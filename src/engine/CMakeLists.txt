@@ -45,3 +45,9 @@ target_include_directories(awe32_render_rates_test PRIVATE "${CMAKE_CURRENT_SOUR
 target_link_libraries(awe32_render_rates_test PRIVATE awe32_chip_safety)
 set_target_properties(awe32_render_rates_test PROPERTIES CXX_STANDARD 23)
 add_test(NAME 125A_render_rates COMMAND awe32_render_rates_test)
+
+add_executable(awe32_box_rates_test "${PROJECT_SOURCE_DIR}/tests/box_rates.cpp")
+target_include_directories(awe32_box_rates_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${UPSTREAM_SRC}")
+target_link_libraries(awe32_box_rates_test PRIVATE awe32_chip_safety)
+set_target_properties(awe32_box_rates_test PROPERTIES CXX_STANDARD 23)
+add_test(NAME 125A_box_rate_fifo COMMAND awe32_box_rates_test)

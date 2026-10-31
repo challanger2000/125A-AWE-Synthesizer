@@ -1,6 +1,6 @@
 # AWE-P04 — bounded SoundFont/MIDI NoteOn selection
 
-**Status: implementation candidate; GitHub Windows compilation and CTest must pass before acceptance.**
+**Status: native test PASS (Windows #41231977541); full VST3 / hardware parity still unverified.**
 
 Upstream remains preserved byte-for-byte under `upstream/AWE32Emu/`.
 The active selection/Synth copies are in `src/engine/`.
@@ -13,7 +13,7 @@ The active selection/Synth copies are in `src/engine/`.
 - Native regression compares all emitted layers against the old selection algorithm, tests key/velocity/bank fallback behavior, capacity overflow, SF1 and SF2 generator merging, and instruments global heap allocation during the selection call.
 
 ## Boundaries
-- `awe32_realtime_synth_compile` currently checks that active Synth.cpp builds; it is not yet linked into a full runnable synthesizer with the patched EMU8000 chip.
-- Other runtime allocations in core rendering (especially RenderNative and 48kHz resampling) remain unaddressed.
+- The active Synth.cpp is now compiled and linked with Emu8000Core and 86Box chip code in `awe32_chip_safety` (P05). Native MIDI fallback and 44.1/48/96 kHz render tests pass.
+- RenderBlock allocation issues originally listed here have been addressed in P05 for the tested paths. Audio-thread bank uploads, arbitrary real-time register writes, and error/log paths need separate audits.
 - No audible hardware parity, VST3 host validation or Studio One test has been done for this patch.
 - The fixed region limit, oversized preset behavior, absence of other audio-thread allocations, and all-bank loading are pending full end-to-end QA.

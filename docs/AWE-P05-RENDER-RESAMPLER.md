@@ -1,6 +1,6 @@
 # AWE-P05 — 44.1/48/96kHz streaming and allocation-free native rendering
 
-**Status: implementation candidate. Consult the matching Windows Actions run.**
+**Status: native Windows x64 CI PASS — [Actions #41231977541](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/41231977541), 4/4 tests. NOT a VST3/release PASS.**
 
 - Added active `Emu8000.h`, `Emu8000.cpp` and `Emu8000Effects.h` under `src/engine/`. Pristine upstream remains byte-for-byte unchanged.
 - `awe32_chip_safety` now compiles and links the active `Emu8000Core`, `Synth`, SoundFont reader and patched 86Box chip implementation together.
@@ -17,3 +17,7 @@
 3. Sample-bank uploads and on-demand DRAM writes remain control-thread operations; `PortOut16` can still grow DRAM if a hypothetical host sends RAM writes in realtime. Hard realtime guard pending.
 4. Some upstream voice-allocation and stream-logging functions may allocate if used inside an audio callback; audio-thread API boundaries require a full review.
 5. Floating-point per-frame rendering retains mathematical parity only for the selected native model; no claim of accurate audio-chip behavior is made by these tests.
+
+## Additional chip timing regression (P05b)
+
+The `125A_box_rate_fifo` test checks the actual patched 86Box EMU8000 C engine with a synthetic ROM and DRAM sine waveform, native/48kHz rate conversion, 980-frame FIFO initial silence, native-to-host latency arithmetic, block-partition parity, and an operator-new guard. It does not validate authentic ROM timbre.
