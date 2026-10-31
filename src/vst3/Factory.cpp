@@ -2,6 +2,7 @@
 #include "public.sdk/source/vst/vsteditcontroller.h"
 #include "public.sdk/source/main/pluginfactory.h"
 #include "base/source/fstreamer.h"
+#include "pluginterfaces/base/ibstream.h"
 #include "pluginterfaces/vst/ivstevents.h"
 #include "pluginterfaces/vst/ivstparameterchanges.h"
 #include "Synth.h"
