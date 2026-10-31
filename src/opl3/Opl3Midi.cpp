@@ -42,6 +42,12 @@ bool Opl3Midi::LoadMelodicIbk(const std::string& path,std::string& error) {
     return true;
 }
 bool Opl3Midi::LoadPercussionIbk(const std::string& path,std::string& error) {
+    // In Nuked CQM 0.9 beta our hardware rhythm test does not produce PCM.
+    // Fail closed until we can verify actual CQM drums against real silicon.
+    if(cqm_) {
+        error="Creative CQM rhythm (Nuked CQM 0.9 beta) unverified: disabled";
+        return false;
+    }
     IbkBank candidate;
     if(!candidate.Load(path,error))return false;
     // IBK rhythm voice byte 11: 6=BD,7=SD,8=TT,9=CY,10=HH.
@@ -199,6 +205,7 @@ void Opl3Midi::StartVoice(size_t i,uint8_t channel,uint8_t note,uint8_t velocity
 void Opl3Midi::NoteOn(uint8_t channel,uint8_t note,uint8_t velocity) {
     if(channel>=16||note>127)return;
     if(velocity==0){NoteOff(channel,note);return;}
+    if(channel==9&&cqm_)return; // no fake percussion for beta CQM
     if(channel==9&&drumBank_){DrumNoteOn(note,velocity);return;}
     size_t chosen=kVoices;
     for(size_t i=0;i<kVoices;++i)
@@ -219,6 +226,7 @@ void Opl3Midi::NoteOn(uint8_t channel,uint8_t note,uint8_t velocity) {
 }
 void Opl3Midi::NoteOff(uint8_t channel,uint8_t note) {
     if(channel>=16||note>127)return;
+    if(channel==9&&cqm_)return;
     if(channel==9&&drumBank_){DrumNoteOff(note);return;}
     size_t chosen=kVoices;uint64_t oldest=std::numeric_limits<uint64_t>::max();
     for(size_t i=0;i<kVoices;++i) {

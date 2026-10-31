@@ -139,8 +139,11 @@ under `third_party/Nuked-CQM/`, with its original LGPL-2.1-or-later
 copyright and license. This is real Creative Quadratic Modulation, **not**
 a Yamaha-OPL3 sound with a different label. The existing 125A MIDI and IBK
 translation layer writes authentic register parameters to the *selected*
-emulated FM chip, either CQM or OPL3. The same optional melodic and percussion
-IBK paths are used for both chips; none are bundled. No new file UI.
+emulated FM chip, either CQM or OPL3. The same optional melodic IBK path is used by both chips; none are bundled.
+**Nuked CQM 0.9 beta rhythm-mode PCM failed our synthetic regression**,
+so this release deliberately **does not enable CQM percussion**. Channel
+10 stays silent on CQM, whereas authentic 0xBD hardware drums remain
+implemented for Yamaha OPL3 with its own verified drum-IBK path. No new file UI.
 
 The VST3 state moves to V6, extending the saved engine enumeration to 2.
 V1-V5 project states remain readable and default/preserve prior engine values.

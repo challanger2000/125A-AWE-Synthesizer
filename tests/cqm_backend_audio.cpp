@@ -66,17 +66,15 @@ int main(){
      if(!f.good())return 2;}
     std::string err;
     Opl3Midi drums(44100,0,true);
-    ok&=ck(drums.LoadPercussionIbk(path.string(),err)&&
-           drums.HasPercussionIbk()&&drums.RhythmRegister()==0x20,
-           "CQM loads user drum IBK into true CQM backend");
+    ok&=ck(!drums.LoadPercussionIbk(path.string(),err)&&
+           !drums.HasPercussionIbk()&&!err.empty()&&
+           drums.RhythmRegister()==0,
+           "CQM 0.9 beta rhythm fixture explicitly rejected (unverified audio)");
     drums.NoteOn(9,36,127);
     std::array<int16_t,4096> bass{};
     drums.RenderBlock(bass.data(),2048);
-    ok&=ck(drums.RhythmRegister()==0x30&&sound(bass),
-           "CQM physical BD bit and nonzero rhythm PCM");
-    drums.NoteOff(9,36);
-    ok&=ck(drums.RhythmRegister()==0x20&&drums.PressedVoices()==0,
-           "CQM BD note-off resets only real rhythm bit");
+    ok&=ck(!sound(bass)&&drums.PressedVoices()==0,
+           "CQM MIDI drum channel remains silent, never a fake melodic drum");
     std::cout<<"NOT RUN: original AWE64 hardware parity, Studio One CQM test\n";
     return ok?0:1;
 }

@@ -91,10 +91,12 @@ public:
             }
             if(!state_.drumIbkPath.empty()) {
                 std::string error;
-                if(!opl_->LoadPercussionIbk(state_.drumIbkPath,error) ||
-                   !cqm_->LoadPercussionIbk(state_.drumIbkPath,error)) {
+                // Yamaha OPL3 rhythm passed its hardware-register audio test.
+                // Creative CQM 0.9 beta did not render reliable drum PCM:
+                // deliberately no CQM drum bank until a supported model passes.
+                if(!opl_->LoadPercussionIbk(state_.drumIbkPath,error)) {
                     assetError_=std::move(error);
-                    fmReady_=false; // fail closed for explicitly requested drum bank
+                    fmReady_=false; // requested Yamaha drum bank invalid
                 }
             }
             for(int c=0;c<16;++c)

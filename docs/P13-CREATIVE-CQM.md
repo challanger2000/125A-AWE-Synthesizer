@@ -12,7 +12,10 @@ Implementation:
   CQM C implementation. Chip instances are separately allocated before
   audio processing, no audio-thread allocation.
 - Shared MIDI note translation, velocity, channel program, IBK bank mapping
-  and original 0xBD percussion rhythm register sent to selected FM core.
+  and optional melodic IBK patches target the selected FM core.
+  **CQM 0.9 beta drum/rhythm remains disabled** after the generated
+  0xBD bassdrum fixture produced no PCM in P13 first test. Yamaha OPL3
+  continues to own the validated 0xBD rhythm playback.
 - No false equivalence: distinct CQM audio must differ from OPL3 when the
   same register patch is written to each emulator.
 - Host native Hardware parameter lists EMU8000 (0), Yamaha OPL3 (1),
@@ -23,7 +26,7 @@ Implementation:
 
 Gate:
 - Native sample-rate, repeatable block-size, note-off, sustain,
-  18 voice polyphony, drum 0xBD, independent CQM-vs-OPL3 PCM tests.
+  18 voice polyphony, explicit fail-closed CQM drum gating, independent CQM-vs-OPL3 PCM tests.
 - Windows x64 VST3 compile, Steinberg validator 47/47 and all CTests.
 - Studio One actual CQM playback is NOT RUN until user checks.
 - Hardware-measured CQM waveforms, 86Box byte-level CQM parity,
