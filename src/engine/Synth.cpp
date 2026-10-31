@@ -155,16 +155,16 @@ bool Synth::LoadBank(const std::string& path, std::string& error, bool samplesIn
         for (SoundFont::Preset& p : bank.presets)
             if (p.bank == 0) p.bank = midiBank;
 
-    if (m_nextDramBase == 0)
-    {
-        const uint32_t reserve =
-            (Awe32::IsDosLike(m_core.DriverVariant())) ? kDramReserveDos
-                                                           : kDramReserveWin95;
-        m_nextDramBase = Emu8000::kDramOffset + reserve;
-    }
-
+    // Compute in a local value: failed loads must never advance the
+    // persistent DRAM allocator or change BankCount().
+    const uint32_t base = m_nextDramBase
+        ? m_nextDramBase
+        : Emu8000::kDramOffset +
+              (Awe32::IsDosLike(m_core.DriverVariant()) ? kDramReserveDos
+                                                         : kDramReserveWin95);
     LoadedBank lb;
-    lb.dramBase = m_nextDramBase;
+    lb.dramBase = base;
+    uint32_t nextDramBase = base;
 
     if (!samplesInRom && !bank.sampleData.empty())
     {
@@ -172,7 +172,25 @@ bool Synth::LoadBank(const std::string& path, std::string& error, bool samplesIn
         // exactly as the driver does when it loads a user bank into the
         // card's RAM.
         const size_t offset = lb.dramBase - Emu8000::kDramOffset;
+        // SoundFont data is untrusted: protect both host arithmetic and the
+        // chip's physical 24-bit sample address space before any mutation.
+        constexpr size_t kMaxDramWords = 0x1000000u - Emu8000::kDramOffset;
+        if (bank.sampleData.size() > kMaxDramWords ||
+            offset > kMaxDramWords - bank.sampleData.size() ||
+            kMaxDramWords - offset - bank.sampleData.size() < 8)
+        {
+            error = "SoundFont exceeds EMU8000 24-bit DRAM address space";
+            return false;
+        }
         const size_t needed = offset + bank.sampleData.size() + 8;
+        // ChipRam() exists only after an actual 86Box chip was initialized.
+        // Do not silently accept an SF2 which cannot fit the installed RAM.
+        if (m_core.ChipVariant() == Emu8000Core::Chip::Box86 &&
+            needed > m_core.ChipRamWords())
+        {
+            error = "SoundFont exceeds selected EMU8000 chip RAM capacity";
+            return false;
+        }
         if (m_core.DramSize() < needed)
         {
             std::vector<int16_t> keep(m_core.DramData(), m_core.DramData() + m_core.DramSize());
@@ -230,11 +248,23 @@ bool Synth::LoadBank(const std::string& path, std::string& error, bool samplesIn
                 }
             }
         }
-        m_nextDramBase += static_cast<uint32_t>(bank.sampleData.size() + 8);
+        if (int16_t* chipRam = m_core.ChipRam())
+        {
+            // Copy the *postprocessed* native words. For SF1 this includes
+            // Creative's pre-emphasis; copying the raw SF2/SBK data here
+            // would make the chip play a different sample than the model.
+            // Also mirror the first bank's zeroed driver reserve.
+            const bool initialBank = (offset == reserveWords);
+            const size_t firstWord = initialBank ? 0 : offset;
+            std::copy_n(m_core.DramData() + firstWord,
+                        needed - firstWord, chipRam + firstWord);
+        }
+        nextDramBase += static_cast<uint32_t>(bank.sampleData.size() + 8);
     }
 
     lb.bank = std::make_unique<SoundFont::Bank>(std::move(bank));
     m_banks.push_back(std::move(lb));
+    m_nextDramBase = nextDramBase;
     return true;
 }
 

@@ -1467,9 +1467,24 @@ void Emu8000Core::UpdateEffectPresets()
 
 bool Emu8000Core::UseBox86Chip(const std::string& romPath, std::string& err)
 {
-    // 86Box allocates the DRAM itself; the size decides where uploads wrap.
+    // Switching to the authentic chip after loading SF2 banks must preserve
+    // the existing sample memory. Refuse rather than silently truncating it.
+    // A fresh Synth has 72 words of a synthetic fallback oscillator; that
+    // oscillator is optional when chip RAM is set to zero (ROM-only usage).
+    const uint64_t capacity = (m_chipRamKb >= 0)
+        ? uint64_t{static_cast<uint32_t>(m_chipRamKb)} * 512u : 0u;
+    if (m_dram.size() > capacity && m_dram.size() > 72u)
+    {
+        err = "Loaded SoundFont data exceeds requested 86Box chip RAM";
+        return false;
+    }
     if (!m_box.Init(romPath, m_basePort + 0x400, m_chipRamKb, err))
         return false;
+    if (int16_t* const chipRam = m_box.Ram())
+    {
+        const size_t words = std::min(m_dram.size(), m_box.RamWords());
+        if (words) std::copy_n(m_dram.data(), words, chipRam);
+    }
     m_chip = Chip::Box86;
     return true;
 }
