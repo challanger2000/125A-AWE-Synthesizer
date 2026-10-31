@@ -32,3 +32,16 @@ endif()
 
 # VST3 implementation deliberately not registered yet. No functional VST3
 # is claimed until the audited engine adapter and real host lifecycle exist.
+
+option(125A_BUILD_VST3 "Build experimental Windows VST3" OFF)
+if(125A_BUILD_VST3)
+  if(NOT WIN32)
+    message(FATAL_ERROR "125A VST3 is Windows-only")
+  endif()
+  set(SMTG_ENABLE_VST3_PLUGIN_EXAMPLES OFF CACHE BOOL "" FORCE)
+  set(SMTG_ENABLE_VST3_HOSTING_EXAMPLES OFF CACHE BOOL "" FORCE)
+  set(SMTG_ENABLE_VSTGUI_SUPPORT OFF CACHE BOOL "" FORCE)
+  set(SMTG_CREATE_PLUGIN_LINK OFF CACHE BOOL "" FORCE)
+  add_subdirectory(external/vst3sdk)
+  add_subdirectory(src/vst3)
+endif()
