@@ -1,7 +1,7 @@
 # 125A AWE Synthesizer
 Windows x64 VST3 instrument project: historically faithful Sound Blaster AWE32/AWE64 EMU8000 synthesis.
 
-**Current state: v0.1.0 EMU8000 native integration candidate — Windows x64 native tests PASS (5/5), NOT a VST3 and NOT released.** No Windows VST3 executable exists yet. Windows Actions [#41232207613](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/41232207613) verified native compilation and tests.
+**Current state: v0.1.0 experimental Windows VST3 developer build, Steinberg Validator 47/47, native tests 6/6 (Windows Actions #41234357310). NOT approved or tested in Studio One.** P08 adds versioned asset-path project recall; this change requires its own CI evidence.
 
 - Development branch: `develop/v0.1.0-upstream-audit`. Keep `main` stable.
 - A complete version-pinned *upstream source snapshot* (C and C++) is under `upstream/AWE32Emu/`; its original CMake console executable is preserved separately.

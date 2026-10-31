@@ -5,6 +5,8 @@
 #include "pluginterfaces/vst/ivstevents.h"
 #include "pluginterfaces/vst/ivstparameterchanges.h"
 #include "Synth.h"
+#include "AssetState.h"
+#include "AssetConfig.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -19,7 +21,7 @@ using namespace Steinberg::Vst;
 inline const FUID kProcessorUID(0x125A8000,0x81A24A93,0xB426CC70,0x3906F211);
 inline const FUID kControllerUID(0x125A8000,0xAE274BC1,0xA4B02DA3,0x573CC990);
 inline constexpr ParamID kProgramID=1000;
-inline constexpr int32 kMagic=0x31455741, kVersion=1;
+// Persistence data contract is in AssetState.h.
 
 class Processor final : public AudioEffect {
 public:
@@ -56,38 +58,53 @@ public:
             if(!capacity_)return kResultFalse;
             synth_=std::make_unique<Synth>(rate_);
             synth_->Core().SetDriver(Awe32::Driver::Win95);
-            if(const char* rom=std::getenv("AWE32_ROM_PATH");rom&&*rom) {
-                std::string err;
-                (void)synth_->Core().UseBox86Chip(rom,err);
+            ResolveAssets();
+            if(!state_.romPath.empty()) {
+                std::string error;
+                if(!synth_->Core().UseBox86Chip(state_.romPath,error))
+                    assetError_=std::move(error);
             }
             synth_->Core().PowerOnInit();
-            if(const char* sf=std::getenv("AWE32_SF2_PATH");sf&&*sf) {
-                std::string err;
-                (void)synth_->LoadBank(sf,err);
+            if(!state_.sf2Path.empty()) {
+                std::string error;
+                if(!synth_->LoadBank(state_.sf2Path,error))
+                    assetError_=std::move(error);
             }
-            for(int c=0;c<16;++c)synth_->ProgramChange(static_cast<uint8_t>(c),program_);
+            for(int c=0;c<16;++c)synth_->ProgramChange(static_cast<uint8_t>(c),
+                static_cast<uint8_t>(state_.program));
         } else synth_.reset();
         return AudioEffect::setActive(active);
     }
     uint32 PLUGIN_API getLatencySamples() override {
         return synth_?synth_->Core().ChipLatencyFrames():0;
     }
-    tresult PLUGIN_API getState(IBStream* state) override {
-        if(!state)return kInvalidArgument;
-        IBStreamer s(state,kLittleEndian);
-        return s.writeInt32(kMagic)&&s.writeInt32(kVersion)&&s.writeInt32(program_)
-               ? kResultOk:kResultFalse;
+    tresult PLUGIN_API getState(IBStream* stream) override {
+        if(!stream)return kInvalidArgument;
+        ResolveAssets();
+        const auto send=[&](const void* buffer,size_t n) {
+            int32 written=0;
+            return n<=AssetState::kMaxPath &&
+                stream->write(const_cast<void*>(buffer),static_cast<int32>(n),
+                              &written)==kResultOk &&
+                written==static_cast<int32>(n);
+        };
+        return AssetState::Write(send,state_) ? kResultOk:kResultFalse;
     }
-    tresult PLUGIN_API setState(IBStream* state) override {
-        if(!state)return kInvalidArgument;
-        IBStreamer s(state,kLittleEndian);
-        int32 magic=0,version=0,program=0;
-        if(!s.readInt32(magic)||!s.readInt32(version)||!s.readInt32(program)||
-           magic!=kMagic||version!=kVersion||program<0||program>127)
-            return kResultFalse;
-        program_=static_cast<uint8_t>(program);
+    tresult PLUGIN_API setState(IBStream* stream) override {
+        if(!stream)return kInvalidArgument;
+        const auto receive=[&](void* buffer,size_t n) {
+            int32 received=0;
+            return n<=AssetState::kMaxPath &&
+                stream->read(buffer,static_cast<int32>(n),&received)==kResultOk &&
+                received==static_cast<int32>(n);
+        };
+        AssetState::Data candidate;
+        if(!AssetState::Read(receive,candidate))return kResultFalse;
+        state_=std::move(candidate);
         if(synth_)for(int c=0;c<16;++c)
-            synth_->ProgramChange(static_cast<uint8_t>(c),program_);
+            synth_->ProgramChange(static_cast<uint8_t>(c),
+                static_cast<uint8_t>(state_.program));
+        // File replacement while active is deferred until reactivation.
         return kResultOk;
     }
     tresult PLUGIN_API process(ProcessData& data) override {
@@ -102,11 +119,10 @@ public:
                 int32 off=0;
                 ParamValue val=0;
                 if(q->getPoint(q->getPointCount()-1,off,val)==kResultOk&&std::isfinite(val)) {
-                    program_=static_cast<uint8_t>(std::clamp(int(std::lround(val*127.)),0,127));
-                    // The host can flush parameters before setActive.
-                    // Program state must survive even without a Synth.
+                    state_.program=static_cast<uint32_t>(std::clamp(int(std::lround(val*127.)),0,127));
                     if(synth_)for(int c=0;c<16;++c)
-                        synth_->ProgramChange(static_cast<uint8_t>(c),program_);
+                        synth_->ProgramChange(static_cast<uint8_t>(c),
+                            static_cast<uint8_t>(state_.program));
                 }
             }
         }
@@ -167,7 +183,17 @@ private:
     std::unique_ptr<Synth> synth_;
     std::vector<int16_t> scratch_;
     uint32_t rate_=44100,capacity_=0;
-    uint8_t program_=0;
+    AssetState::Data state_{};
+    std::string assetError_;
+    void ResolveAssets() {
+        if(state_.pathsSpecified)return;
+        AssetConfig::Paths configured;
+        if(AssetConfig::Load(configured)) {
+            state_.romPath=std::move(configured.rom);
+            state_.sf2Path=std::move(configured.sf2);
+            state_.pathsSpecified=true;
+        } else assetError_="Invalid 125A assets.cfg";
+    }
 };
 class Controller final : public EditControllerEx1 {
 public:
@@ -183,12 +209,15 @@ public:
     }
     tresult PLUGIN_API setComponentState(IBStream* stream) override {
         if(!stream)return kInvalidArgument;
-        IBStreamer s(stream,kLittleEndian);
-        int32 magic=0,version=0,program=0;
-        if(!s.readInt32(magic)||!s.readInt32(version)||!s.readInt32(program)||
-           magic!=kMagic||version!=kVersion||program<0||program>127)
-            return kResultFalse;
-        return setParamNormalized(kProgramID,static_cast<double>(program)/127.);
+        const auto read=[&](void* buffer,size_t n) {
+            int32 received=0;
+            return n<=AssetState::kMaxPath &&
+                stream->read(buffer,static_cast<int32>(n),&received)==kResultOk &&
+                received==static_cast<int32>(n);
+        };
+        AssetState::Data model;
+        if(!AssetState::Read(read,model))return kResultFalse;
+        return setParamNormalized(kProgramID,static_cast<double>(model.program)/127.);
     }
 };
 }

@@ -1,5 +1,5 @@
 set(target 125A_AWE_Synthesizer)
-smtg_add_vst3plugin(125A_AWE_Synthesizer Factory.cpp)
+smtg_add_vst3plugin(125A_AWE_Synthesizer Factory.cpp AssetState.h AssetConfig.h)
 target_link_libraries(125A_AWE_Synthesizer PRIVATE sdk awe32_chip_safety)
 target_include_directories(125A_AWE_Synthesizer PRIVATE
     ../engine ../engine/include

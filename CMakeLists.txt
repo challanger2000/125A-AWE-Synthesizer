@@ -33,6 +33,12 @@ endif()
 # VST3 implementation deliberately not registered yet. No functional VST3
 # is claimed until the audited engine adapter and real host lifecycle exist.
 
+# SDK-independent project state/asset config regression.
+add_executable(awe32_asset_state_test tests/asset_state.cpp)
+target_include_directories(awe32_asset_state_test PRIVATE src/vst3)
+target_compile_features(awe32_asset_state_test PRIVATE cxx_std_23)
+add_test(NAME 125A_asset_state COMMAND awe32_asset_state_test)
+
 option(125A_BUILD_VST3 "Build experimental Windows VST3" OFF)
 if(125A_BUILD_VST3)
   if(NOT WIN32)
