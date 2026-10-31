@@ -372,6 +372,7 @@ typedef struct emu8k_voice_t {
 typedef struct emu8k_t {
     /* 125A: per-chip render target, formerly process-global wavetable_pos_global. */
     int target_pos;
+    int random_helper; /* per-instance register probe state */
     emu8k_voice_t voice[32];
 
     uint16_t hwcf1;
@@ -471,6 +472,8 @@ typedef struct emu8k_t {
 } emu8k_t;
 
 void emu8k_change_addr(emu8k_t *emu8k, uint16_t emu_addr);
+void emu8k_initialize_shared_tables(void);
+int emu8k_shared_lookup_init_count(void);
 int emu8k_init(emu8k_t *emu8k, uint16_t emu_addr, int onboard_ram,
                const uint8_t *rom_image, size_t rom_length);
 void emu8k_close(emu8k_t *emu8k);

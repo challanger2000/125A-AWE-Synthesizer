@@ -139,7 +139,7 @@ enum {
     ENV_RAMP_UP   = 8
 };
 
-static int random_helper = 0;
+/* 125A: random register state moved to emu8k_t (per instance). */
 int        dmareadbit    = 0;
 int        dmawritebit   = 0;
 
@@ -947,7 +947,7 @@ emu8k_inw_untraced(uint16_t addr, void *priv)
 #ifdef EMU8K_DEBUG_REGISTERS
     if (addr == 0xE22) {
         emu8k_log("EMU8K READ POINTER: %d\n",
-                  ((0x80 | ((random_helper + 1) & 0x1F)) << 8) | (emu8k->cur_reg << 5) | emu8k->cur_voice);
+                  ((0x80 | ((emu8k->random_helper + 1) & 0x1F)) << 8) | (emu8k->cur_reg << 5) | emu8k->cur_voice);
     } else if ((addr & 0xF00) == 0x600) {
         /* These are automatically reported by READ16 */
         if (rep_count_r > 1) {
@@ -1326,8 +1326,8 @@ emu8k_inw_untraced(uint16_t addr, void *priv)
              * Impulse tracker tests the non variability of the LS byte that it has set, and the variability
              * of the MS byte to determine that it really is an AWE32.
              * cubic player has a similar code, where it waits until value & 0x1000 is nonzero, and then waits again until it changes to zero.*/
-            random_helper = (random_helper + 1) & 0x1F;
-            return ((0x80 | random_helper) << 8) | (emu8k->cur_reg << 5) | emu8k->cur_voice;
+            emu8k->random_helper = (emu8k->random_helper + 1) & 0x1F;
+            return ((0x80 | emu8k->random_helper) << 8) | (emu8k->cur_reg << 5) | emu8k->cur_voice;
 
         default:
             break;
@@ -2922,67 +2922,19 @@ emu8k_change_addr(emu8k_t *emu8k, uint16_t emu_addr)
 }
 
 /* onboard_ram in kilobytes */
-int
-emu8k_init(emu8k_t *emu8k, uint16_t emu_addr, int onboard_ram,
-           const uint8_t *rom_image, size_t rom_length)
+/* 125A: immutable chip lookup tables. Called exactly once by
+ * std::call_once before first instance activation; no audio-thread locks. */
+static int shared_lookup_initializations = 0;
+int emu8k_shared_lookup_init_count(void)
 {
-    uint32_t const BLOCK_SIZE_WORDS = 0x10000;
-    int            c;
-    double         out;
+    return shared_lookup_initializations;
+}
 
-    /* 125A: ROM was validated and read by the non-realtime wrapper.
-     * Never open files or call fatal()/exit() inside the emulation core. */
-    if (!rom_image || (rom_length != 1048574 && rom_length != 1048576))
-        return 0;
-
-    emu8k->rom = calloc(1024, 1024);
-    if (!emu8k->rom)
-        return 0;
-    memcpy(emu8k->rom, rom_image, rom_length);
-    /*AWE-DUMP creates ROM images offset by 2 bytes, so if we detect this
-      then correct it*/
-    if (emu8k->rom[3] == 0x314d && emu8k->rom[4] == 0x474d) {
-        memmove(&emu8k->rom[0], &emu8k->rom[1], (1024 * 1024) - 2);
-        emu8k->rom[0x7ffff] = 0;
-    }
-
-    emu8k->empty = calloc(2, BLOCK_SIZE_WORDS);
-    if (!emu8k->empty)
-        return 0;
-
-    int j = 0;
-    for (; j < 0x8; j++) {
-        emu8k->ram_pointers[j] = emu8k->rom + (j * BLOCK_SIZE_WORDS);
-    }
-    for (; j < 0x20; j++) {
-        emu8k->ram_pointers[j] = emu8k->empty;
-    }
-
-    if (onboard_ram) {
-        /*Clip to 28MB, since that's the max that we can address. */
-        if (onboard_ram > 0x7000)
-            onboard_ram = 0x7000;
-        emu8k->ram = calloc(1024, onboard_ram);
-        if (!emu8k->ram)
-            return 0;
-        const int i_end = onboard_ram >> 7;
-        int       i     = 0;
-        for (; i < i_end; i++, j++) {
-            emu8k->ram_pointers[j] = emu8k->ram + (i * BLOCK_SIZE_WORDS);
-        }
-        emu8k->ram_end_addr = EMU8K_RAM_MEM_START + (onboard_ram << 9);
-    } else {
-        emu8k->ram          = 0;
-        emu8k->ram_end_addr = EMU8K_RAM_MEM_START;
-    }
-    for (; j < 0x100; j++) {
-        emu8k->ram_pointers[j] = emu8k->empty;
-    }
-
-    emu8k_reset_buffer(emu8k);
-
-    emu8k_change_addr(emu8k, emu_addr);
-
+void
+emu8k_initialize_shared_tables(void)
+{
+    int c;
+    double out;
     /*Create frequency table. (Convert initial pitch register value to a linear speed change)
      * The input is encoded such as 0xe000 is center note (no pitch shift)
      * and from then on , changing up or down 0x1000 (4096) increments/decrements an octave.
@@ -3080,10 +3032,6 @@ emu8k_init(emu8k_t *emu8k, uint16_t emu_addr, int onboard_ram,
         const double db_per_s = 100.0 / (47.513 / div);
         env_decay_to_dbs_or_oct[c] = (int32_t) (db_per_s / 44100.0 * ((double) (1 << 21) / 96.0) * 65536.0 + 0.5);
     }
-    emu8k->eq_bass   = -1; /* AWE32Emu: equalizer not designed yet */
-    emu8k->eq_treble = -1;
-    emu8k_rv_init(emu8k); /* AWE32Emu: fitted reverb */
-    emu8k_state_dump_open(emu8k); /* AWE32Emu: layered state dump */
 
     /* The LFOs use a triangular waveform starting at zero and going 1/-1/1/-1.
      * This table is stored in signed 16bits precision, with a period of 65536 samples */
@@ -3146,6 +3094,87 @@ emu8k_init(emu8k_t *emu8k, uint16_t emu_addr, int onboard_ram,
             // out = 100.0 + (c+1.0)*31.25; //31.25Hz steps */
         }
     }
+
+    /* Cubic Resampling  ( 4point cubic spline) */
+    double const resdouble = 1.0 / (double) CUBIC_RESOLUTION;
+    for (c = 0; c < CUBIC_RESOLUTION; c++) {
+        double x = (double) c * resdouble;
+        /* Cubic resolution is made of four table, but I've put them all in one table to optimize memory access. */
+        cubic_table[c * 4]     = (-0.5 * x * x * x + x * x - 0.5 * x);
+        cubic_table[c * 4 + 1] = (1.5 * x * x * x - 2.5 * x * x + 1.0);
+        cubic_table[c * 4 + 2] = (-1.5 * x * x * x + 2.0 * x * x + 0.5 * x);
+        cubic_table[c * 4 + 3] = (0.5 * x * x * x - 0.5 * x * x);
+    }
+
+    ++shared_lookup_initializations;
+}
+
+int
+emu8k_init(emu8k_t *emu8k, uint16_t emu_addr, int onboard_ram,
+           const uint8_t *rom_image, size_t rom_length)
+{
+    uint32_t const BLOCK_SIZE_WORDS = 0x10000;
+    int            c;
+    double         out;
+
+    /* 125A: ROM was validated and read by the non-realtime wrapper.
+     * Never open files or call fatal()/exit() inside the emulation core. */
+    if (!rom_image || (rom_length != 1048574 && rom_length != 1048576))
+        return 0;
+
+    emu8k->rom = calloc(1024, 1024);
+    if (!emu8k->rom)
+        return 0;
+    memcpy(emu8k->rom, rom_image, rom_length);
+    /*AWE-DUMP creates ROM images offset by 2 bytes, so if we detect this
+      then correct it*/
+    if (emu8k->rom[3] == 0x314d && emu8k->rom[4] == 0x474d) {
+        memmove(&emu8k->rom[0], &emu8k->rom[1], (1024 * 1024) - 2);
+        emu8k->rom[0x7ffff] = 0;
+    }
+
+    emu8k->empty = calloc(2, BLOCK_SIZE_WORDS);
+    if (!emu8k->empty)
+        return 0;
+
+    int j = 0;
+    for (; j < 0x8; j++) {
+        emu8k->ram_pointers[j] = emu8k->rom + (j * BLOCK_SIZE_WORDS);
+    }
+    for (; j < 0x20; j++) {
+        emu8k->ram_pointers[j] = emu8k->empty;
+    }
+
+    if (onboard_ram) {
+        /*Clip to 28MB, since that's the max that we can address. */
+        if (onboard_ram > 0x7000)
+            onboard_ram = 0x7000;
+        emu8k->ram = calloc(1024, onboard_ram);
+        if (!emu8k->ram)
+            return 0;
+        const int i_end = onboard_ram >> 7;
+        int       i     = 0;
+        for (; i < i_end; i++, j++) {
+            emu8k->ram_pointers[j] = emu8k->ram + (i * BLOCK_SIZE_WORDS);
+        }
+        emu8k->ram_end_addr = EMU8K_RAM_MEM_START + (onboard_ram << 9);
+    } else {
+        emu8k->ram          = 0;
+        emu8k->ram_end_addr = EMU8K_RAM_MEM_START;
+    }
+    for (; j < 0x100; j++) {
+        emu8k->ram_pointers[j] = emu8k->empty;
+    }
+
+    emu8k_reset_buffer(emu8k);
+
+    emu8k_change_addr(emu8k, emu_addr);
+
+    emu8k->eq_bass   = -1; /* AWE32Emu: equalizer not designed yet */
+    emu8k->eq_treble = -1;
+    emu8k_rv_init(emu8k); /* AWE32Emu: fitted reverb */
+    emu8k_state_dump_open(emu8k); /* AWE32Emu: layered state dump */
+
     /* NOTE! read_pos and buffer content is implicitly initialized to zero by the sb_t structure memset on sb_awe32_init() */
     emu8k->reverb_engine.reflections[0].bufsize = 2 * REV_BUFSIZE_STEP;
     emu8k->reverb_engine.reflections[1].bufsize = 4 * REV_BUFSIZE_STEP;
@@ -3162,16 +3191,6 @@ emu8k_init(emu8k_t *emu8k, uint16_t emu_addr, int onboard_ram,
         emu8k->reverb_engine.allpass[7 - c].bufsize  = (4 * c) * REV_BUFSIZE_STEP + 55;
     }
 
-    /* Cubic Resampling  ( 4point cubic spline) */
-    double const resdouble = 1.0 / (double) CUBIC_RESOLUTION;
-    for (c = 0; c < CUBIC_RESOLUTION; c++) {
-        double x = (double) c * resdouble;
-        /* Cubic resolution is made of four table, but I've put them all in one table to optimize memory access. */
-        cubic_table[c * 4]     = (-0.5 * x * x * x + x * x - 0.5 * x);
-        cubic_table[c * 4 + 1] = (1.5 * x * x * x - 2.5 * x * x + 1.0);
-        cubic_table[c * 4 + 2] = (-1.5 * x * x * x + 2.0 * x * x + 0.5 * x);
-        cubic_table[c * 4 + 3] = (0.5 * x * x * x - 0.5 * x * x);
-    }
     /* Even when the documentation says that this has to be written by applications to initialize the card,
      * several applications and drivers ( aweman on windows, linux oss driver..) read it to detect an AWE card. */
     emu8k->hwcf1 = 0x59;

@@ -1,6 +1,13 @@
 #include "Emu8000Box.h"
+extern "C" {
+#include <86box/snd_emu8k.h>
+}
 
 #include <cstdint>
+#include <array>
+#include <thread>
+#include <atomic>
+#include <algorithm>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -72,6 +79,8 @@ int main()
     okay &= Check(second.Init(rom.string(), 0x620, 512, error), "synthetic ROM second instance initialization");
     if (!second.Ready()) { std::cerr << error << '\n'; return 1; }
     okay &= Check(first.Ram() != second.Ram(), "isolated per-instance DRAM");
+    okay &= Check(emu8k_shared_lookup_init_count() == 1,
+                  "shared chip lookup tables initialized exactly once");
     okay &= Check(first.RamWords() == second.RamWords() && first.RamWords() > 0,
                   "both chip RAM regions valid");
 
@@ -96,6 +105,32 @@ int main()
     okay &= Check(first.PortRead(0x620) == 0xFFFF, "overflow returns safe register value");
     for (int i = 0; i < 1960; ++i) first.RenderFrame(l, r);
     okay &= Check(l == 0 && r == 0, "post-overflow remains fail-closed");
+
+    // Concurrent new instances cannot rewrite chip tables during active rendering.
+    constexpr int kParallel = 4;
+    std::array<int, kParallel> parallelResults{};
+    std::array<std::thread, kParallel> parallelThreads;
+    std::atomic<bool> begin{false};
+    for (int i = 0; i < kParallel; ++i)
+    {
+        parallelThreads[i] = std::thread([&, i] {
+            while (!begin.load(std::memory_order_acquire)) std::this_thread::yield();
+            Emu8000Box chip;
+            std::string localError;
+            if (!chip.Init(rom.string(), 0x620, 512, localError)) return;
+            parallelResults[i] = 1;
+            std::int32_t l = 0, r = 0;
+            for (int f = 0; f < 1960; ++f) chip.RenderFrame(l, r);
+        });
+    }
+    begin.store(true, std::memory_order_release);
+    for (int i = 0; i < 1960; ++i) second.RenderFrame(l, r);
+    for (auto& thread : parallelThreads) thread.join();
+    okay &= Check(std::all_of(parallelResults.begin(), parallelResults.end(),
+                              [](int status) { return status == 1; }),
+                  "four concurrent chip instances initialize and render");
+    okay &= Check(emu8k_shared_lookup_init_count() == 1,
+                  "concurrent initialization leaves shared lookup tables unchanged");
 
     std::cout << (okay ? "ENGINE SAFETY PROBES PASS" : "ENGINE SAFETY PROBES FAIL") << '\n';
     std::cout << "NOT RUN: original hardware parity, SF2/voice allocation, VST3, Studio One, realtime allocation hook" << '\n';

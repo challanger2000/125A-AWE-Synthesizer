@@ -34,6 +34,7 @@ void     Emu8000Box::FlushBlock()      {}
 #include <cstring>
 #include <vector>
 #include <array>
+#include <mutex>
 #include <algorithm>
 #include <cstdint>
 
@@ -55,6 +56,8 @@ uint16_t emu8k_inw(uint16_t addr, void* priv);
 // Globals and services snd_emu8k.c expects from 86Box. The same stubs as in
 // the reference harness (ref86box/harness.c) - kept identical on purpose.
 // ---------------------------------------------------------------------------
+namespace { std::once_flag g_chipLookupTablesOnce; }
+
 extern "C" {
 
 void pclog_ex(const char* fmt, va_list ap)
@@ -175,6 +178,8 @@ bool Emu8000Box::Init(const std::string& romPath, uint16_t basePort, int ramKb, 
     }
 
     std::memset(&m_impl->emu, 0, sizeof(m_impl->emu));
+    // Initialize global lookup tables exactly once on a control thread.
+    std::call_once(g_chipLookupTablesOnce, emu8k_initialize_shared_tables);
     if (emu8k_init(&m_impl->emu, basePort, ramKb, image.data(), image.size()) != 1)
     {
         emu8k_close(&m_impl->emu);
