@@ -121,7 +121,7 @@ public:
             }
         };
         int32 pos=0;
-        const IEventList* events=data.inputEvents;
+        IEventList* events=data.inputEvents;
         const int32 n=events?std::clamp(events->getEventCount(),0,8192):0;
         for(int32 i=0;i<n;++i) {
             Event e{};
