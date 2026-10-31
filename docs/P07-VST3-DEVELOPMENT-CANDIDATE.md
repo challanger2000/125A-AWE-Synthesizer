@@ -18,3 +18,18 @@ not a user-facing asset workflow.
 No custom GUI, no sample-accurate Program automation, no MIDI CC mapping,
 no project-managed SF2/ROM paths, no Steinberg Validator or Studio One
 signoff. This is a Windows SDK build candidate only.
+
+## Steinberg Validator issues identified in initial build
+
+Initial candidate successfully compiled into a Windows x64 VST3 bundle
+but failed 6 of 47 validator checks (run #41233360306):
+- three valid parameter flushes without audio buffers,
+- mono output and two altered bus/automation arrangements.
+The test also warned on setupProcessing at non-audio test rates 1234.568
+and 1234567.8 Hz. This patch processes parameter-only calls before
+examining audio buffers, supports mono downmix and accepts positive finite
+host probe rates safely. The SDK post-build validator remains the gate;
+new build evidence must confirm whether all findings are actually fixed.
+
+Windows developer artifacts are generated only after a successful build and
+validator run; ROM/SF2 contents are excluded.

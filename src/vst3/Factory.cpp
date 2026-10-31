@@ -36,13 +36,17 @@ public:
         return type==kSample32?kResultTrue:kResultFalse;
     }
     tresult PLUGIN_API setupProcessing(ProcessSetup& setup) override {
-        if(!std::isfinite(setup.sampleRate)||setup.sampleRate<8000.||
-           setup.sampleRate>384000.||setup.maxSamplesPerBlock<=0||
-           setup.maxSamplesPerBlock>262144)return kInvalidArgument;
+        if(!std::isfinite(setup.sampleRate)||setup.sampleRate<=0.||
+           setup.maxSamplesPerBlock<0||setup.maxSamplesPerBlock>262144)
+            return kInvalidArgument;
         const auto result=AudioEffect::setupProcessing(setup);
         if(result!=kResultOk)return result;
-        rate_=static_cast<uint32_t>(std::lround(setup.sampleRate));
-        capacity_=static_cast<uint32_t>(setup.maxSamplesPerBlock);
+        // A VST3 host's conformance test deliberately probes sample rates
+        // outside practical audio ranges. Accept them without overflow,
+        // using a safe internal rate; real host rates 8k..384k are exact.
+        rate_=static_cast<uint32_t>(std::lround(
+            std::clamp(setup.sampleRate,8000.0,384000.0)));
+        capacity_=static_cast<uint32_t>(std::max(setup.maxSamplesPerBlock,1));
         scratch_.assign(size_t{capacity_}*2,0);
         synth_.reset();
         return kResultOk;
@@ -87,17 +91,9 @@ public:
         return kResultOk;
     }
     tresult PLUGIN_API process(ProcessData& data) override {
-        if(data.numSamples<0||data.numOutputs!=1||!data.outputs||
-           data.outputs[0].numChannels!=2||!data.outputs[0].channelBuffers32||
-           !data.outputs[0].channelBuffers32[0]||!data.outputs[0].channelBuffers32[1])
-            return kResultFalse;
-        auto* l=data.outputs[0].channelBuffers32[0];
-        auto* r=data.outputs[0].channelBuffers32[1];
-        std::fill_n(l,data.numSamples,0.f);
-        std::fill_n(r,data.numSamples,0.f);
-        data.outputs[0].silenceFlags=3;
-        if(!synth_||uint32(data.numSamples)>capacity_||data.symbolicSampleSize!=kSample32)
-            return kResultOk;
+        if(data.numSamples<0)return kInvalidArgument;
+        // VST3 explicitly permits a parameter-only process call without
+        // any audio bus or output buffers. Apply changes before checking I/O.
         if(auto* changes=data.inputParameterChanges) {
             const int32 n=std::clamp(changes->getParameterCount(),0,1024);
             for(int32 i=0;i<n;++i) {
@@ -112,12 +108,31 @@ public:
                 }
             }
         }
+        // Hosts may flush controls with numOutputs=0, numChannels=0 or a
+        // null buffer. Such calls are valid: no audio work is required.
+        if(data.numOutputs<1||!data.outputs ||
+           data.outputs[0].numChannels<1 ||
+           data.symbolicSampleSize!=kSample32 ||
+           !data.outputs[0].channelBuffers32 ||
+           !data.outputs[0].channelBuffers32[0])
+            return kResultOk;
+        auto* const l=data.outputs[0].channelBuffers32[0];
+        auto* const r=(data.outputs[0].numChannels>=2)
+            ? data.outputs[0].channelBuffers32[1] : nullptr;
+        std::fill_n(l,data.numSamples,0.f);
+        if(r)std::fill_n(r,data.numSamples,0.f);
+        data.outputs[0].silenceFlags=r?3u:1u;
+        if(!synth_||uint32(data.numSamples)>capacity_)
+            return kResultOk;
+
         const auto render=[&](int32 from,int32 to) {
             if(to<=from)return;
             synth_->RenderBlock(scratch_.data()+size_t{2}*from,static_cast<uint32_t>(to-from));
             for(int32 i=from;i<to;++i) {
-                l[i]=scratch_[size_t{2}*i]/32768.f;
-                r[i]=scratch_[size_t{2}*i+1]/32768.f;
+                const float left=scratch_[size_t{2}*i]/32768.f;
+                const float right=scratch_[size_t{2}*i+1]/32768.f;
+                if(r) {l[i]=left;r[i]=right;}
+                else l[i]=(left+right)*0.5f;
             }
         };
         int32 pos=0;
@@ -143,7 +158,7 @@ public:
         }
         render(pos,data.numSamples);
         for(int32 i=0;i<data.numSamples;++i)
-            if(l[i]!=0.f||r[i]!=0.f){data.outputs[0].silenceFlags=0;break;}
+            if(l[i]!=0.f||(r&&r[i]!=0.f)){data.outputs[0].silenceFlags=0;break;}
         return kResultOk;
     }
 private:
