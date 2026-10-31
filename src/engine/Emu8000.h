@@ -333,7 +333,7 @@ private:
 
     Chip m_chip = Chip::Ours;
     Emu8000Box m_box;
-    int  m_chipRamKb = 8192;
+    int  m_chipRamKb = 28672;  // 28 MiB max physical EMU8000 DRAM (125A fixed default)
 
     RegFile m_regs{};
     std::array<VoiceState, kMaxVoices> m_voices{};

@@ -107,13 +107,15 @@ int main() {
     const fs::path directory=fs::temp_directory_path();
     const fs::path sf=directory/"125A_synthetic_sf2_audio.sf2";
     const fs::path huge=directory/"125A_synthetic_sf2_overflow.sf2";
+    const fs::path large=directory/"125A_synthetic_sf2_8mb_plus.sf2";
     const fs::path rom=directory/"125A_synthetic_sf2_audio.raw";
     struct Cleanup {
-        fs::path a,b,c;
-        ~Cleanup(){std::error_code ec;fs::remove(a,ec);fs::remove(b,ec);fs::remove(c,ec);}
-    } cleanup{sf,huge,rom};
+        fs::path a,b,c,d;
+        ~Cleanup(){std::error_code ec;fs::remove(a,ec);fs::remove(b,ec);fs::remove(c,ec);fs::remove(d,ec);}
+    } cleanup{sf,huge,rom,large};
     if (!writeFile(sf,makeBank(2048)) ||
         !writeFile(huge,makeBank(300000)) ||
+        !writeFile(large,makeBank(4'300'000)) ||
         !writeFile(rom,Bytes(1048576,0)))return 2;
     bool ok=true;
     std::string error;
@@ -183,6 +185,25 @@ int main() {
                     std::equal(chip+reserve,chip+reserve+copiedWords,
                                synth.Core().DramData()+reserve),
                     "mode switch migrates existing bank into chip RAM");
+    }
+    {
+        // This VST3 project's default is now the full 28 MiB EMU8000 RAM.
+        // A >8 MiB generated SF2 must load via the real 86Box chip renderer,
+        // without private Creative data in Git or the CI artifacts.
+        Synth synth(44100);
+        synth.Core().SetDriver(Awe32::Driver::Win95);
+        error.clear();
+        ok &= check(synth.Core().UseBox86Chip(rom.string(),error),
+                    "fixed-default EMU8000 28 MiB chip initialization");
+        ok &= check(synth.Core().ChipRamWords()==28672u*512u,
+                    "default EMU8000 is exactly 28 MiB, not old 8 MiB");
+        synth.Core().PowerOnInit();
+        error.clear();
+        ok &= check(synth.LoadBank(large.string(),error),
+                    ">8 MiB synthetic SoundFont uploads into 28 MiB chip");
+        ok &= check(synth.BankCount()==1 &&
+                    synth.Core().ChipRam()[reserve+64]==synth.Core().DramData()[reserve+64],
+                    "large SF2 copies into actual hardware-emulated chip RAM");
     }
     std::cout<<(ok?"SF2/EMU8000 END-TO-END PASS":"SF2/EMU8000 END-TO-END FAIL")<<'\n';
     std::cout<<"NOT RUN: licensed/user SF2, original ROM timbre parity, Studio One"<<'\n';

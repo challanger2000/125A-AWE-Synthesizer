@@ -51,3 +51,10 @@ if(125A_BUILD_VST3)
   add_subdirectory(external/vst3sdk)
   add_subdirectory(src/vst3)
 endif()
+
+# Independent YMF262/OPL3 chip accuracy module. Register test only;
+# no user-visible FM VST3 mode or MIDI patch translator is claimed yet.
+option(125A_BUILD_OPL3_PROBES "Build isolated register-level OPL3 core tests" ON)
+if(125A_BUILD_OPL3_PROBES)
+  add_subdirectory(src/opl3)
+endif()

@@ -20,3 +20,9 @@ These may be used locally by a user who lawfully possesses them, outside the sou
 ## Developer constraints
 
 Only the version-pinned snapshot is authoritative for comparisons. Never change upstream code to silence a regression without recording a patch and validating before/after register traces and audio PCM. 125A adapter code must be C++23 and callback-safe. An upstream console renderer passing does not demonstrate realtime VST3 functionality.
+
+## Independent OPL3 module (development only)
+
+- [Nuked OPL3](https://github.com/nukeykt/Nuked-OPL3), pinned commit `765ec962e473aeb767e4cba74ffdc8f588ffbfe8`, by Nuke.YKT, **LGPL-2.1-or-later**. Original unmodified `opl3.c` and `opl3.h` and complete original `LICENSE` in `third_party/Nuked-OPL3/`; attribution preserved.
+- Native C core is a **standalone library with register-level tests only**, not linked to the customer/experimental VST3 product in this stage. No Creative CQM implementation has been included.
+- Before shipping binaries linking this library, audit LGPL redistributability, source availability, relinking obligations and notices along with pre-existing 86Box GPL terms. Do not assume a static link is license-obligation-free.
