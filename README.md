@@ -1,7 +1,7 @@
 # 125A AWE Synthesizer
 Windows x64 VST3 instrument project: historically faithful Sound Blaster AWE32/AWE64 EMU8000 synthesis.
 
-**Current state: v0.1.0 EMU8000 native integration candidate — Windows x64 native tests PASS (4/4), NOT a VST3 and NOT released.** No Windows VST3 executable exists yet. Windows Actions [#41231977541](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/41231977541) verified native compilation and tests.
+**Current state: v0.1.0 EMU8000 native integration candidate — Windows x64 native tests PASS (5/5), NOT a VST3 and NOT released.** No Windows VST3 executable exists yet. Windows Actions [#41232207613](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/41232207613) verified native compilation and tests.
 
 - Development branch: `develop/v0.1.0-upstream-audit`. Keep `main` stable.
 - A complete version-pinned *upstream source snapshot* (C and C++) is under `upstream/AWE32Emu/`; its original CMake console executable is preserved separately.
@@ -32,7 +32,7 @@ cmake --build build --config Release --parallel 2
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-Current native coverage: source provenance, 86Box chip initialization and bounded FIFO/queue, SoundFont zone selection, and 44.1/48/96 kHz block-partition equivalence with a synthetic MIDI instrument. **Authentic EMU8000 ROM/SF2 sonic parity, VST3 processor/controller, project recall, validator and Studio One tests are not yet complete.**
+Current native coverage: source provenance, 86Box chip initialization and bounded FIFO/queue, SoundFont zone selection, 44.1/48/96 kHz block-partition equivalence with a synthetic MIDI instrument, **plus separate 86Box chip FIFO/44.1/48 kHz synthetic waveform tests**. **Authentic EMU8000 ROM/SF2 sonic parity, VST3 processor/controller, project recall, validator and Studio One tests are not yet complete.**
 
 See [docs/AWE-P05-RENDER-RESAMPLER.md](docs/AWE-P05-RENDER-RESAMPLER.md) for audit boundaries.
 

@@ -1,6 +1,6 @@
 # Audit patch AWE-P01/P02/P03 — engine safety candidate
 
-**Status: native Windows CI PASS for P01/P02/P03, initially verified in run #41229506821; subsequently rerun in #41231977541. Still a candidate, not release-approved.**
+**Status: native Windows CI PASS for P01/P02/P03, initially verified in run #41229506821; subsequently rerun in #41232207613. Still a candidate, not release-approved.**
 Baseline upstream: `turican0/AWE32Emu@17b0578fe59909dfaa784b5531d6d1a3a80729ce`.
 Original source remains unchanged under `upstream/AWE32Emu/`.
 
@@ -23,4 +23,4 @@ Original source remains unchanged under `upstream/AWE32Emu/`.
 ## Test intentions
 Native test verifies missing and truncated ROM handling, two independently allocated chip instances, initial 980-frame silence, pathological queued writes and no-process-exit failure policy.
 
-**Evidence:** Windows-2022 / MSVC 2022 completed successfully: [#41231977541](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/41231977541), 4/4 native tests PASS. No VST3 validator or Studio One test has run.
+**Evidence:** Windows-2022 / MSVC 2022 completed successfully: [#41232207613](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/41232207613), 5/5 native tests PASS. No VST3 validator or Studio One test has run.
