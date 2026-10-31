@@ -103,7 +103,9 @@ public:
                 ParamValue val=0;
                 if(q->getPoint(q->getPointCount()-1,off,val)==kResultOk&&std::isfinite(val)) {
                     program_=static_cast<uint8_t>(std::clamp(int(std::lround(val*127.)),0,127));
-                    for(int c=0;c<16;++c)
+                    // The host can flush parameters before setActive.
+                    // Program state must survive even without a Synth.
+                    if(synth_)for(int c=0;c<16;++c)
                         synth_->ProgramChange(static_cast<uint8_t>(c),program_);
                 }
             }

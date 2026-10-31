@@ -3,6 +3,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -16,7 +17,9 @@ using Bytes = std::vector<std::uint8_t>;
 void u16(Bytes& b, unsigned v) { b.push_back(v & 255); b.push_back((v >> 8) & 255); }
 void u32(Bytes& b, std::uint32_t v) { u16(b,v); u16(b,v >> 16); }
 void name20(Bytes& b, const char* s) {
-    for (size_t i=0; i<20; ++i) b.push_back(s[i] ? static_cast<std::uint8_t>(s[i]) : 0);
+    const size_t length = std::strlen(s);
+    for (size_t i=0; i<20; ++i)
+        b.push_back(i<length ? static_cast<std::uint8_t>(s[i]) : 0);
 }
 void chunk(Bytes& b, const char* name, const Bytes& payload) {
     b.insert(b.end(), name, name + 4);

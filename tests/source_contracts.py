@@ -20,7 +20,20 @@ missing = [name for name in required if not (upstream / name).is_file()]
 assert not missing, "Incomplete upstream source baseline: " + ", ".join(missing)
 
 forbidden = {".raw", ".rom", ".sf2", ".sbk", ".sfz", ".mdi", ".vxd", ".drv", ".wav", ".iso", ".hfe", ".img"}
-found = [str(p.relative_to(root)) for p in root.rglob("*") if p.is_file() and p.suffix.lower() in forbidden and ".git" not in p.parts]
+# The externally cloned Steinberg SDK is NOT part of the committed project.
+# Its SDK example includes drumLoop.wav. Excluding only this exact SDK root
+# preserves the strict exclusion check everywhere else in our repository.
+external_sdk = root / "external" / "vst3sdk"
+found = []
+for p in root.rglob("*"):
+    if not p.is_file() or p.suffix.lower() not in forbidden:
+        continue
+    relative = p.relative_to(root)
+    if ".git" in relative.parts:
+        continue
+    if external_sdk in p.parents:
+        continue
+    found.append(str(relative))
 assert not found, "Protected binary/audio resources in source tree: " + ", ".join(found)
 print("PASS: upstream source presence and protected binary-asset exclusion ONLY")
 print("NOT RUN: compile, MIDI, audio, ROM, VST3 and Studio One checks")

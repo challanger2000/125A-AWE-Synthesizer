@@ -33,3 +33,23 @@ new build evidence must confirm whether all findings are actually fixed.
 
 Windows developer artifacts are generated only after a successful build and
 validator run; ROM/SF2 contents are excluded.
+
+## Source-contract false-positive, test adequacy and repair
+
+The first actual Windows VST3 module built successfully and the Steinberg
+Validator passed **47/47** in run #41233625685. The workflow was not green
+because `125A_source_baseline_contract` incorrectly flagged
+`external/vst3sdk/public.sdk/samples/vst/again_auv3/Shared/drumLoop.wav`
+from the freshly cloned Steinberg SDK. That is SDK-owned example content,
+not an asset checked into 125A. The source-contract check now excludes **only**
+this exact Steinberg SDK clone root while continuing to reject protected
+ROM/SF2/WAV assets under every other project directory. This is not a
+validator workaround and leaves the audio-content prohibition intact.
+
+A separate processor issue found during review: the VST3 host can flush
+Program changes before `setActive`; previous code dereferenced a null
+`synth_`. The corrected path retains Program state and applies it when
+activation creates the synthesizer.
+
+Status of these changes requires a matching successful CI run; no user
+asset/Studio One parity claim is implied.
