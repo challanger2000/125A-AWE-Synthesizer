@@ -1,0 +1,23 @@
+name: 125A AWE32 Engine Safety - Windows
+on:
+  push:
+    branches:
+      - develop/v0.1.0-upstream-audit
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  engine-safety:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure patched chip safety harness
+        shell: pwsh
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -D125A_BUILD_ENGINE_PROBES=ON
+      - name: Build native engine safety executable
+        shell: pwsh
+        run: cmake --build build --config Release --target awe32_engine_safety_test
+      - name: Run native safety and static source-contract tests
+        shell: pwsh
+        run: ctest --test-dir build -C Release --output-on-failure

@@ -17,6 +17,11 @@ if(125A_BUILD_UPSTREAM_CLI)
 endif()
 
 enable_testing()
+
+option(125A_BUILD_ENGINE_PROBES "Build the patched EMU8000 safety harness" ON)
+if(125A_BUILD_ENGINE_PROBES)
+  add_subdirectory(src/engine)
+endif()
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND)
   add_test(

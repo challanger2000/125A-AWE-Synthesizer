@@ -1,0 +1,26 @@
+# 125A AWE Synthesizer: active, isolated chip safety adapter.
+# Original upstream files remain untouched under upstream/AWE32Emu.
+set(UPSTREAM_SRC "${PROJECT_SOURCE_DIR}/upstream/AWE32Emu/AWE32Emu/src")
+add_library(awe32_chip_safety STATIC
+  "${CMAKE_CURRENT_SOURCE_DIR}/snd_emu8k.c"
+  "${CMAKE_CURRENT_SOURCE_DIR}/Emu8000Box.cpp"
+  "${UPSTREAM_SRC}/I18n.cpp"
+)
+target_include_directories(awe32_chip_safety PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}/include"
+  "${UPSTREAM_SRC}/86box/include"
+  "${UPSTREAM_SRC}"
+)
+target_compile_definitions(awe32_chip_safety PRIVATE AWE32EMU_WITH_86BOX)
+if(WIN32)
+  target_compile_definitions(awe32_chip_safety PRIVATE _CRT_SECURE_NO_WARNINGS)
+else()
+  target_link_libraries(awe32_chip_safety PUBLIC m)
+endif()
+set_target_properties(awe32_chip_safety PROPERTIES C_STANDARD 11 CXX_STANDARD 23)
+
+add_executable(awe32_engine_safety_test "${PROJECT_SOURCE_DIR}/tests/engine_safety.cpp")
+target_include_directories(awe32_engine_safety_test PRIVATE "${UPSTREAM_SRC}")
+target_link_libraries(awe32_engine_safety_test PRIVATE awe32_chip_safety)
+set_target_properties(awe32_engine_safety_test PROPERTIES CXX_STANDARD 23)
+add_test(NAME 125A_engine_safety COMMAND awe32_engine_safety_test)
