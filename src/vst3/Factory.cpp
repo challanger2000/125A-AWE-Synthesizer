@@ -87,6 +87,13 @@ public:
                     fmReady_=false; // never play the test patch as a failed bank
                 }
             }
+            if(!state_.drumIbkPath.empty()) {
+                std::string error;
+                if(!opl_->LoadPercussionIbk(state_.drumIbkPath,error)) {
+                    assetError_=std::move(error);
+                    fmReady_=false; // fail closed for explicitly requested drum bank
+                }
+            }
             for(int c=0;c<16;++c)
                 opl_->ProgramChange(static_cast<uint8_t>(c),
                     static_cast<uint8_t>(state_.program));
@@ -244,12 +251,16 @@ private:
                 state_.romPath=std::move(configured.rom);
                 state_.sf2Path=std::move(configured.sf2);
                 state_.ibkPath=std::move(configured.ibk);
+                state_.drumIbkPath=std::move(configured.drumIbk);
                 state_.pathsSpecified=true;
             } else assetError_="Invalid 125A assets.cfg";
-        } else if(state_.ibkPath.empty() && AssetConfig::Load(configured)) {
-            // Legacy V1-V3 projects have no IBK field. Preserve their
-            // ROM/SF2 paths while adopting an optional configured FM bank.
-            state_.ibkPath=std::move(configured.ibk);
+        } else if((state_.ibkPath.empty()||state_.drumIbkPath.empty()) &&
+                  AssetConfig::Load(configured)) {
+            // Legacy V1-V4 state migration: leave project ROM/SF2 paths
+            // untouched, only fill missing FM bank paths from configuration.
+            if(state_.ibkPath.empty())state_.ibkPath=std::move(configured.ibk);
+            if(state_.drumIbkPath.empty())
+                state_.drumIbkPath=std::move(configured.drumIbk);
         }
     }
 };

@@ -8,7 +8,7 @@
 #include <utility>
 
 namespace AWE125::AssetConfig {
-struct Paths { std::string rom,sf2,ibk; };
+struct Paths { std::string rom,sf2,ibk,drumIbk; };
 inline std::string trim(std::string s) {
     auto ws=[](unsigned char c){return c==' '||c=='\t'||c=='\r'||c=='\n';};
     while(!s.empty()&&ws(static_cast<unsigned char>(s.front())))s.erase(s.begin());
@@ -33,6 +33,7 @@ inline bool Parse(std::istream& stream,Paths& result) {
         if(key=="ROM")candidate.rom=std::move(value);
         else if(key=="SF2")candidate.sf2=std::move(value);
         else if(key=="OPL3_IBK")candidate.ibk=std::move(value);
+        else if(key=="OPL3_DRUM_IBK")candidate.drumIbk=std::move(value);
         else return false; // no silent typo acceptance
     }
     if(stream.bad())return false;
@@ -51,9 +52,11 @@ inline bool Load(Paths& result) {
     if(const char* rom=std::getenv("AWE32_ROM_PATH");rom&&*rom)fallback.rom=rom;
     if(const char* sf2=std::getenv("AWE32_SF2_PATH");sf2&&*sf2)fallback.sf2=sf2;
     if(const char* ibk=std::getenv("AWE32_OPL3_IBK_PATH");ibk&&*ibk)fallback.ibk=ibk;
+    if(const char* kit=std::getenv("AWE32_OPL3_DRUM_IBK_PATH");kit&&*kit)fallback.drumIbk=kit;
     if(!AssetState::validPath(fallback.rom)||
        !AssetState::validPath(fallback.sf2)||
-       !AssetState::validPath(fallback.ibk))return false;
+       !AssetState::validPath(fallback.ibk)||
+       !AssetState::validPath(fallback.drumIbk))return false;
     result=std::move(fallback);
     return true;
 }

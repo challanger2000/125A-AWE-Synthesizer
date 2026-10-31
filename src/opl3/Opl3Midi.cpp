@@ -34,8 +34,96 @@ bool Opl3Midi::LoadMelodicIbk(const std::string& path,std::string& error) {
     bank_=std::move(candidate);
     return true;
 }
+bool Opl3Midi::LoadPercussionIbk(const std::string& path,std::string& error) {
+    IbkBank candidate;
+    if(!candidate.Load(path,error))return false;
+    // IBK rhythm voice byte 11: 6=BD,7=SD,8=TT,9=CY,10=HH.
+    // Reject non-rhythm banks rather than claiming drum coverage.
+    bool hasRhythm=false;
+    for(int n=0;n<128;++n) {
+        const auto type=candidate.At(static_cast<uint8_t>(n)).registers[11];
+        hasRhythm|=type>=6 && type<=10;
+    }
+    if(!hasRhythm) {error="IBK: no valid YMF262 rhythm percussion entries";return false;}
+    AllNotesOff();
+    drumBank_=std::move(candidate);
+    rhythmRegister_=0x20;
+    Write(0xbd,rhythmRegister_); // real YMF262 rhythm mode
+    // B6/B7/B8 key-on bits must stay clear throughout rhythm mode.
+    for(size_t i=6;i<9;++i) {
+        const auto& v=voices_[i];
+        Write(reg(i,0xb0),static_cast<uint8_t>((v.fnum>>8)|(v.block<<2)));
+    }
+    return true;
+}
 void Opl3Midi::ProgramChange(uint8_t channel,uint8_t program) {
     if(channel<16 && program<128)channels_[channel].program=program;
+}
+void Opl3Midi::SetDrumPitch(uint8_t channel,uint8_t note) {
+    const double hz=440.0*std::pow(2.0,(double(note)-69.0)/12.0);
+    uint8_t block=0;
+    double fnum=hz*std::ldexp(1.0,20)/kClock;
+    while(fnum>1023.0&&block<7){fnum*=0.5;++block;}
+    const uint16_t f=static_cast<uint16_t>(std::clamp(int(std::lround(fnum)),0,1023));
+    Write(reg(channel,0xa0),static_cast<uint8_t>(f&0xff));
+    // These channels are drum voices, NEVER use Bx melodic key-on.
+    Write(reg(channel,0xb0),static_cast<uint8_t>((f>>8)|(block<<2)));
+}
+void Opl3Midi::DrumNoteOn(uint8_t note,uint8_t velocity) {
+    if(!drumBank_||note>=128||velocity==0)return;
+    const auto& p=drumBank_->At(note).registers;
+    const uint8_t type=p[11];
+    if(type<6||type>10)return; // no fake GM-to-rhythm substitutions
+    const unsigned drum=type-6;
+    constexpr std::array<uint8_t,5> keyBits{0x10,0x08,0x04,0x02,0x01};
+    constexpr std::array<uint8_t,5> channels{6,7,8,8,7};
+    constexpr std::array<uint8_t,5> slots{0x10,0x14,0x12,0x15,0x11};
+    constexpr std::array<bool,5> carriers{true,true,false,true,false};
+    const uint8_t bit=keyBits[drum];
+    // Hardware has only ONE instance of each drum, so retriggers replace it.
+    rhythmRegister_&=static_cast<uint8_t>(~bit);
+    Write(0xbd,rhythmRegister_); // real drum-envelope KEY OFF
+    const uint8_t ch=channels[drum],op=slots[drum];
+    const auto writeOp=[&](uint8_t slot,bool carrier) {
+        const int delta=carrier?1:0;
+        const uint8_t tl=p[2+delta];
+        // Scale carrier level while preserving the patch's KSL bits.
+        const int db=std::clamp(int(std::lround(
+            -20.0*std::log10(double(velocity)/127.0)/0.75)),0,63);
+        Write(reg(ch,0x20,slot),p[0+delta]);
+        Write(reg(ch,0x40,slot),static_cast<uint8_t>(
+            (tl&0xc0)|std::min(63,int(tl&0x3f)+db)));
+        Write(reg(ch,0x60,slot),p[4+delta]);
+        Write(reg(ch,0x80,slot),p[6+delta]);
+        Write(reg(ch,0xe0,slot),p[8+delta]);
+    };
+    if(drum==0) {
+        writeOp(0x10,false);writeOp(0x13,true);
+    } else {
+        writeOp(op,carriers[drum]);
+    }
+    Write(reg(ch,0xc0),static_cast<uint8_t>((p[10]&0x0f)|0x30));
+    const uint8_t pitch=static_cast<uint8_t>(std::clamp(
+        p[13]!=0?int(p[13]):int(note)+int(static_cast<int8_t>(p[12])),0,127));
+    SetDrumPitch(ch,pitch);
+    drums_[drum]={true,note};
+    rhythmRegister_|=bit;
+    Write(0xbd,rhythmRegister_); // distinct real BD/SD/TT/CY/HH key
+}
+void Opl3Midi::DrumNoteOff(uint8_t note) {
+    constexpr std::array<uint8_t,5> bits{0x10,0x08,0x04,0x02,0x01};
+    for(size_t i=0;i<drums_.size();++i)
+        if(drums_[i].pressed&&drums_[i].note==note) {
+            drums_[i].pressed=false;
+            rhythmRegister_&=static_cast<uint8_t>(~bits[i]);
+            Write(0xbd,rhythmRegister_);
+        }
+}
+void Opl3Midi::AllDrumsOff() {
+    if(!drumBank_)return;
+    for(auto& drum:drums_)drum.pressed=false;
+    rhythmRegister_=0x20;
+    Write(0xbd,rhythmRegister_);
 }
 void Opl3Midi::Write(uint16_t address,uint8_t value) {
     OPL3_WriteReg(chip_.get(),address,value);
@@ -103,25 +191,27 @@ void Opl3Midi::StartVoice(size_t i,uint8_t channel,uint8_t note,uint8_t velocity
 void Opl3Midi::NoteOn(uint8_t channel,uint8_t note,uint8_t velocity) {
     if(channel>=16||note>127)return;
     if(velocity==0){NoteOff(channel,note);return;}
+    if(channel==9&&drumBank_){DrumNoteOn(note,velocity);return;}
     size_t chosen=kVoices;
     for(size_t i=0;i<kVoices;++i)
-        if(!voices_[i].allocated){chosen=i;break;}
+        if(!voices_[i].allocated&&(!drumBank_||i<6||i>=9)){chosen=i;break;}
     if(chosen==kVoices) {
         uint64_t oldest=std::numeric_limits<uint64_t>::max();
         for(size_t i=0;i<kVoices;++i) {
             const auto& v=voices_[i];
-            if(!v.pressed&&!v.held&&v.age<oldest){oldest=v.age;chosen=i;}
+            if((!drumBank_||i<6||i>=9)&&!v.pressed&&!v.held&&v.age<oldest){oldest=v.age;chosen=i;}
         }
     }
     if(chosen==kVoices) {
         uint64_t oldest=std::numeric_limits<uint64_t>::max();
         for(size_t i=0;i<kVoices;++i)
-            if(voices_[i].age<oldest){oldest=voices_[i].age;chosen=i;}
+            if((!drumBank_||i<6||i>=9)&&voices_[i].age<oldest){oldest=voices_[i].age;chosen=i;}
     }
     StartVoice(chosen,channel,note,velocity);
 }
 void Opl3Midi::NoteOff(uint8_t channel,uint8_t note) {
     if(channel>=16||note>127)return;
+    if(channel==9&&drumBank_){DrumNoteOff(note);return;}
     size_t chosen=kVoices;uint64_t oldest=std::numeric_limits<uint64_t>::max();
     for(size_t i=0;i<kVoices;++i) {
         const auto& v=voices_[i];
@@ -136,9 +226,14 @@ void Opl3Midi::NoteOff(uint8_t channel,uint8_t note) {
 void Opl3Midi::AllNotesOff() {
     for(size_t i=0;i<kVoices;++i)KeyOff(i);
     for(auto& ch:channels_)ch.sustain=false;
+    AllDrumsOff();
 }
 void Opl3Midi::ControlChange(uint8_t channel,uint8_t cc,uint8_t value) {
     if(channel>=16)return;
+    if(channel==9&&drumBank_) {
+        if(cc==120||cc==123||cc==121)AllDrumsOff();
+        return;
+    }
     auto& ch=channels_[channel];
     if(cc==64) {
         const bool on=value>=64;
@@ -166,6 +261,7 @@ void Opl3Midi::ControlChange(uint8_t channel,uint8_t cc,uint8_t value) {
 }
 void Opl3Midi::PitchBend(uint8_t channel,int16_t bend) {
     if(channel>=16)return;
+    if(channel==9&&drumBank_)return;
     channels_[channel].bend=static_cast<int16_t>(std::clamp(int(bend),-8192,8191));
     for(size_t i=0;i<kVoices;++i)
         if(voices_[i].allocated&&voices_[i].channel==channel)UpdatePitch(i);
@@ -184,6 +280,8 @@ void Opl3Midi::RenderBlock(int16_t* out,uint32_t frames) {
 }
 uint32_t Opl3Midi::PressedVoices() const {
     return static_cast<uint32_t>(std::count_if(voices_.begin(),voices_.end(),
-        [](const Voice& v){return v.pressed;}));
+        [](const Voice& v){return v.pressed;}))
+        +static_cast<uint32_t>(std::count_if(drums_.begin(),drums_.end(),
+        [](const Drum& d){return d.pressed;}));
 }
 } // namespace AWE125

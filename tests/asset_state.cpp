@@ -31,14 +31,22 @@ int main() {
     d.romPath="C:\\ROMs\\awe32.raw";
     d.sf2Path="D:\\Sounds\\Synth 512 Bank.sf2";
     d.ibkPath="C:\\FM\\Creative melodic.ibk";
+    d.drumIbkPath="C:\\FM\\Creative drums.ibk";
     const auto blob=encode(d);
     AssetState::Data out;
     ok &= ck(!blob.empty()&&decode(blob,out)&&out.program==104&&
              out.engine==1&&out.pathsSpecified&&out.romPath==d.romPath&&
-             out.sf2Path==d.sf2Path&&out.ibkPath==d.ibkPath,
-             "V4 program, hardware and IBK asset round trip");
-    Bytes v3(blob.begin(),blob.end()-4-uint32_t(d.ibkPath.size()));
-    // V4 appends a length-prefixed IBK path after the V3 hardware word.
+             out.sf2Path==d.sf2Path&&out.ibkPath==d.ibkPath&&
+             out.drumIbkPath==d.drumIbkPath,
+             "V5 program, hardware, melodic and percussion banks round trip");
+    // Historical V4 ends before V5's appended drum bank path.
+    Bytes v4(blob.begin(),blob.end()-4-d.drumIbkPath.size());
+    v4[4]=4;
+    ok &= ck(decode(v4,out)&&out.engine==1&&
+             out.ibkPath==d.ibkPath&&out.drumIbkPath.empty(),
+             "legacy V4 melodic bank and engine recall");
+    Bytes v3(v4.begin(),v4.end()-4-d.ibkPath.size());
+    // V3 carried the hardware word without IBK paths.
     v3[4]=3;
     ok &= ck(decode(v3,out)&&out.program==104&&out.engine==1&&
              out.ibkPath.empty()&&out.sf2Path==d.sf2Path,
@@ -61,7 +69,7 @@ int main() {
         if(decode(partial,target)||target.program!=3||
            target.sf2Path!=d.sf2Path)allRejected=false;
     }
-    ok &= ck(allRejected,"all truncated V4 states rejected atomically");
+    ok &= ck(allRejected,"all truncated V5 states rejected atomically");
     auto corrupt=blob;
     corrupt[4]=90;
     out=d;out.program=7;
@@ -69,7 +77,7 @@ int main() {
              "unknown format version rejected atomically");
     corrupt=blob;
     // Hardware word is positioned before the final IBK string record.
-    const size_t engineOffset=corrupt.size()-4-d.ibkPath.size()-4;
+    const size_t engineOffset=corrupt.size()-4-d.drumIbkPath.size()-4-d.ibkPath.size()-4;
     corrupt[engineOffset]=2;
     ok &= ck(!decode(corrupt,out)&&out.program==7,
              "out-of-range hardware mode rejected atomically");
@@ -81,6 +89,9 @@ int main() {
     AssetState::Data blank;blank.program=11;
     ok &= ck(decode(encode(blank),out)&&!out.pathsSpecified,
              "unresolved paths flag preserved for initial configuration");
+    d.drumIbkPath=std::string(4097,'x');
+    ok &= ck(encode(d).empty(),"oversize drum IBK path rejected on save");
+    d.drumIbkPath.clear();
     d.ibkPath=std::string(4097,'x');
     ok &= ck(encode(d).empty(),"oversize IBK path rejected on save");
     d.ibkPath.clear();
@@ -91,11 +102,13 @@ int main() {
         "# private user asset paths\n"
         "ROM = \"C:\\ROMs\\awe32.raw\" \r\n"
         "SF2 = \"D:\\Sounds\\Synth 512 Bank.sf2\"\r\n"
-        "OPL3_IBK = \"C:\\FM\\Creative melodic.ibk\"\r\n");
+        "OPL3_IBK = \"C:\\FM\\Creative melodic.ibk\"\r\n"
+        "OPL3_DRUM_IBK = \"C:\\FM\\Creative drums.ibk\"\r\n");
     ok &= ck(AssetConfig::Parse(ini,config)&&
              config.rom=="C:\\ROMs\\awe32.raw"&&
              config.sf2=="D:\\Sounds\\Synth 512 Bank.sf2"&&
-             config.ibk=="C:\\FM\\Creative melodic.ibk",
+             config.ibk=="C:\\FM\\Creative melodic.ibk"&&
+             config.drumIbk=="C:\\FM\\Creative drums.ibk",
              "Windows paths and quoted spaces parsed");
     AssetConfig::Paths keep{"valid rom","valid sf2"};
     std::istringstream malformed("ROM=valid.raw\nSFX=typo.sf2\n");

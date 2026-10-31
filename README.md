@@ -1,7 +1,7 @@
 # 125A AWE Synthesizer
 Windows x64 VST3 instrument project: historically faithful Sound Blaster AWE32/AWE64 EMU8000 synthesis.
 
-**Current state: v0.1.0 experimental Windows VST3; P10 Windows Actions #41238191358 SUCCESS (Steinberg Validator 47/47, 9/9 CTests). Owner confirmed SF2 and initial OPL3 FM audio in Studio One. Project save/reload and original-hardware sonic parity remain NOT RUN.**
+**Current state: v0.1.0 experimental Windows VST3; P11 Windows Actions #41239353552 SUCCESS (Steinberg Validator 47/47, 10/10 CTests). Owner confirmed SF2 and initial OPL3 FM audio in Studio One; IBK bank and original-hardware sonic parity remain unverified in Studio One.**
 
 - Development branch: `develop/v0.1.0-upstream-audit`. Keep `main` stable.
 - A complete version-pinned *upstream source snapshot* (C and C++) is under `upstream/AWE32Emu/`; its original CMake console executable is preserved separately.
@@ -95,3 +95,35 @@ FM driver volume tables, four-operator FM instrument formats and a GUI bank
 browser remain separate work. This does NOT claim original AWE64 CQM or
 Live!/EMU10K1 emulation. Original Creative FM banks and ROMs are not
 distributed with the repository or Windows Actions artifacts.
+
+## P12: Real YMF262 rhythm hardware with user percussion IBK
+
+If you have a valid original **rhythm-style** Sound Blaster .IBK percussion
+bank (same 3204-byte format as melodic IBK), append this line to the
+existing Windows asset configuration:
+
+    OPL3_DRUM_IBK = "C:\SoundBlaster\YourDrumBank.IBK"
+
+Both IBK files are optional; neither is redistributed. Restart/re-activate
+the VST3 after changing asset paths. Hardware=Yamaha OPL3, MIDI channel 10
+(zero-based channel 9) selects the drum patch by MIDI note. The bank's
+IBK percussion-voice byte 11 must identify one of the actual YMF262 hardware
+drums: 6=BD, 7=SD, 8=Tom, 9=Top Cymbal, 10=Hi-Hat. Unmapped notes
+stay unmapped: we do not invent a GM-to-drum translation.
+
+Register 0xBD rhythm mode (bit 5) controls five original key bits:
+BD=bit4, SD=bit3, Tom=bit2, Cymbal=bit1, HH=bit0. The chip uses
+operators on YMF262 channels 6/7/8, leaving **15 melodic voices** instead
+of 18 while a drum bank is active. Only the corresponding original chip
+operators are programmed, preserving shared-channel frequency behavior.
+One physical drum voice retriggers rather than spawning extra voices.
+
+P12 state V5 adds a persisted external drum-IBK path; state V1-V4 remains
+readable. No Creative ROM, samples, drivers or bank binaries are bundled.
+If an explicitly configured IBK is invalid, FM remains silent until
+configuration is corrected and plugin reactivation. Without a percussion
+bank P11 behavior (18 melodic voices) remains unchanged.
+
+**Still unverified:** Studio One playback with a real licensed percussion
+IBK, Creative Windows/DOS driver-to-GM rhythm mapping, actual YMF262
+hardware PCM parity, Creative CQM and Live!/EMU10K1.

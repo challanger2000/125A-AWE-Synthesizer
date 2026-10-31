@@ -30,3 +30,8 @@ add_executable(awe32_opl3_ibk_bank_test "${PROJECT_SOURCE_DIR}/tests/opl3_ibk_ba
 target_link_libraries(awe32_opl3_ibk_bank_test PRIVATE awe32_opl3_midi)
 target_compile_features(awe32_opl3_ibk_bank_test PRIVATE cxx_std_23)
 add_test(NAME 125A_opl3_ibk_bank COMMAND awe32_opl3_ibk_bank_test)
+
+add_executable(awe32_opl3_rhythm_audio_test "${PROJECT_SOURCE_DIR}/tests/opl3_rhythm_audio.cpp")
+target_link_libraries(awe32_opl3_rhythm_audio_test PRIVATE awe32_opl3_midi)
+target_compile_features(awe32_opl3_rhythm_audio_test PRIVATE cxx_std_23)
+add_test(NAME 125A_opl3_rhythm_audio COMMAND awe32_opl3_rhythm_audio_test)
