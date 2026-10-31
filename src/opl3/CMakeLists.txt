@@ -17,7 +17,7 @@ target_compile_features(awe32_opl3_register_audio_test PRIVATE cxx_std_23)
 add_test(NAME 125A_opl3_register_audio COMMAND awe32_opl3_register_audio_test)
 
 # Separate MIDI-to-YMF262 adapter; no audio-thread heap operations.
-add_library(awe32_opl3_midi STATIC Opl3Midi.cpp Opl3Midi.h)
+add_library(awe32_opl3_midi STATIC Opl3Midi.cpp Opl3Midi.h IbkBank.cpp IbkBank.h)
 target_link_libraries(awe32_opl3_midi PUBLIC awe32_opl3_core)
 target_include_directories(awe32_opl3_midi PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_compile_features(awe32_opl3_midi PRIVATE cxx_std_23)
@@ -25,3 +25,8 @@ add_executable(awe32_opl3_midi_audio_test "${PROJECT_SOURCE_DIR}/tests/opl3_midi
 target_link_libraries(awe32_opl3_midi_audio_test PRIVATE awe32_opl3_midi)
 target_compile_features(awe32_opl3_midi_audio_test PRIVATE cxx_std_23)
 add_test(NAME 125A_opl3_midi_audio COMMAND awe32_opl3_midi_audio_test)
+
+add_executable(awe32_opl3_ibk_bank_test "${PROJECT_SOURCE_DIR}/tests/opl3_ibk_bank.cpp")
+target_link_libraries(awe32_opl3_ibk_bank_test PRIVATE awe32_opl3_midi)
+target_compile_features(awe32_opl3_ibk_bank_test PRIVATE cxx_std_23)
+add_test(NAME 125A_opl3_ibk_bank COMMAND awe32_opl3_ibk_bank_test)

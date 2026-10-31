@@ -1,9 +1,12 @@
 #pragma once
 #include "opl3.h"
+#include "IbkBank.h"
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
+#include <string>
 #include <vector>
 
 // Actual Yamaha YMF262 register engine, separate from EMU8000 and from
@@ -16,6 +19,11 @@ public:
     ~Opl3Midi();
     Opl3Midi(const Opl3Midi&)=delete;
     Opl3Midi& operator=(const Opl3Midi&)=delete;
+    // Load a genuine Sound Blaster 128-patch melodic IBK bank before activation.
+    // Failure leaves the previous bank intact; no audio-thread file operations.
+    bool LoadMelodicIbk(const std::string& path,std::string& error);
+    void ProgramChange(uint8_t channel,uint8_t program);
+    bool HasMelodicIbk() const {return bank_.has_value();}
     void NoteOn(uint8_t channel,uint8_t note,uint8_t velocity);
     void NoteOff(uint8_t channel,uint8_t note);
     void AllNotesOff();
@@ -28,16 +36,18 @@ public:
 private:
     struct Voice {
         bool allocated=false, pressed=false, held=false;
-        uint8_t channel=0,note=0,velocity=0,block=0;
+        uint8_t channel=0,note=0,pitchNote=0,velocity=0,block=0;
+        uint8_t carrierKslTl=0;
         uint16_t fnum=0;
         uint64_t age=0;
     };
     struct Channel {
         bool sustain=false;
         int16_t bend=0;
-        uint8_t volume=100,expression=127;
+        uint8_t volume=100,expression=127,program=0;
     };
     std::unique_ptr<opl3_chip> chip_;
+    std::optional<IbkBank> bank_{};
     std::array<Voice,kVoices> voices_{};
     std::array<Channel,16> channels_{};
     std::array<uint8_t,128> velocityAtten_{};

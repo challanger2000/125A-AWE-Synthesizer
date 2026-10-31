@@ -28,6 +28,15 @@ Opl3Midi::Opl3Midi(uint32_t rate,uint32_t latency)
     }
 }
 Opl3Midi::~Opl3Midi()=default;
+bool Opl3Midi::LoadMelodicIbk(const std::string& path,std::string& error) {
+    IbkBank candidate;
+    if(!candidate.Load(path,error))return false;
+    bank_=std::move(candidate);
+    return true;
+}
+void Opl3Midi::ProgramChange(uint8_t channel,uint8_t program) {
+    if(channel<16 && program<128)channels_[channel].program=program;
+}
 void Opl3Midi::Write(uint16_t address,uint8_t value) {
     OPL3_WriteReg(chip_.get(),address,value);
 }
@@ -42,7 +51,7 @@ void Opl3Midi::UpdatePitch(size_t i) {
     auto& v=voices_[i];
     if(!v.allocated)return;
     const double bend=double(channels_[v.channel].bend)*2.0/8192.0;
-    const double hz=440.0*std::pow(2.0,(double(v.note)-69.0+bend)/12.0);
+    const double hz=440.0*std::pow(2.0,(double(v.pitchNote)-69.0+bend)/12.0);
     uint8_t block=0;
     double fnum=hz*std::ldexp(1.0,20)/kClock;
     while(fnum>1023.0&&block<7){fnum*=0.5;++block;}
@@ -57,24 +66,38 @@ void Opl3Midi::UpdateLevel(size_t i) {
     if(!v.allocated)return;
     const auto& ch=channels_[v.channel];
     const int amplitude=std::clamp(
-        (int(v.velocity)*int(ch.volume)*int(ch.expression))/(127*127),1,127);
+        (int(v.velocity)*int(ch.volume)*int(ch.expression))/(127*127),0,127);
+    const uint8_t total=static_cast<uint8_t>(std::min(63,
+        int(v.carrierKslTl&0x3f)+int(velocityAtten_[amplitude])));
+    // Restore original patch's KSL upper two bits. At full MIDI velocity
+    // and neutral channel level this is bit-identical to the IBK carrier TL.
     Write(reg(i,0x40,static_cast<uint16_t>(kOperators[i%9]+3)),
-          velocityAtten_[amplitude]);
+          static_cast<uint8_t>((v.carrierKslTl&0xc0)|total));
 }
 void Opl3Midi::StartVoice(size_t i,uint8_t channel,uint8_t note,uint8_t velocity) {
     KeyOff(i);
     auto& v=voices_[i];
     v.allocated=true;v.pressed=true;v.held=false;
-    v.channel=channel;v.note=note;v.velocity=velocity;v.age=++age_;
+    v.channel=channel;v.note=note;v.pitchNote=note;v.velocity=velocity;v.age=++age_;
     const uint16_t op=kOperators[i%9];
-    // Temporary developer patch constructed from real OPL3 registers.
-    // This is not an authentic Creative ROM/GM patch mapping.
-    Write(reg(i,0x20,op),0x01);   Write(reg(i,0x20,op+3),0x01);
-    Write(reg(i,0x40,op),0x20);
-    Write(reg(i,0x60,op),0xf4);   Write(reg(i,0x60,op+3),0xf4);
-    Write(reg(i,0x80,op),0x24);   Write(reg(i,0x80,op+3),0x24);
-    Write(reg(i,0xe0,op),0x00);   Write(reg(i,0xe0,op+3),0x00);
-    Write(reg(i,0xc0),0x32); // stereo pan + two operator feedback
+    // .IBK byte layout: MOD/CAR 20, 40, 60, 80, E0 register pairs,
+    // followed by feedback/connection byte. Preserve the real patch bytes.
+    // Without a user-supplied bank retain the one documented test patch.
+    const std::array<uint8_t,16> fallback{
+        0x01,0x01,0x20,0x00,0xf4,0xf4,0x24,0x24,0x00,0x00,0x02,0,0,0,0,0
+    };
+    const auto& patch=bank_?bank_->At(channels_[channel].program).registers:fallback;
+    Write(reg(i,0x20,op),patch[0]); Write(reg(i,0x20,op+3),patch[1]);
+    Write(reg(i,0x40,op),patch[2]);
+    v.carrierKslTl=patch[3];
+    Write(reg(i,0x60,op),patch[4]); Write(reg(i,0x60,op+3),patch[5]);
+    Write(reg(i,0x80,op),patch[6]); Write(reg(i,0x80,op+3),patch[7]);
+    Write(reg(i,0xe0,op),patch[8]); Write(reg(i,0xe0,op+3),patch[9]);
+    Write(reg(i,0xc0),static_cast<uint8_t>((patch[10]&0x0f)|0x30));
+    // SBI/IBK melodic transpose is signed 8-bit at index 12.
+    // Percussion/rhythm IBK requires a separate physical drum-mode implementation.
+    if(bank_)v.pitchNote=static_cast<uint8_t>(std::clamp(
+        int(note)+int(static_cast<int8_t>(patch[12])),0,127));
     UpdateLevel(i);UpdatePitch(i); // B0 key-on last
 }
 void Opl3Midi::NoteOn(uint8_t channel,uint8_t note,uint8_t velocity) {

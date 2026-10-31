@@ -30,13 +30,21 @@ int main() {
     d.program=104;d.engine=1;d.pathsSpecified=true;
     d.romPath="C:\\ROMs\\awe32.raw";
     d.sf2Path="D:\\Sounds\\Synth 512 Bank.sf2";
+    d.ibkPath="C:\\FM\\Creative melodic.ibk";
     const auto blob=encode(d);
     AssetState::Data out;
     ok &= ck(!blob.empty()&&decode(blob,out)&&out.program==104&&
              out.engine==1&&out.pathsSpecified&&out.romPath==d.romPath&&
-             out.sf2Path==d.sf2Path,"V3 program, hardware and asset paths round trip");
-    // V2 is identical to V3 up to the last 4 bytes (new hardware mode).
-    Bytes v2(blob.begin(),blob.end()-4);
+             out.sf2Path==d.sf2Path&&out.ibkPath==d.ibkPath,
+             "V4 program, hardware and IBK asset round trip");
+    Bytes v3(blob.begin(),blob.end()-4-uint32_t(d.ibkPath.size()));
+    // V4 appends a length-prefixed IBK path after the V3 hardware word.
+    v3[4]=3;
+    ok &= ck(decode(v3,out)&&out.program==104&&out.engine==1&&
+             out.ibkPath.empty()&&out.sf2Path==d.sf2Path,
+             "legacy V3 hardware state restores without IBK path");
+    // V2 excludes V3's hardware mode and V4's IBK path.
+    Bytes v2(v3.begin(),v3.end()-4);
     v2[4]=2;
     ok &= ck(decode(v2,out)&&out.program==104&&out.engine==0&&
              out.pathsSpecified&&out.sf2Path==d.sf2Path,
@@ -53,13 +61,16 @@ int main() {
         if(decode(partial,target)||target.program!=3||
            target.sf2Path!=d.sf2Path)allRejected=false;
     }
-    ok &= ck(allRejected,"all truncated V3 states rejected atomically");
+    ok &= ck(allRejected,"all truncated V4 states rejected atomically");
     auto corrupt=blob;
     corrupt[4]=90;
     out=d;out.program=7;
     ok &= ck(!decode(corrupt,out)&&out.program==7,
              "unknown format version rejected atomically");
-    corrupt=blob;corrupt[corrupt.size()-4]=2;
+    corrupt=blob;
+    // Hardware word is positioned before the final IBK string record.
+    const size_t engineOffset=corrupt.size()-4-d.ibkPath.size()-4;
+    corrupt[engineOffset]=2;
     ok &= ck(!decode(corrupt,out)&&out.program==7,
              "out-of-range hardware mode rejected atomically");
     corrupt=blob;corrupt[8]=255;
@@ -70,16 +81,21 @@ int main() {
     AssetState::Data blank;blank.program=11;
     ok &= ck(decode(encode(blank),out)&&!out.pathsSpecified,
              "unresolved paths flag preserved for initial configuration");
+    d.ibkPath=std::string(4097,'x');
+    ok &= ck(encode(d).empty(),"oversize IBK path rejected on save");
+    d.ibkPath.clear();
     d.romPath=std::string(4097,'x');
     ok &= ck(encode(d).empty(),"oversize path rejected on save");
     AssetConfig::Paths config;
     std::istringstream ini(
         "# private user asset paths\n"
         "ROM = \"C:\\ROMs\\awe32.raw\" \r\n"
-        "SF2 = \"D:\\Sounds\\Synth 512 Bank.sf2\"\r\n");
+        "SF2 = \"D:\\Sounds\\Synth 512 Bank.sf2\"\r\n"
+        "OPL3_IBK = \"C:\\FM\\Creative melodic.ibk\"\r\n");
     ok &= ck(AssetConfig::Parse(ini,config)&&
              config.rom=="C:\\ROMs\\awe32.raw"&&
-             config.sf2=="D:\\Sounds\\Synth 512 Bank.sf2",
+             config.sf2=="D:\\Sounds\\Synth 512 Bank.sf2"&&
+             config.ibk=="C:\\FM\\Creative melodic.ibk",
              "Windows paths and quoted spaces parsed");
     AssetConfig::Paths keep{"valid rom","valid sf2"};
     std::istringstream malformed("ROM=valid.raw\nSFX=typo.sf2\n");
