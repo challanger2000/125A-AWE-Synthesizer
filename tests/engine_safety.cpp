@@ -1,5 +1,6 @@
 #include "Emu8000Box.h"
 extern "C" {
+#include <86box/sound.h>
 #include <86box/snd_emu8k.h>
 }
 

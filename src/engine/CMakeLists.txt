@@ -20,7 +20,7 @@ endif()
 set_target_properties(awe32_chip_safety PROPERTIES C_STANDARD 11 CXX_STANDARD 23)
 
 add_executable(awe32_engine_safety_test "${PROJECT_SOURCE_DIR}/tests/engine_safety.cpp")
-target_include_directories(awe32_engine_safety_test PRIVATE "${UPSTREAM_SRC}" "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_include_directories(awe32_engine_safety_test PRIVATE "${UPSTREAM_SRC}" "${CMAKE_CURRENT_SOURCE_DIR}/include" "${UPSTREAM_SRC}/86box/include")
 find_package(Threads REQUIRED)
 target_link_libraries(awe32_chip_safety PUBLIC Threads::Threads)
 target_link_libraries(awe32_engine_safety_test PRIVATE awe32_chip_safety)
