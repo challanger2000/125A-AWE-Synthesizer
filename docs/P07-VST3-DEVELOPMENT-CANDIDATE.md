@@ -53,3 +53,12 @@ activation creates the synthesizer.
 
 Status of these changes requires a matching successful CI run; no user
 asset/Studio One parity claim is implied.
+
+## P07.1 ROM-free VST3 packaging
+The first artifact passed Steinberg Validator 47/47 but the SDK-generated
+`moduleinfo.json` contained trailing commas, rejected by a strict JSON parser.
+A dedicated post-validation packaging gate now strips only unquoted trailing
+commas and independently parses the resulting JSON. It preserves all class
+IDs, names and metadata. The artifact now includes the outer
+`125A_AWE_Synthesizer.vst3` directory for direct installation.
+Build and test results for this packaging commit must be verified separately.

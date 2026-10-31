@@ -29,10 +29,13 @@ jobs:
         run: |
           cmake --build build-vst3 --config Release --parallel 2
           ctest --test-dir build-vst3 -C Release --output-on-failure
+      - name: Normalize moduleinfo to strict JSON
+        shell: pwsh
+        run: python tools/normalize_vst3_metadata.py build-vst3/VST3/Release/125A_AWE_Synthesizer.vst3/Contents/Resources/moduleinfo.json
       - name: Export ROM-free developer VST3 bundle
         uses: actions/upload-artifact@v4
         with:
           name: 125A-AWE-Synthesizer-Windows-x64-DEV
-          path: build-vst3/VST3/Release/125A_AWE_Synthesizer.vst3/
+          path: build-vst3/VST3/Release/
           if-no-files-found: error
           retention-days: 7
