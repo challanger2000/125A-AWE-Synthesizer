@@ -45,3 +45,19 @@ Before development read `challanger2000/125A-Engineering/START-HERE.md` in its s
 A separate, unmodified, version-pinned [Nuked OPL3](https://github.com/nukeykt/Nuked-OPL3) YMF262 register-level emulator is included under `third_party/Nuked-OPL3/` (commit `765ec962e473aeb767e4cba74ffdc8f588ffbfe8`, LGPL-2.1-or-later). `src/opl3/` builds its own native FM audio regression test by default. **The current VST3 still produces EMU8000 wavetable audio only.** OPL3 is not exposed to MIDI or the GUI yet. A real CQM is a distinct pending implementation, never silently substituted with Yamaha OPL3. EMU10K1/Live! remains future research.
 
 The project now has a fixed **28 MiB EMU8000 sample-RAM default** (plus independent 1 MiB Wave ROM), without a redundant RAM selector. Generated >8 MiB SF2 test data is not checked in and is deleted after the test. Windows CI evidence and original-ROM/Studio-One verification must be reported separately.
+
+## P10: preliminary Yamaha OPL3 MIDI mode (development only)
+
+The VST3's **Hardware** parameter switches **EMU8000 AWE32/64** (existing
+default) and **Yamaha OPL3** (separate authentic Nuked YMF262 register core).
+In Yamaha mode MIDI notes are mapped to up to 18 two-operator voices with
+key-on/key-off, bounded voice stealing and velocity applied to operator TL.
+The immediate sound is a **temporary 2-operator test patch**, NOT the original
+Creative or Yamaha GM instrument bank. The existing "Program" parameter is
+the EMU8000 SF2 selection only: changing 0..127 does not select FM patches.
+
+Hardware mode is persisted in VST3 state V3; V1 and V2 projects default to
+EMU8000. The OPL3 engine aligns its output to the host-reported 86Box FIFO
+latency, preventing a hidden engine-switch latency change. No original
+Creative CQM, Live!/EMU10K1, FM bank browser, finished GUI or DAW/FM
+end-to-end verification is claimed. These require separate work and evidence.

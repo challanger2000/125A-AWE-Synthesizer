@@ -27,18 +27,24 @@ static bool ck(bool v,const char* label) {
 int main() {
     bool ok=true;
     AssetState::Data d;
-    d.program=104;d.pathsSpecified=true;
+    d.program=104;d.engine=1;d.pathsSpecified=true;
     d.romPath="C:\\ROMs\\awe32.raw";
     d.sf2Path="D:\\Sounds\\Synth 512 Bank.sf2";
     const auto blob=encode(d);
     AssetState::Data out;
     ok &= ck(!blob.empty()&&decode(blob,out)&&out.program==104&&
-             out.pathsSpecified&&out.romPath==d.romPath&&
-             out.sf2Path==d.sf2Path,"V2 program and asset paths round trip");
+             out.engine==1&&out.pathsSpecified&&out.romPath==d.romPath&&
+             out.sf2Path==d.sf2Path,"V3 program, hardware and asset paths round trip");
+    // V2 is identical to V3 up to the last 4 bytes (new hardware mode).
+    Bytes v2(blob.begin(),blob.end()-4);
+    v2[4]=2;
+    ok &= ck(decode(v2,out)&&out.program==104&&out.engine==0&&
+             out.pathsSpecified&&out.sf2Path==d.sf2Path,
+             "legacy V2 restores as EMU8000");
     Bytes legacy(blob.begin(),blob.begin()+12);
     legacy[4]=1;
     ok &= ck(decode(legacy,out)&&out.program==104&&
-             !out.pathsSpecified&&out.romPath.empty()&&out.sf2Path.empty(),
+             !out.pathsSpecified&&out.engine==0&&out.romPath.empty()&&out.sf2Path.empty(),
              "legacy V1 project state loads");
     bool allRejected=true;
     for(size_t n=0;n<blob.size();++n) {
@@ -47,12 +53,15 @@ int main() {
         if(decode(partial,target)||target.program!=3||
            target.sf2Path!=d.sf2Path)allRejected=false;
     }
-    ok &= ck(allRejected,"all truncated V2 states rejected atomically");
+    ok &= ck(allRejected,"all truncated V3 states rejected atomically");
     auto corrupt=blob;
     corrupt[4]=90;
     out=d;out.program=7;
     ok &= ck(!decode(corrupt,out)&&out.program==7,
              "unknown format version rejected atomically");
+    corrupt=blob;corrupt[corrupt.size()-4]=2;
+    ok &= ck(!decode(corrupt,out)&&out.program==7,
+             "out-of-range hardware mode rejected atomically");
     corrupt=blob;corrupt[8]=255;
     ok &= ck(!decode(corrupt,out)&&out.program==7,
              "invalid Program rejected atomically");

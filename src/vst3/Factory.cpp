@@ -8,6 +8,8 @@
 #include "Synth.h"
 #include "AssetState.h"
 #include "AssetConfig.h"
+#include "Opl3Midi.h"
+#include "public.sdk/source/vst/vstparameters.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -22,6 +24,7 @@ using namespace Steinberg::Vst;
 inline const FUID kProcessorUID(0x125A8000,0x81A24A93,0xB426CC70,0x3906F211);
 inline const FUID kControllerUID(0x125A8000,0xAE274BC1,0xA4B02DA3,0x573CC990);
 inline constexpr ParamID kProgramID=1000;
+inline constexpr ParamID kEngineID=1001;
 // Persistence data contract is in AssetState.h.
 
 class Processor final : public AudioEffect {
@@ -73,7 +76,10 @@ public:
             }
             for(int c=0;c<16;++c)synth_->ProgramChange(static_cast<uint8_t>(c),
                 static_cast<uint8_t>(state_.program));
-        } else synth_.reset();
+            // Both engines are constructed outside the audio callback.
+            // The OPL3 delay matches the 86Box FIFO reported to the host.
+            opl_=std::make_unique<Opl3Midi>(rate_,synth_->Core().ChipLatencyFrames());
+        } else {opl_.reset();synth_.reset();}
         return AudioEffect::setActive(active);
     }
     uint32 PLUGIN_API getLatencySamples() override {
@@ -116,14 +122,25 @@ public:
             const int32 n=std::clamp(changes->getParameterCount(),0,1024);
             for(int32 i=0;i<n;++i) {
                 auto* q=changes->getParameterData(i);
-                if(!q||q->getParameterId()!=kProgramID||q->getPointCount()<=0)continue;
+                if(!q||q->getPointCount()<=0)continue;
                 int32 off=0;
                 ParamValue val=0;
                 if(q->getPoint(q->getPointCount()-1,off,val)==kResultOk&&std::isfinite(val)) {
-                    state_.program=static_cast<uint32_t>(std::clamp(int(std::lround(val*127.)),0,127));
-                    if(synth_)for(int c=0;c<16;++c)
-                        synth_->ProgramChange(static_cast<uint8_t>(c),
-                            static_cast<uint8_t>(state_.program));
+                    if(q->getParameterId()==kProgramID) {
+                        state_.program=static_cast<uint32_t>(std::clamp(
+                            int(std::lround(val*127.)),0,127));
+                        if(synth_)for(int c=0;c<16;++c)
+                            synth_->ProgramChange(static_cast<uint8_t>(c),
+                                static_cast<uint8_t>(state_.program));
+                    } else if(q->getParameterId()==kEngineID) {
+                        const uint32_t mode=(val>=0.5)?1u:0u;
+                        if(mode!=state_.engine) {
+                            if(opl_)opl_->AllNotesOff();
+                            if(synth_)for(int c=0;c<16;++c)
+                                synth_->ControlChange(static_cast<uint8_t>(c),120,0);
+                            state_.engine=mode;
+                        }
+                    }
                 }
             }
         }
@@ -141,12 +158,15 @@ public:
         std::fill_n(l,data.numSamples,0.f);
         if(r)std::fill_n(r,data.numSamples,0.f);
         data.outputs[0].silenceFlags=r?3u:1u;
-        if(!synth_||uint32(data.numSamples)>capacity_)
+        if(!synth_||!opl_||uint32(data.numSamples)>capacity_)
             return kResultOk;
 
         const auto render=[&](int32 from,int32 to) {
             if(to<=from)return;
-            synth_->RenderBlock(scratch_.data()+size_t{2}*from,static_cast<uint32_t>(to-from));
+            if(state_.engine==1)
+                opl_->RenderBlock(scratch_.data()+size_t{2}*from,static_cast<uint32_t>(to-from));
+            else
+                synth_->RenderBlock(scratch_.data()+size_t{2}*from,static_cast<uint32_t>(to-from));
             for(int32 i=from;i<to;++i) {
                 const float left=scratch_[size_t{2}*i]/32768.f;
                 const float right=scratch_[size_t{2}*i+1]/32768.f;
@@ -167,12 +187,20 @@ public:
                e.noteOn.pitch>=0&&e.noteOn.pitch<=127&&std::isfinite(e.noteOn.velocity)) {
                 const uint8_t vel=static_cast<uint8_t>(std::clamp(
                     int(std::lround(e.noteOn.velocity*127.f)),0,127));
-                synth_->NoteOn(static_cast<uint8_t>(e.noteOn.channel),
-                               static_cast<uint8_t>(e.noteOn.pitch),vel);
+                if(state_.engine==1)
+                    opl_->NoteOn(static_cast<uint8_t>(e.noteOn.channel),
+                                 static_cast<uint8_t>(e.noteOn.pitch),vel);
+                else
+                    synth_->NoteOn(static_cast<uint8_t>(e.noteOn.channel),
+                                   static_cast<uint8_t>(e.noteOn.pitch),vel);
             }else if(e.type==Event::kNoteOffEvent&&e.noteOff.channel>=0&&
                      e.noteOff.channel<16&&e.noteOff.pitch>=0&&e.noteOff.pitch<=127) {
-                synth_->NoteOff(static_cast<uint8_t>(e.noteOff.channel),
-                                static_cast<uint8_t>(e.noteOff.pitch));
+                if(state_.engine==1)
+                    opl_->NoteOff(static_cast<uint8_t>(e.noteOff.channel),
+                                  static_cast<uint8_t>(e.noteOff.pitch));
+                else
+                    synth_->NoteOff(static_cast<uint8_t>(e.noteOff.channel),
+                                    static_cast<uint8_t>(e.noteOff.pitch));
             }
         }
         render(pos,data.numSamples);
@@ -182,6 +210,7 @@ public:
     }
 private:
     std::unique_ptr<Synth> synth_;
+    std::unique_ptr<Opl3Midi> opl_;
     std::vector<int16_t> scratch_;
     uint32_t rate_=44100,capacity_=0;
     AssetState::Data state_{};
@@ -206,6 +235,10 @@ public:
         if(r!=kResultOk)return r;
         parameters.addParameter(STR16("Program"),nullptr,127,0,
                                 ParameterInfo::kCanAutomate,kProgramID);
+        auto* engine=new StringListParameter(STR16("Hardware"),kEngineID);
+        engine->appendString(STR16("EMU8000 AWE32/64"));
+        engine->appendString(STR16("Yamaha OPL3"));
+        parameters.addParameter(engine);
         return kResultOk;
     }
     tresult PLUGIN_API setComponentState(IBStream* stream) override {
@@ -218,7 +251,9 @@ public:
         };
         AssetState::Data model;
         if(!AssetState::Read(read,model))return kResultFalse;
-        return setParamNormalized(kProgramID,static_cast<double>(model.program)/127.);
+        if(setParamNormalized(kProgramID,static_cast<double>(model.program)/127.)!=kResultOk)
+            return kResultFalse;
+        return setParamNormalized(kEngineID,static_cast<double>(model.engine));
     }
 };
 }
