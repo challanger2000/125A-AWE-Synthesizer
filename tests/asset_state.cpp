@@ -27,7 +27,7 @@ static bool ck(bool v,const char* label) {
 int main() {
     bool ok=true;
     AssetState::Data d;
-    d.program=104;d.engine=1;d.pathsSpecified=true;
+    d.program=104;d.engine=2;d.pathsSpecified=true;
     d.romPath="C:\\ROMs\\awe32.raw";
     d.sf2Path="D:\\Sounds\\Synth 512 Bank.sf2";
     d.ibkPath="C:\\FM\\Creative melodic.ibk";
@@ -35,12 +35,20 @@ int main() {
     const auto blob=encode(d);
     AssetState::Data out;
     ok &= ck(!blob.empty()&&decode(blob,out)&&out.program==104&&
-             out.engine==1&&out.pathsSpecified&&out.romPath==d.romPath&&
+             out.engine==2&&out.pathsSpecified&&out.romPath==d.romPath&&
              out.sf2Path==d.sf2Path&&out.ibkPath==d.ibkPath&&
              out.drumIbkPath==d.drumIbkPath,
-             "V5 program, hardware, melodic and percussion banks round trip");
+             "V6 CQM hardware mode, melodic and percussion banks round trip");
+    // The v6 layout is unchanged from v5 except for hardware enum extension.
+    Bytes v5(blob);
+    v5[4]=5; // historical v5, Yamaha only
+    // Engine word occurs before melodic and drum-IBK paths.
+    const size_t engineIndex=v5.size()-4-d.drumIbkPath.size()-4-d.ibkPath.size()-4;
+    v5[engineIndex]=1;
+    ok &= ck(decode(v5,out)&&out.engine==1&&
+             out.drumIbkPath==d.drumIbkPath,"legacy V5 rhythm state migrates");
     // Historical V4 ends before V5's appended drum bank path.
-    Bytes v4(blob.begin(),blob.end()-4-d.drumIbkPath.size());
+    Bytes v4(v5.begin(),v5.end()-4-d.drumIbkPath.size());
     v4[4]=4;
     ok &= ck(decode(v4,out)&&out.engine==1&&
              out.ibkPath==d.ibkPath&&out.drumIbkPath.empty(),
@@ -69,7 +77,7 @@ int main() {
         if(decode(partial,target)||target.program!=3||
            target.sf2Path!=d.sf2Path)allRejected=false;
     }
-    ok &= ck(allRejected,"all truncated V5 states rejected atomically");
+    ok &= ck(allRejected,"all truncated V6 states rejected atomically");
     auto corrupt=blob;
     corrupt[4]=90;
     out=d;out.program=7;
@@ -78,7 +86,7 @@ int main() {
     corrupt=blob;
     // Hardware word is positioned before the final IBK string record.
     const size_t engineOffset=corrupt.size()-4-d.drumIbkPath.size()-4-d.ibkPath.size()-4;
-    corrupt[engineOffset]=2;
+    corrupt[engineOffset]=3;
     ok &= ck(!decode(corrupt,out)&&out.program==7,
              "out-of-range hardware mode rejected atomically");
     corrupt=blob;corrupt[8]=255;

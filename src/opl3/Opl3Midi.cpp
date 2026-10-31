@@ -12,10 +12,17 @@ uint16_t reg(size_t voice,uint16_t base,uint16_t slot=0) {
 }
 }
 
-Opl3Midi::Opl3Midi(uint32_t rate,uint32_t latency)
-  : chip_(std::make_unique<opl3_chip>()),
+Opl3Midi::Opl3Midi(uint32_t rate,uint32_t latency,bool cqmBackend)
+  : chip_(cqmBackend ? nullptr : std::make_unique<opl3_chip>()),
+    cqm_(cqmBackend ? std::make_unique<cqm_t>() : nullptr),
     delayed_(size_t{latency}*2,0),latencyFrames_(latency) {
-    OPL3_Reset(chip_.get(),std::clamp(rate,8000u,384000u));
+    if(cqm_) {
+        // Creative CQM native clock ~49.716 kHz; output is host rate.
+        // Genuine independent Nuke.YKT CQM core, not a Yamaha OPL3 variant.
+        CQM_Reset(cqm_.get(),49716u,std::clamp(rate,8000u,384000u));
+    } else {
+        OPL3_Reset(chip_.get(),std::clamp(rate,8000u,384000u));
+    }
     Write(0x105,1); // YMF262 mode (18 x two-operator channels)
     Write(0x104,0); // 4-op mode disabled
     Write(0xbd,0); // melodic, no percussion voices
@@ -126,7 +133,8 @@ void Opl3Midi::AllDrumsOff() {
     Write(0xbd,rhythmRegister_);
 }
 void Opl3Midi::Write(uint16_t address,uint8_t value) {
-    OPL3_WriteReg(chip_.get(),address,value);
+    if(cqm_)CQM_WriteReg(cqm_.get(),address,value);
+    else OPL3_WriteReg(chip_.get(),address,value);
 }
 void Opl3Midi::KeyOff(size_t i) {
     if(i>=kVoices)return;
@@ -268,10 +276,15 @@ void Opl3Midi::PitchBend(uint8_t channel,int16_t bend) {
 }
 void Opl3Midi::RenderBlock(int16_t* out,uint32_t frames) {
     if(!out||frames==0)return;
-    if(!latencyFrames_){OPL3_GenerateStream(chip_.get(),out,frames);return;}
+    if(!latencyFrames_) {
+        if(cqm_)CQM_GenerateStream(cqm_.get(),out,frames);
+        else OPL3_GenerateStream(chip_.get(),out,frames);
+        return;
+    }
     for(uint32_t i=0;i<frames;++i) {
         int16_t next[2]{};
-        OPL3_GenerateResampled(chip_.get(),next);
+        if(cqm_)CQM_GenerateResampled(cqm_.get(),next);
+        else OPL3_GenerateResampled(chip_.get(),next);
         const size_t j=size_t{2}*delayIndex_;
         out[i*2]=delayed_[j];out[i*2+1]=delayed_[j+1];
         delayed_[j]=next[0];delayed_[j+1]=next[1];

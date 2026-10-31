@@ -26,3 +26,8 @@ Only the version-pinned snapshot is authoritative for comparisons. Never change 
 - [Nuked OPL3](https://github.com/nukeykt/Nuked-OPL3), pinned commit `765ec962e473aeb767e4cba74ffdc8f588ffbfe8`, by Nuke.YKT, **LGPL-2.1-or-later**. Original unmodified `opl3.c` and `opl3.h` and complete original `LICENSE` in `third_party/Nuked-OPL3/`; attribution preserved.
 - Native C core is a **standalone library with register-level tests only**, not linked to the customer/experimental VST3 product in this stage. No Creative CQM implementation has been included.
 - Before shipping binaries linking this library, audit LGPL redistributability, source availability, relinking obligations and notices along with pre-existing 86Box GPL terms. Do not assume a static link is license-obligation-free.
+
+## P13 Creative CQM engine
+
+- [Nuked-CQM](https://github.com/nukeykt/Nuked-CQM) copyright Nuke.YKT 2026; upstream `274a4c463ab2f8e193b1c1192f9d4e0d02df521a` (CQM 0.9 beta), **LGPL-2.1-or-later**. Vendored unmodified in `third_party/Nuked-CQM/{cqm.c,cqm.h,LICENSE}` and linked only to the CQM hardware selector.
+- CQM and Yamaha OPL3 are distinct emulated chips; Creative AWE64 model-by-model parity is unverified. Existing 86Box GPL and Nuked OPL3 LGPL obligations remain separately applicable; retain notices and evaluate release obligations before distribution.

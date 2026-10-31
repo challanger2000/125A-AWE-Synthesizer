@@ -79,25 +79,32 @@ public:
             // Both engines are constructed outside the audio callback.
             // The OPL3 delay matches the 86Box FIFO reported to the host.
             opl_=std::make_unique<Opl3Midi>(rate_,synth_->Core().ChipLatencyFrames());
+            cqm_=std::make_unique<Opl3Midi>(rate_,synth_->Core().ChipLatencyFrames(),true);
             fmReady_=true;
             if(!state_.ibkPath.empty()) {
                 std::string error;
-                if(!opl_->LoadMelodicIbk(state_.ibkPath,error)) {
+                if(!opl_->LoadMelodicIbk(state_.ibkPath,error) ||
+                   !cqm_->LoadMelodicIbk(state_.ibkPath,error)) {
                     assetError_=std::move(error);
                     fmReady_=false; // never play the test patch as a failed bank
                 }
             }
             if(!state_.drumIbkPath.empty()) {
                 std::string error;
-                if(!opl_->LoadPercussionIbk(state_.drumIbkPath,error)) {
+                if(!opl_->LoadPercussionIbk(state_.drumIbkPath,error) ||
+                   !cqm_->LoadPercussionIbk(state_.drumIbkPath,error)) {
                     assetError_=std::move(error);
                     fmReady_=false; // fail closed for explicitly requested drum bank
                 }
             }
             for(int c=0;c<16;++c)
-                opl_->ProgramChange(static_cast<uint8_t>(c),
-                    static_cast<uint8_t>(state_.program));
-        } else {opl_.reset();synth_.reset();}
+                {
+                    opl_->ProgramChange(static_cast<uint8_t>(c),
+                        static_cast<uint8_t>(state_.program));
+                    cqm_->ProgramChange(static_cast<uint8_t>(c),
+                        static_cast<uint8_t>(state_.program));
+                }
+        } else {cqm_.reset();opl_.reset();synth_.reset();}
         return AudioEffect::setActive(active);
     }
     uint32 PLUGIN_API getLatencySamples() override {
@@ -129,6 +136,12 @@ public:
         if(synth_)for(int c=0;c<16;++c)
             synth_->ProgramChange(static_cast<uint8_t>(c),
                 static_cast<uint8_t>(state_.program));
+        if(opl_)for(int c=0;c<16;++c)
+            opl_->ProgramChange(static_cast<uint8_t>(c),
+                static_cast<uint8_t>(state_.program));
+        if(cqm_)for(int c=0;c<16;++c)
+            cqm_->ProgramChange(static_cast<uint8_t>(c),
+                static_cast<uint8_t>(state_.program));
         // File replacement while active is deferred until reactivation.
         return kResultOk;
     }
@@ -153,10 +166,14 @@ public:
                         if(opl_)for(int c=0;c<16;++c)
                             opl_->ProgramChange(static_cast<uint8_t>(c),
                                 static_cast<uint8_t>(state_.program));
+                        if(cqm_)for(int c=0;c<16;++c)
+                            cqm_->ProgramChange(static_cast<uint8_t>(c),
+                                static_cast<uint8_t>(state_.program));
                     } else if(q->getParameterId()==kEngineID) {
-                        const uint32_t mode=(val>=0.5)?1u:0u;
+                        const uint32_t mode=static_cast<uint32_t>(std::clamp(int(std::lround(val*2.)),0,2));
                         if(mode!=state_.engine) {
                             if(opl_)opl_->AllNotesOff();
+                            if(cqm_)cqm_->AllNotesOff();
                             if(synth_)for(int c=0;c<16;++c)
                                 synth_->ControlChange(static_cast<uint8_t>(c),120,0);
                             state_.engine=mode;
@@ -179,22 +196,24 @@ public:
         std::fill_n(l,data.numSamples,0.f);
         if(r)std::fill_n(r,data.numSamples,0.f);
         data.outputs[0].silenceFlags=r?3u:1u;
-        if(!synth_||!opl_||uint32(data.numSamples)>capacity_)
+        if(!synth_||!opl_||!cqm_||uint32(data.numSamples)>capacity_)
             return kResultOk;
 
         const auto render=[&](int32 from,int32 to) {
             if(to<=from)return;
-            if(state_.engine==1)
-                {
-                if(fmReady_)
-                    opl_->RenderBlock(scratch_.data()+size_t{2}*from,
-                                      static_cast<uint32_t>(to-from));
-                else
+            if(state_.engine==1||state_.engine==2) {
+                if(fmReady_) {
+                    auto* fm=(state_.engine==2)?cqm_.get():opl_.get();
+                    fm->RenderBlock(scratch_.data()+size_t{2}*from,
+                                    static_cast<uint32_t>(to-from));
+                } else {
                     std::fill_n(scratch_.data()+size_t{2}*from,
                                 size_t{2}*(to-from),int16_t{0});
+                }
+            } else {
+                synth_->RenderBlock(scratch_.data()+size_t{2}*from,
+                                    static_cast<uint32_t>(to-from));
             }
-            else
-                synth_->RenderBlock(scratch_.data()+size_t{2}*from,static_cast<uint32_t>(to-from));
             for(int32 i=from;i<to;++i) {
                 const float left=scratch_[size_t{2}*i]/32768.f;
                 const float right=scratch_[size_t{2}*i+1]/32768.f;
@@ -215,18 +234,22 @@ public:
                e.noteOn.pitch>=0&&e.noteOn.pitch<=127&&std::isfinite(e.noteOn.velocity)) {
                 const uint8_t vel=static_cast<uint8_t>(std::clamp(
                     int(std::lround(e.noteOn.velocity*127.f)),0,127));
-                if(state_.engine==1) {
-                    if(fmReady_)opl_->NoteOn(static_cast<uint8_t>(e.noteOn.channel),
-                                 static_cast<uint8_t>(e.noteOn.pitch),vel);
+                if(state_.engine==1||state_.engine==2) {
+                    if(fmReady_) {
+                        auto* fm=(state_.engine==2)?cqm_.get():opl_.get();
+                        fm->NoteOn(static_cast<uint8_t>(e.noteOn.channel),
+                                   static_cast<uint8_t>(e.noteOn.pitch),vel);
+                    }
                 } else
                     synth_->NoteOn(static_cast<uint8_t>(e.noteOn.channel),
                                    static_cast<uint8_t>(e.noteOn.pitch),vel);
             }else if(e.type==Event::kNoteOffEvent&&e.noteOff.channel>=0&&
                      e.noteOff.channel<16&&e.noteOff.pitch>=0&&e.noteOff.pitch<=127) {
-                if(state_.engine==1)
-                    opl_->NoteOff(static_cast<uint8_t>(e.noteOff.channel),
-                                  static_cast<uint8_t>(e.noteOff.pitch));
-                else
+                if(state_.engine==1||state_.engine==2) {
+                    auto* fm=(state_.engine==2)?cqm_.get():opl_.get();
+                    fm->NoteOff(static_cast<uint8_t>(e.noteOff.channel),
+                                 static_cast<uint8_t>(e.noteOff.pitch));
+                } else
                     synth_->NoteOff(static_cast<uint8_t>(e.noteOff.channel),
                                     static_cast<uint8_t>(e.noteOff.pitch));
             }
@@ -239,6 +262,7 @@ public:
 private:
     std::unique_ptr<Synth> synth_;
     std::unique_ptr<Opl3Midi> opl_;
+    std::unique_ptr<Opl3Midi> cqm_;
     std::vector<int16_t> scratch_;
     uint32_t rate_=44100,capacity_=0;
     AssetState::Data state_{};
@@ -277,6 +301,7 @@ public:
         auto* engine=new StringListParameter(STR16("Hardware"),kEngineID);
         engine->appendString(STR16("EMU8000 AWE32/64"));
         engine->appendString(STR16("Yamaha OPL3"));
+        engine->appendString(STR16("Creative CQM"));
         parameters.addParameter(engine);
         return kResultOk;
     }

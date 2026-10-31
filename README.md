@@ -1,7 +1,7 @@
 # 125A AWE Synthesizer
 Windows x64 VST3 instrument project: historically faithful Sound Blaster AWE32/AWE64 EMU8000 synthesis.
 
-**Current state: v0.1.0 experimental Windows VST3; P11 Windows Actions #41239353552 SUCCESS (Steinberg Validator 47/47, 10/10 CTests). Owner confirmed SF2 and initial OPL3 FM audio in Studio One; IBK bank and original-hardware sonic parity remain unverified in Studio One.**
+**Current state: v0.1.0 experimental Windows VST3; P12 Windows Actions #41240515928 SUCCESS (Steinberg Validator 47/47, 11/11 CTests). Owner confirmed earlier SF2 and Yamaha OPL3 playback in Studio One; new CQM and original-hardware parity remain NOT RUN.**
 
 - Development branch: `develop/v0.1.0-upstream-audit`. Keep `main` stable.
 - A complete version-pinned *upstream source snapshot* (C and C++) is under `upstream/AWE32Emu/`; its original CMake console executable is preserved separately.
@@ -127,3 +127,27 @@ bank P11 behavior (18 melodic voices) remains unchanged.
 **Still unverified:** Studio One playback with a real licensed percussion
 IBK, Creative Windows/DOS driver-to-GM rhythm mapping, actual YMF262
 hardware PCM parity, Creative CQM and Live!/EMU10K1.
+
+## P13 — genuine Creative CQM hardware mode (experimental)
+
+New selectable **Hardware** modes in the generic host editor:
+EMU8000 AWE32/64 (0), Yamaha OPL3 (1), Creative CQM (2).
+
+Creative CQM uses the entirely separate **Nuked CQM 0.9 beta** emulator,
+pinned verbatim to upstream commit `274a4c463ab2f8e193b1c1192f9d4e0d02df521a`
+under `third_party/Nuked-CQM/`, with its original LGPL-2.1-or-later
+copyright and license. This is real Creative Quadratic Modulation, **not**
+a Yamaha-OPL3 sound with a different label. The existing 125A MIDI and IBK
+translation layer writes authentic register parameters to the *selected*
+emulated FM chip, either CQM or OPL3. The same optional melodic and percussion
+IBK paths are used for both chips; none are bundled. No new file UI.
+
+The VST3 state moves to V6, extending the saved engine enumeration to 2.
+V1-V5 project states remain readable and default/preserve prior engine values.
+Audio is delayed to the existing EMU8000-reported latency (unchanged to DAW
+PDC), with no allocations inside the process callback.
+
+Nuked CQM currently calls its own engine **0.9 beta**. It needs a real
+Creative CQM card comparison before declaring verified AWE64 parity.
+The 86Box docs confirm CQM emulation via Nuked CQM on supported cards;
+**AWE64-specific silicon verification and custom GUI remain open**.

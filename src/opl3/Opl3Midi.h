@@ -1,5 +1,6 @@
 #pragma once
 #include "opl3.h"
+#include "cqm.h"
 #include "IbkBank.h"
 #include <array>
 #include <cstddef>
@@ -15,7 +16,7 @@
 namespace AWE125 {
 class Opl3Midi final {
 public:
-    explicit Opl3Midi(uint32_t sampleRate,uint32_t latencyFrames=0);
+    explicit Opl3Midi(uint32_t sampleRate,uint32_t latencyFrames=0,bool cqmBackend=false);
     ~Opl3Midi();
     Opl3Midi(const Opl3Midi&)=delete;
     Opl3Midi& operator=(const Opl3Midi&)=delete;
@@ -39,6 +40,7 @@ public:
     void RenderBlock(int16_t* interleaved,uint32_t frames);
     uint32_t PressedVoices() const;
     static constexpr size_t kVoices=18;
+    bool UsesCqmBackend() const {return cqm_!=nullptr;}
 
 private:
     struct Voice {
@@ -54,6 +56,7 @@ private:
         uint8_t volume=100,expression=127,program=0;
     };
     std::unique_ptr<opl3_chip> chip_;
+    std::unique_ptr<cqm_t> cqm_; // separate Creative quadratic modulation chipset
     std::optional<IbkBank> bank_{};
     std::optional<IbkBank> drumBank_{};
     struct Drum {bool pressed=false;uint8_t note=0;};
