@@ -5,6 +5,8 @@ add_library(awe32_chip_safety STATIC
   "${CMAKE_CURRENT_SOURCE_DIR}/snd_emu8k.c"
   "${CMAKE_CURRENT_SOURCE_DIR}/Emu8000Box.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/SoundFont.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/Emu8000.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/Synth.cpp"
   "${UPSTREAM_SRC}/I18n.cpp"
 )
 target_include_directories(awe32_chip_safety PRIVATE
@@ -21,12 +23,8 @@ else()
 endif()
 set_target_properties(awe32_chip_safety PROPERTIES C_STANDARD 11 CXX_STANDARD 23)
 
-# Compile the active Synth (not the pristine upstream copy) on each CI run.
-# This compile-only target is NOT an integrated/linked VST3 or audible QA.
-add_library(awe32_realtime_synth_compile OBJECT "${CMAKE_CURRENT_SOURCE_DIR}/Synth.cpp")
-target_include_directories(awe32_realtime_synth_compile PRIVATE
-  "${CMAKE_CURRENT_SOURCE_DIR}" "${UPSTREAM_SRC}" "${UPSTREAM_SRC}/86box/include")
-set_target_properties(awe32_realtime_synth_compile PROPERTIES CXX_STANDARD 23)
+# Both active Synth and the active DSP renderer are now compiled and linked
+# into awe32_chip_safety. This is still a native test engine, NOT a VST3.
 
 add_executable(awe32_engine_safety_test "${PROJECT_SOURCE_DIR}/tests/engine_safety.cpp")
 target_include_directories(awe32_engine_safety_test PRIVATE "${UPSTREAM_SRC}" "${CMAKE_CURRENT_SOURCE_DIR}/include" "${UPSTREAM_SRC}/86box/include")
@@ -41,3 +39,9 @@ target_include_directories(awe32_sf2_selection_test PRIVATE "${CMAKE_CURRENT_SOU
 target_link_libraries(awe32_sf2_selection_test PRIVATE awe32_chip_safety)
 set_target_properties(awe32_sf2_selection_test PROPERTIES CXX_STANDARD 23)
 add_test(NAME 125A_sf2_selection COMMAND awe32_sf2_selection_test)
+
+add_executable(awe32_render_rates_test "${PROJECT_SOURCE_DIR}/tests/render_rates.cpp")
+target_include_directories(awe32_render_rates_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${UPSTREAM_SRC}")
+target_link_libraries(awe32_render_rates_test PRIVATE awe32_chip_safety)
+set_target_properties(awe32_render_rates_test PROPERTIES CXX_STANDARD 23)
+add_test(NAME 125A_render_rates COMMAND awe32_render_rates_test)
