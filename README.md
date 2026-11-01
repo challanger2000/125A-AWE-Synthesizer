@@ -1,7 +1,7 @@
 # 125A AWE Synthesizer
 Windows x64 VST3 instrument project: historically faithful Sound Blaster AWE32/AWE64 EMU8000 synthesis.
 
-**Current state: v0.1.0 experimental Windows VST3; P12 Windows Actions #41240515928 SUCCESS (Steinberg Validator 47/47, 11/11 CTests). Owner confirmed earlier SF2 and Yamaha OPL3 playback in Studio One; new CQM and original-hardware parity remain NOT RUN.**
+**Current state: v0.1.0 experimental Windows VST3. P13 Windows Actions #41241525870 SUCCESS (12/12 native CTests); 47/47 Steinberg Validator reported. Owner confirmed earlier SF2 and Yamaha OPL3 playback in Studio One. Creative CQM, P14 VSTGUI editor and original-hardware parity need independent Studio One checks.**
 
 - Development branch: `develop/v0.1.0-upstream-audit`. Keep `main` stable.
 - A complete version-pinned *upstream source snapshot* (C and C++) is under `upstream/AWE32Emu/`; its original CMake console executable is preserved separately.
@@ -154,3 +154,23 @@ Nuked CQM currently calls its own engine **0.9 beta**. It needs a real
 Creative CQM card comparison before declaring verified AWE64 parity.
 The 86Box docs confirm CQM emulation via Nuked CQM on supported cards;
 **AWE64-specific silicon verification and custom GUI remain open**.
+
+## P14 — functional VSTGUI test editor (development)
+
+This lightweight, fixed-size VSTGUI editor replaces the host's generic editor
+with two **real** VST3 parameter selectors: **Hardware** (EMU8000 AWE32/AWE64,
+Yamaha OPL3, Creative CQM) and **Program** (0..127). Both are bound to the
+existing processor parameters 1001 and 1000, respectively. P14 fixes the
+controller's three-way Hardware recall normalization (0, 0.5, 1); previous
+saved project values keep their V6 format and parameter IDs.
+
+It deliberately does not add unsupported ADSR controls, a fake SF2 bank
+browser or a designer faceplate. User-provided ROM, SF2 and IBK paths still
+come from `%APPDATA%\\125A\\AWE Synthesizer\\assets.cfg`. Change the
+configuration and re-activate/reload the plugin to load a different bank.
+Existing engine DSP and CQM percussion limitations remain unchanged.
+
+**Validation:** `125A_p14_vstgui_contract` is a static XML/CMake/controller
+binding check only. A Windows VST3 build, validator, packaged-editor
+attach/detach, mouse/automation and Studio One project-recall tests must be
+reported independently. P14 is **DEV** until these have run.

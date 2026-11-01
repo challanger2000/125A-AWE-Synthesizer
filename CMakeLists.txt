@@ -28,10 +28,14 @@ if(Python3_Interpreter_FOUND)
     NAME 125A_source_baseline_contract
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/source_contracts.py" "${CMAKE_CURRENT_SOURCE_DIR}"
   )
+  add_test(
+    NAME 125A_p14_vstgui_contract
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/p14_vstgui_contract.py" "${CMAKE_CURRENT_SOURCE_DIR}"
+  )
 endif()
 
-# VST3 implementation deliberately not registered yet. No functional VST3
-# is claimed until the audited engine adapter and real host lifecycle exist.
+# Windows VST3 P14 development editor uses VSTGUI; host acceptance is separate
+# from compilation and native engine tests.
 
 # SDK-independent project state/asset config regression.
 add_executable(awe32_asset_state_test tests/asset_state.cpp)
@@ -46,7 +50,7 @@ if(125A_BUILD_VST3)
   endif()
   set(SMTG_ENABLE_VST3_PLUGIN_EXAMPLES OFF CACHE BOOL "" FORCE)
   set(SMTG_ENABLE_VST3_HOSTING_EXAMPLES OFF CACHE BOOL "" FORCE)
-  set(SMTG_ENABLE_VSTGUI_SUPPORT OFF CACHE BOOL "" FORCE)
+  set(SMTG_ENABLE_VSTGUI_SUPPORT ON CACHE BOOL "VSTGUI P14 editor" FORCE)
   set(SMTG_CREATE_PLUGIN_LINK OFF CACHE BOOL "" FORCE)
   add_subdirectory(external/vst3sdk)
   add_subdirectory(src/vst3)
