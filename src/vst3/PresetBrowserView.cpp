@@ -1,4 +1,6 @@
 #include "PresetBrowserView.h"
+#include "MasterLogoView.h"
+#include "vstgui/lib/cgradient.h"
 #include "vstgui/lib/cdrawcontext.h"
 #include "vstgui/lib/cfont.h"
 #include <algorithm>
@@ -9,9 +11,34 @@
 namespace AWE125 {
 using namespace VSTGUI;
 namespace {
-constexpr CColor kBack(29,34,42,255),kRaised(48,57,69,255),
-                 kPaper(212,228,244,255),kMuted(164,180,199,255),
-                 kSel(67,91,115,255),kGrid(65,75,86,255);
+constexpr CColor kBack(22,27,34,255),kRaised(40,50,62,255),
+                 kPaper(225,230,235,255),kMuted(151,168,184,255),
+                 kSel(50,84,102,255),kGrid(55,68,80,255),
+                 kBezel(12,16,22,255),kStroke(83,99,111,255);
+class HardwareFaceplate final : public CView {
+public:
+    explicit HardwareFaceplate(const CRect& r):CView(r) {setMouseEnabled(false);}
+    void draw(CDrawContext* c) override {
+        const auto surface=[&](CRect r,CColor fill,CColor edge) {
+            c->setFillColor(fill);
+            c->drawRect(r,kDrawFilled);
+            c->setFrameColor(edge);
+            c->drawRect(r,kDrawStroked);
+        };
+        // Dark, anodized metal enclosure: three functional surfaces.
+        surface({11,7,849,55},CColor(34,42,51),CColor(104,117,128));
+        surface({13,146,838,199},CColor(13,19,25),CColor(66,80,94));
+        surface({16,276,832,570},CColor(19,25,31),CColor(78,94,106));
+        // Fine brushed-metal separators, no imitation rack screws.
+        c->setFrameColor(CColor(75,91,102));
+        c->drawLine({18,55},{841,55});
+        c->drawLine({17,201},{840,201});
+        c->drawLine({17,269},{840,269});
+        c->setFrameColor(CColor(38,50,58));
+        c->drawLine({17,55.8},{841,55.8});
+        c->drawLine({17,269.8},{840,269.8});
+    }
+};
 constexpr Steinberg::Vst::ParamID kProgram=1000,kEngine=1001,kBank=1002;
 std::string BankLabel(uint16_t bank) {
     if(bank==128)return "Bank 128 - Drumkits";
@@ -21,13 +48,19 @@ std::string BankLabel(uint16_t bank) {
 
 PresetBrowserView::PresetBrowserView(const CRect& rect,
     Steinberg::Vst::EditController* controller,
-    const PresetCatalog& sf,const PresetCatalog& fm)
+    const PresetCatalog& sf,const PresetCatalog& fm,
+    const std::string& exactLogoPath)
     : CViewContainer(rect),controller_(controller),sf_(sf),fm_(fm) {
     setBackgroundColor(kBack);
-    title_=MakeLabel({22,12,827,49},"125A  |  AWE SYNTHESIZER  /  PRESET BROWSER");
+    addView(new HardwareFaceplate({0,0,860,612}));
+    addView(new MasterLogoView({18,8,150,53},exactLogoPath));
+    title_=MakeLabel({167,15,827,49},"AWE SYNTHESIZER   /   SOUND BLASTER SERIES");
     MakeLabel({24,62,155,91},"HARDWARE",true);
     hardware_=new COptionMenu({176,61,565,95},this,kHardware);
     for(int i=0;i<3;++i)hardware_->addEntry(PresetBrowserModel::HardwareName(i));
+    hardware_->setBackColor(kBezel);
+    hardware_->setFontColor(kPaper);
+    hardware_->setFrameColor(kStroke);
     addView(hardware_);
     info_=MakeLabel({24,107,822,139},"",true);
     MakeLabel({24,156,156,187},"INSTRUMENT",true);
@@ -41,11 +74,17 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     toggle_->setValue(1.f);
     bankCaption_=MakeLabel({24,226,150,256},"BANK",true);
     bankMenu_=new COptionMenu({145,225,443,260},this,kBank);
+    bankMenu_->setBackColor(kBezel);
+    bankMenu_->setFontColor(kPaper);
+    bankMenu_->setFrameColor(kStroke);
     addView(bankMenu_);
     searchCaption_=MakeLabel({464,226,530,256},"SUCHE",true);
     search_=new CTextEdit({532,225,821,260},this,kFilter,"");
     search_->setPlaceholderString("Instrument suchen...");
     search_->setImmediateTextChange(true);
+    search_->setBackColor(kBezel);
+    search_->setFontColor(kPaper);
+    search_->setFrameColor(kStroke);
     addView(search_);
     table_=new CDataBrowser({24,282,821,566},this,
                              CScrollView::kVerticalScrollbar|
@@ -55,7 +94,7 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     addView(table_);
     empty_=MakeLabel({35,293,786,335},"",true);
     hint_=MakeLabel({24,571,822,601},
-                    "Einmal klicken: Instrument waehlen  |  PREV/NEXT: Bank durchblaettern",
+                    "Instrument waehlen  |  PREV/NEXT: Programme der aktiven Bank",
                     true);
     SetExpanded(true);
     setWantsIdle(true);
@@ -76,7 +115,15 @@ CTextButton* PresetBrowserView::MakeButton(const CRect& r,int tag,const char* s)
     button->setFont(kNormalFont);
     button->setTextColor(kPaper);
     button->setTextColorHighlighted(kPaper);
-    button->setFrameColor(kMuted);
+    button->setFrameColor(kStroke);
+    button->setFrameColorHighlighted(CColor(116,154,171));
+    button->setRoundRadius(4.);
+    auto* base=CGradient::create(0.,1.,CColor(66,79,92),CColor(33,44,56));
+    auto* active=CGradient::create(0.,1.,CColor(85,119,138),CColor(51,77,93));
+    button->setGradient(base);
+    button->setGradientHighlighted(active);
+    base->forget();
+    active->forget();
     addView(button);
     return button;
 }
