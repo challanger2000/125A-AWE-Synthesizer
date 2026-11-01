@@ -81,11 +81,12 @@ def check_trace(csv_path: Path) -> dict:
     data = csv_path.read_text(encoding="utf8").splitlines()
     if not data or data[0] != "sequence,wc,port,value,pointer,reg,voice,kind":
         raise AssertionError(f"EMU8000 CSV header wrong or missing: {data[:2]}")
-    if not any(",0xe22,0x0020," in x and x.endswith(",pointer") for x in data[1:]):
+    if not any(",0x0e22,0x0020," in x and x.endswith(",pointer") for x in data[1:]):
         raise AssertionError("Pointer register write not observed")
-    if not any(",0x620,0x1234," in x and x.endswith(",data") for x in data[1:]):
+    if not any(",0x0620,0x1234," in x and x.endswith(",data") for x in data[1:]):
         raise AssertionError("Data register write not observed")
     return {"data_lines": len(data) - 1, "header": data[0],
+            "sample": data[1:4],
             "pointer_confirmed": True, "data_confirmed": True}
 
 
