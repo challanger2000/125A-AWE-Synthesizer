@@ -114,6 +114,13 @@ def install(image:Path):
                        b"CTL0021_Device 132 C:\\AWE32\\SB16AWE.INF\r\n")
             with fs.openbin("AWE32/INSTALL.BAT","w") as outbat:
                 outbat.write(installer)
+            # P40d: Genuine Win95 Add New Hardware wizard, which creates
+            # hardware enumeration and HKR device registry context. Simple
+            # InstallHinfSection on its own does not bind the original VxD.
+            with fs.openbin("AWE32/WIZARD.BAT","w") as outbat:
+                outbat.write(
+                    b"@ECHO OFF\r\n"
+                    b"C:\\WINDOWS\\RUNDLL.EXE SYSDM.CPL,InstallDevice_Rundll\r\n")
             for path in temp.iterdir():
                 with fs.openbin("AWE32/"+path.name,"w") as f:
                     f.write(path.read_bytes())
