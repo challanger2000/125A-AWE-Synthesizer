@@ -1,0 +1,33 @@
+name: P34 original Creative Win95 loader vs driver binary audit
+on:
+  push:
+    branches: [research/p34-win95-original-driver-stack-audit]
+    paths:
+      - tools/p34_creative_win95_binary_audit.py
+      - tools/p34_validate_win95_sf2_noteon.py
+      - .github/workflows/p34-creative-original-win95-stack.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect-original-manager-and-drivers:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install independent PE format reader
+        run: python -m pip install --disable-pip-version-check pefile==2024.8.26
+      - name: Audit exact original Creative binaries without storing them in artifact
+        run: python tools/p34_creative_win95_binary_audit.py
+      - name: Validate 2/4 sample-RAM-note gate on synthetic traces
+        run: python tools/p34_validate_win95_sf2_noteon.py --self-test
+      - name: Upload JSON evidence only, never vendor executables
+        uses: actions/upload-artifact@v4
+        with:
+          name: P34-Original-Creative-Win95-Driver-Stack-Audit
+          path: P34-Creative-Win95-original-binary-audit.json
+          if-no-files-found: error
+          retention-days: 14
