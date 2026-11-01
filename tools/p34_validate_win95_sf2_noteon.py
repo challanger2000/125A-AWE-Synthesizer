@@ -65,7 +65,8 @@ def parse(trace: str):
             on=not bool(value & 0x80)
             if on and not live[voice]:
                 regs=dict(pending[voice])
-                if regs.get("CCCA",0) and regs.get("ATKHLDV",0):
+                if ((regs.get("CCCA",0) or (regs.get("CCCA^",0)&0xFF))
+                        and regs.get("ATKHLDV",0)):
                     addr=(regs.get("CCCA",0) |
                           ((regs.get("CCCA^",0)&0xFF)<<16))
                     notes.append({"frame":frame,"voice":voice,
