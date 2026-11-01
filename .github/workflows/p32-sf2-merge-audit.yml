@@ -1,0 +1,27 @@
+name: P32 SF2 generator interpretation - isolated validation
+on:
+  push:
+    branches: [research/p32-sf2-preset-merge-comparison]
+    paths:
+      - tools/p32_sf2_preset_merge_audit.py
+      - .github/workflows/p32-sf2-merge-audit.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile and test both candidate SF2 merge semantics
+        run: |
+          python -m py_compile tools/p32_sf2_preset_merge_audit.py
+          python tools/p32_sf2_preset_merge_audit.py --self-test
+      - name: Verify real user SoundFont is not part of repository
+        run: |
+          test ! -f "Synth 512 Bank.sf2"
+          test ! -f "awe32.raw"
+          echo "Only algorithm arithmetic tested; no real Win95 original-driver trace or audio parity claim."
