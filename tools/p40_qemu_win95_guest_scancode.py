@@ -170,10 +170,19 @@ def main():
                 key("ret")
                 time.sleep(15)
                 shot("p43_170_after_original_awe32_model_confirmation")
-                # Do not press a second Enter blindly: any original Win95
-                # additional dialog must first be identified by screenshot.
-                report["p43_model_selection_confirmed"]="needs_visual_verification"
-                report["p43_original_awe32_driver_bound"]=False
+                # P44: P43 evidence shows the actual Win95 "Windows can
+                # continue installing your hardware now" page with a
+                # focused FINISH button. Confirm precisely that button once.
+                # Subsequent dialogs remain unverified: do not automate
+                # additional confirmations until their screenshots are read.
+                key("ret")
+                time.sleep(13)
+                shot("p44_183_after_finish")
+                time.sleep(25)
+                shot("p44_208_after_driver_setup")
+                report["p44_finished_confirmed_model"]="AWE32 synthesis model selected in P43"
+                report["p44_original_awe32_driver_bound"]=False
+                report["p44_note_on_register_trace"]=False
             finally:
                 if proc.poll() is None:
                     proc.terminate()
