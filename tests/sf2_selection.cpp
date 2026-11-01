@@ -61,6 +61,66 @@ int main() {
     std::array<Region, 64> buffer{};
     const auto expected = bank.Select(12, 7, 66, 90);
     ok &= Check(expected.size() == 80, "80 matching layers in baseline");
+    ok &= Check(expected.front().gen.Get(Gen::CoarseTune,-999)==2,
+        "SF2: instrument coarseTune +3 and preset offset -1 combine to +2");
+    ok &= Check(expected.front().gen.Get(Gen::InitialFilterFc,-999)==4000,
+        "SF2: preset-only generator is preserved");
+    // Real-world pattern recreated without copying proprietary bank data:
+    // preset offsets must affect audible pitch, chorus, resonance and envelopes.
+    {
+        Bank bass;
+        bass.version=Version::Sf2;
+        bass.samples.resize(1);
+        bass.instruments.resize(1);
+        bass.presets.resize(1);
+        auto& ins=bass.instruments.front();
+        ins.global.Set(Gen::InitialFilterQ,100);
+        ins.global.Set(Gen::ChorusEffectsSend,0);
+        ins.global.Set(Gen::AttackVolEnv,-7973);
+        ins.global.Set(Gen::DecayVolEnv,0);
+        ins.global.Set(Gen::FineTune,-5);
+        ins.global.Set(Gen::ReleaseVolEnv,0);
+        Zone iz;
+        iz.sampleId=0;
+        ins.zones.push_back(iz);
+        auto& patch=bass.presets.front();
+        patch.program=7;patch.bank=0;
+        Zone pz2;
+        pz2.instrument=0;
+        pz2.gen.Set(Gen::InitialFilterQ,-110);
+        pz2.gen.Set(Gen::ChorusEffectsSend,400);
+        pz2.gen.Set(Gen::AttackVolEnv,-3986);
+        pz2.gen.Set(Gen::DecayVolEnv,814);
+        pz2.gen.Set(Gen::ReleaseVolEnv,814);
+        pz2.gen.Set(Gen::FineTune,-1);
+        patch.zones.push_back(pz2);
+        const auto sound=bass.Select(0,7,60,100);
+        const bool composed=sound.size()==1&&
+            sound[0].gen.Get(Gen::InitialFilterQ,-999)==-10&&
+            sound[0].gen.Get(Gen::ChorusEffectsSend,-999)==400&&
+            sound[0].gen.Get(Gen::AttackVolEnv,-999)==-11959&&
+            sound[0].gen.Get(Gen::DecayVolEnv,-999)==814&&
+            sound[0].gen.Get(Gen::ReleaseVolEnv,-999)==814&&
+            sound[0].gen.Get(Gen::FineTune,-999)==-6;
+        ok &= Check(composed,"SF2 real-bank-style filter, envelope, chorus and tuning offsets combine");
+        // Protect the previously proven SBK/SF1 driver semantics.
+        bass.version=Version::Sf1;
+        const auto legacy=bass.Select(0,7,60,100);
+        ok &= Check(legacy.size()==1&&
+            legacy[0].gen.Get(Gen::InitialFilterQ,-999)==100&&
+            legacy[0].gen.Get(Gen::ChorusEffectsSend,-999)==0&&
+            legacy[0].gen.Get(Gen::AttackVolEnv,-999)==-7973&&
+            legacy[0].gen.Get(Gen::FineTune,-999)==-5,
+            "SF1 historical driver precedence remains unchanged");
+        // A malformed preset must not wrap an int16 sum.
+        GenSet saturating;
+        GenSet offset;
+        saturating.Set(Gen::FineTune,32760);
+        offset.Set(Gen::FineTune,200);
+        saturating.AddFrom(offset);
+        ok &= Check(saturating.Get(Gen::FineTune,-1)==32767,
+            "SF2 additive overflow saturates instead of wrapping");
+    }
     auto result = bank.SelectInto(12, 7, 66, 90, buffer);
     ok &= Check(result.overflow && result.count == buffer.size(), "oversized preset reports overflow instead of silently truncating");
     for (size_t i = 0; i < result.count; ++i)
