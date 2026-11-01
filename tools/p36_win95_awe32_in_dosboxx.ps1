@@ -1,3 +1,4 @@
+param([string]$ExistingDiskImage = '')
 $ErrorActionPreference = 'Stop'
 $root = Join-Path $env:RUNNER_TEMP 'p36-win95'
 $exeRoot = Join-Path $root 'dosbox'
@@ -9,6 +10,10 @@ function Download($url,$dest) {
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path $dest)) { throw "Download failed: $url" }
 }
 try {
+    if ($ExistingDiskImage) {
+        if (-not (Test-Path $ExistingDiskImage)) { throw 'Existing guest image not found' }
+        Write-Host "P38 pre-staged Win95 disk: $ExistingDiskImage"
+    } else {
     $os = Join-Path $root 'win95.img.7z'
     Download 'https://www.rekoba.de/~cs/v86/win95/Windows95b_p9x-0.9.91_512MB.img.7z' $os
     $seven = 'C:\Program Files\7-Zip\7z.exe'
@@ -23,6 +28,9 @@ try {
             Where-Object {$_.Length -eq 536870912} |
             Select-Object -First 1 -ExpandProperty FullName
     if (-not $disk) { throw 'Valid Windows OSR2 raw disk image absent' }
+    }
+    if ($ExistingDiskImage) { $disk = $ExistingDiskImage }
+    if ((Get-Item $disk).Length -ne 536870912) { throw 'Invalid staged Win95 image size' }
     $rom = Join-Path $root 'awe32-dummy.raw'
     [IO.File]::WriteAllBytes($rom,[byte[]]::new(1048576))
     $zip = Join-Path $root 'dosbox-x.zip'
@@ -86,7 +94,7 @@ boot C:
 "@ | Set-Content -Path $cfg -Encoding Ascii
     $stdout=Join-Path $out 'dosboxx.stdout.txt'
     $stderr=Join-Path $out 'dosboxx.stderr.txt'
-    $arguments=@('-conf',('"' + $cfg + '"'),'-fastlaunch','-time-limit','52','-log-con')
+    $arguments=@('-conf',('"' + $cfg + '"'),'-fastlaunch','-time-limit','88','-log-con')
     $proc=Start-Process -FilePath $binary -WorkingDirectory (Split-Path $binary) -ArgumentList $arguments -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
     function Capture($label) {
         try {
@@ -119,8 +127,8 @@ boot C:
             Write-Host 'Sent ENTER to dismiss Windows 95 NE2000 warning'
         }
     } catch { Write-Warning "Unable to send guest key: $_" }
-    Start-Sleep -Seconds 25
-    Capture '047s'
+    Start-Sleep -Seconds 55
+    Capture '077s'
     if (-not $proc.HasExited) { try { $proc.Kill();$proc.WaitForExit(5000)|Out-Null } catch {} }
     $report=[PSCustomObject]@{
        image_format='Windows 95 OSR2 raw 512MB'; emulation='DOSBox-X 2026.10.01'
