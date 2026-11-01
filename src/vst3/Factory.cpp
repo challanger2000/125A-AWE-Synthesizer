@@ -10,9 +10,11 @@
 #include "AssetConfig.h"
 #include "Opl3Midi.h"
 #include "public.sdk/source/vst/vstparameters.h"
+#include "pluginterfaces/base/ustring.h"
 #include "vstgui/plugin-bindings/vst3editor.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -300,8 +302,19 @@ public:
     tresult PLUGIN_API initialize(FUnknown* ctx) override {
         const auto r=EditControllerEx1::initialize(ctx);
         if(r!=kResultOk)return r;
-        parameters.addParameter(STR16("Program"),nullptr,127,0,
-                                ParameterInfo::kCanAutomate,kProgramID);
+        // COptionMenu displays and selects real steps only when the parameter
+        // supplies readable values. The former generic numeric parameter
+        // displayed normalized 0.000..1.000, not program numbers.
+        // Keep ParamID 1000 and the unchanged 0..127 normalized mapping.
+        auto* programs = new StringListParameter(STR16("Program"),kProgramID);
+        for(int index=0;index<128;++index) {
+            char ascii[8]{};
+            std::snprintf(ascii,sizeof(ascii),"%03d",index);
+            String128 label{};
+            UString(label,128).fromAscii(ascii);
+            programs->appendString(label);
+        }
+        parameters.addParameter(programs);
         auto* engine=new StringListParameter(STR16("Hardware"),kEngineID);
         engine->appendString(STR16("EMU8000 AWE32/64"));
         engine->appendString(STR16("Yamaha OPL3"));
