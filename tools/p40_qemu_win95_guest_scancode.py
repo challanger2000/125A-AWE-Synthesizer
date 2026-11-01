@@ -153,10 +153,14 @@ def main():
                 # Press S while the list is focused and inspect the
                 # highlighted category before requesting Next.
                 key("s")
-                time.sleep(2)
-                shot("p41e_101_sound_class_candidate")
-                # P41f verified from P41e screenshot: MEDIA class is
-                # highlighted in Win95 original category list.
+                time.sleep(1)
+                shot("p41g_100_scsi_controller_first_s")
+                # Win95 first-letter navigation chooses first S-category:
+                # SCSI controllers. The adjacent NEXT row is the intended
+                # Sound, video and game controllers. One down selects MEDIA.
+                key("down")
+                time.sleep(1)
+                shot("p41g_101_media_class_highlighted")
                 key("ret")
                 time.sleep(8)
                 shot("p41f_109_sound_manufacturer_page")
@@ -173,7 +177,7 @@ def main():
                 time.sleep(8)
                 shot("p41f_121_creative_media_model")
                 report["p41d_hardware_class_reached"]=True
-                report["p41e_sound_class_selected"]=True
+                report["p41e_sound_class_selected"]="verify p41g_101 screenshot"
                 report["p41f_awe32_device_binding"]="unverified"
                 report["p41d_original_awe32_driver_bound"]=False
             finally:
