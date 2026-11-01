@@ -1,7 +1,7 @@
 name: P40 QEMU guest-controlled Windows95 input
 on:
   push:
-    branches: [research/p42-win95-media-class-selection]
+    branches: [research/p43-win95-original-awe32-install]
     paths:
       - tools/p40_qemu_win95_guest_scancode.py
       - tools/p38_stage_creative_awe32_win95.py
