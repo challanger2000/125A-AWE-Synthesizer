@@ -2,7 +2,7 @@ name: 125A AWE VST3 Dev - Windows x64
 on:
   push:
     branches: [develop/v0.1.0-upstream-audit]
-    paths: ['src/vst3/**', 'src/engine/**', 'src/opl3/**', 'tests/asset_state.cpp', 'tests/sf2_audio_integration.cpp', 'tests/p16_preset_catalog.cpp', 'tests/opl3_historical_factory.cpp', 'CMakeLists.txt', '.github/workflows/vst3-dev.yml']
+    paths: ['src/vst3/**', 'src/engine/**', 'src/opl3/**', 'tests/**', 'tools/p18_editorhost_smoke.py', 'CMakeLists.txt', '.github/workflows/vst3-dev.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -20,7 +20,7 @@ jobs:
           if ($hash -ne "3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96") { throw "Unexpected SDK: $hash" }
       - name: Configure VS2022 x64
         shell: pwsh
-        run: cmake -S . -B build-vst3 -G "Visual Studio 17 2022" -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON
+        run: cmake -S . -B build-vst3 -G "Visual Studio 17 2022" -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_EDITORHOST_TEST=ON
       - name: Compile developer VST3
         shell: pwsh
         run: cmake --build build-vst3 --config Release --target 125A_AWE_Synthesizer --parallel 2
@@ -35,6 +35,27 @@ jobs:
       - name: Verify actual bundled original IBK factory banks
         shell: pwsh
         run: python tools/verify_ibk_bundle.py build-vst3/VST3/Release/125A_AWE_Synthesizer.vst3/Contents/Resources
+      - name: Build Steinberg reference EditorHost (real VST3 GUI)
+        shell: pwsh
+        run: cmake --build build-vst3 --config Release --target editorhost --parallel 2
+      - name: P18 real Win32 EditorHost GUI smoke
+        shell: pwsh
+        timeout-minutes: 4
+        run: |
+          $editor = Get-ChildItem build-vst3 -Filter editorhost.exe -Recurse |
+            Where-Object { $_.FullName -match 'Release' } |
+            Select-Object -First 1 -ExpandProperty FullName
+          $plugin = (Resolve-Path "build-vst3/VST3/Release/125A_AWE_Synthesizer.vst3").Path
+          if (-not $editor) { throw "Compiled EditorHost binary missing" }
+          python tools/p18_editorhost_smoke.py --editorhost "$editor" --plugin "$plugin" --output build-vst3/gui-smoke
+      - name: Keep actual GUI screenshots and interaction results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 125A-P18-EditorHost-Win32-GUI-Evidence
+          path: build-vst3/gui-smoke/
+          if-no-files-found: warn
+          retention-days: 7
       - name: Export ROM-free developer VST3 bundle
         uses: actions/upload-artifact@v4
         with:
