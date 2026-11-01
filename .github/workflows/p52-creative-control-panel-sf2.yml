@@ -1,0 +1,46 @@
+name: P52 inspect genuine Creative AWECP95 SoundFont 2.0 control panel
+on:
+  push:
+    branches: [research/p52-creative-awecp95-sf2-staging]
+    paths:
+      - tools/p52_awecp95_inspect.py
+      - .github/workflows/p52-creative-control-panel-sf2.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect-original-control-panel:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install archive and file examination tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq p7zip-full file
+      - name: Fetch original Creative AWECP95 package for inspection ONLY
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/p52"
+          curl -fLsS --retry 3 --max-time 90 \
+            'https://www.philscomputerlab.com/uploads/3/7/2/3/37231621/awecp95.exe' \
+            -o "$RUNNER_TEMP/p52/AWECP95.EXE"
+          file "$RUNNER_TEMP/p52/AWECP95.EXE"
+          python tools/p52_awecp95_inspect.py \
+            --exe "$RUNNER_TEMP/p52/AWECP95.EXE" \
+            --out "$RUNNER_TEMP/p52/AWECP95-P52-text-report.json"
+      - name: Preserve text metadata only (NO Creative binaries)
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p p52-evidence
+          cp "$RUNNER_TEMP/p52/AWECP95-P52-text-report.json" p52-evidence/ 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: P52-Original-AWECP95-Metadata-Only
+          path: p52-evidence/*.json
+          if-no-files-found: warn
+          retention-days: 5
+      - name: Remove original Creative package from temporary runner
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/p52"
