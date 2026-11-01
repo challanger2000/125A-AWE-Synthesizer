@@ -26,6 +26,16 @@ browser = (root / "src/vst3/PresetBrowserView.cpp").read_text(encoding="utf-8")
 assert 'new VSTGUI::VST3Editor(this,"view","awe_test_panel.uidesc")' in factory
 assert 'editor->setDelegate(this)' in factory
 assert 'new PresetBrowserView({0,0,860,612},this,sfCatalog_,fmCatalog_,' in factory
+# Preset names in phdr do NOT prove sound samples were successfully loaded:
+# the UI must receive the processor's actual load result, not display fake
+# FM-/SF2-sounding sine substitution after a failed request.
+assert 'sendTextMessage(("125A_SF2_STATUS:"+sf2Status).c_str())' in factory
+assert 'receiveText(const char8* msg) override' in factory
+assert 'AllowEmuNoteOn(sf2Configured_,sf2Loaded_)' in factory
+assert 'assetError_="SF2-Ladefehler: "' in factory
+assert 'Sf2AudioStatus();' in factory
+assert 'SyncSf2Status();' in browser
+assert 'hint_->setVisible(true);' in browser
 assert 'FactoryBank(L"125A_Logo_Master_FINAL.svg")' in factory
 assert 'new MasterLogoView({18,11,150,50},exactLogoPath)' in browser
 assert 'kPathFilledEvenOdd' in (root / "src/vst3/MasterLogoView.cpp").read_text(encoding="utf-8")

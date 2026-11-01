@@ -49,8 +49,10 @@ std::string BankLabel(uint16_t bank) {
 PresetBrowserView::PresetBrowserView(const CRect& rect,
     Steinberg::Vst::EditController* controller,
     const PresetCatalog& sf,const PresetCatalog& fm,
-    const std::string& exactLogoPath)
-    : CViewContainer(rect),controller_(controller),sf_(sf),fm_(fm) {
+    const std::string& exactLogoPath,
+    std::function<std::string()> sf2StatusProvider)
+    : CViewContainer(rect),controller_(controller),sf_(sf),fm_(fm),
+      sf2StatusProvider_(std::move(sf2StatusProvider)) {
     setBackgroundColor(kBack);
     addView(new HardwareFaceplate({0,0,860,612}));
     addView(new MasterLogoView({18,11,150,50},exactLogoPath));
@@ -94,8 +96,9 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     addView(table_);
     empty_=MakeLabel({35,293,786,335},"",true);
     hint_=MakeLabel({24,571,822,601},
-                    "Instrument waehlen  |  PREV/NEXT: Programme der aktiven Bank",
+                    "SF2-Audiostatus noch nicht vom Prozessor bestaetigt.",
                     true);
+    hint_->setTextTruncateMode(CTextLabel::kTruncateTail);
     SetExpanded(true);
     setWantsIdle(true);
     Sync(true);
@@ -185,6 +188,9 @@ void PresetBrowserView::Sync(bool force) {
         controller_->getParamNormalized(kBank)*16383.)),0,16383));
     const auto program=static_cast<uint8_t>(std::clamp(int(std::lround(
         controller_->getParamNormalized(kProgram)*127.)),0,127));
+    // SF2 load information arrives from processor via VST3 connection and
+    // can change without any parameter automation. Poll on UI idle only.
+    SyncSf2Status();
     if(!force&&engine==engine_&&bank==bank_&&program==program_)return;
     const bool newEngine=engine!=engine_;
     engine_=engine;
@@ -197,6 +203,17 @@ void PresetBrowserView::Sync(bool force) {
     if(newEngine||force)RebuildBanks();
     RebuildRows();
 }
+void PresetBrowserView::SyncSf2Status() {
+    if(!hint_||!sf2StatusProvider_)return;
+    std::string value=sf2StatusProvider_();
+    if(value.empty())value="SF2-Audiostatus nicht verfuegbar.";
+    if(engine_!=0)value="Instrument waehlen  |  PREV/NEXT: Programme der aktiven Bank";
+    if(value==lastStatus_)return;
+    lastStatus_=value;
+    hint_->setText(value.c_str());
+    const bool error=value.find("SF2-Ladefehler:")!=std::string::npos;
+    hint_->setFontColor(error?CColor(255,136,123,255):kMuted);
+}
 void PresetBrowserView::onIdle() { Sync(); }
 void PresetBrowserView::SetExpanded(bool value) {
     expanded_=value;
@@ -205,7 +222,8 @@ void PresetBrowserView::SetExpanded(bool value) {
     searchCaption_->setVisible(value);
     search_->setVisible(value);
     table_->setVisible(value);
-    hint_->setVisible(value);
+    // A load error must remain visible even when the preset table is closed.
+    hint_->setVisible(true);
     empty_->setVisible(value&&rows_.empty());
     toggle_->setTitle(value?"BROWSER SCHLIESSEN":"BROWSER OEFFNEN");
 }

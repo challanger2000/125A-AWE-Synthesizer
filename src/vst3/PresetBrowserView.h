@@ -8,6 +8,7 @@
 #include "vstgui/lib/controls/ctextlabel.h"
 #include "public.sdk/source/vst/vsteditcontroller.h"
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -21,7 +22,8 @@ public:
     PresetBrowserView(const VSTGUI::CRect& rect,
                       Steinberg::Vst::EditController* controller,
                       const PresetCatalog& sf,const PresetCatalog& fm,
-                      const std::string& exactLogoPath);
+                      const std::string& exactLogoPath,
+                      std::function<std::string()> sf2StatusProvider);
     void onIdle() override;
     void valueChanged(VSTGUI::CControl* c) override;
     int32_t dbGetNumRows(VSTGUI::CDataBrowser*) override;
@@ -41,6 +43,8 @@ private:
     Steinberg::Vst::EditController* controller_;
     const PresetCatalog& sf_;
     const PresetCatalog& fm_;
+    std::function<std::string()> sf2StatusProvider_;
+    std::string lastStatus_;
     int engine_=-1;
     uint16_t bank_=0;
     uint8_t program_=0;
@@ -62,6 +66,7 @@ private:
     void RebuildBanks();
     void RebuildRows();
     void Sync(bool force=false);
+    void SyncSf2Status();
     void SetExpanded(bool);
     void Select(uint16_t bank,uint8_t program);
     void ChangeParameter(Steinberg::Vst::ParamID,double normalized);
