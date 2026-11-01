@@ -57,6 +57,7 @@ sbbase=220
 irq=7
 dma=1
 hdma=5
+[emu8k]
 rompath=$romUnix
 memsize=8192
 [midi]
