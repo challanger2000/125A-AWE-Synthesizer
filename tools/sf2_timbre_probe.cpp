@@ -35,7 +35,8 @@ bool SaveWav(const std::filesystem::path& path,
 }
 void Help() {
     std::cerr << "Usage: awe32_sf2_timbre_probe [--rom path] [--sf2 path]"
-              << " [--out folder] [--note 0..127] [--velocity 1..127]\n"
+              << " [--out folder] [--note 0..127] [--velocity 1..127]" 
+              << " [--driver win95|sdk] [--port-trace yes|no]\n"
               << "Paths default to %APPDATA%/125A/AWE Synthesizer/assets.cfg."
               << " No source sound files are copied into the repository.\n";
 }
@@ -59,6 +60,8 @@ int main(int argc, char** argv) {
     }
     fs::path output = fs::current_path() / "125A-SF2-Timbre-Probe";
     int note = 48, velocity = 100;
+    Awe32::Driver driver = Awe32::Driver::Win95;
+    bool tracePorts = false;
     for (int i = 1; i < argc; i += 2) {
         if (i + 1 >= argc) { Help(); return 2; }
         const std::string flag(argv[i]), value(argv[i + 1]);
@@ -67,6 +70,12 @@ int main(int argc, char** argv) {
         else if (flag == "--out") output = fs::path(value);
         else if (flag == "--note" && Decimal(value, 0, 127, note)) {}
         else if (flag == "--velocity" && Decimal(value, 1, 127, velocity)) {}
+        else if (flag == "--driver" && value == "win95")
+            driver = Awe32::Driver::Win95;
+        else if (flag == "--driver" && value == "sdk")
+            driver = Awe32::Driver::Sdk;
+        else if (flag == "--port-trace" && value == "yes") tracePorts = true;
+        else if (flag == "--port-trace" && value == "no") tracePorts = false;
         else { Help(); return 2; }
     }
     if (paths.rom.empty() || paths.sf2.empty()) {
@@ -81,11 +90,13 @@ int main(int argc, char** argv) {
         return 3;
     }
     std::cout << "125A authentic EMU8000 audio probe | 44100 Hz / stereo PCM16"
-              << " | MIDI note " << note << " velocity " << velocity << '\n';
+              << " | MIDI note " << note << " velocity " << velocity
+              << " | driver " << (driver==Awe32::Driver::Sdk ? "sdk" : "win95")
+              << (tracePorts ? " | trace enabled" : "") << '\n';
     bool ok = true;
     for (const int program : {0, 7}) {
         Synth synth(44100);
-        synth.Core().SetDriver(Awe32::Driver::Win95);
+        synth.Core().SetDriver(driver);
         std::string error;
         if (!synth.Core().UseBox86Chip(paths.rom, error) ||
             synth.Core().ChipVariant() != Emu8000Core::Chip::Box86) {
@@ -129,6 +140,17 @@ int main(int argc, char** argv) {
             std::cerr << "ERROR: cannot create note dump " << notes << '\n';
             return 6;
         }
+        // Capture only MIDI->EMU8000 port activity after initialization
+        // and bank loading. This is the portion comparable to the Creative
+        // SDK (or Windows VxD) note-on from a separately instrumented VM.
+        // The trace deliberately does NOT include chip initialization or
+        // DRAM uploads; the original SDK may upload the bank differently.
+        const fs::path portTrace = output / (id +
+            (driver==Awe32::Driver::Sdk ? "_sdk" : "_win95") + "_noteon.trace");
+        if (tracePorts && !synth.Core().OpenTrace(portTrace.string().c_str())) {
+            std::cerr << "ERROR: cannot create port-write trace " << portTrace << '\n';
+            return 9;
+        }
         synth.ProgramChange(0, static_cast<uint8_t>(program));
         synth.NoteOn(0, static_cast<uint8_t>(note),
                      static_cast<uint8_t>(velocity));
@@ -136,6 +158,10 @@ int main(int argc, char** argv) {
         std::vector<int16_t> samples(size_t{frames} * 2, 0);
         synth.RenderBlock(samples.data(), frames);
         synth.CloseNoteDump();
+        if (tracePorts) {
+            synth.Core().CloseTrace();
+            std::cout << "  port trace: " << portTrace << '\n';
+        }
         const bool audible = std::any_of(samples.begin(), samples.end(),
                                         [](int16_t x) { return x != 0; });
         double sum = 0.;

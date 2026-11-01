@@ -1,0 +1,36 @@
+name: P29 Original Creative Driver Oracle - compile check
+on:
+  push:
+    branches:
+      - research/p29-original-creative-sf2-driver-oracle
+    paths:
+      - tools/sf2_timbre_probe.cpp
+      - docs/P29-ORIGINAL-CREATIVE-DRIVER-FEASIBILITY.md
+      - .github/workflows/p29-creative-sdk-oracle.yml
+permissions:
+  contents: read
+jobs:
+  native-probe-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure native 86Box-backed EMU8000
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -D125A_BUILD_VST3=OFF -D125A_BUILD_OPL3_PROBES=OFF
+      - name: Compile note-on register trace exporter without proprietary files
+        run: cmake --build build --target awe32_sf2_timbre_probe --parallel 2
+      - name: Validate default, SDK and trace argument handling (no external ROM or SoundFont)
+        shell: bash
+        run: |
+          set -eu
+          exe=build/src/engine/awe32_sf2_timbre_probe
+          test -x "$exe"
+          for driver in win95 sdk; do
+            set +e
+            "$exe" --driver "$driver" --port-trace yes --rom "" --sf2 "" > /tmp/p29-output 2>&1
+            rc=$?
+            set -e
+            if [ "$rc" -ne 2 ]; then cat /tmp/p29-output; exit 1; fi
+            grep -q 'ROM and SF2 must be configured' /tmp/p29-output
+          done
+          echo "P29 CLI variants verified. NO Creative driver executed and no real SF2 parity claimed."
