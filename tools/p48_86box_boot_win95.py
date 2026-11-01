@@ -17,6 +17,40 @@ from pathlib import Path
 from p47_86box_emu8k_smoke import send, wait_socket, write_config
 
 
+# Scancode set 1 (US Win95 layout), only for the fixed laboratory filename.
+P49_KEYCODES = {
+    **dict(zip("qwertyuiop", range(0x10, 0x1a))),
+    **dict(zip("asdfghjkl", range(0x1e, 0x27))),
+    **dict(zip("zxcvbnm", range(0x2c, 0x33))),
+    **dict(zip("1234567890", list(range(0x02, 0x0c)))),
+    "\\": 0x2b, ".": 0x34, "-": 0x0c,
+}
+
+
+def p49_key(conn: socket.socket, scan: int) -> None:
+    send(conn, f"key down 0x{scan:x}")
+    send(conn, f"key up 0x{scan:x}")
+
+
+def p49_type_path(conn: socket.socket, value: str) -> None:
+    for ch in value.lower():
+        if ch == ":":
+            send(conn, "key down 0x2a")  # shift + semicolon
+            p49_key(conn, 0x27)
+            send(conn, "key up 0x2a")
+        else:
+            scan = P49_KEYCODES.get(ch)
+            if scan is None:
+                raise ValueError(f"Unsupported P49 test filename character {ch!r}")
+            p49_key(conn, scan)
+
+
+def p49_screenshot(conn: socket.socket, out: Path, name: str, report: dict) -> None:
+    result = send(conn, f"screenshot {(out / name).resolve()}")
+    report["screens"].append({"name": name, "w": result.get("w"), "h": result.get("h")})
+
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--binary", type=Path, required=True)
@@ -69,7 +103,7 @@ hdd_01_speed = ramdisk
                     raise AssertionError("Wrong emulated card in P48 VM")
                 if not info.get("hdd"):
                     raise AssertionError("Win95 IDE disk was not mounted")
-                for elapsed in (15000, 30000, 5000, 15000, 30000, 30000):
+                for index, elapsed in enumerate((15000, 30000, 5000, 15000, 30000, 30000)):
                     step = send(conn, f"step {elapsed}")
                     report["last_emulated_ms"] = step.get("ms")
                     name = f"win95-{step.get('ms', 0):08d}.png"
@@ -79,7 +113,7 @@ hdd_01_speed = ramdisk
                         report["screens"].append({"name": name, "w": screen.get("w"), "h": screen.get("h")})
                     except Exception as exc:
                         report["screens"].append({"name": name, "error": str(exc)})
-                    if elapsed == 15000:
+                    if index == 0:
                         # Verified P48 run 41347661011: first-ever boot of
                         # ASUS P/I-P55T2P4 BIOS displays "CMOS checksum
                         # error — Defaults loaded" and "Press F1 to
@@ -88,7 +122,7 @@ hdd_01_speed = ramdisk
                         send(conn, "key down 0x3b")
                         send(conn, "key up 0x3b")
                         report["f1_cmos_continue_pressed"] = True
-                    if elapsed == 30000 and not report.get("ne2000_warning_ok_pressed", False):
+                    if index == 1:
                         # P48 run #41348535559: Windows 95 reaches a
                         # centered "Windows Networking" warning about the
                         # mismatched NE2000 device. "OK" has keyboard
@@ -97,6 +131,55 @@ hdd_01_speed = ramdisk
                         send(conn, "key down 0x1c")
                         send(conn, "key up 0x1c")
                         report["ne2000_warning_ok_pressed"] = True
+                    if index == 3:
+                        # P48b screenshot 00065008: Win95 Welcome window
+                        # shows a focused Close button. Press Enter only once.
+                        p49_key(conn, 0x1c)
+                        report["win95_welcome_closed"] = True
+                # P49: The actual Win95 desktop and focused Welcome Close
+                # were visually confirmed in successful P48b run #41349407124.
+                # Open Win95 Start -> Run via known Ctrl+Esc, R shortcut.
+                # A screenshot is saved BEFORE sending the laboratory path.
+                send(conn, "key down 0x1d 0x01")
+                send(conn, "key up 0x01 0x1d")
+                send(conn, "step 300")
+                p49_key(conn, 0x13)       # r => Win95 Run menu item
+                send(conn, "step 500")
+                p49_screenshot(conn, args.out, "p49-run-dialog.png", report)
+                fixture_path = "c:\\awe32\\p49-p0.mid"
+                p49_type_path(conn, fixture_path)
+                p49_screenshot(conn, args.out, "p49-run-midi-path.png", report)
+                report["requested_midi_path"] = fixture_path
+                # Do not assert the MIDI is routed to AWE32 until Windows
+                # player UI and register/audio changes actually prove it.
+                baseline = 0
+                if trace.exists():
+                    baseline = max(0, len(trace.read_text(encoding="utf8", errors="replace").splitlines()) - 1)
+                report["raw_writes_before_midi_launch"] = baseline
+                try:
+                    send(conn, "audio start")
+                    report["automation_audio_recording_started"] = True
+                except Exception as exc:
+                    report["audio_recording_error"] = str(exc)
+                p49_key(conn, 0x1c)       # launch fixed laboratory .MID
+                report["midi_open_command_entered"] = True
+                send(conn, "step 1000")
+                p49_screenshot(conn, args.out, "p49-midi-player-initial.png", report)
+                send(conn, "step 4000")
+                p49_screenshot(conn, args.out, "p49-midi-player-after4s.png", report)
+                try:
+                    levels = send(conn, "audio level 5000")
+                    report["post_midi_audio_levels"] = levels
+                except Exception as exc:
+                    report["audio_level_error"] = str(exc)
+                try:
+                    audio = send(conn, "audio stop")
+                    report["audio_segments"] = [
+                        {k: v for k, v in seg.items() if k not in ("file",)}
+                        for seg in audio.get("segments", [])
+                    ]
+                except Exception as exc:
+                    report["audio_stop_error"] = str(exc)
                 try:
                     status = send(conn, "status")
                     report["end_status"] = {
@@ -111,6 +194,7 @@ hdd_01_speed = ramdisk
                     lines = trace.read_text(encoding="utf8", errors="replace").splitlines()
                     report["raw_emu8000_write_count"] = max(0, len(lines) - 1)
                     report["raw_emu8000_preview"] = lines[1:4]
+                    report["raw_writes_after_midi_launch_delta"] = max(0, len(lines)-1-baseline)
                     report["raw_emu8000_pointer_count"] = sum(
                         x.endswith(",pointer") for x in lines[1:])
                     report["raw_emu8000_data_count"] = sum(
