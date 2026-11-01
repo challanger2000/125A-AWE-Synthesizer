@@ -55,7 +55,7 @@ p45_125a_trace_emu8k_write(const emu8k_t *emu8k, uint16_t port, uint16_t value)
             is_pointer ? "pointer" : "data");
     /* Limit expensive flushes during SoundFont transfers. Clean normal
        process exits also flush FILE streams automatically. */
-    if ((sequence & 127ULL) == 0)
+    if (sequence <= 4 || (sequence & 127ULL) == 0)
         fflush(fp);
 }
 '''
