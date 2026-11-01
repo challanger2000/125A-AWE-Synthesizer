@@ -1,4 +1,5 @@
 #include "PresetCatalog.h"
+#include "PresetBrowserModel.h"
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
@@ -68,6 +69,27 @@ int main(int argc,char** argv) {
         catalog.Find(128,0)&&catalog.Find(128,0)->name=="Room Drum Kit"&&
         catalog.Find(128,0)->drums,
         "exact SF2 phdr names, MIDI bank/program and drum-bank metadata");
+    // P17 model regression uses actual SF2 phdr names, not a GM lookup.
+    AWE125::PresetCatalog fmCatalog;
+    const auto names=AWE125::PresetBrowserModel::Filter(0,catalog,fmCatalog,-1,"rEtRo");
+    ok&=check(names.size()==1&&names[0].bank==2&&names[0].program==4&&
+              names[0].name=="Retro Lead",
+              "browser search is case-insensitive and returns actual SF2 name");
+    const auto bankOnly=AWE125::PresetBrowserModel::Filter(0,catalog,fmCatalog,128,"");
+    ok&=check(bankOnly.size()==1&&bankOnly[0].drums&&
+              bankOnly[0].name=="Room Drum Kit",
+              "browser filters real SF2 bank 128 drum kits");
+    const auto banks=AWE125::PresetBrowserModel::Banks(0,catalog,fmCatalog);
+    ok&=check(banks==std::vector<uint16_t>({0,2,128})&&
+              AWE125::PresetBrowserModel::Neighbor(0,catalog,fmCatalog,2,4,1)==4&&
+              AWE125::PresetBrowserModel::Neighbor(0,catalog,fmCatalog,2,4,-1)==4&&
+              AWE125::PresetBrowserModel::Neighbor(0,catalog,fmCatalog,3,0,1)==-1,
+              "browser navigates only actual programs, missing bank gives no false preset");
+    ok&=check(AWE125::PresetBrowserModel::CurrentLabel(0,catalog,fmCatalog,2,4)
+                    .find("Retro Lead")!=std::string::npos&&
+              std::string(AWE125::PresetBrowserModel::HardwareDescription(2))
+                    .find("OPL3")!=std::string::npos,
+              "browser main label and hardware explanation use correct hardware");
     const auto oldCount=catalog.Entries().size();
     ok&=check(save(sf,makeSf(16384))&&!catalog.LoadSoundFont(sf.string(),error)&&
         catalog.Entries().size()==oldCount,
@@ -88,6 +110,12 @@ int main(int argc,char** argv) {
         !catalog.Find(0,0)->name.empty()&&catalog.Find(0,127)&&
         !catalog.Find(0,127)->name.empty(),
         "real historical IBK bank yields 128 named FM preset entries");
+    const auto fmNames=AWE125::PresetBrowserModel::Filter(2,fmCatalog,catalog,-1,"");
+    ok&=check(fmNames.size()==128&&
+              AWE125::PresetBrowserModel::Neighbor(2,fmCatalog,catalog,0,0,1)==1&&
+              AWE125::PresetBrowserModel::Neighbor(2,fmCatalog,catalog,0,127,1)==0&&
+              AWE125::PresetBrowserModel::Neighbor(1,fmCatalog,catalog,0,0,-1)==127,
+              "both FM chips browse all actual 128 historic IBK patches with wrap");
     ok&=check(!catalog.LoadFmIbk("does_not_exist.ibk",error)&&
         catalog.Entries().size()==128,
         "missing user IBK does not erase valid metadata");
