@@ -29,6 +29,33 @@ jobs:
         run: |
           cmake --build build-vst3 --config Release --parallel 2
           ctest --test-dir build-vst3 -C Release --output-on-failure
+      - name: Stage standalone ROM-backed SF2 timbre test executable
+        shell: pwsh
+        run: |
+          $probe = Get-ChildItem build-vst3 -Filter awe32_sf2_timbre_probe.exe -Recurse |
+            Where-Object { $_.FullName -match 'Release' } |
+            Select-Object -First 1 -ExpandProperty FullName
+          if (-not $probe) { throw "SF2 timbre probe binary missing" }
+          New-Item -ItemType Directory -Force build-vst3/audio-probe | Out-Null
+          Copy-Item $probe build-vst3/audio-probe/
+          @'
+          125A EMU8000 sound comparison (private SoundFont and ROM stay local).
+          Double-click awe32_sf2_timbre_probe.exe on the Windows machine that
+          has %APPDATA%\125A\AWE Synthesizer\assets.cfg configured.
+          It writes isolated held-note WAVs for program 000 and 007 to
+          125A-SF2-Timbre-Probe in the current working directory.
+          Note C3 (MIDI 48), velocity 100, 2 seconds, 44100 Hz PCM16.
+          Real 86Box + wave ROM mandatory; no silent alternate-engine fallback.
+          If a project overrides the global assets.cfg, explicit command line:
+          awe32_sf2_timbre_probe.exe --rom "C:\path\awe32.raw" --sf2 "C:\path\bank.sf2"
+          '@ | Set-Content build-vst3/audio-probe/START-HERE.txt -Encoding utf8
+      - name: Upload native private-asset audio verification tool
+        uses: actions/upload-artifact@v4
+        with:
+          name: 125A-AWE-EMU8000-SF2-Timbre-Probe-Windows-x64
+          path: build-vst3/audio-probe/
+          if-no-files-found: error
+          retention-days: 7
       - name: Normalize moduleinfo to strict JSON
         shell: pwsh
         run: python tools/normalize_vst3_metadata.py build-vst3/VST3/Release/125A_AWE_Synthesizer.vst3/Contents/Resources/moduleinfo.json
