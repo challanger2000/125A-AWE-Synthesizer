@@ -330,6 +330,80 @@ int main() {
                     synth.Core().ChipRam()[reserve+64]==synth.Core().DramData()[reserve+64],
                     "large SF2 copies into actual hardware-emulated chip RAM");
     }
+    {
+        // P27: A direct, synthetic sound test of the authentic 86Box chip's
+        // stereo pan and hardware effects. This is NOT comparison with
+        // FluidSynth, which uses different effect algorithms and levels.
+        // Use a zero ROM and a generated, copyrighted-asset-free SF2.
+        auto capture=[&](unsigned pan,unsigned chorus,unsigned reverb) {
+            Synth synth(44100);
+            synth.Core().SetDriver(Awe32::Driver::Win95);
+            std::string err;
+            if(!synth.Core().UseBox86Chip(rom.string(),err) ||
+               synth.Core().ChipVariant()!=Emu8000Core::Chip::Box86)
+                return std::vector<int16_t>{};
+            synth.Core().PowerOnInit();
+            if(!synth.LoadBank(sf.string(),err)) return std::vector<int16_t>{};
+            synth.ProgramChange(0,0);
+            synth.NoteOn(0,69,110);
+            // The first single voice in a newly initialized Win95 chip is
+            // voice zero. Only change chip registers AFTER the actual
+            // Synth/driver note-on. The native DSP/FX code stays untouched.
+            constexpr int voice=0;
+            auto& chip=synth.Core();
+            const uint32_t psst=chip.Read(Emu8000::Reg::PSST,voice);
+            const uint32_t csl=chip.Read(Emu8000::Reg::CSL,voice);
+            const uint32_t ptrx=chip.Read(Emu8000::Reg::PTRX,voice);
+            chip.Write(Emu8000::Reg::PSST,voice,
+                       ((pan&255u)<<24) | (psst&0xFFFFFFu));
+            chip.Write(Emu8000::Reg::CSL,voice,
+                       ((chorus&255u)<<24) | (csl&0xFFFFFFu));
+            chip.Write(Emu8000::Reg::PTRX,voice,
+                       (ptrx&0xFFFF00FFu) | ((reverb&255u)<<8));
+            constexpr size_t frames=44100;
+            std::vector<int16_t> audio(frames*2,0);
+            synth.RenderBlock(audio.data(),static_cast<uint32_t>(frames));
+            return audio;
+        };
+        const auto dry=capture(128,0,0);
+        const auto left=capture(255,0,0);
+        const auto right=capture(0,0,0);
+        const auto wetChorus=capture(128,255,0);
+        const auto wetReverb=capture(128,0,255);
+        const bool sizes=dry.size()==88200&&left.size()==88200&&
+                         right.size()==88200&&wetChorus.size()==88200&&
+                         wetReverb.size()==88200;
+        ok &= check(sizes,"P27 five genuine 86Box wet/dry/pan captures rendered");
+        if(sizes) {
+            const auto energy=[](const std::vector<int16_t>& a,int channel) {
+                uint64_t sum=0;
+                // Ignore the 980-frame chip FIFO; inspect 0.04 to 0.25s.
+                for(size_t f=1764;f<11025;++f)
+                    sum+=static_cast<uint64_t>(
+                        std::abs(static_cast<int>(a[2*f+channel])));
+                return sum;
+            };
+            const auto change=[](const std::vector<int16_t>& a,
+                                 const std::vector<int16_t>& b) {
+                uint64_t sum=0;
+                for(size_t f=1764;f<44100;++f)
+                    for(int c=0;c<2;++c)
+                        sum+=static_cast<uint64_t>(
+                          std::abs(static_cast<int>(a[2*f+c])-
+                                   static_cast<int>(b[2*f+c])));
+                return sum;
+            };
+            const uint64_t eDry=energy(dry,0)+energy(dry,1);
+            ok &= check(eDry>100000,"P27 dry generated SF2 produces real chip PCM");
+            ok &= check(energy(left,0)>10u*energy(left,1) &&
+                        energy(right,1)>10u*energy(right,0),
+                        "P27 PSST hardware left and right pans route PCM correctly");
+            ok &= check(change(dry,wetChorus)>1000,
+                        "P27 CSL chorus send changes 86Box DSP output");
+            ok &= check(change(dry,wetReverb)>1000,
+                        "P27 PTRX reverb send changes 86Box DSP output");
+        }
+    }
     std::cout<<(ok?"SF2/EMU8000 END-TO-END PASS":"SF2/EMU8000 END-TO-END FAIL")<<'\n';
     std::cout<<"NOT RUN: licensed/user SF2, original ROM timbre parity, Studio One"<<'\n';
     return ok?0:1;
