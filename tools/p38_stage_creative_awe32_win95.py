@@ -106,6 +106,14 @@ def install(image:Path):
         with PyFatFS(str(image),offset=partition_offset(image),
                      read_only=False,preserve_case=False) as fs:
             fs.makedirs("AWE32",recreate=True)
+            # P40: A simple guest DOS command avoids Windows 95 clipboard,
+            # host-key forwarding and long SetupX API command-line typing.
+            # Calls the ORIGINAL Windows 95 loader, not a replacement driver.
+            installer=(b"@ECHO OFF\r\n"
+                       b"C:\\WINDOWS\\RUNDLL.EXE SETUPX.DLL,InstallHinfSection "
+                       b"CTL0021_Device 132 C:\\AWE32\\SB16AWE.INF\r\n")
+            with fs.openbin("AWE32/INSTALL.BAT","w") as outbat:
+                outbat.write(installer)
             for path in temp.iterdir():
                 with fs.openbin("AWE32/"+path.name,"w") as f:
                     f.write(path.read_bytes())
