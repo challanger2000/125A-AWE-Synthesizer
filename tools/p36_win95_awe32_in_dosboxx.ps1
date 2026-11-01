@@ -112,38 +112,92 @@ boot C:
             Write-Host "Saved host display $file"
         } catch { Write-Warning "No interactive-screen capture: $_" }
     }
-    Start-Sleep -Seconds 22
-    Capture '022s'
-    # The community Win95 image has a stale NE2000 network device.
-    # Dismiss its warning using an actual key press to check that the
-    # guest remains interactive after the initial graphical boot.
-    try {
-        $wsh = New-Object -ComObject WScript.Shell
-        $activated=$wsh.AppActivate($proc.Id)
-        Write-Host "P36 DOSBox-X foreground activation: $activated"
-        if ($activated) {
-            Start-Sleep -Milliseconds 900
-            $wsh.SendKeys('{ENTER}')
-            Write-Host 'Sent ENTER to dismiss Windows 95 NE2000 warning'
-            # P38c: invoke SetupX interactively in the original Windows95
-            # guest rather than trusting WIN.INI run= to launch behind
-            # networking dialogs. This is NOT proof of hardware binding.
-            Start-Sleep -Seconds 7
-            $wsh.SendKeys('{ESC}')
-            Start-Sleep -Milliseconds 350
-            $wsh.SendKeys('^{ESC}')
-            Start-Sleep -Milliseconds 700
-            $wsh.SendKeys('r')
-            Start-Sleep -Milliseconds 650
-            $wsh.SendKeys('C:\WINDOWS\RUNDLL.EXE SETUPX.DLL,InstallHinfSection CTL0021_Device 132 C:\AWE32\SB16AWE.INF')
-            Start-Sleep -Milliseconds 300
-            $wsh.SendKeys('{ENTER}')
-            Write-Host 'P38c requested original Creative INF installation from Windows 95 Start/Run'
+    # P39: Never direct host-level Windows shortcuts to the runner.
+    # Always validate foreground emulator PID before guest SendKeys.
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class P39Input {
+    [StructLayout(LayoutKind.Sequential)]
+    public struct Rect {public int Left,Top,Right,Bottom;}
+    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr w, out uint p);
+    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr w, out Rect r);
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr w);
+    [DllImport("user32.dll")] public static extern bool SetCursorPos(int x,int y);
+    [DllImport("user32.dll")] public static extern void mouse_event(uint f,uint x,uint y,uint d,uint e);
+}
+'@
+    $wsh=New-Object -ComObject WScript.Shell
+    function ForegroundGuest {
+        $proc.Refresh()
+        $wnd=$proc.MainWindowHandle
+        if ($wnd -eq [IntPtr]::Zero) { throw 'DOSBox-X guest window unavailable' }
+        [P39Input]::SetForegroundWindow($wnd)|Out-Null
+        $wsh.AppActivate($proc.Id)|Out-Null
+        Start-Sleep -Milliseconds 350
+        [uint32]$actualPid=0
+        [P39Input]::GetWindowThreadProcessId([P39Input]::GetForegroundWindow(),[ref]$actualPid)|Out-Null
+        if ($actualPid -ne [uint32]$proc.Id) {
+            throw "REFUSE HOST INPUT: guest PID $($proc.Id) != foreground PID $actualPid"
         }
-    } catch { Write-Warning "Unable to send guest key: $_" }
-    Start-Sleep -Seconds 55
-    Capture '077s'
-    if (-not $proc.HasExited) { try { $proc.Kill();$proc.WaitForExit(5000)|Out-Null } catch {} }
+        Write-Host "Verified guest emulator foreground PID $actualPid"
+        return $wnd
+    }
+    function GuestKey([string]$keys) {
+        $null=ForegroundGuest
+        $wsh.SendKeys($keys)
+        Start-Sleep -Milliseconds 250
+    }
+    function GuestClick([int]$relX,[int]$relY) {
+        $wnd=ForegroundGuest
+        $rect=New-Object P39Input+Rect
+        [P39Input]::GetWindowRect($wnd,[ref]$rect)|Out-Null
+        $px=$rect.Left+$relX
+        $py=$rect.Top+$relY
+        [P39Input]::SetCursorPos($px,$py)|Out-Null
+        Start-Sleep -Milliseconds 200
+        [P39Input]::mouse_event(2,0,0,0,0)
+        Start-Sleep -Milliseconds 100
+        [P39Input]::mouse_event(4,0,0,0,0)
+        Write-Host "Clicked guest GUI offset ($relX,$relY) -> host ($px,$py)"
+    }
+    Start-Sleep -Seconds 24
+    Capture '024s'
+    GuestKey('{ENTER}')
+    Start-Sleep -Seconds 2
+    Capture '026s'
+    GuestKey('%n')
+    Start-Sleep -Seconds 4
+    Capture '031s'
+    GuestKey('{ENTER}')
+    Start-Sleep -Seconds 3
+    Capture '034s'
+    # DOSBox-X title/menu consumes 44 px above the 640x480 guest.
+    $wnd=ForegroundGuest
+    $rect=New-Object P39Input+Rect
+    [P39Input]::GetWindowRect($wnd,[ref]$rect)|Out-Null
+    $winWidth=$rect.Right-$rect.Left
+    $winHeight=$rect.Bottom-$rect.Top
+    Write-Host "DOSBox-X host window width $winWidth height $winHeight left $($rect.Left) top $($rect.Top)"
+    GuestClick 28 ($winHeight-17)
+    Start-Sleep -Seconds 1
+    Capture '038_startmenu'
+    GuestKey('r')
+    Start-Sleep -Seconds 1
+    Capture '040_run_dialog'
+    $cmd='C:\WINDOWS\RUNDLL.EXE SETUPX.DLL,InstallHinfSection CTL0021_Device 132 C:\AWE32\SB16AWE.INF'
+    GuestKey($cmd)
+    Start-Sleep -Milliseconds 500
+    Capture '042_command'
+    GuestKey('{ENTER}')
+    Start-Sleep -Seconds 12
+    Capture '056_install'
+    Start-Sleep -Seconds 14
+    Capture '070_install'
+    if (-not $proc.HasExited) {
+        try { $proc.Kill();$proc.WaitForExit(5000)|Out-Null } catch {}
+    }
     $report=[PSCustomObject]@{
        image_format='Windows 95 OSR2 raw 512MB'; emulation='DOSBox-X 2026.10.01'
        emulated_sound_card='awe32'; emu8000_RAM_kb=8192
