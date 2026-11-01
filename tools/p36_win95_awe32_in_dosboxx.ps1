@@ -125,6 +125,20 @@ boot C:
             Start-Sleep -Milliseconds 900
             $wsh.SendKeys('{ENTER}')
             Write-Host 'Sent ENTER to dismiss Windows 95 NE2000 warning'
+            # P38c: invoke SetupX interactively in the original Windows95
+            # guest rather than trusting WIN.INI run= to launch behind
+            # networking dialogs. This is NOT proof of hardware binding.
+            Start-Sleep -Seconds 7
+            $wsh.SendKeys('{ESC}')
+            Start-Sleep -Milliseconds 350
+            $wsh.SendKeys('^{ESC}')
+            Start-Sleep -Milliseconds 700
+            $wsh.SendKeys('r')
+            Start-Sleep -Milliseconds 650
+            $wsh.SendKeys('C:\WINDOWS\RUNDLL.EXE SETUPX.DLL,InstallHinfSection CTL0021_Device 132 C:\AWE32\SB16AWE.INF')
+            Start-Sleep -Milliseconds 300
+            $wsh.SendKeys('{ENTER}')
+            Write-Host 'P38c requested original Creative INF installation from Windows 95 Start/Run'
         }
     } catch { Write-Warning "Unable to send guest key: $_" }
     Start-Sleep -Seconds 55
