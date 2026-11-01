@@ -63,8 +63,8 @@ int main() {
     ok &= Check(expected.size() == 80, "80 matching layers in baseline");
     ok &= Check(expected.front().gen.Get(Gen::CoarseTune,-999)==2,
         "SF2: instrument coarseTune +3 and preset offset -1 combine to +2");
-    ok &= Check(expected.front().gen.Get(Gen::InitialFilterFc,-999)==4000,
-        "SF2: preset-only generator is preserved");
+    ok &= Check(expected.front().gen.Get(Gen::InitialFilterFc,-999)==13500,
+        "SF2: positive preset cutoff offset clamps against default 13500");
     // Real-world pattern recreated without copying proprietary bank data:
     // preset offsets must affect audible pitch, chorus, resonance and envelopes.
     {
@@ -93,6 +93,13 @@ int main() {
         pz2.gen.Set(Gen::DecayVolEnv,814);
         pz2.gen.Set(Gen::ReleaseVolEnv,814);
         pz2.gen.Set(Gen::FineTune,-1);
+        // Recreate the actual bass-bank failure: the instrument omits
+        // delayVolEnv, but the preset contains a negative offset. Before
+        // P26, -3986 was treated as an ABSOLUTE 100 ms delay.
+        pz2.gen.Set(Gen::DelayVolEnv,-3986);
+        pz2.gen.Set(Gen::DelayModLFO,3000);
+        pz2.gen.Set(Gen::DecayModEnv,3986);
+        pz2.gen.Set(Gen::InitialFilterFc,-2000);
         patch.zones.push_back(pz2);
         const auto sound=bass.Select(0,7,60,100);
         const bool composed=sound.size()==1&&
@@ -101,7 +108,11 @@ int main() {
             sound[0].gen.Get(Gen::AttackVolEnv,-999)==-11959&&
             sound[0].gen.Get(Gen::DecayVolEnv,-999)==814&&
             sound[0].gen.Get(Gen::ReleaseVolEnv,-999)==814&&
-            sound[0].gen.Get(Gen::FineTune,-999)==-6;
+            sound[0].gen.Get(Gen::FineTune,-999)==-6 &&
+            sound[0].gen.Get(Gen::DelayVolEnv,-999)==-12000 &&
+            sound[0].gen.Get(Gen::DelayModLFO,-999)==-9000 &&
+            sound[0].gen.Get(Gen::DecayModEnv,-999)==-8014 &&
+            sound[0].gen.Get(Gen::InitialFilterFc,-999)==11500;
         ok &= Check(composed,"SF2 real-bank-style filter, envelope, chorus and tuning offsets combine");
         // Sound 000 in the actual bank contains no sustain generators.
         // In SF2 absence means full sustain, NOT decay-to-zero as for SF1.
@@ -110,6 +121,10 @@ int main() {
                                            Awe32::Driver::Win95);
             ok &= Check((full.dcysusv>>8)==0x7F&&(full.dcysus>>8)==0x7F,
                 "SF2 absent volume AND modulation sustain -> full 127");
+            ok &= Check(full.envvol==0x8000,
+                "SF2 preset -3986 delay offset over implicit -12000 starts immediately");
+            ok &= Check(full.ifatn!=0xFF00,
+                "SF2 preset cutoff offset over default is converted to chip register");
             Region adjusted=sound[0];
             adjusted.gen.Set(Gen::SustainVolEnv,120); // 12 dB -> 16 steps
             adjusted.gen.Set(Gen::SustainModEnv,600); // 60% below peak
