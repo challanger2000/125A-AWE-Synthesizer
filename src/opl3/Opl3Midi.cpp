@@ -35,6 +35,20 @@ Opl3Midi::Opl3Midi(uint32_t rate,uint32_t latency,bool cqmBackend)
     }
 }
 Opl3Midi::~Opl3Midi()=default;
+void Opl3Midi::UseBuiltInMelodic() {
+    bank_=IbkBank::BuiltInMelodic();
+}
+void Opl3Midi::UseBuiltInPercussion() {
+    if(cqm_)return; // CQM 0.9 beta has no verified rhythm PCM.
+    AllNotesOff();
+    drumBank_=IbkBank::BuiltInPercussion();
+    rhythmRegister_=0x20;
+    Write(0xbd,rhythmRegister_);
+    for(size_t i=6;i<9;++i) {
+        const auto& v=voices_[i];
+        Write(reg(i,0xb0),static_cast<uint8_t>((v.fnum>>8)|(v.block<<2)));
+    }
+}
 bool Opl3Midi::LoadMelodicIbk(const std::string& path,std::string& error) {
     IbkBank candidate;
     if(!candidate.Load(path,error))return false;

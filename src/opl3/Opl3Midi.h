@@ -23,6 +23,10 @@ public:
     // Load a genuine Sound Blaster 128-patch melodic IBK bank before activation.
     // Failure leaves the previous bank intact; no audio-thread file operations.
     bool LoadMelodicIbk(const std::string& path,std::string& error);
+    // Factory bank is enabled by the VST3, not by unit-test adapter defaults.
+    // All allocations and preset generation happen outside the audio callback.
+    void UseBuiltInMelodic();
+    void UseBuiltInPercussion(); // Yamaha only. CQM rhythm remains disabled.
     void ProgramChange(uint8_t channel,uint8_t program);
     // User-supplied percussion IBK. 0xBD rhythm mode uses real YMF262
     // channel 6/7/8 operators, reducing melodic polyphony from 18 to 15.

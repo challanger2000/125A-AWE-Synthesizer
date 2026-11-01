@@ -15,7 +15,7 @@
     <view class="COptionMenu" origin="145, 98" size="350, 30" control-tag="Program" menu-popup-style="true" menu-check-style="false" min-value="0" max-value="127" default-value="0" back-color="Control" frame-color="Muted" frame-width="1" font="~ NormalFont" font-color="Accent" text-alignment="left" text-inset="10, 0" transparent="false" mouse-enabled="true"/>
     <view class="CTextLabel" origin="20, 145" size="475, 19" title="SF2 / ROM / IBK: existing assets.cfg configuration" font="~ NormalFontSmall" font-color="Muted" back-color="Panel" frame-color="Panel" transparent="true" mouse-enabled="false"/>
     <view class="CTextLabel" origin="20, 169" size="475, 19" title="Restart the plugin after changing asset paths." font="~ NormalFontSmall" font-color="Muted" back-color="Panel" frame-color="Panel" transparent="true" mouse-enabled="false"/>
-    <view class="CTextLabel" origin="20, 203" size="475, 19" title="FM without melodic IBK: one test tone. CQM drums disabled." font="~ NormalFontSmall" font-color="Muted" back-color="Panel" frame-color="Panel" transparent="true" mouse-enabled="false"/>
+    <view class="CTextLabel" origin="20, 203" size="475, 19" title="FM: 125A built-in presets; optional IBK override. CQM drums off." font="~ NormalFontSmall" font-color="Muted" back-color="Panel" frame-color="Panel" transparent="true" mouse-enabled="false"/>
   </template>
   <control-tags>
     <control-tag name="Program" tag="1000"/>

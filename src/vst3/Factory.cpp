@@ -85,6 +85,13 @@ public:
             opl_=std::make_unique<Opl3Midi>(rate_,synth_->Core().ChipLatencyFrames());
             cqm_=std::make_unique<Opl3Midi>(rate_,synth_->Core().ChipLatencyFrames(),true);
             fmReady_=true;
+            // P15: functional instrument selection even without user IBK files.
+            // These are independently authored 125A OPL register patches,
+            // never misrepresented as original Creative GM presets.
+            // Explicit user IBKs take precedence; invalid overrides fail closed.
+            opl_->UseBuiltInMelodic();
+            cqm_->UseBuiltInMelodic();
+            opl_->UseBuiltInPercussion(); // real Yamaha hardware rhythm; CQM disabled
             if(!state_.ibkPath.empty()) {
                 std::string error;
                 if(!opl_->LoadMelodicIbk(state_.ibkPath,error) ||
