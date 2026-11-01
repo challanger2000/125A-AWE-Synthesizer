@@ -35,6 +35,8 @@ def main():
     p=argparse.ArgumentParser()
     p.add_argument("--image",type=Path,required=True)
     p.add_argument("--out",type=Path,default=Path("p40-images"))
+    p.add_argument("--guest-keep-copy", type=Path, default=None,
+                   help="Private TEMPORARY guest disk handoff to another CI step; never publish")
     args=p.parse_args()
     out=args.out
     out.mkdir(exist_ok=True,parents=True)
@@ -207,6 +209,16 @@ def main():
             capture_output=True,text=True,timeout=40)
         report["guest_registry_check_return_code"]=result.returncode
         report["guest_registry_check_excerpt"]=(result.stdout+result.stderr)[-1100:]
+        if args.guest_keep_copy is not None:
+            # The QEMU working image is destroyed on context exit. This
+            # handoff remains only in RUNNER_TEMP during the SAME CI job,
+            # solely to boot original drivers on emulated AWE32 in 86Box.
+            target = args.guest_keep_copy.resolve()
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(disk, target)
+            report["private_guest_handoff"] = "ephemeral runner only"
+            report["private_guest_size"] = target.stat().st_size
+
     report["original_os_disk_destroyed"]=not disk.exists()
     (out/"p40-input-report.json").write_text(json.dumps(report,indent=2)+"\n",encoding="utf8")
     print("P40 SCREENSHOTS:",[p.name for p in out.glob("*.ppm")])
