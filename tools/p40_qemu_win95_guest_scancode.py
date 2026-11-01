@@ -145,23 +145,22 @@ def main():
                 # our original Creative VxD was bound.
                 time.sleep(38)
                 shot("p41_133_after_database_build")
-                # The detected class chooser is keyboard navigable.
-                # Capture after each action: the next action's legitimacy
-                # depends on actual guest screen state.
-                key("s")
-                time.sleep(2)
-                shot("p41_135_first_s_category")
-                key("s")
-                time.sleep(2)
-                shot("p41_137_second_s_category")
+                # P41b: The 133s capture is ALREADY the manufacturer and
+                # model page (default Adaptec SCSI). Previously pressing S
+                # and Enter mistakenly selected a SCSI adapter. Select
+                # Have Disk right here, BEFORE 'Next'.
+                key("alt-h")
+                time.sleep(3)
+                shot("p41_136_have_disk_dialog")
+                for ch in "c:\\awe32":
+                    key(symbols.get(ch,ch.lower()))
+                time.sleep(1)
+                shot("p41_138_disk_path")
                 key("ret")
                 time.sleep(9)
-                shot("p41_146_device_model_selection")
-                # Potential Creative manufacturer setup (Win95 'Have Disk')
-                # is an ALT+H accelerater only where that control exists.
-                key("alt-h")
-                time.sleep(4)
-                shot("p41_150_have_disk_candidate")
+                shot("p41_148_creative_models")
+                # Capture original manufacturer/model chooser but DO NOT
+                # blindly install a device without confirming AWE32 class.
             finally:
                 if proc.poll() is None:
                     proc.terminate()
