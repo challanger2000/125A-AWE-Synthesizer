@@ -101,10 +101,20 @@ public:
             sf2Configured_=!state_.sf2Path.empty();
             sf2Loaded_=false;
             std::string sf2Status="SF2 nicht konfiguriert: kein echter SoundFont-Klang.";
+            // A loaded SF2 does not prove that the 86Box hardware backend is
+            // active. The ROM is external and never bundled in the VST3.
+            // Report the effective chip backend instead of silently showing
+            // the generic "SF2-Audio geladen" message after a ROM failure.
+            std::string chipStatus="ROM nicht konfiguriert - interner EMU8000 aktiv";
             if(!state_.romPath.empty()) {
                 std::string error;
-                if(!synth_->Core().UseBox86Chip(state_.romPath,error))
-                    assetError_=std::move(error);
+                if(synth_->Core().UseBox86Chip(state_.romPath,error)) {
+                    chipStatus="ROM geladen - 86Box-EMU8000 aktiv";
+                } else {
+                    chipStatus="ROM-Ladefehler - interner EMU8000 aktiv";
+                    assetError_="ROM-Ladefehler: "+
+                        (error.empty()?std::string("unbekannter Grund"):error);
+                }
             }
             synth_->Core().PowerOnInit();
             if(sf2Configured_) {
@@ -157,7 +167,8 @@ public:
             // This is a non-realtime activation callback. The VST3 connection
             // passes the actual processor loading outcome to the GUI, not
             // just the SF2 phdr names the controller happened to parse.
-            sendTextMessage(("125A_SF2_STATUS:"+sf2Status).c_str());
+            sendTextMessage(("125A_SF2_STATUS:"+chipStatus+
+                             " | "+sf2Status).c_str());
         } else {cqm_.reset();opl_.reset();synth_.reset();}
         return AudioEffect::setActive(active);
     }
