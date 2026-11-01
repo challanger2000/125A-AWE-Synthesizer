@@ -1,0 +1,29 @@
+name: P45 external 86Box EMU8000 trace patch contract
+on:
+  push:
+    branches: [research/p45-86box-emu8000-trace-instrumentation, research/p46-win95-original-driver-reboot]
+    paths:
+      - tools/p45_86box_emu8k_trace.py
+      - tests/test_p45_86box_emu8k_trace.py
+      - .github/workflows/p45-86box-trace-contract.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  patch-validation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Static Python validation and fail-closed tests
+        run: |
+          python -m py_compile tools/p45_86box_emu8k_trace.py
+          python -m unittest discover -s tests -p 'test_p45_86box_emu8k_trace.py' -v
+      - name: Instrument disposable upstream 86Box C source (no bundled 86Box files)
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fLsS --retry 3 --max-time 120 'https://raw.githubusercontent.com/86Box/86Box/master/src/sound/snd_emu8k.c' -o /tmp/snd_emu8k-original.c
+          python tools/p45_86box_emu8k_trace.py --source /tmp/snd_emu8k-original.c --out /tmp/snd_emu8k-instrumented.c
+          grep -F 'p45_125a_trace_emu8k_write(emu8k, addr, val);' /tmp/snd_emu8k-instrumented.c
+          test "$(grep -c P45_125A_EMU8K_TRACE /tmp/snd_emu8k-instrumented.c)" -eq 1
