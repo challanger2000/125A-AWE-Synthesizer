@@ -265,3 +265,18 @@ channels must not be interrupted. This directly covers the real
 failure mode missed by earlier tests which used fresh instances per
 program. Owner Studio One acceptance and click-free transitions
 remain **NOT RUN** until explicitly confirmed.
+
+## P16 development: Preset catalog and actual SoundFont bank switching
+
+The backend can now index **real names, bank numbers and program numbers**
+from a SoundFont's RIFF phdr metadata (without loading sample data in the
+controller), or from the historical FM IBK bank. The existing numeric
+developer GUI is not the promised preset browser yet.
+
+New VST3 parameter 1002 selects SoundFont Bank 0..16383; Program 1000 and
+Hardware 1001 remain unchanged. MIDI CC0 can override per-channel bank
+selection. Bank 128 is the SF2 drum bank. Project state moves from V6 to V7
+while maintaining V1-V6 migration with default bank 0.
+
+Details and verification matrix: [P16 Preset/Bank Backend](docs/P16-PRESET-BANK-BACKEND.md).
+Host/editor tests and the finished GUI are separate, still NOT RUN.
