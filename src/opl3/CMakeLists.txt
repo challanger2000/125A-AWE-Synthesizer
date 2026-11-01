@@ -50,6 +50,17 @@ add_test(NAME 125A_cqm_backend_audio COMMAND awe32_cqm_backend_test)
 # Historical licensed factory IBKs are fetched and verified at VST3 CMake
 # configuration time. Test the REAL bundled data through both chip cores.
 if(125A_BUILD_VST3)
+  # Browser metadata probe exercises real MAUIFM.IBK as well as synthetic
+  # multi-bank SF2 files, without loading SF2 samples on the GUI thread.
+  add_executable(awe32_p16_preset_catalog_test
+    "${PROJECT_SOURCE_DIR}/tests/p16_preset_catalog.cpp")
+  target_include_directories(awe32_p16_preset_catalog_test PRIVATE
+    "${PROJECT_SOURCE_DIR}/src/vst3")
+  target_link_libraries(awe32_p16_preset_catalog_test PRIVATE awe32_opl3_midi)
+  target_compile_features(awe32_p16_preset_catalog_test PRIVATE cxx_std_23)
+  add_test(NAME 125A_p16_preset_catalog
+    COMMAND awe32_p16_preset_catalog_test
+      "${PROJECT_SOURCE_DIR}/src/vst3/resource/MAUIFM.IBK")
   add_executable(awe32_opl3_historical_factory_test
     "${PROJECT_SOURCE_DIR}/tests/opl3_historical_factory.cpp")
   target_link_libraries(awe32_opl3_historical_factory_test PRIVATE awe32_opl3_midi)
