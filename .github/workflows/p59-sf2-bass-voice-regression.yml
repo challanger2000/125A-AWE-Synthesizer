@@ -1,0 +1,22 @@
+name: P59 verify D3 E3 four-layer original-style SF2 bass engine behavior
+on:
+  push:
+    branches: [research/p59-user-bass-d3-e3-voice-regression]
+    paths:
+      - tests/sf2_selection.cpp
+      - .github/workflows/p59-sf2-bass-voice-regression.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  bass-voice-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure native SF2 engine checks (no VST3 or ROM downloads)
+        run: cmake -S . -B build-p59 -G Ninja -DCMAKE_BUILD_TYPE=Release -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_OPL3_PROBES=OFF
+      - name: Build SoundFont layer selector and register conversion
+        run: cmake --build build-p59 --target awe32_sf2_selection_test --parallel 2
+      - name: Run genuine compiled engine bass regression
+        run: ctest --test-dir build-p59 --output-on-failure -R '^125A_sf2_selection$'
