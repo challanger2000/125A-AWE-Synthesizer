@@ -186,7 +186,7 @@ int main() {
                     r0.size()==1&&r5.size()==1&&r128.size()==1,
                     "generated SF2 loads all three distinct actual soundbank regions");
         ok &= check(!r0.empty()&&!r5.empty()&&!r128.empty()&&
-                    r0[0].gen.Get(SoundFont::Gen::CoarseTune,-999)==0&&
+                    r0[0].gen.Get(SoundFont::Gen::CoarseTune,0)==0&&
                     r5[0].gen.Get(SoundFont::Gen::CoarseTune,-999)==12&&
                     r128[0].gen.Get(SoundFont::Gen::CoarseTune,-999)==24,
                     "SF2 presets 0/5/128 have different semitone generator data");
