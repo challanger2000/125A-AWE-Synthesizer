@@ -53,7 +53,7 @@ set_target_properties(awe32_box_rates_test PROPERTIES CXX_STANDARD 23)
 add_test(NAME 125A_box_rate_fifo COMMAND awe32_box_rates_test)
 
 add_executable(awe32_sf2_audio_integration_test "${PROJECT_SOURCE_DIR}/tests/sf2_audio_integration.cpp")
-target_include_directories(awe32_sf2_audio_integration_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${UPSTREAM_SRC}")
+target_include_directories(awe32_sf2_audio_integration_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/src/vst3" "${UPSTREAM_SRC}")
 target_link_libraries(awe32_sf2_audio_integration_test PRIVATE awe32_chip_safety)
 set_target_properties(awe32_sf2_audio_integration_test PROPERTIES CXX_STANDARD 23)
 add_test(NAME 125A_sf2_audio_integration COMMAND awe32_sf2_audio_integration_test)
