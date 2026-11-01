@@ -158,11 +158,22 @@ def main():
                 key("ret")
                 time.sleep(10)
                 shot("p42_150_creative_awe32_model_candidates")
-                # SAFETY: Observe the original Creative model chooser
-                # before selecting any actual model or driver installation.
-                # A workflow success means only screenshots were captured.
-                report["p42_creative_models_reached"]="needs_visual_verification"
-                report["p42_original_awe32_driver_bound"]=False
+                # P43: P42 screenshot verified this exact dialog is the
+                # original Creative Select Device list. Index 0 is Creative
+                # 3D Stereo Enhancement Technology. Index 1 is:
+                # Creative Advanced Wave Effects Synthesis for AWE 32.
+                # Select that original driver by one DOWN. Capture the
+                # proposed device BEFORE confirming it.
+                key("down")
+                time.sleep(2)
+                shot("p43_152_awe32_synthesis_model_selected")
+                key("ret")
+                time.sleep(15)
+                shot("p43_170_after_original_awe32_model_confirmation")
+                # Do not press a second Enter blindly: any original Win95
+                # additional dialog must first be identified by screenshot.
+                report["p43_model_selection_confirmed"]="needs_visual_verification"
+                report["p43_original_awe32_driver_bound"]=False
             finally:
                 if proc.poll() is None:
                     proc.terminate()
