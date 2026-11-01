@@ -1,0 +1,27 @@
+name: P30 Original Creative DOS executable on emulated AWE32
+on:
+  push:
+    branches: [research/p30-creative-dos-awe32-runtime]
+    paths:
+      - tools/p30_creative_original_runtime.ps1
+      - .github/workflows/p30-original-creative-runtime.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  original-creative-binary:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Execute 1996 Creative binary in modern AWE32 emulation (controlled original-vs-SB16)
+        shell: pwsh
+        run: ./tools/p30_creative_original_runtime.ps1
+      - name: Upload TEXT METRICS ONLY — no copyrighted executable, SF2 or ROM
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: P30-Original-Creative-DOS-emulation-result
+          path: p30-run/output/*result.json
+          if-no-files-found: warn
+          retention-days: 7
