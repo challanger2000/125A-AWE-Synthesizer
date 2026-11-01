@@ -51,7 +51,7 @@ jobs:
         run: |
           set -euo pipefail
           root="$RUNNER_TEMP/p47/roms"
-          mkdir -p "$root/sound/creative" "$root/machines/p55t2p4"
+          mkdir -p "$root/sound/creative" "$root/machines/p55t2p4" "$root/video/vga"
           # ROMs are supplied by the official 86Box ROM project; never upload.
           curl -fLsS --retry 3 --max-time 120 \
             'https://raw.githubusercontent.com/86Box/roms/master/sound/creative/awe32.raw' \
@@ -62,9 +62,15 @@ jobs:
           curl -fLsS --retry 3 --max-time 120 \
             'https://raw.githubusercontent.com/86Box/roms/master/machines/p55t2p4/0207_j2.bin' \
             -o "$root/machines/p55t2p4/0207_j2.bin"
+          # The selected generic VGA device ALSO requires its IBM VGA BIOS;
+          # missing it causes a modal fallback before automation_init().
+          curl -fLsS --retry 3 --max-time 120 \
+            'https://raw.githubusercontent.com/86Box/roms/master/video/vga/ibm_vga.bin' \
+            -o "$root/video/vga/ibm_vga.bin"
           test "$(stat -c %s "$root/sound/creative/awe32.raw")" -eq 1048576
           test "$(stat -c %s "$root/sound/creative/CT3980 PnP.BIN")" -eq 512
           test "$(stat -c %s "$root/machines/p55t2p4/0207_j2.bin")" -eq 131072
+          test "$(stat -c %s "$root/video/vga/ibm_vga.bin")" -eq 32768
       - name: Verify non-PnP EMU8000 port hook and AWE32 PnP card presence
         shell: bash
         run: |
