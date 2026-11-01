@@ -1025,9 +1025,22 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
     // those were the last four mismatching notes of RELAX. For note 69 with
     // samplePitch 8781 it gives (69-60+60)*100 - 8781 = -1881, half is
     // -940 - exactly what the driver wrote.
-    double pitchCents = (key - rootKey) * 100.0 + cents;
-    if (g.Get(Gen::ScaleTuning, 100) == 1)
-        pitchCents = static_cast<int>(pitchCents) / 2;
+    // The measured Creative SF1 driver uses an unusual scaleTuning=1
+    // switch that halves the computed pitch. SoundFont 2.x is different:
+    // generator 56 is cents per MIDI key (0 = fixed pitch, 100 = semitones).
+    // Keep the hardware-traced SF1 behavior without leaking it into SF2.
+    double pitchCents;
+    if (sf1)
+    {
+        pitchCents = (key - rootKey) * 100.0 + cents;
+        if (g.Get(Gen::ScaleTuning, 100) == 1)
+            pitchCents = static_cast<int>(pitchCents) / 2;
+    }
+    else
+    {
+        pitchCents = (key - rootKey) * static_cast<double>(
+            std::clamp(g.Get(Gen::ScaleTuning, 100), 0, 1200)) + cents;
+    }
 
     // The sample rate is converted to cents separately - the driver has this
     // component already baked into `gen55`, we keep it in the sample
