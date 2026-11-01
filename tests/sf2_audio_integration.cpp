@@ -81,7 +81,7 @@ Bytes makeBank(size_t sampleWords,bool multipleBanks=false) {
     u16(pgen,41);u16(pgen,0); // Instrument 0
     if(multipleBanks) {
         u16(pgen,41);u16(pgen,1);u16(pgen,51);u16(pgen,12);
-        u16(pgen,52);u16(pgen,280); // preset +280 cents over instrument -300
+        u16(pgen,52);u16(pgen,20); // preset +20 cents over instrument -30
         u16(pgen,41);u16(pgen,2);u16(pgen,51);u16(pgen,24); // different sample 2
     }
 
@@ -102,7 +102,7 @@ Bytes makeBank(size_t sampleWords,bool multipleBanks=false) {
         // preset-level relative tuning: BOTH must apply to the same layer.
         // With the old SF1-only FillFrom rule, +12 was silently discarded
         // as soon as instrument fineTune was present.
-        u16(igen,54);u16(igen,1);u16(igen,52);u16(igen,static_cast<unsigned>(-300 & 0xffff));
+        u16(igen,54);u16(igen,1);u16(igen,52);u16(igen,static_cast<unsigned>(-30 & 0xffff));
         u16(igen,53);u16(igen,1);
         u16(igen,54);u16(igen,1);u16(igen,53);u16(igen,2);
     }
@@ -251,9 +251,9 @@ int main() {
         ok &= check(!r0.empty()&&!r5.empty()&&!r128.empty()&&
                     r0[0].gen.Get(SoundFont::Gen::CoarseTune,0)==0&&
                     r5[0].gen.Get(SoundFont::Gen::CoarseTune,-999)==12&&
-                    r5[0].gen.Get(SoundFont::Gen::FineTune,-999)==-20&&
+                    r5[0].gen.Get(SoundFont::Gen::FineTune,-999)==-10&&
                     r128[0].gen.Get(SoundFont::Gen::CoarseTune,-999)==24,
-                    "SF2 bank 5 combines instrument -300 and preset +280 fineTune to -20");
+                    "SF2 bank 5 combines instrument -30 and preset +20 fineTune to -10");
         ok &= check(bank0.size()==8192&&bank5.size()==8192&&
                     bank128.size()==8192&&audible(bank0)&&audible(bank5)&&
                     audible(bank128),
