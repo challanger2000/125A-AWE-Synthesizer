@@ -34,8 +34,8 @@ if(Python3_Interpreter_FOUND)
   )
 endif()
 
-# VST3 implementation deliberately not registered yet. No functional VST3
-# is claimed until the audited engine adapter and real host lifecycle exist.
+# Windows VST3 P14 development editor uses VSTGUI; host acceptance is separate
+# from compilation and native engine tests.
 
 # SDK-independent project state/asset config regression.
 add_executable(awe32_asset_state_test tests/asset_state.cpp)
