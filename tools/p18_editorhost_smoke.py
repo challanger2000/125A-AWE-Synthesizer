@@ -184,10 +184,18 @@ def key(v):
     time.sleep(.05)
     u.keybd_event(v,0,2,None)
 
-def choose_menu(hwnd,x,y,last=False):
+def choose_menu(hwnd,x,y,last=False,debug=None):
+    # VSTGUI COptionMenu::onKeyboardEvent handles VK_UP/VK_DOWN, *not*
+    # VK_HOME/VK_END. Its mouse-down opens a native OS popup, so first
+    # dismiss it with ESC while retaining focus on the menu control.
     click(hwnd,x,y)
-    key(0x23 if last else 0x24)  # END or HOME
-    key(0x0D)  # enter
+    if debug is not None:
+        snap(hwnd,debug)
+    key(0x1B)  # escape from native popup; focus returns to COptionMenu
+    time.sleep(.15)
+    for _ in range(2):
+        key(0x28 if last else 0x26)  # VK_DOWN/VK_UP
+        time.sleep(.22)
     time.sleep(.65)
 
 def text_input(s):
@@ -270,7 +278,8 @@ def main():
                   "BROWSER button restores scrollable preset table",results)
             # Switch hardware through the VSTGUI COptionMenu, not simulated
             # calls to a C++ browser model.
-            choose_menu(hwnd,340,80,last=True)
+            choose_menu(hwnd,340,80,last=True,
+                        debug=args.output/"04a_hardware_native_menu.bmp")
             cqm=snap(hwnd,args.output/"04_creative_cqm.bmp")
             check(different(opened,cqm,(22,102,823,140))>8,
                   "GUI hardware selection updates Creative CQM description",results)
