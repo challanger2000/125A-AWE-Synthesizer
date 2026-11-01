@@ -10,6 +10,7 @@
 #include "AssetConfig.h"
 #include "PresetCatalog.h"
 #include "PresetBrowserView.h"
+#include "Sf2LoadPolicy.h"
 #include "Opl3Midi.h"
 #include "public.sdk/source/vst/vstparameters.h"
 #include "public.sdk/source/main/moduleinit.h"
@@ -29,6 +30,7 @@
 #include <windows.h>
 #endif
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -94,17 +96,27 @@ public:
             if(!capacity_)return kResultFalse;
             synth_=std::make_unique<Synth>(rate_);
             synth_->Core().SetDriver(Awe32::Driver::Win95);
+            assetError_.clear();
             ResolveAssets();
+            sf2Configured_=!state_.sf2Path.empty();
+            sf2Loaded_=false;
+            std::string sf2Status="SF2 nicht konfiguriert: kein echter SoundFont-Klang.";
             if(!state_.romPath.empty()) {
                 std::string error;
                 if(!synth_->Core().UseBox86Chip(state_.romPath,error))
                     assetError_=std::move(error);
             }
             synth_->Core().PowerOnInit();
-            if(!state_.sf2Path.empty()) {
+            if(sf2Configured_) {
                 std::string error;
-                if(!synth_->LoadBank(state_.sf2Path,error))
-                    assetError_=std::move(error);
+                if(synth_->LoadBank(state_.sf2Path,error)) {
+                    sf2Loaded_=true;
+                    sf2Status="SF2-Audio geladen.";
+                } else {
+                    assetError_="SF2-Ladefehler: "+(error.empty() ?
+                        std::string("unbekannter Grund"):error);
+                    sf2Status=assetError_;
+                }
             }
             synth_->SelectBrowserBank(static_cast<uint16_t>(state_.bank));
             for(int c=0;c<16;++c)synth_->ProgramChange(static_cast<uint8_t>(c),
@@ -142,6 +154,10 @@ public:
                     cqm_->ProgramChange(static_cast<uint8_t>(c),
                         static_cast<uint8_t>(state_.program));
                 }
+            // This is a non-realtime activation callback. The VST3 connection
+            // passes the actual processor loading outcome to the GUI, not
+            // just the SF2 phdr names the controller happened to parse.
+            sendTextMessage(("125A_SF2_STATUS:"+sf2Status).c_str());
         } else {cqm_.reset();opl_.reset();synth_.reset();}
         return AudioEffect::setActive(active);
     }
@@ -287,7 +303,7 @@ public:
                         fm->NoteOn(static_cast<uint8_t>(e.noteOn.channel),
                                    static_cast<uint8_t>(e.noteOn.pitch),vel);
                     }
-                } else
+                } else if(AllowEmuNoteOn(sf2Configured_,sf2Loaded_))
                     synth_->NoteOn(static_cast<uint8_t>(e.noteOn.channel),
                                    static_cast<uint8_t>(e.noteOn.pitch),vel);
             }else if(e.type==Event::kNoteOffEvent&&e.noteOff.channel>=0&&
@@ -315,6 +331,7 @@ private:
     AssetState::Data state_{};
     std::string assetError_;
     bool fmReady_=true;
+    bool sf2Configured_=false,sf2Loaded_=false; // written outside process()
     void ResolveAssets() {
         AssetConfig::Paths configured;
         if(!state_.pathsSpecified) {
@@ -339,6 +356,19 @@ class Controller final : public EditControllerEx1, public VSTGUI::VST3EditorDele
 public:
     static FUnknown* createInstance(void*) {
         return static_cast<IEditController*>(new Controller);
+    }
+    tresult receiveText(const char8* msg) override {
+        constexpr char prefix[]="125A_SF2_STATUS:";
+        if(msg&&std::strncmp(msg,prefix,sizeof(prefix)-1)==0) {
+            std::lock_guard<std::mutex> guard(sf2StatusMutex_);
+            sf2AudioStatus_.assign(msg+sizeof(prefix)-1);
+            return kResultOk;
+        }
+        return EditControllerEx1::receiveText(msg);
+    }
+    std::string Sf2AudioStatus() const {
+        std::lock_guard<std::mutex> guard(sf2StatusMutex_);
+        return sf2AudioStatus_;
     }
     tresult PLUGIN_API initialize(FUnknown* ctx) override {
         const auto r=EditControllerEx1::initialize(ctx);
@@ -374,7 +404,8 @@ public:
         VSTGUI::VST3Editor*) override {
         if(name&&std::strcmp(name,"AwePresetBrowser")==0)
             return new PresetBrowserView({0,0,860,612},this,sfCatalog_,fmCatalog_,
-                FactoryBank(L"125A_Logo_Master_FINAL.svg"));
+                FactoryBank(L"125A_Logo_Master_FINAL.svg"),
+                [this]() {return Sf2AudioStatus();});
         return nullptr;
     }
     IPlugView* PLUGIN_API createView(FIDString name) override {
@@ -412,6 +443,8 @@ public:
     const PresetCatalog& FmPresets() const noexcept {return fmCatalog_;}
 private:
     PresetCatalog sfCatalog_{},fmCatalog_{};
+    mutable std::mutex sf2StatusMutex_;
+    std::string sf2AudioStatus_="SF2-Audiostatus noch nicht vom Prozessor bestaetigt.";
     void ReloadPresetCatalogs(const AssetState::Data* model) {
         AssetConfig::Paths paths;
         if(model&&model->pathsSpecified) {
