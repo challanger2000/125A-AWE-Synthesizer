@@ -28,6 +28,10 @@ if(Python3_Interpreter_FOUND)
     NAME 125A_source_baseline_contract
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/source_contracts.py" "${CMAKE_CURRENT_SOURCE_DIR}"
   )
+  add_test(
+    NAME 125A_p14_vstgui_contract
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/p14_vstgui_contract.py" "${CMAKE_CURRENT_SOURCE_DIR}"
+  )
 endif()
 
 # VST3 implementation deliberately not registered yet. No functional VST3
