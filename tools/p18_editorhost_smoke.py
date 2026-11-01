@@ -1,0 +1,311 @@
+#!/usr/bin/env python3
+"""P18: actual VST3 editor open, Win32 input, screenshots and redraw smoke.
+
+Run on an interactive Windows runner with Steinberg's pinned EditorHost.
+This is a real plug-in view, NOT a synthetic C++ mock, source regex or OCR.
+Do not label it PASS when no interactive desktop/screen capture is present.
+"""
+import argparse
+import ctypes
+from ctypes import wintypes
+import json
+import os
+from pathlib import Path
+import struct
+import subprocess
+import sys
+import tempfile
+import time
+
+if os.name != "nt":
+    raise SystemExit("P18 NOT RUN: Win32 interactive GUI required")
+
+user32 = ctypes.WinDLL("user32", use_last_error=True)
+gdi = ctypes.WinDLL("gdi32", use_last_error=True)
+
+class RECT(ctypes.Structure):
+    _fields_ = [(v, ctypes.c_long) for v in ("left", "top", "right", "bottom")]
+
+class POINT(ctypes.Structure):
+    _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
+
+u = user32
+for name, restype, args in [
+    ("EnumWindows", wintypes.BOOL, [ctypes.c_void_p, ctypes.c_void_p]),
+    ("GetWindowThreadProcessId", wintypes.DWORD, [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]),
+    ("IsWindowVisible", wintypes.BOOL, [wintypes.HWND]),
+    ("GetClassNameW", ctypes.c_int, [wintypes.HWND, ctypes.c_wchar_p, ctypes.c_int]),
+    ("GetClientRect", wintypes.BOOL, [wintypes.HWND, ctypes.POINTER(RECT)]),
+    ("ClientToScreen", wintypes.BOOL, [wintypes.HWND, ctypes.POINTER(POINT)]),
+    ("SetForegroundWindow", wintypes.BOOL, [wintypes.HWND]),
+    ("SetCursorPos", wintypes.BOOL, [ctypes.c_int, ctypes.c_int]),
+    ("mouse_event", None, [wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p]),
+    ("keybd_event", None, [wintypes.BYTE, wintypes.BYTE, wintypes.DWORD, ctypes.c_void_p]),
+    ("PostMessageW", wintypes.BOOL, [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]),
+    ("GetDC", wintypes.HDC, [wintypes.HWND]),
+    ("ReleaseDC", ctypes.c_int, [wintypes.HWND, wintypes.HDC]),
+]:
+    f = getattr(u, name)
+    f.restype, f.argtypes = restype, args
+gdi.CreateCompatibleDC.restype = wintypes.HDC
+gdi.CreateCompatibleDC.argtypes = [wintypes.HDC]
+gdi.CreateCompatibleBitmap.restype = wintypes.HBITMAP
+gdi.CreateCompatibleBitmap.argtypes = [wintypes.HDC, ctypes.c_int, ctypes.c_int]
+gdi.SelectObject.restype = wintypes.HANDLE
+gdi.SelectObject.argtypes = [wintypes.HDC, wintypes.HANDLE]
+gdi.BitBlt.restype = wintypes.BOOL
+gdi.BitBlt.argtypes = [wintypes.HDC, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                       ctypes.c_int, wintypes.HDC, ctypes.c_int, ctypes.c_int, wintypes.DWORD]
+gdi.GetDIBits.restype = ctypes.c_int
+gdi.GetDIBits.argtypes = [wintypes.HDC, wintypes.HBITMAP, wintypes.UINT, wintypes.UINT,
+                         ctypes.c_void_p, ctypes.c_void_p, wintypes.UINT]
+gdi.DeleteObject.restype = wintypes.BOOL
+gdi.DeleteObject.argtypes = [wintypes.HANDLE]
+gdi.DeleteDC.restype = wintypes.BOOL
+gdi.DeleteDC.argtypes = [wintypes.HDC]
+
+class BITMAPINFOHEADER(ctypes.Structure):
+    _fields_ = [("biSize", wintypes.DWORD), ("biWidth", ctypes.c_long),
+                ("biHeight", ctypes.c_long), ("biPlanes", wintypes.WORD),
+                ("biBitCount", wintypes.WORD), ("biCompression", wintypes.DWORD),
+                ("biSizeImage", wintypes.DWORD), ("biXPelsPerMeter", ctypes.c_long),
+                ("biYPelsPerMeter", ctypes.c_long), ("biClrUsed", wintypes.DWORD),
+                ("biClrImportant", wintypes.DWORD)]
+
+def chunk(name, value):
+    return name.encode("ascii") + struct.pack("<I", len(value)) + value + bytes(len(value) % 2)
+
+def phdr(name, bank, program):
+    return name.encode("ascii")[:20].ljust(20, b"\0") + struct.pack("<HHHIII", program, bank, 0, 0, 0, 0)
+
+def make_sf2(path):
+    ph = b"".join([
+        phdr("125A PIANO", 0, 0), phdr("RETRO LEAD", 2, 4),
+        phdr("ROOM DRUM KIT", 128, 0), phdr("EOP", 0, 0),
+    ])
+    pdta = b"pdta" + chunk("phdr", ph)
+    body = b"sfbk" + chunk("LIST", pdta)
+    path.write_bytes(b"RIFF" + struct.pack("<I", len(body)) + body)
+
+def get_editor(pid):
+    found = []
+    CB = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    def cb(hwnd, _):
+        proc = wintypes.DWORD(0)
+        u.GetWindowThreadProcessId(hwnd, ctypes.byref(proc))
+        if proc.value == pid and u.IsWindowVisible(hwnd):
+            buf = ctypes.create_unicode_buffer(128)
+            u.GetClassNameW(hwnd, buf, 128)
+            if buf.value == "VSTSDK WindowClass":
+                found.append(hwnd)
+        return True
+    callback = CB(cb)
+    u.EnumWindows(callback, 0)
+    return found[0] if found else None
+
+def client_size(hwnd):
+    r = RECT()
+    if not u.GetClientRect(hwnd, ctypes.byref(r)):
+        raise RuntimeError("GetClientRect failed")
+    return r.right-r.left, r.bottom-r.top
+
+def screen_pos(hwnd, x, y):
+    sz = client_size(hwnd)
+    pt = POINT(round(x*sz[0]/860), round(y*sz[1]/612))
+    if not u.ClientToScreen(hwnd, ctypes.byref(pt)):
+        raise RuntimeError("ClientToScreen failed")
+    return pt.x, pt.y
+
+def snap(hwnd, filename):
+    w,h = client_size(hwnd)
+    x,y = screen_pos(hwnd, 0, 0)
+    if w < 700 or h < 500:
+        raise RuntimeError(f"Editor window wrong dimensions {w}x{h}")
+    src = u.GetDC(None)
+    mem = gdi.CreateCompatibleDC(src)
+    bmp = gdi.CreateCompatibleBitmap(src, w, h)
+    prev = gdi.SelectObject(mem, bmp)
+    try:
+        if not gdi.BitBlt(mem,0,0,w,h,src,x,y,0x00CC0020):
+            raise RuntimeError("Screen capture unavailable (no interactive desktop?)")
+        info = BITMAPINFOHEADER()
+        info.biSize = ctypes.sizeof(info)
+        info.biWidth, info.biHeight = w, -h   # top-down 32-bit pixels
+        info.biPlanes, info.biBitCount = 1,32
+        pixels = (ctypes.c_ubyte*(w*h*4))()
+        if not gdi.GetDIBits(mem,bmp,0,h,ctypes.byref(pixels),ctypes.byref(info),0):
+            raise RuntimeError("GetDIBits failed")
+        raw = bytes(pixels)
+        # BMP byte array is bottom-up while screen pixel array is top-down.
+        path = Path(filename)
+        file_size = 54 + len(raw)
+        header = (b"BM" + struct.pack("<IHHI", file_size, 0, 0, 54)
+                  + struct.pack("<IiiHHIIiiII", 40,w,-h,1,32,0,len(raw),0,0,0,0))
+        path.write_bytes(header+raw)
+        return (w,h,raw)
+    finally:
+        gdi.SelectObject(mem,prev)
+        gdi.DeleteObject(bmp)
+        gdi.DeleteDC(mem)
+        u.ReleaseDC(None,src)
+
+def different(before,after,region):
+    w,h,a = before
+    w2,h2,b = after
+    if (w,h)!=(w2,h2):
+        raise RuntimeError("Editor size changed unexpectedly")
+    x0,y0,x1,y1 = region
+    scale_x,scale_y = w/860,h/612
+    x0,x1 = round(x0*scale_x),round(x1*scale_x)
+    y0,y1 = round(y0*scale_y),round(y1*scale_y)
+    changed = 0
+    for y in range(y0,y1,2):
+        for x in range(x0,x1,2):
+            off = (y*w+x)*4
+            if any(abs(a[off+c]-b[off+c])>16 for c in range(3)):
+                changed+=1
+    return changed
+
+def click(hwnd,x,y):
+    sx,sy=screen_pos(hwnd,x,y)
+    if not u.SetForegroundWindow(hwnd):
+        # Windows focus is best effort; SetCursorPos failure is fatal.
+        pass
+    if not u.SetCursorPos(sx,sy):
+        raise RuntimeError("Cannot position mouse: no interactive desktop")
+    time.sleep(.15)
+    u.mouse_event(0x0002,0,0,0,None)
+    time.sleep(.08)
+    u.mouse_event(0x0004,0,0,0,None)
+    time.sleep(.65)
+
+def key(v):
+    u.keybd_event(v,0,0,None)
+    time.sleep(.05)
+    u.keybd_event(v,0,2,None)
+
+def choose_menu(hwnd,x,y,last=False):
+    click(hwnd,x,y)
+    key(0x23 if last else 0x24)  # END or HOME
+    key(0x0D)  # enter
+    time.sleep(.65)
+
+def text_input(s):
+    # Send unicode via KEYEVENTF_UNICODE, works even without US keyboard layout.
+    class MOUSEINPUT(ctypes.Structure):
+        _fields_=[("dx",wintypes.LONG),("dy",wintypes.LONG),("mouseData",wintypes.DWORD),
+                  ("dwFlags",wintypes.DWORD),("time",wintypes.DWORD),("dwExtraInfo",ctypes.c_void_p)]
+    class KEYBDINPUT(ctypes.Structure):
+        _fields_=[("wVk",wintypes.WORD),("wScan",wintypes.WORD),
+                  ("dwFlags",wintypes.DWORD),("time",wintypes.DWORD),
+                  ("dwExtraInfo",ctypes.c_void_p)]
+    class HARDWAREINPUT(ctypes.Structure):
+        _fields_=[("uMsg",wintypes.DWORD),("wParamL",wintypes.WORD),("wParamH",wintypes.WORD)]
+    class Union(ctypes.Union):
+        _fields_=[("mi",MOUSEINPUT),("ki",KEYBDINPUT),("hi",HARDWAREINPUT)]
+    class INPUT(ctypes.Structure):
+        _fields_=[("type",wintypes.DWORD),("u",Union)]
+    u.SendInput.argtypes=[wintypes.UINT,ctypes.POINTER(INPUT),ctypes.c_int]
+    u.SendInput.restype=wintypes.UINT
+    for c in s:
+        for down in (True,False):
+            item=INPUT()
+            item.type=1
+            item.u.ki=KEYBDINPUT(0,ord(c),4 if down else 6,0,None)
+            if u.SendInput(1,ctypes.byref(item),ctypes.sizeof(INPUT))!=1:
+                raise RuntimeError("SendInput unavailable")
+    time.sleep(.75)
+
+def check(condition, label, results):
+    results.append({"test":label,"pass":bool(condition)})
+    print(("PASS: " if condition else "FAIL: ")+label, flush=True)
+    if not condition: raise AssertionError(label)
+
+def main():
+    p=argparse.ArgumentParser()
+    p.add_argument("--editorhost",type=Path,required=True)
+    p.add_argument("--plugin",type=Path,required=True)
+    p.add_argument("--output",type=Path,required=True)
+    args=p.parse_args()
+    args.output.mkdir(parents=True,exist_ok=True)
+    if not args.editorhost.is_file() or not args.plugin.is_dir():
+        raise RuntimeError("EditorHost executable / VST3 bundle not found")
+    results=[]
+    with tempfile.TemporaryDirectory(prefix="125a_p18_") as temp:
+        root=Path(temp)
+        sf2=root/"ui_fixture.sf2"
+        make_sf2(sf2)
+        appdata=root/"AppData"
+        cfg=appdata/"125A"/"AWE Synthesizer"/"assets.cfg"
+        cfg.parent.mkdir(parents=True)
+        cfg.write_text(f'SF2 = "{sf2}"\n',encoding="utf-8")
+        env=os.environ.copy()
+        env["APPDATA"]=str(appdata)
+        proc=subprocess.Popen([str(args.editorhost),"--componentHandler",str(args.plugin)],
+                              cwd=str(args.editorhost.parent),env=env,
+                              stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+        try:
+            hwnd=None
+            for _ in range(90):
+                if proc.poll() is not None:
+                    raise RuntimeError(f"EditorHost exited early: {proc.returncode}")
+                hwnd=get_editor(proc.pid)
+                if hwnd:break
+                time.sleep(.2)
+            check(hwnd is not None,"real VST3 editor window opened",results)
+            time.sleep(1.0)
+            first=snap(hwnd,args.output/"01_initial.bmp")
+            w,h,_=first
+            check(w>=850 and h>=600,f"editor content dimensions {w}x{h}",results)
+            # Never equate all-black frames to a successful render.
+            distinct = len(set(first[2][0::384]))
+            check(distinct>3,"EditorHost screen produced non-flat pixels",results)
+            click(hwnd,730,79)  # hide in-editor browser
+            closed=snap(hwnd,args.output/"02_browser_closed.bmp")
+            check(different(first,closed,(24,230,825,561))>35,
+                  "BROWSER button hides the real table and controls",results)
+            click(hwnd,730,79)  # reveal browser
+            opened=snap(hwnd,args.output/"03_browser_reopened.bmp")
+            check(different(closed,opened,(24,230,825,561))>35,
+                  "BROWSER button restores scrollable preset table",results)
+            # Switch hardware through the VSTGUI COptionMenu, not simulated
+            # calls to a C++ browser model.
+            choose_menu(hwnd,340,80,last=True)
+            cqm=snap(hwnd,args.output/"04_creative_cqm.bmp")
+            check(different(opened,cqm,(22,102,823,140))>8,
+                  "GUI hardware selection updates Creative CQM description",results)
+            click(hwnd,767,172)  # NEXT (real host-bound Program ID 1000)
+            next_s=snap(hwnd,args.output/"05_cqm_next.bmp")
+            check(different(cqm,next_s,(240,149,740,196))>8,
+                  "NEXT refreshes visible original IBK instrument name",results)
+            choose_menu(hwnd,340,80,last=False)
+            sf=snap(hwnd,args.output/"06_emu8000.bmp")
+            check(different(cqm,sf,(22,102,823,140))>8,
+                  "GUI hardware selection returns to SF2/EMU8000",results)
+            click(hwnd,578,242)
+            text_input("DRUM")
+            searched=snap(hwnd,args.output/"07_search_drum.bmp")
+            check(different(sf,searched,(23,280,824,560))>10,
+                  "keyboard search filters actual SF2 instrument rows",results)
+            click(hwnd,82,306)  # filtered first drum row
+            picked=snap(hwnd,args.output/"08_bank128_selected.bmp")
+            check(different(searched,picked,(238,151,737,195))>8,
+                  "selecting filtered drum row changes bank+program label",results)
+            u.PostMessageW(hwnd,0x0010,0,0) # WM_CLOSE
+            proc.wait(timeout=10)
+            check(proc.returncode==0,"EditorHost closes without crash",results)
+        finally:
+            if proc.poll() is None:
+                proc.terminate()
+                try:proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:proc.kill()
+            (args.output/"result.json").write_text(
+                json.dumps({"results":results,"passed":all(x["pass"] for x in results)},
+                           indent=2),encoding="utf-8")
+    print("P18 WIN32 EDITORHOST GUI SMOKE PASS",flush=True)
+
+if __name__=="__main__":
+    try:main()
+    except Exception as exc:
+        print(f"P18 FAIL: {type(exc).__name__}: {exc}",file=sys.stderr,flush=True)
+        sys.exit(1)
