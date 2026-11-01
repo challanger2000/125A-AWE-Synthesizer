@@ -35,7 +35,8 @@ bool SaveWav(const std::filesystem::path& path,
 }
 void Help() {
     std::cerr << "Usage: awe32_sf2_timbre_probe [--rom path] [--sf2 path]"
-              << " [--out folder] [--note 0..127] [--velocity 1..127]\n"
+              << " [--out folder] [--note 0..127] [--velocity 1..127]" 
+              << " [--sf2-merge additive|legacy-fill]\n"
               << "Paths default to %APPDATA%/125A/AWE Synthesizer/assets.cfg."
               << " No source sound files are copied into the repository.\n";
 }
@@ -59,6 +60,7 @@ int main(int argc, char** argv) {
     }
     fs::path output = fs::current_path() / "125A-SF2-Timbre-Probe";
     int note = 48, velocity = 100;
+    bool legacyFill = false;
     for (int i = 1; i < argc; i += 2) {
         if (i + 1 >= argc) { Help(); return 2; }
         const std::string flag(argv[i]), value(argv[i + 1]);
@@ -67,6 +69,8 @@ int main(int argc, char** argv) {
         else if (flag == "--out") output = fs::path(value);
         else if (flag == "--note" && Decimal(value, 0, 127, note)) {}
         else if (flag == "--velocity" && Decimal(value, 1, 127, velocity)) {}
+        else if (flag == "--sf2-merge" && value == "additive") legacyFill = false;
+        else if (flag == "--sf2-merge" && value == "legacy-fill") legacyFill = true;
         else { Help(); return 2; }
     }
     if (paths.rom.empty() || paths.sf2.empty()) {
@@ -81,7 +85,9 @@ int main(int argc, char** argv) {
         return 3;
     }
     std::cout << "125A authentic EMU8000 audio probe | 44100 Hz / stereo PCM16"
-              << " | MIDI note " << note << " velocity " << velocity << '\n';
+              << " | MIDI note " << note << " velocity " << velocity
+              << " | merge candidate " << (legacyFill ? "legacy-fill" : "P26-additive")
+              << '\n';
     bool ok = true;
     for (const int program : {0, 7}) {
         Synth synth(44100);
@@ -100,6 +106,10 @@ int main(int argc, char** argv) {
             return 5;
         }
 
+        if (!synth.SetLastBankSf2LegacyFillForDiagnostics(legacyFill)) {
+            std::cerr << "ERROR: cannot select SF2 diagnostic merge candidate\n";
+            return 10;
+        }
         const auto regions = synth.BankAt(synth.BankCount() - 1).Select(
             0, program, note, velocity);
         const size_t expected = (program == 0) ? 2u : 4u;
@@ -122,8 +132,9 @@ int main(int argc, char** argv) {
                       << " sustainVol=" << gen.Get(SoundFont::Gen::SustainVolEnv, 0)
                       << '\n';
         }
-        const std::string id = (program == 0)
-            ? "000_Grungy_Ramp_Bass" : "007_TX81Z_Lately_Bass";
+        const std::string id = ((program == 0)
+            ? "000_Grungy_Ramp_Bass" : "007_TX81Z_Lately_Bass") +
+            std::string(legacyFill ? "_legacy_fill" : "_P26_additive");
         const fs::path notes = output / (id + "_voices.csv");
         if (!synth.OpenNoteDump(notes.string())) {
             std::cerr << "ERROR: cannot create note dump " << notes << '\n';
