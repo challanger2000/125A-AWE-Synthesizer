@@ -109,6 +109,24 @@ def install(image:Path):
             for path in temp.iterdir():
                 with fs.openbin("AWE32/"+path.name,"w") as f:
                     f.write(path.read_bytes())
+            # P38b: stage the ORIGINAL files where Windows 95 actually
+            # resolves system drivers, bypassing shell Startup and INF GUI
+            # dialogs. Static file placement alone is not a device bind.
+            for name in FILES:
+                target = ("WINDOWS/INF/" if name.lower().endswith(".inf")
+                          else "WINDOWS/SYSTEM/") + name.upper()
+                with fs.openbin(target,"w") as target_file:
+                    target_file.write((temp/name.upper()).read_bytes())
+            report["system_files_copied_for_boot_probe"]=len(FILES)
+            sysini="WINDOWS/SYSTEM.INI"
+            original_sys=fs.readbytes(sysini)
+            if not re.search(rb"(?im)^device=[^\r\n]*SBAWE\.VXD",original_sys):
+                section=re.search(rb"(?im)^\[386Enh\][ \t]*\r?$",original_sys)
+                if not section: raise RuntimeError("No Windows95 [386Enh] section")
+                marker=b"\r\ndevice=C:\\WINDOWS\\SYSTEM\\SBAWE.VXD"
+                original_sys=original_sys[:section.end()]+marker+original_sys[section.end():]
+            with fs.openbin(sysini,"w") as outf: outf.write(original_sys)
+            report["vxd_boot_registration_probed"]="SYSTEM.INI 386Enh device"
             dest="WINDOWS/WIN.INI"
             original=fs.readbytes(dest)
             entry=(b'run=RUNDLL.EXE SETUPX.DLL,InstallHinfSection '
