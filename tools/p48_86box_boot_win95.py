@@ -197,6 +197,39 @@ onboard_ram = 2048
                 send(conn, "step 800")
                 p49_screenshot(conn, args.out, "p55-after-alt-b.png", report)
                 report["p55_user_browse_requested"] = True
+                # P56: P55 screenshot establishes the Win95 common
+                # dialog has "File Name" focused and "*.sbk;*.sf2" selected.
+                # Enter the staged path exactly, confirm via Return.
+                guest_sf2_path = "c:\\awe32\\p55test.sf2"
+                p49_type_path(conn, guest_sf2_path)
+                p49_screenshot(conn, args.out, "p56-file-selected.png", report)
+                p49_key(conn, 0x1c)
+                send(conn, "step 1500")
+                p49_screenshot(conn, args.out, "p56-after-file-open.png", report)
+                # AWECP32 User pane requires Apply. Attempt standard
+                # Alt+A mnemonic and capture UI as evidence, including
+                # any Creative native bank parser errors.
+                io_before_apply = (
+                    len(trace.read_text(encoding="utf8", errors="replace").splitlines())-1
+                    if trace.is_file() else 0
+                )
+                send(conn, "key down 0x38 0x1e") # Alt+A
+                send(conn, "key up 0x1e 0x38")
+                send(conn, "step 1500")
+                p49_screenshot(conn, args.out, "p56-apply-result-1s.png", report)
+                send(conn, "step 4000")
+                p49_screenshot(conn, args.out, "p56-apply-result-5s.png", report)
+                io_after_apply = (
+                    len(trace.read_text(encoding="utf8", errors="replace").splitlines())-1
+                    if trace.is_file() else 0
+                )
+                report["p56_staged_sf2"] = guest_sf2_path
+                report["p56_apply_attempted"] = True
+                report["p56_register_writes_after_apply"] = max(
+                    0,io_after_apply-io_before_apply)
+                # These flags require *visual inspection* and evidence of
+                # successful original Creative user-bank load/DRAM delta.
+                report["p56_original_sf2_load_verified"] = False
                 report["p55_original_sf2_load_confirmed"] = False
                 report["p53_original_control_panel_loaded"] = False
                 report["p53_original_bank_sf2_loaded"] = False

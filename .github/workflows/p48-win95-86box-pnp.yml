@@ -1,7 +1,7 @@
-name: P55 test original Win95 Creative AWE32 User SoundFont Browse with generated SF2
+name: P56 verify original Creative SoundFont user-bank Apply on synthetic SF2
 on:
   push:
-    branches: [research/p55-win95-original-creative-sf2-user-load]
+    branches: [research/p56-win95-creative-apply-generated-sf2]
     paths:
       - tools/p40_qemu_win95_guest_scancode.py
       - tools/p48_86box_boot_win95.py
@@ -151,7 +151,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: P55-Original-Creative-User-Browse-Generated-SF2
+          name: P56-Creative-Win95-Original-User-Bank-Apply-Evidence
           path: p48-evidence/*
           if-no-files-found: warn
           retention-days: 5
