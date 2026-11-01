@@ -186,6 +186,20 @@ def main():
                 key("ret")
                 time.sleep(12)
                 shot("p41h_141_after_install_confirm")
+                # P41i: Original Creative driver install entered Win95's
+                # source-disk request. Accept the insertion prompt, then
+                # point "Copy files from" to the 21 staged vendor files.
+                key("ret")
+                time.sleep(4)
+                shot("p41i_145_after_insert_disk")
+                key("ctrl-a")
+                for ch in "c:\\awe32":
+                    key(symbols.get(ch,ch.lower()))
+                time.sleep(1)
+                shot("p41i_147_vendor_source_path")
+                key("ret")
+                time.sleep(12)
+                shot("p41i_159_after_vendor_copy")
                 report["p41d_hardware_class_reached"]=True
                 report["p41e_sound_class_selected"]="verify p41g_101 screenshot"
                 report["p41f_awe32_device_binding"]="unverified"
