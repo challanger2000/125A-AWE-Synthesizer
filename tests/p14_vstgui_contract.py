@@ -27,6 +27,9 @@ assert "static_cast<double>(model.engine)/2." in factory, "mode 1 should restore
 assert "kProgramID=1000" in factory and "kEngineID=1001" in factory
 assert "SMTG_ENABLE_VSTGUI_SUPPORT ON" in cmake
 assert "vstgui_support" in target
+# The SDK VSTGUI module initializer needs a Windows moduleHandle definition.
+# P14 initial CI failed LNK2019 when dllmain.cpp was absent.
+assert "${SDK_ROOT}/public.sdk/source/main/dllmain.cpp" in target
 assert "resource/awe_test_panel.uidesc" in target
 print("P14 STATIC PASS: editor resource, two live parameter tags, VST3 persistence mapping")
 print("NOT RUN: Windows VSTGUI attach, DAW interaction, bank playback, asset browse")
