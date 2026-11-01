@@ -117,6 +117,20 @@ def main():
                 shot("p40_066_original_creative_installer")
                 time.sleep(11)
                 shot("p40_077_original_creative_installer")
+                # AWE32 is a legacy ISA device. An INF section launched
+                # without a hardware instance cannot establish HKR binding.
+                # Execute Win95's actual Add New Hardware wizard.
+                key("ctrl-esc")
+                time.sleep(1)
+                key("r")
+                time.sleep(1)
+                for ch in "c:\\awe32\\wizard.bat":
+                    key(symbols.get(ch,ch.lower()))
+                time.sleep(1)
+                shot("p40_080_wizard_command")
+                key("ret")
+                time.sleep(8)
+                shot("p40_088_add_hardware_wizard")
             finally:
                 if proc.poll() is None:
                     proc.terminate()
