@@ -41,4 +41,12 @@ Auch Programm 0 hatte in beiden Sägezahn-Layern `chorus=0` auf Instrumenteneben
 
 ## Aussagegrenzen
 
-**CI-Status: AUSSTEHEND.** Selbst wenn alle automatischen Tests bestehen, ist damit die Klanggleichheit zu einer originalen Sound-Blaster-AWE32-Hardware oder zu einem echten Yamaha TX81Z nicht erwiesen. Ein SoundFont-Preset mit dem Namen TX81Z ist eine EMU8000-Samplekonstruktion und keine native TX81Z-4-OP-FM-Emulation. Ein Vergleich mit einer Referenz-SoundFont-Wiedergabe ist für die finale akustische Abnahme sinnvoll.
+**CI-Status: WINDOWS-PASS.** Selbst wenn alle automatischen Tests bestehen, ist damit die Klanggleichheit zu einer originalen Sound-Blaster-AWE32-Hardware oder zu einem echten Yamaha TX81Z nicht erwiesen. Ein SoundFont-Preset mit dem Namen TX81Z ist eine EMU8000-Samplekonstruktion und keine native TX81Z-4-OP-FM-Emulation. Ein Vergleich mit einer Referenz-SoundFont-Wiedergabe ist für die finale akustische Abnahme sinnvoll.
+
+## Windows-Nachweise (2026-11-01)
+
+- P21 getestet mit Source `40a943bb3912cd22c6e496b7fe323fa4812b871c`.
+- [P21 VST3 Actions #41273754442](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/41273754442): **SUCCESS**, 16/16 CTests, 47/47 Steinberg Validator, Win32 EditorHost GUI PASS.
+- [P21 Native #41273754415](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/41273754415): **SUCCESS**, 14/14.
+- P22 baut auf P21 auf und korrigiert außerdem die SF2-Sustain-Standardwerte; aktueller Stand in `docs/P22-SF2-SUSTAIN-SEMANTICS.md`.
+- Originale Benutzer-SF2 wurde **nicht** in GitHub eingecheckt. Realer akustischer Vergleich 125A gegen FluidSynth/EMU8000 unter Studio One bleibt NOT RUN.

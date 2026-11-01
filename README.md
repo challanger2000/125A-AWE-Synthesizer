@@ -318,3 +318,21 @@ Windows VST3 [#41272929443](https://github.com/challanger2000/125A-AWE-Synthesiz
 passed 16/16 CTests, Steinberg 47/47 and EditorHost GUI automation; see
 [P20 diagnosis](docs/P20-SF2-LOAD-DIAGNOSIS.md).
 The exact user's SF2 and claimed TX81Z timbre are NOT YET reproduced or verified.
+
+## P21/P22 — actual SoundFont 2 timbre fixes (Windows verified)
+
+A real user SoundFont ('Synth 512 Bank', 77 programs) exposed two mistakes:
+SF2 preset-level generators were incorrectly merged using the historically
+traced SF1 missing-field rule, dropping additive detuning, resonance, FX
+sends and envelopes; and SF2 absent sustain generators were mapped to zero
+EMU8000 sustain rather than **full sustain** per SoundFont 2.04. These are now
+corrected **only for SF2**, with SF1/SBK historically verified behavior retained.
+
+[Windows P22 CI #41274176376](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/41274176376)
+SUCCESS: 16/16 CTests, 47/47 Steinberg Validator, real EditorHost GUI PASS;
+[Engine Safety #41274176362](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/41274176362)
+SUCCESS: 14/14. Source `361913c5cfde64bc419db168e3c120a6f36bfb71`.
+No user SF2 or user WAVs have been committed. Actual Studio One timbre
+comparison with user SoundFont and reference renderer is still NOT RUN.
+See [P21 composition](docs/P21-SF2-PRESET-COMPOSITION.md) and
+[P22 sustain](docs/P22-SF2-SUSTAIN-SEMANTICS.md).
