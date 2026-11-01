@@ -126,6 +126,26 @@ int main() {
                         (zeroSustain.dcysus>>8)==0,
                 "SF2 explicit high attenuation decays to zero as intended");
         }
+        // SoundFont 2.x scaleTuning is CENTS PER KEY, not the SF1
+        // Creative-driver special case where a value of 1 halves the pitch.
+        if (!sound.empty()) {
+            Region scaled=sound[0];
+            scaled.gen.Set(Gen::ScaleTuning,100);
+            const auto normal=MakeVoiceParams(bass,scaled,72,100,0x200010,0,
+                                               Awe32::Driver::Win95);
+            scaled.gen.Set(Gen::ScaleTuning,50);
+            const auto half=MakeVoiceParams(bass,scaled,72,100,0x200010,0,
+                                             Awe32::Driver::Win95);
+            ok &= Check(normal.ipCents-half.ipCents==600,
+                        "SF2 scaleTuning=50 gives 50 cents per MIDI key");
+            scaled.gen.Set(Gen::ScaleTuning,0);
+            const auto fixed60=MakeVoiceParams(bass,scaled,60,100,0x200010,0,
+                                                Awe32::Driver::Win95);
+            const auto fixed72=MakeVoiceParams(bass,scaled,72,100,0x200010,0,
+                                                Awe32::Driver::Win95);
+            ok &= Check(fixed60.ipCents==fixed72.ipCents,
+                        "SF2 scaleTuning=0 makes note pitch key-independent");
+        }
         // Protect the previously proven SBK/SF1 driver semantics.
         bass.version=Version::Sf1;
         const auto legacy=bass.Select(0,7,60,100);
@@ -134,6 +154,15 @@ int main() {
                                                  Awe32::Driver::Win95);
             ok &= Check((original.dcysusv>>8)==0&&(original.dcysus>>8)==0,
                 "SF1 missing sustain retains original hardware register default zero");
+            Region legacyScaled=legacy[0];
+            legacyScaled.gen.Set(Gen::ScaleTuning,100);
+            const auto originalPitch=MakeVoiceParams(bass,legacyScaled,72,100,
+                0x200010,0,Awe32::Driver::Win95);
+            legacyScaled.gen.Set(Gen::ScaleTuning,1);
+            const auto halfPitch=MakeVoiceParams(bass,legacyScaled,72,100,
+                0x200010,0,Awe32::Driver::Win95);
+            ok &= Check(halfPitch.ipCents==originalPitch.ipCents/2,
+                "SF1 Creative-driver scaleTuning=1 still halves pitch");
         }
         ok &= Check(legacy.size()==1&&
             legacy[0].gen.Get(Gen::InitialFilterQ,-999)==100&&
