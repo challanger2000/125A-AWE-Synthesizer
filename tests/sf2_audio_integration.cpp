@@ -178,10 +178,24 @@ int main() {
             return std::any_of(pcm.begin(),pcm.end(),
                               [](int16_t x){return x!=0;});
         };
+        const auto sound=SoundFont::Load(multi.string());
+        const auto r0=sound.Select(0,0,69,127);
+        const auto r5=sound.Select(5,0,69,127);
+        const auto r128=sound.Select(128,0,69,127);
+        ok &= check(sound.valid&&sound.presets.size()==3&&
+                    r0.size()==1&&r5.size()==1&&r128.size()==1,
+                    "generated SF2 loads all three distinct actual soundbank regions");
+        ok &= check(!r0.empty()&&!r5.empty()&&!r128.empty()&&
+                    r0[0].gen.Get(SoundFont::Gen::CoarseTune,-999)==0&&
+                    r5[0].gen.Get(SoundFont::Gen::CoarseTune,-999)==12&&
+                    r128[0].gen.Get(SoundFont::Gen::CoarseTune,-999)==24,
+                    "SF2 presets 0/5/128 have different semitone generator data");
         ok &= check(bank0.size()==8192&&bank5.size()==8192&&
                     bank128.size()==8192&&audible(bank0)&&audible(bank5)&&
-                    audible(bank128)&&bank0!=bank5&&bank5!=bank128,
-                    "actual EMU8000 audio differs for SF2 banks 0, 5 and drum 128");
+                    audible(bank128),
+                    "generated SF2 banks 0, 5 and 128 all render audible PCM");
+        ok &= check(bank0!=bank5,"actual EMU8000 audio changes for bank 0 -> 5");
+        ok &= check(bank5!=bank128,"actual EMU8000 audio changes for bank 5 -> drums 128");
         ok &= check(midiOverride==bank0,
                     "MIDI CC0 explicitly overrides the browser-selected SF2 bank");
     }
