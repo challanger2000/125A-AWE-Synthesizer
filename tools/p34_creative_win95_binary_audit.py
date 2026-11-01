@@ -108,7 +108,7 @@ def main():
         req=Request(ROOT+source_path,headers={"User-Agent":"125A-research-p34"})
         sample=urlopen(req,timeout=45).read()
         if git_blob_sha(sample)!="a6b3986478ec739a3cd13f7baadee8c1d61dec4":
-            raise RuntimeError("Sample program hash changed")
+            raise RuntimeError("Sample program blob mismatch: " + git_blob_sha(sample) + ", received " + str(len(sample)) + " bytes")
         calls=["AWEMAN32.DLL","AWE_LOAD_USER_BANK","AWE_SEND_MIDI"]
         source=sample.decode("latin1")
         if not all(x in source for x in calls):
