@@ -102,12 +102,37 @@ def main():
                 key("r")
                 time.sleep(3)
                 shot("p40_050_guest_run")
-                # Do not type commands unless the Run dialog is observed.
+                # P40c: Windows95 Run dialog at this checkpoint is
+                # visually confirmed from previous P40b run. Key events go
+                # directly to QEMU's PS/2 keyboard, not the CI host UI.
+                command="c:\\awe32\\install.bat"
+                symbols={"\\":"backslash",":":"shift-semicolon",
+                         ".":"dot"," ":"spc","_":"shift-minus"}
+                for ch in command:
+                    key(symbols.get(ch,ch.lower()))
+                time.sleep(2)
+                shot("p40_052_original_installer_command")
+                key("ret")
+                time.sleep(14)
+                shot("p40_066_original_creative_installer")
+                time.sleep(11)
+                shot("p40_077_original_creative_installer")
             finally:
                 if proc.poll() is None:
                     proc.terminate()
                     try:proc.wait(timeout=6)
                     except subprocess.TimeoutExpired:proc.kill();proc.wait(timeout=4)
+        # The booted guest may have modified SYSTEM.DAT/USER.DAT. Inspect
+        # the working copy WITHOUT preserving, publishing or redistributing
+        # the OS disk, Creative drivers, ROM or private SoundFont.
+        report["guest_registry_verification"] = "requested"
+        result=subprocess.run(
+            ["python3","tools/p38_stage_creative_awe32_win95.py",
+             str(disk),"--phase","verify","--output",
+             str((out/"p40-guest-after-installer.json").resolve())],
+            capture_output=True,text=True,timeout=40)
+        report["guest_registry_check_return_code"]=result.returncode
+        report["guest_registry_check_excerpt"]=(result.stdout+result.stderr)[-1100:]
     report["original_os_disk_destroyed"]=not disk.exists()
     (out/"p40-input-report.json").write_text(json.dumps(report,indent=2)+"\n",encoding="utf8")
     print("P40 SCREENSHOTS:",[p.name for p in out.glob("*.ppm")])
