@@ -126,31 +126,12 @@ def install(image:Path):
                 with fs.openbin(target,"w") as target_file:
                     target_file.write((temp/name.upper()).read_bytes())
             report["system_files_copied_for_boot_probe"]=len(FILES)
-            sysini="WINDOWS/SYSTEM.INI"
-            original_sys=fs.readbytes(sysini)
-            if not re.search(rb"(?im)^device=[^\r\n]*SBAWE\.VXD",original_sys):
-                section=re.search(rb"(?im)^\[386Enh\][ \t]*\r?$",original_sys)
-                if not section: raise RuntimeError("No Windows95 [386Enh] section")
-                marker=b"\r\ndevice=C:\\WINDOWS\\SYSTEM\\SBAWE.VXD"
-                original_sys=original_sys[:section.end()]+marker+original_sys[section.end():]
-            with fs.openbin(sysini,"w") as outf: outf.write(original_sys)
-            report["vxd_boot_registration_probed"]="SYSTEM.INI 386Enh device"
-            dest="WINDOWS/WIN.INI"
-            original=fs.readbytes(dest)
-            entry=(b'run=RUNDLL.EXE SETUPX.DLL,InstallHinfSection '
-                   b'CTL0021_Device 132 C:\\AWE32\\SB16AWE.INF')
-            match=re.search(rb"(?im)^run=[^\r\n]*",original)
-            if not match:
-                winsection=re.search(rb"(?im)^\[windows\][ \t]*\r?$",original)
-                if not winsection:
-                    raise ValueError("Win95 WIN.INI [windows] section absent")
-                pos=winsection.end()
-                modified=original[:pos]+b"\r\n"+entry+original[pos:]
-            else:
-                if original[match.start()+4:match.end()].strip():
-                    raise RuntimeError("Refuse to replace non-empty existing WIN.INI run command")
-                modified=original[:match.start()]+entry+original[match.end():]
-            with fs.openbin(dest,"w") as f:f.write(modified)
+            # P39: Never force-load a 1990s PnP VxD via [386Enh].
+            # Doing so caused an unusable guest UI. Device binding belongs
+            # to Windows95 SetupX / Add New Hardware and must be verified.
+            report["vxd_boot_registration_probed"] = "none; guest SetupX required"
+            report["preinstalled_system_ini_left_unchanged"] = True
+            report["guest_startup_command"] = None
             for path in FILES:
                 if not fs.exists("AWE32/"+path.upper()):
                     raise RuntimeError(f"Guest driver file not written: {path}")
