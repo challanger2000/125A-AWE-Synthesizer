@@ -141,6 +141,30 @@ int main() {
                         (zeroSustain.dcysus>>8)==0,
                 "SF2 explicit high attenuation decays to zero as intended");
         }
+        // P33: Both hypotheses on the SAME SF2 bank and DSP generator path.
+        // The experimental legacy-fill mode is NOT proof of original VxD
+        // behaviour. It must remain explicit, reversible and off by default.
+        bass.diagnosticSf2LegacyFill=true;
+        const auto alt=bass.Select(0,7,60,100);
+        ok &= Check(alt.size()==1&&
+            alt[0].gen.Get(Gen::InitialFilterQ,-999)==100&&
+            alt[0].gen.Get(Gen::ChorusEffectsSend,-999)==0&&
+            alt[0].gen.Get(Gen::AttackVolEnv,-999)==-7973&&
+            alt[0].gen.Get(Gen::FineTune,-999)==-5&&
+            alt[0].gen.Get(Gen::DelayVolEnv,-999)==-3986,
+            "P33 hypothetical legacy-fill alters exactly preset-generator priority");
+        if (!alt.empty()) {
+            const auto regs=MakeVoiceParams(bass,alt[0],60,100,
+                                            0x200010,0,Awe32::Driver::Win95);
+            ok &= Check(regs.envvol!=0x8000,
+                "P33 legacy-fill candidate exhibits delayed SF2 envelope");
+        }
+        bass.diagnosticSf2LegacyFill=false;
+        const auto restored=bass.Select(0,7,60,100);
+        ok &= Check(restored.size()==1&&
+             restored[0].gen.Get(Gen::DelayVolEnv,-999)==-12000&&
+             restored[0].gen.Get(Gen::ChorusEffectsSend,-999)==400,
+             "P33 P26 additive behaviour is restored exactly when diagnostic is disabled");
         // Protect the previously proven SBK/SF1 driver semantics.
         bass.version=Version::Sf1;
         const auto legacy=bass.Select(0,7,60,100);

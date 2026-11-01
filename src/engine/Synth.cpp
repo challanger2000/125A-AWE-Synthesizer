@@ -268,6 +268,17 @@ bool Synth::LoadBank(const std::string& path, std::string& error, bool samplesIn
     return true;
 }
 
+// P33: A/B instrument-zone composition. Offline research only; NEVER
+// called from an audio callback. No effect on current VST3 unless called.
+bool Synth::SetLastBankSf2LegacyFillForDiagnostics(bool enabled)
+{
+    if (m_banks.empty() || !m_banks.back().bank ||
+        m_banks.back().bank->version != SoundFont::Version::Sf2)
+        return false;
+    m_banks.back().bank->diagnosticSf2LegacyFill = enabled;
+    return true;
+}
+
 // ---------------------------------------------------------------------------
 // Voice management
 // ---------------------------------------------------------------------------

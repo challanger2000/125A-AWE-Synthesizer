@@ -1,0 +1,40 @@
+name: P33 86Box actual audio A-B (offline research)
+on:
+  push:
+    branches: [research/p33-actual-audio-merge-ab]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure native engine (no proprietary assets)
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -D125A_BUILD_VST3=OFF -D125A_BUILD_OPL3_PROBES=OFF
+      - name: Build native EMU8000 chip and A/B SoundFont renderer
+        run: cmake --build build --parallel 2
+      - name: Run engine regression suite
+        run: ctest --test-dir build --output-on-failure
+      - name: Create machine-readable provenance
+        shell: bash
+        run: |
+          mkdir -p p33-artifact
+          cp build/src/engine/awe32_sf2_timbre_probe p33-artifact/
+          cat > p33-artifact/START-HERE.txt <<'EOF'
+          P33 A/B research executable — Linux x64, no ROM or SoundFont embedded.
+          Run separately:
+          ./awe32_sf2_timbre_probe --rom /absolute/path/awe32.raw --sf2 /absolute/path/bank.sf2 --out /tmp/p33-add --sf2-merge additive
+          ./awe32_sf2_timbre_probe --rom /absolute/path/awe32.raw --sf2 /absolute/path/bank.sf2 --out /tmp/p33-fill --sf2-merge legacy-fill
+          Each produces isolated programs 000 and 007 WAV/voice dump.
+          Both use same 86Box chip. LEGACY-FILL IS A HYPOTHESIS, not authentic driver proof.
+          EOF
+          sha256sum p33-artifact/awe32_sf2_timbre_probe > p33-artifact/sha256.txt
+      - name: Downloadable diagnostic binary (no assets)
+        uses: actions/upload-artifact@v4
+        with:
+          name: P33-EMU8000-SF2-A-B-Linux-x64
+          path: p33-artifact/
+          if-no-files-found: error
+          retention-days: 5

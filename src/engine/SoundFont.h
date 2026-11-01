@@ -142,6 +142,11 @@ namespace SoundFont
         bool valid = false;
         std::string errorMessage;
         Version version = Version::Sf2;
+        // P33 RESEARCH ONLY: false is the existing verified P26 default.
+        // true compares legacy Creative fill-only precedence in the SAME
+        // 86Box DSP without changing SF2 version or note conversion.
+        // Set before playback, never from a realtime callback.
+        bool diagnosticSf2LegacyFill = false;
         std::string name;
         std::string romName;            // INFO/irom - which ROM the bank expects
         // True = the samples of this bank are not in its smpl chunk but in

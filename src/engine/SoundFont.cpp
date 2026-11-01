@@ -818,7 +818,14 @@ static void SelectRegionsImpl(const Bank& self, int bankNum, int program, int ke
             //
             // The attenuation is an exception, handled separately above,
             // because the driver adds it only in register units.
-            if (self.version == Version::Sf2)
+            if (self.version == Version::Sf2 && self.diagnosticSf2LegacyFill)
+            {
+                // P33 experimental candidate: preserved raw SF2 parameters,
+                // but use the historically observed Creative fill-only rule.
+                // Not asserted to be authentic for 1996 Win95 VxD / SF2 2.01.
+                r.gen.FillFrom(presetGen);
+            }
+            else if (self.version == Version::Sf2)
             {
                 // P26: Preset generators are ADDITIVE offsets from the
                 // instrument's *effective* values, including SF2 defaults.
