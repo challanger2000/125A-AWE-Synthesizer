@@ -946,7 +946,8 @@ int Synth::BankNumberFor(uint8_t channel) const
 {
     // Channel 10 (index 9) is drums per GM. SoundFont has them in bank 128.
     if (channel == 9) return kDrumBank;
-    return m_channels[channel].bankMsb;
+    const auto& selection=m_channels[channel];
+    return selection.browserBankActive?selection.browserBank:selection.bankMsb;
 }
 
 int Synth::PitchBendOffset(uint8_t channel) const
@@ -1546,6 +1547,19 @@ void Synth::NoteOff(uint8_t channel, uint8_t note)
     }
 }
 
+void Synth::SelectBrowserBank(uint16_t bank)
+{
+    if (bank > 16383u) return;
+    // Channel 10 deliberately retains its GM drum convention. Selecting
+    // bank 128 on any melodic channel also permits keyboard drum previews.
+    for (size_t c = 0; c < m_channels.size(); ++c)
+    {
+        if (c == 9) continue;
+        m_channels[c].browserBank = bank;
+        m_channels[c].browserBankActive = true;
+    }
+}
+
 void Synth::ProgramChange(uint8_t channel, uint8_t program)
 {
     if (channel >= 16) return;
@@ -1590,7 +1604,7 @@ void Synth::ControlChange(uint8_t channel, uint8_t controller, uint8_t value)
 
     switch (controller)
     {
-    case 0:  ch.bankMsb = value; break;
+    case 0:  ch.bankMsb = value; ch.browserBankActive = false; break;
     case 1:
         ch.modWheel = value;
         if (m_core.DriverVariant() == Awe32::Driver::Win95) UpdateFmmodVxd(channel);

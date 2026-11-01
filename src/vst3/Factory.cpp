@@ -8,6 +8,7 @@
 #include "Synth.h"
 #include "AssetState.h"
 #include "AssetConfig.h"
+#include "PresetCatalog.h"
 #include "Opl3Midi.h"
 #include "public.sdk/source/vst/vstparameters.h"
 #include "public.sdk/source/main/moduleinit.h"
@@ -37,6 +38,7 @@ inline const FUID kProcessorUID(0x125A8000,0x81A24A93,0xB426CC70,0x3906F211);
 inline const FUID kControllerUID(0x125A8000,0xAE274BC1,0xA4B02DA3,0x573CC990);
 inline constexpr ParamID kProgramID=1000;
 inline constexpr ParamID kEngineID=1001;
+inline constexpr ParamID kBankID=1002; // SF2 bank, fixed normalized range 0..16383
 // Persistence data contract is in AssetState.h.
 // Factory banks are packaged *inside* the Windows VST3 by CMake. The path
 // is resolved on activation, never from the realtime audio callback.
@@ -103,6 +105,7 @@ public:
                 if(!synth_->LoadBank(state_.sf2Path,error))
                     assetError_=std::move(error);
             }
+            synth_->SelectBrowserBank(static_cast<uint16_t>(state_.bank));
             for(int c=0;c<16;++c)synth_->ProgramChange(static_cast<uint8_t>(c),
                 static_cast<uint8_t>(state_.program));
             // Both engines are constructed outside the audio callback.
@@ -167,6 +170,7 @@ public:
         AssetState::Data candidate;
         if(!AssetState::Read(receive,candidate))return kResultFalse;
         state_=std::move(candidate);
+        if(synth_)synth_->SelectBrowserBank(static_cast<uint16_t>(state_.bank));
         if(synth_)for(int c=0;c<16;++c)
             synth_->ProgramChange(static_cast<uint8_t>(c),
                 static_cast<uint8_t>(state_.program));
@@ -203,6 +207,14 @@ public:
                         if(cqm_)for(int c=0;c<16;++c)
                             cqm_->ProgramChange(static_cast<uint8_t>(c),
                                 static_cast<uint8_t>(state_.program));
+                    } else if(q->getParameterId()==kBankID) {
+                        const auto bank=static_cast<uint32_t>(std::clamp(
+                            int(std::lround(val*AssetState::kMaxBank)),0,
+                            int(AssetState::kMaxBank)));
+                        if(bank!=state_.bank) {
+                            state_.bank=bank;
+                            if(synth_)synth_->SelectBrowserBank(static_cast<uint16_t>(bank));
+                        }
                     } else if(q->getParameterId()==kEngineID) {
                         const uint32_t mode=static_cast<uint32_t>(std::clamp(int(std::lround(val*2.)),0,2));
                         if(mode!=state_.engine) {
@@ -343,11 +355,17 @@ public:
             programs->appendString(label);
         }
         parameters.addParameter(programs);
+        // Stable discrete ID; GUI will display only banks from actual SF2 phdr.
+        auto* banks=new RangeParameter(STR16("SF2 Bank"),kBankID,nullptr,
+            0.,double(AssetState::kMaxBank),0.,
+            static_cast<int32>(AssetState::kMaxBank));
+        parameters.addParameter(banks);
         auto* engine=new StringListParameter(STR16("Hardware"),kEngineID);
         engine->appendString(STR16("EMU8000 AWE32/64"));
         engine->appendString(STR16("Yamaha OPL3"));
         engine->appendString(STR16("Creative CQM"));
         parameters.addParameter(engine);
+        ReloadPresetCatalogs(nullptr); // UI thread; indexed metadata only
         return kResultOk;
     }
     IPlugView* PLUGIN_API createView(FIDString name) override {
@@ -368,7 +386,35 @@ public:
         if(setParamNormalized(kProgramID,static_cast<double>(model.program)/127.)!=kResultOk)
             return kResultFalse;
         // VST3 StringListParameter has three discrete entries: index / (3-1).
-        return setParamNormalized(kEngineID,static_cast<double>(model.engine)/2.);
+        if(setParamNormalized(kEngineID,static_cast<double>(model.engine)/2.)!=kResultOk)
+            return kResultFalse;
+        if(setParamNormalized(kBankID,
+            static_cast<double>(model.bank)/AssetState::kMaxBank)!=kResultOk)
+            return kResultFalse;
+        ReloadPresetCatalogs(&model); // no sound samples loaded
+        return kResultOk;
+    }
+    // The future VSTGUI browser uses these exact names and bank indices.
+    // They belong to the editor/controller, never the realtime processor.
+    const PresetCatalog& SoundFontPresets() const noexcept {return sfCatalog_;}
+    const PresetCatalog& FmPresets() const noexcept {return fmCatalog_;}
+private:
+    PresetCatalog sfCatalog_{},fmCatalog_{};
+    void ReloadPresetCatalogs(const AssetState::Data* model) {
+        AssetConfig::Paths paths;
+        if(model&&model->pathsSpecified) {
+            paths.sf2=model->sf2Path;
+            paths.ibk=model->ibkPath;
+        } else if(!AssetConfig::Load(paths)) {
+            paths={};
+        }
+        // Clear stale entries when a project points at a new/missing file.
+        sfCatalog_=PresetCatalog{};
+        fmCatalog_=PresetCatalog{};
+        std::string error;
+        if(!paths.sf2.empty())sfCatalog_.LoadSoundFont(paths.sf2,error);
+        const auto melodic=paths.ibk.empty()?FactoryBank(L"MAUIFM.IBK"):paths.ibk;
+        if(!melodic.empty())fmCatalog_.LoadFmIbk(melodic,error);
     }
 };
 }

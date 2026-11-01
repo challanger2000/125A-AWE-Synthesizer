@@ -69,6 +69,10 @@ public:
     void NoteOff(uint8_t channel, uint8_t note);
     void ChannelPressure(uint8_t channel, uint8_t value);
     void ProgramChange(uint8_t channel, uint8_t program);
+    // Plugin browser selection. 0..16383 (128 is the standard SF2 drum bank).
+    // Does not modify audio/MIDI engine until note-on and allocates nothing.
+    // Incoming MIDI bank-select CC0 can subsequently override per channel.
+    void SelectBrowserBank(uint16_t bank);
     void ControlChange(uint8_t channel, uint8_t controller, uint8_t value);
     void PitchBend(uint8_t channel, int16_t value);
 
@@ -135,6 +139,8 @@ private:
         uint8_t program = 0;
         uint8_t modWheel = 0;   // CC1, see Synth::NoteOn
         uint8_t bankMsb = 0;         // CC0
+        uint16_t browserBank=0;
+        bool browserBankActive=false;
         uint8_t bankLsb = 0;         // CC32
         uint8_t volume = 100;        // CC7
         uint8_t expression = 127;    // CC11

@@ -2,7 +2,7 @@ name: 125A AWE VST3 Dev - Windows x64
 on:
   push:
     branches: [develop/v0.1.0-upstream-audit]
-    paths: ['src/vst3/**', 'src/opl3/**', 'tests/asset_state.cpp', 'tests/opl3_historical_factory.cpp', 'CMakeLists.txt', '.github/workflows/vst3-dev.yml']
+    paths: ['src/vst3/**', 'src/engine/**', 'src/opl3/**', 'tests/asset_state.cpp', 'tests/sf2_audio_integration.cpp', 'tests/p16_preset_catalog.cpp', 'tests/opl3_historical_factory.cpp', 'CMakeLists.txt', '.github/workflows/vst3-dev.yml']
   workflow_dispatch:
 permissions:
   contents: read
