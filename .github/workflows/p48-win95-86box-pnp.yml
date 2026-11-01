@@ -1,12 +1,13 @@
-name: P50 compare Win95 original Creative EMU8000 MIDI programs 0 and 7
+name: P51 verify timestamped EMU8000 port-write counts on original Win95 MIDI
 on:
   push:
-    branches: [research/p50-emu8000-program0-7-comparison]
+    branches: [research/p51-emu8000-immediate-trace]
     paths:
       - tools/p40_qemu_win95_guest_scancode.py
       - tools/p48_86box_boot_win95.py
       - tools/p49_stage_original_midi.py
       - tools/p50_emu8k_midi_probe.py
+      - tools/p45_86box_emu8k_trace.py
       - .github/workflows/p48-win95-86box-pnp.yml
   workflow_dispatch:
 permissions:
@@ -126,7 +127,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: P50-AWE32-Win95-Original-Creative-Program0-7-Comparison
+          name: P51-AWE32-Immediate-Trace-Program0-7
           path: p48-evidence/*
           if-no-files-found: warn
           retention-days: 5
