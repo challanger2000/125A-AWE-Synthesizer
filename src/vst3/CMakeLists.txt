@@ -12,7 +12,7 @@ if(NOT IBK_IMPORT_RESULT EQUAL 0)
 endif()
 set(target 125A_AWE_Synthesizer)
 smtg_add_vst3plugin(125A_AWE_Synthesizer
-  Factory.cpp PresetBrowserView.cpp PresetBrowserView.h PresetBrowserModel.h PresetCatalog.h MasterLogoView.cpp MasterLogoView.h LogoGeometry.h AssetState.h AssetConfig.h
+  Factory.cpp PresetBrowserView.cpp PresetBrowserView.h PresetBrowserModel.h PresetCatalog.h MasterLogoView.cpp MasterLogoView.h LogoGeometry.h Sf2LoadPolicy.h AssetState.h AssetConfig.h
   # SDK's moduleinit.cpp needs moduleHandle from the real Windows entry.
   "${CMAKE_SOURCE_DIR}/external/vst3sdk/public.sdk/source/main/dllmain.cpp"
 )
