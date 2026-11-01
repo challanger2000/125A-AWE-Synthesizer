@@ -155,8 +155,26 @@ def main():
                 key("s")
                 time.sleep(2)
                 shot("p41e_101_sound_class_candidate")
+                # P41f verified from P41e screenshot: MEDIA class is
+                # highlighted in Win95 original category list.
+                key("ret")
+                time.sleep(8)
+                shot("p41f_109_sound_manufacturer_page")
+                key("alt-h")
+                time.sleep(2)
+                shot("p41f_111_media_have_disk")
+                # Use original Creative driver folder, which contains
+                # SB16AWE.INF with MEDIA class and *CTL0021.
+                for ch in "c:\\awe32":
+                    key(symbols.get(ch,ch.lower()))
+                time.sleep(1)
+                shot("p41f_113_media_inf_path")
+                key("ret")
+                time.sleep(8)
+                shot("p41f_121_creative_media_model")
                 report["p41d_hardware_class_reached"]=True
-                report["p41e_sound_class_selected"]="needs_visual_verification"
+                report["p41e_sound_class_selected"]=True
+                report["p41f_awe32_device_binding"]="unverified"
                 report["p41d_original_awe32_driver_bound"]=False
             finally:
                 if proc.poll() is None:
