@@ -1,6 +1,6 @@
 # P22 – SoundFont-2-Sustain-Standardwerte und Modulations-Sustain
 
-**Status: Code und Regressionen implementiert, Windows-Build/Validator noch nicht ausgeführt.**
+**Status: WINDOWS-PASS; reale DAW-Klangabnahme steht noch aus.**
 
 ## Mit hochgeladener SF2 nachgewiesener Fehler
 
@@ -30,3 +30,12 @@ Referenz: [SoundFont Technical Specification 2.04, Generator-Tabelle S. 38](http
 - P21-Offset- und Synthese-Audiotests sowie GUI-Hosttest bleiben Pflicht.
 
 **Grenze:** Ein Name wie `TX81Z Lately Bass` in SF2 bedeutet eine samplebasierte EMU8000-Klangprogrammierung, keine native Yamaha-TX81Z-FM-Emulation. Vollständig identische Klänge zu einer Referenzengine bzw. Originalhardware sind nicht durch dieses isolierte Sustain-Testpaket nachgewiesen.
+
+## Windows-Nachweise (2026-11-01)
+
+- Exakt geprüfter Quellstand: `361913c5cfde64bc419db168e3c120a6f36bfb71` (P21 + P22).
+- [Windows VST3 Actions #41274176376](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/41274176376): **SUCCESS**, **16/16 CTests**, **47/47 Steinberg-Validator-Tests**, tatsächlicher Win32 EditorHost GUI-Smoke PASS, unverändertes 125A-Masterlogo im Paket geprüft.
+- [Native Windows #41274176362](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/41274176362): **SUCCESS**, **14/14 CTests** (einschließlich neuer SF2-Sustain- und SF1-Abgrenzung).
+- VST3-Build-Artifact: `125A-AWE-Synthesizer-Windows-x64-DEV` in Actions #41274176376.
+- **NOT RUN:** tatsächlicher Klang der konkreten Benutzer-SF2 im neuen Plugin in Studio One; Hördifferenz zu den offline erzeugten FluidSynth-Referenzen und Original-Sound-Blaster-Hardware.
+- Vergleichsklänge aus privat bereitgestellter SoundFont wurden lokal mit FluidSynth (C3, Velocity 100, je 2 Sekunden) gerendert, die Original-SF2 blieb privat; keine WAVs oder vollständigen Samples im öffentlichen Repository.
