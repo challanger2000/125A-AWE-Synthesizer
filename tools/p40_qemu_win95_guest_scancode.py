@@ -70,25 +70,39 @@ def main():
             try:
                 time.sleep(max(0,22-(time.monotonic()-start)))
                 shot("p40_022_original_dialog")
+                # Win95 first launch has multiple modal warnings including
+                # NE2000, daylight-saving time, and Date/Time Properties.
+                # Send *actual PS/2 keyboard scancodes* and capture EACH
+                # checkpoint, rather than pretending Start exists already.
                 key("ret")
-                time.sleep(3)
-                shot("p40_025_after_return")
-                key("esc")
                 time.sleep(2)
-                shot("p40_027_after_escape")
-                # Windows 95 guest CTRL+ESC = launch *guest* Start Menu.
-                # This is NOT the host 2022 Windows Start menu.
+                shot("p40_024_after_network")
+                key("ret")
+                time.sleep(2)
+                shot("p40_026_after_clock")
+                key("esc")
+                time.sleep(3)
+                shot("p40_029_after_timezone")
+                key("esc")
+                time.sleep(3)
+                shot("p40_032_after_second_escape")
+                key("ret")
+                time.sleep(5)
+                shot("p40_037_after_return")
+                # Once modal dialogs have cleared, test Shell and Start.
+                key("ctrl-esc")
+                time.sleep(4)
+                shot("p40_041_guest_shell")
+                key("esc")
+                time.sleep(4)
+                shot("p40_045_guest_shell_resumed")
                 key("ctrl-esc")
                 time.sleep(2)
-                shot("p40_029_guest_start")
+                shot("p40_047_guest_start")
                 key("r")
-                time.sleep(2)
-                shot("p40_031_guest_run")
-                for letter in "notepad":
-                    key(letter)
-                key("ret")
-                time.sleep(7)
-                shot("p40_040_guest_notepad")
+                time.sleep(3)
+                shot("p40_050_guest_run")
+                # Do not type commands unless the Run dialog is observed.
             finally:
                 if proc.poll() is None:
                     proc.terminate()
