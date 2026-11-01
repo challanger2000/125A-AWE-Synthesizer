@@ -31,3 +31,23 @@ user SF2, host-received error status and Studio One acoustic parity NOT RUN.
 Do NOT merge P20 sustain-envelope proposal from separate unmerged branch
 `fix/p20-sf2-envelope-defaults` as a diagnosis for this symptom without
 independent evidence. See `docs/P20-SF2-LOAD-DIAGNOSIS.md`. No FINAL release.
+
+Latest Windows-validated developer checkpoint (2026-11-01): **P22 SF2
+semantics**, tested source `361913c5cfde64bc419db168e3c120a6f36bfb71`,
+branch `develop/v0.1.0-upstream-audit`. Actions #41274176376 SUCCESS:
+16/16 CTests, 47/47 Steinberg Validator and real Win32 EditorHost GUI PASS;
+Native Actions #41274176362 SUCCESS 14/14. P21 repairs SF2 additive
+preset offsets (fineTune, filter, chorus, attack/decay/release) while
+preserving historical SF1/SBK precedence. P22 fixes default absent SF2
+volume/modulation sustain to full (EMU8000 127) and SF2 mod-sustain
+permille conversion while preserving SF1 missing-sustain hardware zero.
+Actual private user SF2 'Synth 512 Bank' was analyzed **offline only**:
+program 000 'Grungy Ramp Bass' has +/-5 cents preset offsets and no
+explicit sustain generator; program 007 'TX81Z Lately Bass' has 4 preset
+layers with significant relative filter/chorus/envelope values. **Do not
+commit or re-upload private SF2 or reference WAVs to public GitHub.**
+Docs: `docs/P21-SF2-PRESET-COMPOSITION.md` and
+`docs/P22-SF2-SUSTAIN-SEMANTICS.md`. Important: Windows CI success
+DOES NOT prove actual 125A PCM matches FluidSynth or real EMU8000; final
+Studio One A/B reference listening and project recall are NOT RUN.
+No FINAL/Gumroad release.
