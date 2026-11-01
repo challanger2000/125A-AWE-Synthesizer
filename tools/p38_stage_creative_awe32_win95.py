@@ -115,6 +115,14 @@ def install(image:Path):
             for name in FILES:
                 target = ("WINDOWS/INF/" if name.lower().endswith(".inf")
                           else "WINDOWS/SYSTEM/") + name.upper()
+                # Preserve preinstalled SB16 files: pyfatfs cannot safely
+                # truncate/rewrite some non-empty legacy FAT chains. Original
+                # AWE32-specific files were proven absent in P37 and are
+                # created afresh. Any SB16 driver updates can occur inside
+                # the guest via SetupX after its device binding.
+                if fs.exists(target):
+                    report.setdefault("preexisting_windows_files_untouched", []).append(target)
+                    continue
                 with fs.openbin(target,"w") as target_file:
                     target_file.write((temp/name.upper()).read_bytes())
             report["system_files_copied_for_boot_probe"]=len(FILES)
