@@ -56,7 +56,7 @@ public:
             if(fill==std::string::npos||fill>=close) {
                 error="125A SVG path has no fill";return false;
             }
-            const auto color=svg.substr(fill+8,7);
+            const auto color=svg.substr(fill+7,7);
             if(color!="#D9D9D9"&&color!="#D71920") {
                 error="125A SVG color is not master palette";return false;
             }
