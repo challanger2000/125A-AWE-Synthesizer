@@ -133,12 +133,24 @@ def main():
                 shot("p40_088_add_hardware_wizard")
                 # Original Windows95 hardware-type list is alphabetical.
                 # Select Sound, video and game controllers via "s".
+                # P41c: The initial wizard focus is Next, NOT the
+                # hardware-class list; sending S did nothing. Move to
+                # class list with Shift+Tab, then select the Media class.
+                key("shift-tab")
+                time.sleep(1)
+                shot("p41_089_hardware_class_list_focus")
                 key("s")
-                time.sleep(2)
-                shot("p40_090_sound_category")
+                time.sleep(1)
+                shot("p41_090_first_s")
+                key("s")
+                time.sleep(1)
+                shot("p41_091_second_s")
+                key("s")
+                time.sleep(1)
+                shot("p41_092_third_s")
                 key("ret")
-                time.sleep(5)
-                shot("p40_095_vendor_selection")
+                time.sleep(8)
+                shot("p41_100_after_class_choice")
                 # Windows95 builds the device driver database on first wizard
                 # invocation; 5 seconds was too short in the actual P40 run.
                 # Wait for genuine guest progress rather than inventing that
