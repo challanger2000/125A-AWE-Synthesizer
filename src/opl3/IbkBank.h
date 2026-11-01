@@ -19,6 +19,11 @@ public:
         std::array<uint8_t,16> registers{};
         std::array<char,10> name{};
     };
+    // Independently authored 125A presets: real OPL register patches,
+    // NOT Creative factory instruments or copied third-party IBK data.
+    // Built once outside the realtime callback; external IBKs may override.
+    static IbkBank BuiltInMelodic();
+    static IbkBank BuiltInPercussion();
     bool Parse(std::span<const uint8_t> bytes,std::string& error);
     bool Load(const std::string& path,std::string& error);
     const Instrument& At(uint8_t program) const {return instruments_[program];}
