@@ -131,14 +131,91 @@ def main():
                 key("ret")
                 time.sleep(8)
                 shot("p40_088_add_hardware_wizard")
-                # Original Windows95 hardware-type list is alphabetical.
-                # Select Sound, video and game controllers via "s".
-                key("s")
-                time.sleep(2)
-                shot("p40_090_sound_category")
+                # P41d: Verified screenshot p40_088 is NOT a hardware-class
+                # list: it is the wizard's YES/NO search choice.
+                # Initially YES (recommended) is selected. Shift+Tab puts
+                # focus on the radio group; Down selects NO, then Tab moves
+                # focus back to NEXT. Do not select Creative until MEDIA is
+                # actually visible in a screenshot.
+                key("shift-tab")
+                time.sleep(1)
+                key("down")
+                time.sleep(1)
+                shot("p41d_090_search_no_selected")
+                key("tab")
+                time.sleep(1)
+                shot("p41d_091_next_focused")
                 key("ret")
-                time.sleep(5)
-                shot("p40_095_vendor_selection")
+                time.sleep(8)
+                shot("p41d_099_hardware_class_list")
+                # P41e: VERIFIED that this screen is the actual hardware
+                # class list (not the prior detect/search radio choice).
+                # Press S while the list is focused and inspect the
+                # highlighted category before requesting Next.
+                key("s")
+                time.sleep(1)
+                shot("p41g_100_scsi_controller_first_s")
+                # Win95 first-letter navigation chooses first S-category:
+                # SCSI controllers. The adjacent NEXT row is the intended
+                # Sound, video and game controllers. One down selects MEDIA.
+                key("down")
+                time.sleep(1)
+                shot("p41g_101_media_class_highlighted")
+                key("ret")
+                time.sleep(8)
+                shot("p41f_109_sound_manufacturer_page")
+                key("alt-h")
+                time.sleep(2)
+                shot("p41f_111_media_have_disk")
+                # Use original Creative driver folder, which contains
+                # SB16AWE.INF with MEDIA class and *CTL0021.
+                for ch in "c:\\awe32":
+                    key(symbols.get(ch,ch.lower()))
+                time.sleep(1)
+                shot("p41f_113_media_inf_path")
+                key("ret")
+                time.sleep(8)
+                shot("p41f_121_creative_media_model")
+                # P41h verified from P41g screenshot: Original Creative
+                # media-INF is accepted and Creative Labs + its AWE32
+                # compatible model appear in the actual Windows95 page.
+                # Advance to device-install confirmation and inspect.
+                key("ret")
+                time.sleep(7)
+                shot("p41h_128_install_confirmation")
+                key("ret")
+                time.sleep(12)
+                shot("p41h_141_after_install_confirm")
+                # P41i: Original Creative driver install entered Win95's
+                # source-disk request. Accept the insertion prompt, then
+                # point "Copy files from" to the 21 staged vendor files.
+                key("ret")
+                time.sleep(4)
+                shot("p41i_145_after_insert_disk")
+                key("ctrl-a")
+                for ch in "c:\\awe32":
+                    key(symbols.get(ch,ch.lower()))
+                time.sleep(1)
+                shot("p41i_147_vendor_source_path")
+                key("ret")
+                time.sleep(12)
+                shot("p41i_159_after_vendor_copy")
+                # P41j: Screenshot proves the next source dialog requests
+                # a Windows 95 CD-ROM file, rather than the vendor INF.
+                # First try the already installed Win95 SYSTEM directory;
+                # no additional proprietary OS archive is downloaded.
+                key("ctrl-a")
+                for ch in "c:\\windows\\system":
+                    key(symbols.get(ch,ch.lower()))
+                time.sleep(1)
+                shot("p41j_161_installed_win95_system_source")
+                key("ret")
+                time.sleep(12)
+                shot("p41j_173_after_win95_system_copy")
+                report["p41d_hardware_class_reached"]=True
+                report["p41e_sound_class_selected"]="verify p41g_101 screenshot"
+                report["p41f_awe32_device_binding"]="unverified"
+                report["p41d_original_awe32_driver_bound"]=False
             finally:
                 if proc.poll() is None:
                     proc.terminate()
