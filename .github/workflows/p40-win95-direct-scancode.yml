@@ -4,6 +4,7 @@ on:
     branches: [research/p40-win95-qemu-direct-guest-input]
     paths:
       - tools/p40_qemu_win95_guest_scancode.py
+      - tools/p38_stage_creative_awe32_win95.py
       - .github/workflows/p40-win95-direct-scancode.yml
   workflow_dispatch:
 permissions:
@@ -18,7 +19,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq qemu-system-x86 p7zip-full
-          python -m pip install --disable-pip-version-check pillow
+          python -m pip install --disable-pip-version-check pillow "setuptools<81" pyfatfs==1.1.0
       - name: Get ephemeral unmodified preinstalled Windows95 reference disk
         shell: bash
         run: |
@@ -29,6 +30,10 @@ jobs:
           disk="$(find "$RUNNER_TEMP/p40" -name '*.img' -type f | head -1)"
           test -n "$disk"
           echo "P40_DISK=$disk" >> "$GITHUB_ENV"
+      - name: Stage matching 1998 Creative original Windows95 driver package into disposable FAT disk
+        shell: bash
+        run: |
+          python tools/p38_stage_creative_awe32_win95.py "$P40_DISK" --phase stage --output p40-stage-result.json
       - name: Test real guest BIOS scancodes and Win95 shell
         run: python tools/p40_qemu_win95_guest_scancode.py --image "$P40_DISK" --out p40-results
       - name: Convert raw screenshot outputs to PNG
@@ -51,6 +56,7 @@ jobs:
             p40-results/*.png
             p40-results/*.json
             p40-results/*.log
+            p40-stage-result.json
           if-no-files-found: warn
           retention-days: 5
       - name: Delete the transient Windows installation
