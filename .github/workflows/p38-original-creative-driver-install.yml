@@ -1,7 +1,7 @@
 name: P38 Original Creative AWE32 Win95 driver install in live guest
 on:
   push:
-    branches: [research/p38-original-creative-win95-install]
+    branches: [research/p39-win95-guest-targeted-installer]
     paths:
       - tools/p38_stage_creative_awe32_win95.py
       - tools/p36_win95_awe32_in_dosboxx.ps1
