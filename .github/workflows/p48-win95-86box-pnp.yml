@@ -1,11 +1,12 @@
-name: P49 MIDI note route through original Win95 AWE32 Creative driver
+name: P50 compare Win95 original Creative EMU8000 MIDI programs 0 and 7
 on:
   push:
-    branches: [research/p49-win95-midi-note-creative-driver]
+    branches: [research/p50-emu8000-program0-7-comparison]
     paths:
       - tools/p40_qemu_win95_guest_scancode.py
       - tools/p48_86box_boot_win95.py
       - tools/p49_stage_original_midi.py
+      - tools/p50_emu8k_midi_probe.py
       - .github/workflows/p48-win95-86box-pnp.yml
   workflow_dispatch:
 permissions:
@@ -16,8 +17,8 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-      - name: Static check of P49 MIDI fixture and Win95 UI scripts
-        run: python -m py_compile tools/p49_stage_original_midi.py tools/p48_86box_boot_win95.py
+      - name: Static check of P50 Win95 MIDI playback and register probe
+        run: python -m py_compile tools/p49_stage_original_midi.py tools/p48_86box_boot_win95.py tools/p50_emu8k_midi_probe.py
       - name: Install isolated QEMU and 86Box build dependencies
         run: |
           sudo apt-get update -qq
@@ -125,7 +126,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: P49-Original-Creative-MIDI-Win95-Screens-and-Text
+          name: P50-AWE32-Win95-Original-Creative-Program0-7-Comparison
           path: p48-evidence/*
           if-no-files-found: warn
           retention-days: 5
