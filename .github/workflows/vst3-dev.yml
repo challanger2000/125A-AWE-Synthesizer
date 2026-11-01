@@ -32,6 +32,9 @@ jobs:
       - name: Normalize moduleinfo to strict JSON
         shell: pwsh
         run: python tools/normalize_vst3_metadata.py build-vst3/VST3/Release/125A_AWE_Synthesizer.vst3/Contents/Resources/moduleinfo.json
+      - name: Verify actual bundled original IBK factory banks
+        shell: pwsh
+        run: python tools/verify_ibk_bundle.py build-vst3/VST3/Release/125A_AWE_Synthesizer.vst3/Contents/Resources
       - name: Export ROM-free developer VST3 bundle
         uses: actions/upload-artifact@v4
         with:
