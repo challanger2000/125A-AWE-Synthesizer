@@ -291,3 +291,17 @@ Selections use the unchanged host VST3 IDs Program=1000, Hardware=1001,
 Bank=1002. The GUI follows host automation through controller-value sync.
 This is the **functional** browser, not the final branded Sound Blaster
 hardware-look GUI. See [P17 GUI contract](docs/P17-NATIVE-PRESET-BROWSER.md).
+
+## P19 — native Sound-Blaster Faceplate (Windows GUI-verified)
+
+The P17/P18 browser now uses a dark metal-style VSTGUI faceplate and the
+**exact unmodified 125A Systems master SVG** (30 original vector paths,
+including even-odd cutouts). The original logo lives inside the VST3 Resources;
+no external branding file is required at runtime. The GUI is not a final
+Gumroad/release design until its owner reviews the look.
+
+**Verified:** Windows build and real Steinberg EditorHost GUI smoke on
+[Actions #41271495551](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/41271495551)
+— 16/16 CTests, 47/47 VST3 Validator, visual logo check, search, bank and
+hardware clicks all PASS. See [P19 evidence](docs/P19-SOUND-BLASTER-FACEPLATE.md).
+Studio One project recall and owner visual approval remain NOT RUN.
