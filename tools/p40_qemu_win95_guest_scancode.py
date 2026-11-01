@@ -131,30 +131,25 @@ def main():
                 key("ret")
                 time.sleep(8)
                 shot("p40_088_add_hardware_wizard")
-                # Original Windows95 hardware-type list is alphabetical.
-                # Select Sound, video and game controllers via "s".
-                # P41c: The initial wizard focus is Next, NOT the
-                # hardware-class list; sending S did nothing. Move to
-                # class list with Shift+Tab, then select the Media class.
+                # P41d: Verified screenshot p40_088 is NOT a hardware-class
+                # list: it is the wizard's YES/NO search choice.
+                # Initially YES (recommended) is selected. Shift+Tab puts
+                # focus on the radio group; Down selects NO, then Tab moves
+                # focus back to NEXT. Do not select Creative until MEDIA is
+                # actually visible in a screenshot.
                 key("shift-tab")
                 time.sleep(1)
-                shot("p41_089_hardware_class_list_focus")
-                key("s")
+                key("down")
                 time.sleep(1)
-                shot("p41_090_first_s")
-                key("s")
+                shot("p41d_090_search_no_selected")
+                key("tab")
                 time.sleep(1)
-                shot("p41_091_second_s")
-                key("s")
-                time.sleep(1)
-                shot("p41_092_third_s")
-                # Deliberately STOP HERE. Prior run proved the intended
-                # MEDIA class was NOT selected; Return closed the wizard.
-                # A future guest-mouse/class-selection probe must confirm
-                # \"Sound, video and game controllers\" in a screenshot
-                # before choosing Next or Have Disk. No wrong driver install.
-                report["p41_sound_hardware_class_confirmed"]=False
-                report["p41_original_vxd_install_attempted"]=False
+                shot("p41d_091_next_focused")
+                key("ret")
+                time.sleep(8)
+                shot("p41d_099_hardware_class_list")
+                report["p41d_hardware_class_reached"]="needs_visual_verification"
+                report["p41d_original_awe32_driver_bound"]=False
             finally:
                 if proc.poll() is None:
                     proc.terminate()
