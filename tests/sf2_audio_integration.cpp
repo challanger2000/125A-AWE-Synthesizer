@@ -1,4 +1,5 @@
 #include "Synth.h"
+#include "Sf2LoadPolicy.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -168,6 +169,28 @@ int main() {
         !writeFile(rom,Bytes(1048576,0)))return 2;
     bool ok=true;
     std::string error;
+    // P20: A phdr name can be visible even when full SF2 sample loading
+    // fails (e.g. a >28 MiB sample pool). In that case, a substitute sine
+    // would wrongly sound like the selected "TX81Z Lately Bass" patch.
+    {
+        Synth notLoaded(44100);
+        notLoaded.Core().SetDriver(Awe32::Driver::Win95);
+        const bool loaded=notLoaded.LoadBank(
+            (directory/"125A_missing_configured.sf2").string(),error);
+        ok &= check(!loaded&&!error.empty()&&
+                    !AWE125::AllowEmuNoteOn(true,loaded),
+                    "failed configured SF2 suppresses misleading substitute-sine NoteOn");
+        std::vector<int16_t> silent(8192);
+        if(AWE125::AllowEmuNoteOn(true,loaded))
+            notLoaded.NoteOn(0,69,127);
+        notLoaded.RenderBlock(silent.data(),4096);
+        ok &= check(std::all_of(silent.begin(),silent.end(),
+                    [](int16_t x){return x==0;}),
+                    "failed SF2 produces silence instead of playing a fake patch");
+        ok &= check(AWE125::AllowEmuNoteOn(false,false) &&
+                    AWE125::AllowEmuNoteOn(true,true),
+                    "unconfigured demo fallback and successfully loaded SF2 remain usable");
+    }
     constexpr size_t reserve=16;
     constexpr size_t copiedWords=2048+46;
     {
