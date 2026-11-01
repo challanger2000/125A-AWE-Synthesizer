@@ -197,3 +197,41 @@ Status: source contract only until new Windows VST3 build and owner
 Studio One tests. Verify the menu opens, shows `000`..`127`, selecting
 `001` changes the host Program parameter, and that playing a note
 changes timbre when a suitable multi-preset bank is actually loaded.
+
+## P15: Immediately playable FM modes (historical factory banks bundled)
+
+**Normal use requires no .IBK download, copy, extraction or path selection.**
+The Windows VST3 bundle includes two historically authored, MIT-licensed
+Sound Blaster FM banks from Jamie O'Connell's IBK collection:
+`MAUIFM.IBK` (128 melodic programs), and `DRUM.IBK` (genuine YMF262 five-voice
+percussion mappings). All original bank bytes are SHA-256 verified against
+the owner's uploaded archive, and the original MIT license is included inside
+the VST3 Resources folder. VST3 CMake configuration automatically fetches
+these pinned source resources; **there is no runtime download**.
+
+The Program menu 000–127 controls MAUIFM program selection for **both**
+Yamaha OPL3 and Creative CQM, which use separate emulator cores. Yamaha
+melodic and hardware rhythm programs start automatically, without any user
+config file. Creative CQM drums remain intentionally silent pending real
+hardware confirmation. Users who explicitly set `OPL3_IBK` or
+`OPL3_DRUM_IBK` in `assets.cfg` override the included banks. An invalid
+user-specified override fails closed; it does not silently play another bank.
+
+EMU8000 sample ROM and optional user SF2 are separate from FM banks; no
+Creative ROM is newly distributed. The owner has already obtained
+`awe32.raw` privately. Existing VST3 program/engine parameter IDs and
+project state V6 are unchanged.
+
+**Important**: This GitHub repository was verified **PUBLIC** on 2026-11-01;
+do not commit the owner's original Creative ROM or unlicensed driver files.
+The P15 FM banks explicitly permit redistribution under their MIT license.
+Source:
+https://www.midiox.com/html/ibk.htm
+Pinned bank bytes:
+https://github.com/Wohlstand/libADLMIDI/tree/3e9ddb13ad39e2de0ca7eb003e622d4741aa50b7/fm_banks/ibk_files/ibk
+
+QA: the Windows workflow must verify audio from Program 000 vs 048 on
+both hardware emulators, Yamaha rhythm PCM, 47/47 Steinberg validation,
+and hashes of the final packaged .IBK resources. Studio One manual
+first-load, changing hardware/program and save/reopen remains a separate
+owner test; never confuse Windows CI with DAW verification.
