@@ -280,3 +280,14 @@ while maintaining V1-V6 migration with default bank 0.
 
 Details and verification matrix: [P16 Preset/Bank Backend](docs/P16-PRESET-BANK-BACKEND.md).
 Host/editor tests and the finished GUI are separate, still NOT RUN.
+
+## P17: Native Windows preset browser (developer GUI)
+
+The old 128-entry numeric program popup is replaced with a built-in VSTGUI
+browser: a scrollable list of the **actual SF2 phdr and IBK names**, live
+search, real SF2 bank filtering, PREV/NEXT for populated programs, and an
+always-visible explanation for EMU8000 vs Yamaha OPL3 vs Creative CQM.
+Selections use the unchanged host VST3 IDs Program=1000, Hardware=1001,
+Bank=1002. The GUI follows host automation through controller-value sync.
+This is the **functional** browser, not the final branded Sound Blaster
+hardware-look GUI. See [P17 GUI contract](docs/P17-NATIVE-PRESET-BROWSER.md).
