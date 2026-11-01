@@ -200,6 +200,18 @@ def main():
                 key("ret")
                 time.sleep(12)
                 shot("p41i_159_after_vendor_copy")
+                # P41j: Screenshot proves the next source dialog requests
+                # a Windows 95 CD-ROM file, rather than the vendor INF.
+                # First try the already installed Win95 SYSTEM directory;
+                # no additional proprietary OS archive is downloaded.
+                key("ctrl-a")
+                for ch in "c:\\windows\\system":
+                    key(symbols.get(ch,ch.lower()))
+                time.sleep(1)
+                shot("p41j_161_installed_win95_system_source")
+                key("ret")
+                time.sleep(12)
+                shot("p41j_173_after_win95_system_copy")
                 report["p41d_hardware_class_reached"]=True
                 report["p41e_sound_class_selected"]="verify p41g_101 screenshot"
                 report["p41f_awe32_device_binding"]="unverified"
