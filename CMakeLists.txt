@@ -43,6 +43,15 @@ target_include_directories(awe32_asset_state_test PRIVATE src/vst3)
 target_compile_features(awe32_asset_state_test PRIVATE cxx_std_23)
 add_test(NAME 125A_asset_state COMMAND awe32_asset_state_test)
 
+# Independent executable proves the exact 125A master SVG is usable as vector
+# paths without linking a Windows GUI or loading any copyrighted ROM.
+add_executable(awe32_p19_master_logo_test tests/p19_logo_geometry.cpp)
+target_include_directories(awe32_p19_master_logo_test PRIVATE src/vst3)
+target_compile_features(awe32_p19_master_logo_test PRIVATE cxx_std_23)
+add_test(NAME 125A_p19_master_logo
+  COMMAND awe32_p19_master_logo_test
+    "${PROJECT_SOURCE_DIR}/src/vst3/resource/125A_Logo_Master_FINAL.svg")
+
 option(125A_BUILD_VST3 "Build experimental Windows VST3" OFF)
 if(125A_BUILD_VST3)
   if(NOT WIN32)
