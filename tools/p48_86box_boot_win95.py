@@ -146,13 +146,14 @@ hdd_01_speed = ramdisk
                 p49_key(conn, 0x13)       # r => Win95 Run menu item
                 send(conn, "step 500")
                 p49_screenshot(conn, args.out, "p49-run-dialog.png", report)
-                fixture_path = "c:\\awe32\\p49-p0.mid"
+                fixture_path = "c:\\awe32\\p49-p7.mid"
                 # Verified historical Windows 95 MPLAYER.EXE command-line
                 # switch: /play starts playback rather than opening stopped.
                 play_command = "c:\\windows\\mplayer.exe /play " + fixture_path
                 p49_type_path(conn, play_command)
                 p49_screenshot(conn, args.out, "p49-run-midi-path.png", report)
                 report["requested_midi_path"] = fixture_path
+                report["requested_midi_program"] = 7
                 report["requested_midi_command"] = play_command
                 # Do not assert the MIDI is routed to AWE32 until Windows
                 # player UI and register/audio changes actually prove it.
