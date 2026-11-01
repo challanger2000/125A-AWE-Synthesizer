@@ -1,7 +1,7 @@
-name: P57 compare original Creative MIDI playback on GM0 vs user SoundFont bank 1
+name: P58 verify actual generated sine SF2 waveform via original Win95 Creative MIDI
 on:
   push:
-    branches: [research/p57-original-creative-userbank-midi]
+    branches: [research/p58-sf2-waveform-spectral-confirmation]
     paths:
       - tools/p40_qemu_win95_guest_scancode.py
       - tools/p48_86box_boot_win95.py
@@ -11,6 +11,7 @@ on:
       - tools/p53_stage_creative_cp95.py
       - tools/p55_stage_generated_sf2.py
       - tools/p57_stage_user_bank_midi.py
+      - tools/p58_analyze_audio.py
       - .github/workflows/p48-win95-86box-pnp.yml
   workflow_dispatch:
 permissions:
@@ -158,7 +159,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: P57-Original-Creative-MIDI-CC0-UserBank1-Comparison
+          name: P58-Original-Creative-AWE32-SF2-Private-Waveform-Spectrum
           path: p48-evidence/*
           if-no-files-found: warn
           retention-days: 5

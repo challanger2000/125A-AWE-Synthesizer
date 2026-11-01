@@ -16,6 +16,7 @@ from pathlib import Path
 
 from p47_86box_emu8k_smoke import send, wait_socket, write_config
 from p50_emu8k_midi_probe import play as p50_play
+from p58_analyze_audio import analyze_wav
 
 
 # Scancode set 1 (US Win95 layout), only for the fixed laboratory filename.
@@ -253,8 +254,12 @@ onboard_ram = 2048
                         len(trace.read_text(encoding="utf8",errors="replace").splitlines())-1
                         if trace.is_file() else 0
                     )
+                    private_audio = args.out / f"p58-private-wavetable-bank{bank}"
+                    private_audio.mkdir(parents=True, exist_ok=True)
                     try:
-                        send(conn, "audio start")
+                        # Record each exact 86Box sound stream as WAV in
+                        # an ephemeral directory (never artifact-uploaded).
+                        send(conn, f"audio start {private_audio.resolve()}")
                         audio_started = True
                     except Exception:
                         audio_started = False
@@ -279,7 +284,12 @@ onboard_ram = 2048
                         len(trace.read_text(encoding="utf8",errors="replace").splitlines())-1
                         if trace.is_file() else 0
                     )
+                    spectrum = None
+                    wav = private_audio / "wavetable.wav"
+                    if wav.is_file():
+                        spectrum = analyze_wav(wav)
                     report["p57_original_midi_trials"].append({
+                        "p58_wavetable_spectrum":spectrum,
                         "bank_cc0":bank,
                         "midi_fixture":filename,
                         "gm_program_zero_based":0,
