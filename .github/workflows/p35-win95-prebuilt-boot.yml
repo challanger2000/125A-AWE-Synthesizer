@@ -1,0 +1,73 @@
+name: P35 Preinstalled Win95 OSR2 ephemeral QEMU boot check
+on:
+  push:
+    branches: [research/p35-win95-preinstalled-boot]
+    paths:
+      - tools/p35_win95_ephemeral_boot.py
+      - .github/workflows/p35-win95-prebuilt-boot.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test-preinstalled-image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install x86 PC emulator and archive reader
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq qemu-system-x86 p7zip-full
+      - name: Fetch community Win95 OSR2 image into ephemeral runner (NEVER publish disk)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/p35-win95"
+          url='https://www.rekoba.de/~cs/v86/win95/Windows95b_p9x-0.9.91_512MB.img.7z'
+          curl --fail --location --retry 3 --connect-timeout 20 --max-time 240 \
+            --output "$RUNNER_TEMP/p35-win95/win95-preinstalled.img.7z" "$url"
+          7z l "$RUNNER_TEMP/p35-win95/win95-preinstalled.img.7z" | tail -16
+          7z x -y "-o$RUNNER_TEMP/p35-win95" "$RUNNER_TEMP/p35-win95/win95-preinstalled.img.7z"
+          find "$RUNNER_TEMP/p35-win95" -name '*.img' -type f -printf '%s %p\n'
+          img="$(find "$RUNNER_TEMP/p35-win95" -name '*.img' -type f | head -1)"
+          test -n "$img"
+          test "$(stat -c%s "$img")" -ge 200000000
+          echo "P35_WIN95_IMG=$img" >> "$GITHUB_ENV"
+      - name: Boot preinstalled OS offline and capture console at 18 and 55 seconds
+        run: python tools/p35_win95_ephemeral_boot.py --image "$P35_WIN95_IMG" --out p35-output --seconds 18 55
+      - name: Convert PPM screenshots to PNG and analyze display diversity
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p p35-output
+          python -m pip install --quiet --disable-pip-version-check pillow
+          python - <<'PY'
+          from PIL import Image
+          from pathlib import Path
+          import json
+          for path in Path('p35-output').glob('boot_*.ppm'):
+              im=Image.open(path).convert("RGB")
+              im.save(path.with_suffix(".png"))
+              colors=im.resize((128,96)).getcolors(128*96)
+              print(path, "dimensions", im.size, "distinct downsized colors", len(colors) if colors else ">12288")
+              path.unlink()
+          PY
+          rm -f p35-output/*.sock
+      - name: Publish ONLY boot diagnostics/screenshots — no Windows disk
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: P35-win95-OSR2-boot-display-evidence
+          path: |
+            p35-output/*.png
+            p35-output/boot-status.json
+            p35-output/qemu-output.txt
+          if-no-files-found: warn
+          retention-days: 5
+      - name: Ephemeral cleanup regardless of boot result
+        if: always()
+        shell: bash
+        run: |
+          rm -rf "$RUNNER_TEMP/p35-win95"
+          rm -f p35-output/*.img
+          echo 'User bank, wave ROM, Windows guest image and Creative drivers are NOT in artifacts.'
