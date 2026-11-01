@@ -1,0 +1,41 @@
+name: P37 Win95 AWE32 driver inventory
+on:
+  push:
+    branches: [research/p37-win95-driver-install-precheck]
+    paths:
+      - tools/p37_win95_driver_inventory.py
+      - .github/workflows/p37-win95-driver-inventory.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inventory-existing-creative-stack:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install FAT inspection tools
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq mtools p7zip-full
+      - name: Inspect preinstalled Win95 disk only (do not upload guest)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/p37-guest"
+          curl --fail --location --retry 3 --connect-timeout 20 --max-time 240 \
+            --output "$RUNNER_TEMP/p37-guest/win95.7z" \
+            https://www.rekoba.de/~cs/v86/win95/Windows95b_p9x-0.9.91_512MB.img.7z
+          7z x -y "-o$RUNNER_TEMP/p37-guest" "$RUNNER_TEMP/p37-guest/win95.7z" >/dev/null
+          disk="$(find "$RUNNER_TEMP/p37-guest" -type f -name '*.img' | head -1)"
+          test -n "$disk"
+          python tools/p37_win95_driver_inventory.py "$disk" --output P37-Win95-driver-inventory.json
+      - name: Publish extracted filenames only
+        uses: actions/upload-artifact@v4
+        with:
+          name: P37-Win95-AWE32-existing-driver-inventory
+          path: P37-Win95-driver-inventory.json
+          retention-days: 5
+      - name: Destroy downloaded legacy OS image
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/p37-guest"

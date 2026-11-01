@@ -1,0 +1,71 @@
+name: P38 Original Creative AWE32 Win95 driver install in live guest
+on:
+  push:
+    branches: [research/p38-original-creative-win95-install]
+    paths:
+      - tools/p38_stage_creative_awe32_win95.py
+      - tools/p36_win95_awe32_in_dosboxx.ps1
+      - .github/workflows/p38-original-creative-driver-install.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  win95-creative-guest-install:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install isolated FAT16 disk utility
+        shell: pwsh
+        run: python -m pip install --disable-pip-version-check "setuptools<81" pyfatfs==1.1.0
+      - name: Download Win95 guest to ephemeral workspace
+        shell: pwsh
+        run: |
+          $root=Join-Path $env:RUNNER_TEMP 'p38-win95-guest'
+          New-Item -ItemType Directory -Force $root | Out-Null
+          $archive=Join-Path $root 'win95.7z'
+          & curl.exe --fail --location --retry 3 --connect-timeout 20 --max-time 240 --output $archive 'https://www.rekoba.de/~cs/v86/win95/Windows95b_p9x-0.9.91_512MB.img.7z'
+          if ($LASTEXITCODE -ne 0) { throw 'Win95 image download failed' }
+          $seven='C:\Program Files\7-Zip\7z.exe'
+          if (-not (Test-Path $seven)) { throw '7z not available' }
+          & $seven x -y "-o$root" $archive | Select-Object -Last 4
+          if ($LASTEXITCODE -ne 0) { throw 'Win95 extraction failed' }
+          $disk=Get-ChildItem $root -Recurse -Filter *.img | Where-Object {$_.Length -eq 536870912} | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $disk) { throw 'Win95 512MiB disk missing' }
+          "P38_GUEST_DISK=$disk" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+      - name: Stage matching Creative original Win95 INF, drivers and autostart on disposable disk
+        shell: pwsh
+        run: python tools/p38_stage_creative_awe32_win95.py "$env:P38_GUEST_DISK" --phase stage --output P38-staging.json
+      - name: Boot Win95 and execute original Creative SetupX driver-install section
+        shell: pwsh
+        run: ./tools/p36_win95_awe32_in_dosboxx.ps1 -ExistingDiskImage "$env:P38_GUEST_DISK"
+      - name: Examine installed guest files and registry markers after boot
+        if: always()
+        shell: pwsh
+        run: |
+          if ($env:P38_GUEST_DISK -and (Test-Path $env:P38_GUEST_DISK)) {
+            python tools/p38_stage_creative_awe32_win95.py "$env:P38_GUEST_DISK" --phase verify --output P38-after-boot.json
+          }
+      - name: Publish evidence only, not Windows or original binaries
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: P38-Win95-AWE32-original-driver-install-evidence
+          path: |
+            P38-staging.json
+            P38-after-boot.json
+            p36-output/P36-result.json
+            p36-output/dosboxx.stdout.txt
+            p36-output/dosboxx.stderr.txt
+            p36-output/display_*.png
+          if-no-files-found: warn
+          retention-days: 5
+      - name: Remove copyrighted Windows and vendor files from runner
+        if: always()
+        shell: pwsh
+        run: |
+          Remove-Item (Join-Path $env:RUNNER_TEMP 'p38-win95-guest') -Recurse -Force -ErrorAction SilentlyContinue
+          Write-Host 'Guest OS, downloaded Creative binaries, and synthetic test ROM destroyed.'
