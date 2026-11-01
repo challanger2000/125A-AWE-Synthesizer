@@ -76,11 +76,12 @@ Bytes makeBank(size_t sampleWords,bool multipleBanks=false) {
 
     u16(pbag,0);u16(pbag,0);u16(pbag,1);u16(pbag,0);
     if(multipleBanks) {
-        u16(pbag,3);u16(pbag,0);u16(pbag,5);u16(pbag,0);
+        u16(pbag,4);u16(pbag,0);u16(pbag,6);u16(pbag,0);
     }
     u16(pgen,41);u16(pgen,0); // Instrument 0
     if(multipleBanks) {
-        u16(pgen,41);u16(pgen,1);u16(pgen,51);u16(pgen,12); // different sample 1
+        u16(pgen,41);u16(pgen,1);u16(pgen,51);u16(pgen,12);
+        u16(pgen,52);u16(pgen,280); // preset +280 cents over instrument -300
         u16(pgen,41);u16(pgen,2);u16(pgen,51);u16(pgen,24); // different sample 2
     }
 
@@ -92,12 +93,17 @@ Bytes makeBank(size_t sampleWords,bool multipleBanks=false) {
     name20(inst,"EOI");u16(inst,multipleBanks?3:1);
     u16(ibag,0);u16(ibag,0);u16(ibag,2);u16(ibag,0);
     if(multipleBanks) {
-        u16(ibag,4);u16(ibag,0);u16(ibag,6);u16(ibag,0);
+        u16(ibag,5);u16(ibag,0);u16(ibag,7);u16(ibag,0);
     }
     u16(igen,54);u16(igen,1); // Loop continuously
     u16(igen,53);u16(igen,0); // Sample 0
     if(multipleBanks) {
-        u16(igen,54);u16(igen,1);u16(igen,53);u16(igen,1);
+        // A real SF2 may specify instrument tuning and an additional
+        // preset-level relative tuning: BOTH must apply to the same layer.
+        // With the old SF1-only FillFrom rule, +12 was silently discarded
+        // as soon as instrument fineTune was present.
+        u16(igen,54);u16(igen,1);u16(igen,52);u16(igen,static_cast<unsigned>(-300 & 0xffff));
+        u16(igen,53);u16(igen,1);
         u16(igen,54);u16(igen,1);u16(igen,53);u16(igen,2);
     }
 
@@ -245,8 +251,9 @@ int main() {
         ok &= check(!r0.empty()&&!r5.empty()&&!r128.empty()&&
                     r0[0].gen.Get(SoundFont::Gen::CoarseTune,0)==0&&
                     r5[0].gen.Get(SoundFont::Gen::CoarseTune,-999)==12&&
+                    r5[0].gen.Get(SoundFont::Gen::FineTune,-999)==-20&&
                     r128[0].gen.Get(SoundFont::Gen::CoarseTune,-999)==24,
-                    "SF2 presets 0/5/128 have different semitone generator data");
+                    "SF2 bank 5 combines instrument -300 and preset +280 fineTune to -20");
         ok &= check(bank0.size()==8192&&bank5.size()==8192&&
                     bank128.size()==8192&&audible(bank0)&&audible(bank5)&&
                     audible(bank128),
