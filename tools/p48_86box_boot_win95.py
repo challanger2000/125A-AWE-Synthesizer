@@ -79,6 +79,15 @@ hdd_01_speed = ramdisk
                         report["screens"].append({"name": name, "w": screen.get("w"), "h": screen.get("h")})
                     except Exception as exc:
                         report["screens"].append({"name": name, "error": str(exc)})
+                    if elapsed == 15000:
+                        # Verified P48 run 41347661011: first-ever boot of
+                        # ASUS P/I-P55T2P4 BIOS displays "CMOS checksum
+                        # error — Defaults loaded" and "Press F1 to
+                        # continue". Press that observed key exactly once.
+                        # Screenshot is saved BEFORE input for audit.
+                        send(conn, "key down 0x3b")
+                        send(conn, "key up 0x3b")
+                        report["f1_cmos_continue_pressed"] = True
                 try:
                     status = send(conn, "status")
                     report["end_status"] = {
