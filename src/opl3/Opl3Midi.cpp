@@ -70,7 +70,24 @@ bool Opl3Midi::LoadPercussionIbk(const std::string& path,std::string& error) {
     return true;
 }
 void Opl3Midi::ProgramChange(uint8_t channel,uint8_t program) {
-    if(channel<16 && program<128)channels_[channel].program=program;
+    if(channel>=16||program>=128||channels_[channel].program==program)return;
+    // A released FM voice retains its old operator envelope for potentially
+    // several seconds. Repeated preset previews used to pile up these tails
+    // on every never-used hardware slot, masking freshly selected timbres.
+    // Keep genuinely held/pressed notes (normal MIDI program-change behavior)
+    // but promptly retire already released voices from the previous patch.
+    for(size_t i=0;i<kVoices;++i) {
+        auto& v=voices_[i];
+        if(!v.allocated||v.channel!=channel||v.pressed||v.held)continue;
+        KeyOff(i);
+        const uint16_t op=kOperators[i%9];
+        // 2-op chip has additive and FM modes; both operators can reach the
+        // output. Damp both to avoid a long ghost tail at a previous timbre.
+        Write(reg(i,0x40,op),0x3f);
+        Write(reg(i,0x40,op+3),0x3f);
+        v.allocated=false;
+    }
+    channels_[channel].program=program;
 }
 void Opl3Midi::SetDrumPitch(uint8_t channel,uint8_t note) {
     const double hz=440.0*std::pow(2.0,(double(note)-69.0)/12.0);
@@ -298,6 +315,10 @@ void Opl3Midi::RenderBlock(int16_t* out,uint32_t frames) {
         delayed_[j]=next[0];delayed_[j+1]=next[1];
         if(++delayIndex_==latencyFrames_)delayIndex_=0;
     }
+}
+uint32_t Opl3Midi::AllocatedVoices() const {
+    return static_cast<uint32_t>(std::count_if(voices_.begin(),voices_.end(),
+        [](const Voice& v){return v.allocated;}));
 }
 uint32_t Opl3Midi::PressedVoices() const {
     return static_cast<uint32_t>(std::count_if(voices_.begin(),voices_.end(),

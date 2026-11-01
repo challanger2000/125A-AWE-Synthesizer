@@ -39,6 +39,9 @@ public:
     void PitchBend(uint8_t channel,int16_t value);
     void RenderBlock(int16_t* interleaved,uint32_t frames);
     uint32_t PressedVoices() const;
+    // Diagnostics: includes released envelope tails, not just keyed notes.
+    // Useful for asserting that old timbres cannot stack across Program changes.
+    uint32_t AllocatedVoices() const;
     static constexpr size_t kVoices=18;
     bool UsesCqmBackend() const {return cqm_!=nullptr;}
 
