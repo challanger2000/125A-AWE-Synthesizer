@@ -65,9 +65,9 @@ jobs:
             -o "$RUNNER_TEMP/p53/AWECP95.EXE"
           test "$(stat -c %s "$RUNNER_TEMP/p53/AWECP95.EXE")" -eq 189630
           echo '29727ac591abe0a944ec6044455c87c379c44f05b1b782eb84b361690e40e4f4  '"$RUNNER_TEMP/p53/AWECP95.EXE" | sha256sum -c -
-          7z x -y "-o$RUNNER_TEMP/p53/files" "$RUNNER_TEMP/p53/AWECP95.EXE" >/dev/null
+          # Python zipfile ignores old self-extracting DOS/ZIP reparse attributes.
           python tools/p53_stage_creative_cp95.py \
-            --disk "$P48_ORIGINAL_IMAGE" --files "$RUNNER_TEMP/p53/files" \
+            --disk "$P48_ORIGINAL_IMAGE" --sfx "$RUNNER_TEMP/p53/AWECP95.EXE" \
             --report "$RUNNER_TEMP/p53/P53-original-control-panel-stage.json"
 
       - name: Complete P46 original Creative driver installation and private disk handoff
