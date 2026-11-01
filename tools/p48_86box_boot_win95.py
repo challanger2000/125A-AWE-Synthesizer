@@ -75,6 +75,8 @@ hdd_01_fn = {args.disk.resolve()}
 hdd_01_parameters = 63, 16, 1040, 0, ide
 hdd_01_ide_channel = 0:0
 hdd_01_speed = ramdisk
+[Sound Blaster AWE32 PnP]
+onboard_ram = 2048
 """)
     trace = vm / "driver-potential-emu8000-io.csv"
     sockpath = vm / "automation.sock"
@@ -151,6 +153,29 @@ hdd_01_speed = ramdisk
                         screenshot=p49_screenshot, report=report,
                     )
                     report["p50_midi_trials"].append(trial)
+                # P53: load the ORIGINAL Creative AWE Control Panel from
+                # an ephemeral guest directory. It is not a user-bank
+                # loader substitute. First close the MIDI player, then
+                # use the Win95 Start/Run UI that succeeded in P49.
+                send(conn, "key down 0x38 0x3e")   # Alt-F4 closes MPLAYER
+                send(conn, "key up 0x3e 0x38")
+                send(conn, "step 350")
+                send(conn, "key down 0x1d 0x01")   # Ctrl+Esc => Start
+                send(conn, "key up 0x01 0x1d")
+                send(conn, "step 300")
+                p49_key(conn, 0x13)                 # 'R' = Run
+                send(conn, "step 500")
+                p49_screenshot(conn, args.out, "p53-control-panel-run.png", report)
+                cp_cmd = "c:\\awe32\\cp\\awecp32.exe"
+                p49_type_path(conn, cp_cmd)
+                p49_screenshot(conn, args.out, "p53-control-panel-command.png", report)
+                report["p53_control_panel_command"] = cp_cmd
+                p49_key(conn, 0x1c)
+                send(conn, "step 7000")
+                p49_screenshot(conn, args.out, "p53-control-panel-open.png", report)
+                report["p53_original_control_panel_loaded"] = False
+                report["p53_original_bank_sf2_loaded"] = False
+                report["p53_86box_sample_ram_kb"] = 2048
                 try:
                     status = send(conn, "status")
                     report["end_status"] = {
