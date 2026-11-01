@@ -35,6 +35,10 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     programLabel_=MakeLabel({239,154,733,193},"000",false);
     next_=MakeButton({744,155,793,190},kNext,">");
     toggle_=MakeButton({654,61,819,96},kToggle,"BROWSER");
+    // CTextButton::kKickStyle invokes valueChanged TWICE per click: ON,
+    // then OFF. Persistent browser visibility MUST use kOnOffStyle.
+    toggle_->setStyle(CTextButton::kOnOffStyle);
+    toggle_->setValue(1.f);
     bankCaption_=MakeLabel({24,226,150,256},"BANK",true);
     bankMenu_=new COptionMenu({145,225,443,260},this,kBank);
     addView(bankMenu_);
@@ -53,6 +57,7 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     hint_=MakeLabel({24,571,822,601},
                     "Einmal klicken: Instrument waehlen  |  PREV/NEXT: Bank durchblaettern",
                     true);
+    SetExpanded(true);
     setWantsIdle(true);
     Sync(true);
 }
@@ -163,10 +168,14 @@ void PresetBrowserView::valueChanged(CControl* c) {
     if(tag==kHardware) {
         ChangeParameter(kEngine,std::clamp(int(std::lround(c->getValue())),0,2)/2.);
     } else if(tag==kPrevious||tag==kNext) {
-        const int target=PresetBrowserModel::Neighbor(engine_,sf_,fm_,
-            bank_,program_,tag==kNext?1:-1);
-        if(target>=0)Select(engine_==0?bank_:0,static_cast<uint8_t>(target));
-    } else if(tag==kToggle)SetExpanded(!expanded_);
+        // Ignore the second, kKickStyle reset-to-zero callback, otherwise
+        // one user click advances TWO programs.
+        if(c->getValue()>0.5f) {
+            const int target=PresetBrowserModel::Neighbor(engine_,sf_,fm_,
+                bank_,program_,tag==kNext?1:-1);
+            if(target>=0)Select(engine_==0?bank_:0,static_cast<uint8_t>(target));
+        }
+    } else if(tag==kToggle)SetExpanded(c->getValue()>0.5f);
     else if(tag==kFilter) {
         searchText_=search_->getText().data();
         RebuildRows();
