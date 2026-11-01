@@ -53,10 +53,12 @@ p45_125a_trace_emu8k_write(const emu8k_t *emu8k, uint16_t port, uint16_t value)
             (unsigned int) port, (unsigned int) value,
             pointer, (pointer >> 5) & 7, pointer & 31,
             is_pointer ? "pointer" : "data");
-    /* Limit expensive flushes during SoundFont transfers. Clean normal
-       process exits also flush FILE streams automatically. */
-    if (sequence <= 4 || (sequence & 127ULL) == 0)
-        fflush(fp);
+    /* P51 research precision: make every complete port-write record
+       visible to the host automation reader immediately. Without this,
+       P50's first-second register counts were misleading because the
+       stdio buffer flush interval was 128 writes. This is enabled only
+       when AWE_TRACE_CSV is set. */
+    fflush(fp);
 }
 '''
 
