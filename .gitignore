@@ -31,3 +31,8 @@ Testing/
 *.img
 *.iso
 !*.md
+
+# P15: fetched at configure time from pinned MIT-licensed bank source.
+# The VST3 packager includes them; they are not manually installed.
+src/vst3/resource/*.IBK
+src/vst3/resource/IBK_License.txt

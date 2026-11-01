@@ -46,3 +46,16 @@ add_executable(awe32_cqm_backend_test "${PROJECT_SOURCE_DIR}/tests/cqm_backend_a
 target_link_libraries(awe32_cqm_backend_test PRIVATE awe32_opl3_midi)
 target_compile_features(awe32_cqm_backend_test PRIVATE cxx_std_23)
 add_test(NAME 125A_cqm_backend_audio COMMAND awe32_cqm_backend_test)
+
+# Historical licensed factory IBKs are fetched and verified at VST3 CMake
+# configuration time. Test the REAL bundled data through both chip cores.
+if(125A_BUILD_VST3)
+  add_executable(awe32_opl3_historical_factory_test
+    "${PROJECT_SOURCE_DIR}/tests/opl3_historical_factory.cpp")
+  target_link_libraries(awe32_opl3_historical_factory_test PRIVATE awe32_opl3_midi)
+  target_compile_features(awe32_opl3_historical_factory_test PRIVATE cxx_std_23)
+  add_test(NAME 125A_opl3_historical_factory
+    COMMAND awe32_opl3_historical_factory_test
+      "${PROJECT_SOURCE_DIR}/src/vst3/resource/MAUIFM.IBK"
+      "${PROJECT_SOURCE_DIR}/src/vst3/resource/DRUM.IBK")
+endif()
