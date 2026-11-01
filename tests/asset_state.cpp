@@ -97,7 +97,8 @@ int main() {
              "out-of-range hardware mode rejected atomically");
     corrupt=blob;
     // Last V7 word encodes bank and must be validated atomically.
-    corrupt[corrupt.size()-2]=0x40; // bank 16384 (invalid)
+    corrupt[corrupt.size()-4]=0x00;
+    corrupt[corrupt.size()-3]=0x40; // exact little-endian bank 16384
     out=d;out.program=7;
     ok &= ck(!decode(corrupt,out)&&out.program==7&&out.bank==128,
              "invalid SF2 bank 16384 rejected without state mutation");
@@ -107,6 +108,7 @@ int main() {
     boundary.bank=AssetState::kMaxBank+1;
     ok &= ck(encode(boundary).empty(),"bank 16384 rejected on serialization");
     corrupt=blob;corrupt[8]=255;
+    out=d;out.program=7; // do not accidentally inherit the prior successful round-trip
     ok &= ck(!decode(corrupt,out)&&out.program==7,
              "invalid Program rejected atomically");
     corrupt=blob;corrupt[16]=255;corrupt[17]=255;
