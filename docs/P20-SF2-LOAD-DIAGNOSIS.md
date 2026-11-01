@@ -1,6 +1,6 @@
 # P20 – Klangzuordnung: SF2-Namen ohne geladene Samples
 
-**Status: Korrektur implementiert, Windows-CI noch ausstehend.**
+**Status: Windows-CI für Fehlerbehandlung PASS; konkrete Nutzer-SF2 und ihre Klangtreue NICHT geprüft.**
 
 ## Beobachtung und überprüfbare Ursache
 
@@ -58,3 +58,13 @@ des Yamaha TX81Z.
 
 **Keine finale Klanggleichheit und keine Studio-One-Reproduzierbarkeit
 behaupten, bevor die tatsächlich verwendete SF2 vorliegt.**
+
+## Verifizierter Prüfstand – 2026-11-01
+
+- Quellstand `3ec81c27eea46dea751516327c959500974bd913` (P20 Fehlerbehandlung, ohne Hüllkurvenänderung).
+- [Windows VST3 #41272929443](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/41272929443): **SUCCESS**, **16/16 CTests**, **47/47 Steinberg Validator**, **P18 Win32 EditorHost GUI PASS**.
+- [Native Windows Engine Safety #41272929458](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/41272929458): **SUCCESS, 14/14 CTests**.
+- Neues Regressionstestszenario: ausdrücklich konfigurierte, fehlende SF2 gibt Stille statt Ersatz-Sinus; erfolgreiche/unkonfigurierte Auswahlen bleiben nach geltender Policy benutzbar.
+- **NOT RUN:** Controller/Processor-Textnachricht für einen tatsächlichen SF2-Ladefehler in Studio One; tatsächlicher Dateipfad, Dateninhalt, Sample-Zonen und Klangvergleich der vom Nutzer verwendeten SF2. Ein erfolgreicher EditorHost-Klicktest ersetzt dies nicht.
+- Eine öffentlich gelistete Datei `00.5mg Synth 512 Bank.sf2` hat rund 0,56 MB; die Zahl `512` in diesem Dateinamen darf daher nicht als 512-MB-Dateigröße missverstanden werden. Das beweist nicht, dass die vom Nutzer verwendete Datei identisch ist.
+- **Kein Release/FINAL oder Garantie**, dass der TX81Z-Preset jetzt identisch zum Original klingt; nächster Diagnoseweg ist die reale SF2-Datei selbst.
