@@ -224,12 +224,22 @@ namespace
 
 void GenSet::AddFrom(const GenSet& other)
 {
+    // SF2 preset-level generators are RELATIVE offsets over instrument-level
+    // values, not "defaults when absent". Never sum structural terminal
+    // generators (instrument/sample IDs or key/velocity selectors).
     for (int i = 0; i < Gen::Count; ++i)
-        if (other.present[i])
+    {
+        if (!other.present[i] || i == Gen::Instrument ||
+            i == Gen::SampleID || i == Gen::KeyRange ||
+            i == Gen::VelRange) continue;
+        if (present[i])
         {
-            if (present[i]) value[i] = static_cast<int16_t>(value[i] + other.value[i]);
-            else            { value[i] = other.value[i]; present[i] = true; }
+            // Malformed/untrusted SF2 must not invoke signed 16-bit overflow.
+            const int sum = static_cast<int>(value[i]) + other.value[i];
+            value[i] = static_cast<int16_t>(std::clamp(sum, -32768, 32767));
         }
+        else { value[i] = other.value[i]; present[i] = true; }
+    }
 }
 
 void GenSet::FillFrom(const GenSet& other)
@@ -779,9 +789,19 @@ static void SelectRegionsImpl(const Bank& self, int bankNum, int program, int ke
                 r.sf1AttenUnits = any ? units : -1;
             }
 
-            // The preset zone only **fills in** what the instrument zone
-            // lacks - it is not added. Formerly we added per the SF2
-            // specification, but the driver does not do that.
+            // **The two formats must NOT share the preset merge rule.**
+            // SF2 2.x explicitly stores preset generators as offsets to
+            // the instrument values. In the user's Synth 512 Bank SF2,
+            // e.g. 'TX81Z Lately Bass' combines filterQ=100 (instrument)
+            // and filterQ=-110 (preset), and adds preset chorus, attack,
+            // decay, release and detuning. Using FillFrom for SF2 dropped
+            // those sound-design parameters, making multiple presets wrong.
+            //
+            // SF1 (SBK/MDI) is different: the historically measured Creative
+            // driver fills missing fields and does not add, so preserve that
+            // verified legacy behavior ONLY for Version::Sf1.
+            //
+            // Historical SF1 measurements retained below as background:
             //
             // Measured on CRAZY: channel 4 plays program 97 (SeaShore ->
             // Soundtrack), which has `coarseTune` on both levels - 1 on the
@@ -798,7 +818,10 @@ static void SelectRegionsImpl(const Bank& self, int bankNum, int program, int ke
             //
             // The attenuation is an exception, handled separately above,
             // because the driver adds it only in register units.
-            r.gen.FillFrom(presetGen);
+            if (self.version == Version::Sf2)
+                r.gen.AddFrom(presetGen);
+            else
+                r.gen.FillFrom(presetGen);
 
             emit(std::move(r));
         }
