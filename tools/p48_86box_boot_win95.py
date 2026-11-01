@@ -183,6 +183,21 @@ onboard_ram = 2048
                     p49_screenshot(conn, args.out,
                                    f"p54-creative-{pane}-tab.png", report)
                 report["p54_original_cp_tabs_screenshotted"] = True
+                # P55: return from Playback via WaveFx to User.
+                for _ in range(2):
+                    send(conn, "key down 0x1d 0x2a 0x0f") # Ctrl+Shift+Tab
+                    send(conn, "key up 0x0f 0x2a 0x1d")
+                    send(conn, "step 600")
+                p49_screenshot(conn, args.out, "p55-user-before-browse.png", report)
+                # Creative User tab has a 'Browse...' button. Try its
+                # standard Windows-95 Alt+B mnemonic, but do not type into
+                # an unconfirmed dialog or claim any SoundFont is loaded.
+                send(conn, "key down 0x38 0x30") # Alt+B
+                send(conn, "key up 0x30 0x38")
+                send(conn, "step 800")
+                p49_screenshot(conn, args.out, "p55-after-alt-b.png", report)
+                report["p55_user_browse_requested"] = True
+                report["p55_original_sf2_load_confirmed"] = False
                 report["p53_original_control_panel_loaded"] = False
                 report["p53_original_bank_sf2_loaded"] = False
                 report["p53_86box_sample_ram_kb"] = 2048
