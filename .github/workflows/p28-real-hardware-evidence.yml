@@ -1,0 +1,31 @@
+name: P28 Real AWE32 hardware audio evidence
+on:
+  push:
+    branches: [develop/v0.1.0-upstream-audit]
+    paths:
+      - tools/awe32_hardware_reference_check.py
+      - .github/workflows/p28-real-hardware-evidence.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  hardware-capture-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install audit-only numerical audio dependencies
+        run: python -m pip install --disable-pip-version-check numpy scipy soundfile
+      - name: Download immutable public physical-card AWE32 and emulator FLAC pairs, validate Git SHA and compare
+        run: python tools/awe32_hardware_reference_check.py --output hardware-reference-results.json
+      - name: Publish measurements only (copyrighted/public audio not republished)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: P28-real-AWE32-vs-AWE32Emu-metrics
+          path: hardware-reference-results.json
+          if-no-files-found: warn
+          retention-days: 30
