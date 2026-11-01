@@ -8,11 +8,13 @@
 namespace AWE125::AssetState {
 // Legacy V1 was 3 x little-endian int32: "AWE1", version=1, Program.
 inline constexpr uint32_t kMagic = 0x31455741u;
-inline constexpr uint32_t kVersion = 6u;
+inline constexpr uint32_t kVersion = 7u;
+inline constexpr uint32_t kMaxBank = 16383u; // MIDI-compatible bank-selection range
 inline constexpr uint32_t kMaxPath = 4096u;
 struct Data {
     uint32_t program=0;
     uint32_t engine=0; // 0=EMU8000, 1=Yamaha OPL3, 2=Creative CQM
+    uint32_t bank=0; // browser/SF2 bank, 128=SoundFont drum bank
     bool pathsSpecified=false;
     std::string romPath;
     std::string sf2Path;
@@ -23,7 +25,7 @@ inline bool validPath(std::string_view s) {
     return s.size()<=kMaxPath && s.find('\0')==std::string_view::npos;
 }
 template<class Sink> bool Write(Sink&& sink,const Data& d) {
-    if(d.program>127||d.engine>2||!validPath(d.romPath)||!validPath(d.sf2Path)||!validPath(d.ibkPath)||!validPath(d.drumIbkPath))return false;
+    if(d.program>127||d.engine>2||d.bank>kMaxBank||!validPath(d.romPath)||!validPath(d.sf2Path)||!validPath(d.ibkPath)||!validPath(d.drumIbkPath))return false;
     auto word=[&](uint32_t n){
         const std::array<unsigned char,4> bytes{
           static_cast<unsigned char>(n), static_cast<unsigned char>(n>>8),
@@ -35,7 +37,7 @@ template<class Sink> bool Write(Sink&& sink,const Data& d) {
                (p.empty()||sink(p.data(),p.size()));
     };
     return word(kMagic)&&word(kVersion)&&word(d.program)&&
-           word(d.pathsSpecified?1u:0u)&&path(d.romPath)&&path(d.sf2Path)&&word(d.engine)&&path(d.ibkPath)&&path(d.drumIbkPath);
+           word(d.pathsSpecified?1u:0u)&&path(d.romPath)&&path(d.sf2Path)&&word(d.engine)&&path(d.ibkPath)&&path(d.drumIbkPath)&&word(d.bank);
 }
 template<class Source> bool Read(Source&& source,Data& target) {
     auto word=[&]()->std::pair<bool,uint32_t>{
@@ -48,7 +50,7 @@ template<class Source> bool Read(Source&& source,Data& target) {
     const auto [ok2,version]=word();
     const auto [ok3,program]=word();
     if(!ok1||!ok2||!ok3||magic!=kMagic||
-       (version!=1u&&version!=2u&&version!=3u&&version!=4u&&version!=5u&&version!=kVersion)||program>127)return false;
+       (version!=1u&&version!=2u&&version!=3u&&version!=4u&&version!=5u&&version!=6u&&version!=kVersion)||program>127)return false;
     Data candidate;
     candidate.program=program;
     if(version==1u) {
@@ -76,6 +78,11 @@ template<class Source> bool Read(Source&& source,Data& target) {
     if(version>=5u&&!readPath(candidate.drumIbkPath))return false;
     if(!candidate.pathsSpecified&&
        (!candidate.ibkPath.empty()||!candidate.drumIbkPath.empty()))return false;
+    if(version>=7u) {
+        const auto [okBank,bank]=word();
+        if(!okBank||bank>kMaxBank)return false;
+        candidate.bank=bank;
+    }
     target=std::move(candidate); // atomic commit, after complete validation
     return true;
 }
