@@ -15,6 +15,7 @@ import time
 from pathlib import Path
 
 from p47_86box_emu8k_smoke import send, wait_socket, write_config
+from p50_emu8k_midi_probe import play as p50_play
 
 
 # Scancode set 1 (US Win95 layout), only for the fixed laboratory filename.
@@ -136,54 +137,20 @@ hdd_01_speed = ramdisk
                         # shows a focused Close button. Press Enter only once.
                         p49_key(conn, 0x1c)
                         report["win95_welcome_closed"] = True
-                # P49: The actual Win95 desktop and focused Welcome Close
-                # were visually confirmed in successful P48b run #41349407124.
-                # Open Win95 Start -> Run via known Ctrl+Esc, R shortcut.
-                # A screenshot is saved BEFORE sending the laboratory path.
-                send(conn, "key down 0x1d 0x01")
-                send(conn, "key up 0x01 0x1d")
-                send(conn, "step 300")
-                p49_key(conn, 0x13)       # r => Win95 Run menu item
-                send(conn, "step 500")
-                p49_screenshot(conn, args.out, "p49-run-dialog.png", report)
-                fixture_path = "c:\\awe32\\p49-p0.mid"
-                # Verified historical Windows 95 MPLAYER.EXE command-line
-                # switch: /play starts playback rather than opening stopped.
-                play_command = "c:\\windows\\mplayer.exe /play " + fixture_path
-                p49_type_path(conn, play_command)
-                p49_screenshot(conn, args.out, "p49-run-midi-path.png", report)
-                report["requested_midi_path"] = fixture_path
-                report["requested_midi_command"] = play_command
-                # Do not assert the MIDI is routed to AWE32 until Windows
-                # player UI and register/audio changes actually prove it.
-                baseline = 0
-                if trace.exists():
-                    baseline = max(0, len(trace.read_text(encoding="utf8", errors="replace").splitlines()) - 1)
-                report["raw_writes_before_midi_launch"] = baseline
-                try:
-                    send(conn, "audio start")
-                    report["automation_audio_recording_started"] = True
-                except Exception as exc:
-                    report["audio_recording_error"] = str(exc)
-                p49_key(conn, 0x1c)       # launch fixed laboratory .MID
-                report["midi_open_command_entered"] = True
-                send(conn, "step 1000")
-                p49_screenshot(conn, args.out, "p49-midi-player-initial.png", report)
-                send(conn, "step 4000")
-                p49_screenshot(conn, args.out, "p49-midi-player-after4s.png", report)
-                try:
-                    levels = send(conn, "audio level 5000")
-                    report["post_midi_audio_levels"] = levels
-                except Exception as exc:
-                    report["audio_level_error"] = str(exc)
-                try:
-                    audio = send(conn, "audio stop")
-                    report["audio_segments"] = [
-                        {k: v for k, v in seg.items() if k not in ("file",)}
-                        for seg in audio.get("segments", [])
-                    ]
-                except Exception as exc:
-                    report["audio_stop_error"] = str(exc)
+                # P50: P49b run #41351601157 confirmed
+                # MPLAYER.EXE /play actually PLAYING MIDI program 0,
+                # 163 fresh EMU8000 writes, wavetable peak -32.8 dBFS.
+                # Run both staged GM fixtures in the SAME original Win95 VM.
+                # The program 0/7 tests are baseline device-compatibility
+                # tests, NOT a check against the user's exact SF2 basses.
+                report["p50_midi_trials"] = []
+                for program in (0, 7):
+                    trial = p50_play(
+                        conn, args.out, trace, program,
+                        key=p49_key, type_path=p49_type_path,
+                        screenshot=p49_screenshot, report=report,
+                    )
+                    report["p50_midi_trials"].append(trial)
                 try:
                     status = send(conn, "status")
                     report["end_status"] = {
@@ -198,7 +165,8 @@ hdd_01_speed = ramdisk
                     lines = trace.read_text(encoding="utf8", errors="replace").splitlines()
                     report["raw_emu8000_write_count"] = max(0, len(lines) - 1)
                     report["raw_emu8000_preview"] = lines[1:4]
-                    report["raw_writes_after_midi_launch_delta"] = max(0, len(lines)-1-baseline)
+                    report["raw_writes_after_two_midi_launches_delta"] = max(
+                        0, len(lines)-1-report["p50_midi_trials"][0]["raw_writes_before"])
                     report["raw_emu8000_pointer_count"] = sum(
                         x.endswith(",pointer") for x in lines[1:])
                     report["raw_emu8000_data_count"] = sum(
