@@ -25,6 +25,14 @@ target = (root / "src/vst3/CMakeLists.txt").read_text(encoding="utf-8")
 assert "new VSTGUI::VST3Editor(this,\"view\",\"awe_test_panel.uidesc\")" in factory
 assert "static_cast<double>(model.engine)/2." in factory, "mode 1 should restore as normalized 0.5"
 assert "kProgramID=1000" in factory and "kEngineID=1001" in factory
+# Critical regression: generic numeric parameter displays normalized decimal
+# steps in VSTGUI. Program needs an actual 128-step StringListParameter.
+assert 'new StringListParameter(STR16("Program"),kProgramID)' in factory
+assert 'for(int index=0;index<128;++index)' in factory
+assert '"%03d"' in factory and 'programs->appendString(label);' in factory
+assert 'parameters.addParameter(programs);' in factory
+assert 'parameters.addParameter(STR16("Program")' not in factory
+assert 'one test tone' in gui.read_text(encoding="utf-8")
 assert "SMTG_ENABLE_VSTGUI_SUPPORT ON" in cmake
 assert "vstgui_support" in target
 # The SDK VSTGUI module initializer needs a Windows moduleHandle definition.
@@ -32,5 +40,5 @@ assert "vstgui_support" in target
 assert '"${CMAKE_SOURCE_DIR}/external/vst3sdk/public.sdk/source/main/dllmain.cpp"' in target
 assert "${SDK_ROOT}/public.sdk/source/main/dllmain.cpp" not in target, "undefined SDK_ROOT would silently resolve to /public.sdk"
 assert "resource/awe_test_panel.uidesc" in target
-print("P14 STATIC PASS: editor resource, two live parameter tags, VST3 persistence mapping")
+print("P14 STATIC PASS: two control tags, 128 listed programs, VST3 recall mapping")
 print("NOT RUN: Windows VSTGUI attach, DAW interaction, bank playback, asset browse")

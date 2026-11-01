@@ -174,3 +174,26 @@ Existing engine DSP and CQM percussion limitations remain unchanged.
 binding check only. A Windows VST3 build, validator, packaged-editor
 attach/detach, mouse/automation and Studio One project-recall tests must be
 reported independently. P14 is **DEV** until these have run.
+
+### P14 follow-up — real Program menu (owner Studio One feedback)
+
+The owner verified the P14 editor opens, the Hardware selector works, and
+all three engines output sound, but **Program selection was not usable** and
+only a single timbre was heard. Replace the generic numeric Program
+parameter with a proper **128-entry VST3 StringListParameter** (displaying
+`000` through `127`), so VSTGUI's `COptionMenu` has explicit choices.
+Keep the original parameter ID 1000, normalized 0..127 mapping, project
+persistence, processor event path and existing synth DSP unchanged.
+
+**A Program choice does not create sounds without loaded patches.**
+Yamaha OPL3 and Creative CQM deliberately use the single developer
+test patch if `OPL3_IBK` has not been configured. Both need a genuine
+melodic IBK to make Program 0..127 select different FM patches.
+EMU8000 requires an SF2 containing those presets; a missing program
+can map to bank 0/preset 0 per the current emulated driver behavior.
+No licensed SF2 or IBK data is included in CI/artifacts.
+
+Status: source contract only until new Windows VST3 build and owner
+Studio One tests. Verify the menu opens, shows `000`..`127`, selecting
+`001` changes the host Program parameter, and that playing a note
+changes timbre when a suitable multi-preset bank is actually loaded.
