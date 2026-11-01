@@ -69,7 +69,8 @@ CTextLabel* PresetBrowserView::MakeLabel(const CRect& r,const char* s,bool secon
 CTextButton* PresetBrowserView::MakeButton(const CRect& r,int tag,const char* s) {
     auto* button=new CTextButton(r,this,tag,s);
     button->setFont(kNormalFont);
-    button->setFontColor(kPaper);
+    button->setTextColor(kPaper);
+    button->setTextColorHighlighted(kPaper);
     button->setFrameColor(kMuted);
     addView(button);
     return button;
@@ -81,7 +82,8 @@ void PresetBrowserView::ChangeParameter(Steinberg::Vst::ParamID tag,double norm)
     controller_->setParamNormalized(tag,norm);
     controller_->performEdit(tag,norm);
     controller_->endEdit(tag);
-    Sync(true);
+    // Rebuild on the next UI idle, not while CDataBrowser is dispatching
+    // a selected-row mouse event. Avoids reentrant layout invalidation.
 }
 void PresetBrowserView::Select(uint16_t bank,uint8_t program) {
     // Both parameters are written in one UI gesture. Their original host
