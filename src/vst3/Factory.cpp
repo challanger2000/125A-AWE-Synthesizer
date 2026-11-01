@@ -9,6 +9,7 @@
 #include "AssetState.h"
 #include "AssetConfig.h"
 #include "PresetCatalog.h"
+#include "PresetBrowserView.h"
 #include "Opl3Midi.h"
 #include "public.sdk/source/vst/vstparameters.h"
 #include "public.sdk/source/main/moduleinit.h"
@@ -334,7 +335,7 @@ private:
         }
     }
 };
-class Controller final : public EditControllerEx1 {
+class Controller final : public EditControllerEx1, public VSTGUI::VST3EditorDelegate {
 public:
     static FUnknown* createInstance(void*) {
         return static_cast<IEditController*>(new Controller);
@@ -368,9 +369,19 @@ public:
         ReloadPresetCatalogs(nullptr); // UI thread; indexed metadata only
         return kResultOk;
     }
+    VSTGUI::CView* createCustomView(VSTGUI::UTF8StringPtr name,
+        const VSTGUI::UIAttributes&,const VSTGUI::IUIDescription*,
+        VSTGUI::VST3Editor*) override {
+        if(name&&std::strcmp(name,"AwePresetBrowser")==0)
+            return new PresetBrowserView({0,0,860,612},this,sfCatalog_,fmCatalog_);
+        return nullptr;
+    }
     IPlugView* PLUGIN_API createView(FIDString name) override {
-        if(name && std::strcmp(name,ViewType::kEditor)==0)
-            return new VSTGUI::VST3Editor(this,"view","awe_test_panel.uidesc");
+        if(name && std::strcmp(name,ViewType::kEditor)==0) {
+            auto* editor=new VSTGUI::VST3Editor(this,"view","awe_test_panel.uidesc");
+            editor->setDelegate(this);
+            return editor;
+        }
         return nullptr;
     }
     tresult PLUGIN_API setComponentState(IBStream* stream) override {
