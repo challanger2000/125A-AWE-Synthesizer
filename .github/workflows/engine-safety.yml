@@ -21,3 +21,10 @@ jobs:
       - name: Run native safety and static source-contract tests
         shell: pwsh
         run: ctest --test-dir build -C Release --output-on-failure
+      - name: Upload native timbre probe executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: 125A-EMU8000-Timbre-Probe-Standalone-Windows-x64
+          path: build/src/engine/Release/awe32_sf2_timbre_probe.exe
+          if-no-files-found: error
+          retention-days: 7
