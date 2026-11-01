@@ -24,7 +24,12 @@ cmake = (root / "CMakeLists.txt").read_text(encoding="utf-8")
 target = (root / "src/vst3/CMakeLists.txt").read_text(encoding="utf-8")
 assert 'new VSTGUI::VST3Editor(this,"view","awe_test_panel.uidesc")' in factory
 assert 'editor->setDelegate(this)' in factory
-assert 'new PresetBrowserView({0,0,860,612},this,sfCatalog_,fmCatalog_)' in factory
+assert 'new PresetBrowserView({0,0,860,612},this,sfCatalog_,fmCatalog_,' in factory
+assert 'FactoryBank(L"125A_Logo_Master_FINAL.svg")' in factory
+assert 'MasterLogoView({18,8,150,53},exactLogoPath)' in browser or        'new MasterLogoView({18,8,150,53},exactLogoPath)' in browser
+assert 'kPathFilledEvenOdd' in (root / "src/vst3/MasterLogoView.cpp").read_text(encoding="utf-8")
+assert (root / "src/vst3/resource/125A_Logo_Master_FINAL.svg").is_file()
+assert "resource/125A_Logo_Master_FINAL.svg" in target
 assert "static_cast<double>(model.engine)/2." in factory, "mode 1 should restore as normalized 0.5"
 assert "kProgramID=1000" in factory and "kEngineID=1001" in factory
 # Critical regression: generic numeric parameter displays normalized decimal
