@@ -45,6 +45,17 @@ Bytes makeBank(size_t sampleWords,bool multipleBanks=false) {
             std::sin(2.0*pi*(n%64u)/64.0)*11000.0);
         u16(smpl,static_cast<std::uint16_t>(sample));
     }
+    if(multipleBanks) {
+        // Distinct sample WAVEFORMS, not merely different pitch generators.
+        // This guarantees that selecting the wrong SF2 bank cannot pass
+        // merely because two presets happen to share an identical sample.
+        for(size_t n=0;n<sampleWords;++n)
+            u16(smpl,static_cast<uint16_t>(static_cast<int16_t>(
+                std::sin(2.0*pi*(n%37u)/37.0)*13000.0)));
+        for(size_t n=0;n<sampleWords;++n)
+            u16(smpl,static_cast<uint16_t>(static_cast<int16_t>(
+                std::sin(2.0*pi*(n%83u)/83.0)*8000.0)));
+    }
     // The SF2 specification requires 46 guard words after a sample.
     for (int n=0;n<46;++n)u16(smpl,0);
     chunk(sdta,"smpl",smpl);
@@ -68,15 +79,26 @@ Bytes makeBank(size_t sampleWords,bool multipleBanks=false) {
     }
     u16(pgen,41);u16(pgen,0); // Instrument 0
     if(multipleBanks) {
-        u16(pgen,41);u16(pgen,0);u16(pgen,51);u16(pgen,12); // +12 semitones
-        u16(pgen,41);u16(pgen,0);u16(pgen,51);u16(pgen,24); // +24 semitones
+        u16(pgen,41);u16(pgen,1);u16(pgen,51);u16(pgen,12); // different sample 1
+        u16(pgen,41);u16(pgen,2);u16(pgen,51);u16(pgen,24); // different sample 2
     }
 
     name20(inst,"125A Wave");u16(inst,0);
-    name20(inst,"EOI");u16(inst,1);
+    if(multipleBanks) {
+        name20(inst,"125A Wave B");u16(inst,1);
+        name20(inst,"125A Wave C");u16(inst,2);
+    }
+    name20(inst,"EOI");u16(inst,multipleBanks?3:1);
     u16(ibag,0);u16(ibag,0);u16(ibag,2);u16(ibag,0);
+    if(multipleBanks) {
+        u16(ibag,4);u16(ibag,0);u16(ibag,6);u16(ibag,0);
+    }
     u16(igen,54);u16(igen,1); // Loop continuously
     u16(igen,53);u16(igen,0); // Sample 0
+    if(multipleBanks) {
+        u16(igen,54);u16(igen,1);u16(igen,53);u16(igen,1);
+        u16(igen,54);u16(igen,1);u16(igen,53);u16(igen,2);
+    }
 
     name20(shdr,"125A Wave");u32(shdr,0);
     u32(shdr,static_cast<uint32_t>(sampleWords));
@@ -84,6 +106,17 @@ Bytes makeBank(size_t sampleWords,bool multipleBanks=false) {
     u32(shdr,44100);
     shdr.push_back(69);shdr.push_back(0);
     u16(shdr,0);u16(shdr,1);
+    if(multipleBanks) {
+        for(uint32_t n=1;n<=2;++n) {
+            name20(shdr,n==1?"125A Wave B":"125A Wave C");
+            u32(shdr,static_cast<uint32_t>(sampleWords*n));
+            u32(shdr,static_cast<uint32_t>(sampleWords*(n+1)));
+            u32(shdr,static_cast<uint32_t>(sampleWords*n+16));
+            u32(shdr,static_cast<uint32_t>(sampleWords*(n+1)-16));
+            u32(shdr,44100);
+            shdr.push_back(69);shdr.push_back(0);u16(shdr,0);u16(shdr,1);
+        }
+    }
     name20(shdr,"EOS");
     for (int n=0;n<6;++n)u32(shdr,0);
     shdr.push_back(0);shdr.push_back(0);u16(shdr,0);u16(shdr,1);
@@ -178,10 +211,25 @@ int main() {
             return std::any_of(pcm.begin(),pcm.end(),
                               [](int16_t x){return x!=0;});
         };
+        const auto sound=SoundFont::Load(multi.string());
+        const auto r0=sound.Select(0,0,69,127);
+        const auto r5=sound.Select(5,0,69,127);
+        const auto r128=sound.Select(128,0,69,127);
+        ok &= check(sound.valid&&sound.presets.size()==3&&
+                    r0.size()==1&&r5.size()==1&&r128.size()==1&&
+                    r0[0].sample!=r5[0].sample&&r5[0].sample!=r128[0].sample,
+                    "generated SF2 banks select physically distinct sample records");
+        ok &= check(!r0.empty()&&!r5.empty()&&!r128.empty()&&
+                    r0[0].gen.Get(SoundFont::Gen::CoarseTune,0)==0&&
+                    r5[0].gen.Get(SoundFont::Gen::CoarseTune,-999)==12&&
+                    r128[0].gen.Get(SoundFont::Gen::CoarseTune,-999)==24,
+                    "SF2 presets 0/5/128 have different semitone generator data");
         ok &= check(bank0.size()==8192&&bank5.size()==8192&&
                     bank128.size()==8192&&audible(bank0)&&audible(bank5)&&
-                    audible(bank128)&&bank0!=bank5&&bank5!=bank128,
-                    "actual EMU8000 audio differs for SF2 banks 0, 5 and drum 128");
+                    audible(bank128),
+                    "generated SF2 banks 0, 5 and 128 all render audible PCM");
+        ok &= check(bank0!=bank5,"actual EMU8000 audio changes for bank 0 -> 5");
+        ok &= check(bank5!=bank128,"actual EMU8000 audio changes for bank 5 -> drums 128");
         ok &= check(midiOverride==bank0,
                     "MIDI CC0 explicitly overrides the browser-selected SF2 bank");
     }
