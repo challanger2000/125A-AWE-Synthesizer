@@ -173,6 +173,16 @@ onboard_ram = 2048
                 p49_key(conn, 0x1c)
                 send(conn, "step 7000")
                 p49_screenshot(conn, args.out, "p53-control-panel-open.png", report)
+                # P54: verify the ORIGINAL Creative Control Panel pages,
+                # without asserting a bank is loaded or changing preferences.
+                # Standard Win95 property-sheet Ctrl+Tab switches tab.
+                for pane in ("synth", "user", "wavefx", "playback"):
+                    send(conn, "key down 0x1d 0x0f")  # Ctrl + Tab
+                    send(conn, "key up 0x0f 0x1d")
+                    send(conn, "step 800")
+                    p49_screenshot(conn, args.out,
+                                   f"p54-creative-{pane}-tab.png", report)
+                report["p54_original_cp_tabs_screenshotted"] = True
                 report["p53_original_control_panel_loaded"] = False
                 report["p53_original_bank_sf2_loaded"] = False
                 report["p53_86box_sample_ram_kb"] = 2048
