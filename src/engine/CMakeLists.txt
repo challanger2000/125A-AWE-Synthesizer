@@ -57,3 +57,12 @@ target_include_directories(awe32_sf2_audio_integration_test PRIVATE "${CMAKE_CUR
 target_link_libraries(awe32_sf2_audio_integration_test PRIVATE awe32_chip_safety)
 set_target_properties(awe32_sf2_audio_integration_test PROPERTIES CXX_STANDARD 23)
 add_test(NAME 125A_sf2_audio_integration COMMAND awe32_sf2_audio_integration_test)
+
+# P25: Reproduce real, user-supplied SF2 timbre through 86Box with an external
+# ROM and bank. The executable has no proprietary assets or external deps.
+# It resolves the same assets.cfg as the VST3 and writes two isolated WAVs.
+add_executable(awe32_sf2_timbre_probe "${PROJECT_SOURCE_DIR}/tools/sf2_timbre_probe.cpp")
+target_include_directories(awe32_sf2_timbre_probe PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/src/vst3" "${UPSTREAM_SRC}")
+target_link_libraries(awe32_sf2_timbre_probe PRIVATE awe32_chip_safety)
+set_target_properties(awe32_sf2_timbre_probe PROPERTIES CXX_STANDARD 23)
