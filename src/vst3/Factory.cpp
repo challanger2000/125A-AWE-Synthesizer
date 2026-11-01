@@ -10,6 +10,7 @@
 #include "AssetConfig.h"
 #include "Opl3Midi.h"
 #include "public.sdk/source/vst/vstparameters.h"
+#include "public.sdk/source/main/moduleinit.h"
 #include "pluginterfaces/base/ustring.h"
 #include "vstgui/plugin-bindings/vst3editor.h"
 #include <algorithm>
@@ -18,6 +19,13 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 #include <memory>
 #include <string>
 #include <vector>
@@ -30,6 +38,23 @@ inline const FUID kControllerUID(0x125A8000,0xAE274BC1,0xA4B02DA3,0x573CC990);
 inline constexpr ParamID kProgramID=1000;
 inline constexpr ParamID kEngineID=1001;
 // Persistence data contract is in AssetState.h.
+// Factory banks are packaged *inside* the Windows VST3 by CMake. The path
+// is resolved on activation, never from the realtime audio callback.
+static std::string FactoryBank(const wchar_t* filename) {
+#if defined(_WIN32)
+    wchar_t path[32768]{};
+    const auto mod=reinterpret_cast<HMODULE>(Steinberg::getPlatformModuleHandle());
+    const DWORD count=GetModuleFileNameW(mod,path,32768);
+    if(!mod||count==0||count>=32768)return {};
+    // .../Synth.vst3/Contents/x86_64-win/Synth.vst3 ->
+    // .../Synth.vst3/Contents/Resources/<bank>
+    return (std::filesystem::path(path).parent_path().parent_path()/
+            "Resources"/filename).string();
+#else
+    (void)filename;
+    return {};
+#endif
+}
 
 class Processor final : public AudioEffect {
 public:
@@ -85,24 +110,27 @@ public:
             opl_=std::make_unique<Opl3Midi>(rate_,synth_->Core().ChipLatencyFrames());
             cqm_=std::make_unique<Opl3Midi>(rate_,synth_->Core().ChipLatencyFrames(),true);
             fmReady_=true;
-            if(!state_.ibkPath.empty()) {
-                std::string error;
-                if(!opl_->LoadMelodicIbk(state_.ibkPath,error) ||
-                   !cqm_->LoadMelodicIbk(state_.ibkPath,error)) {
-                    assetError_=std::move(error);
-                    fmReady_=false; // never play the test patch as a failed bank
-                }
+            // Factory FM banks load automatically; a user-selected IBK
+            // explicitly overrides them. No setup files are needed to play FM.
+            const std::string melodicPath=state_.ibkPath.empty() ?
+                FactoryBank(L"MAUIFM.IBK") : state_.ibkPath;
+            const std::string drumsPath=state_.drumIbkPath.empty() ?
+                FactoryBank(L"DRUM.IBK") : state_.drumIbkPath;
+            std::string error;
+            // Don't short circuit: both emulated chips load the same FM
+            // parameter data, but each renders via its own hardware core.
+            const bool yamahaLoaded=!melodicPath.empty() &&
+                opl_->LoadMelodicIbk(melodicPath,error);
+            const bool creativeLoaded=!melodicPath.empty() &&
+                cqm_->LoadMelodicIbk(melodicPath,error);
+            const bool rhythmLoaded=!drumsPath.empty() &&
+                opl_->LoadPercussionIbk(drumsPath,error);
+            if(!yamahaLoaded||!creativeLoaded||!rhythmLoaded) {
+                assetError_=error.empty() ?
+                    "Built-in FM bank resource not found in VST3" : std::move(error);
+                fmReady_=false;
             }
-            if(!state_.drumIbkPath.empty()) {
-                std::string error;
-                // Yamaha OPL3 rhythm passed its hardware-register audio test.
-                // Creative CQM 0.9 beta did not render reliable drum PCM:
-                // deliberately no CQM drum bank until a supported model passes.
-                if(!opl_->LoadPercussionIbk(state_.drumIbkPath,error)) {
-                    assetError_=std::move(error);
-                    fmReady_=false; // requested Yamaha drum bank invalid
-                }
-            }
+            // Creative CQM 0.9 beta percussion deliberately remains disabled.
             for(int c=0;c<16;++c)
                 {
                     opl_->ProgramChange(static_cast<uint8_t>(c),
