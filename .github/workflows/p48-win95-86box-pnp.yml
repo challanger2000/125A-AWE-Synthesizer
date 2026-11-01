@@ -1,7 +1,7 @@
-name: P56 verify original Creative SoundFont user-bank Apply on synthetic SF2
+name: P57 compare original Creative MIDI playback on GM0 vs user SoundFont bank 1
 on:
   push:
-    branches: [research/p56-win95-creative-apply-generated-sf2]
+    branches: [research/p57-original-creative-userbank-midi]
     paths:
       - tools/p40_qemu_win95_guest_scancode.py
       - tools/p48_86box_boot_win95.py
@@ -10,6 +10,7 @@ on:
       - tools/p45_86box_emu8k_trace.py
       - tools/p53_stage_creative_cp95.py
       - tools/p55_stage_generated_sf2.py
+      - tools/p57_stage_user_bank_midi.py
       - .github/workflows/p48-win95-86box-pnp.yml
   workflow_dispatch:
 permissions:
@@ -76,6 +77,11 @@ jobs:
           python tools/p55_stage_generated_sf2.py \
             --disk "$P48_ORIGINAL_IMAGE" \
             --report "$RUNNER_TEMP/p53/P55-generated-sf2-stage.json"
+      - name: Stage original MIDI control and user-bank select fixtures
+        run: |
+          python tools/p57_stage_user_bank_midi.py \
+            --disk "$P48_ORIGINAL_IMAGE" \
+            --report "$RUNNER_TEMP/p53/P57-userbank-midi-stage.json"
       - name: Complete P46 original Creative driver installation and private disk handoff
         shell: bash
         run: |
@@ -148,10 +154,11 @@ jobs:
           cp "$RUNNER_TEMP/p48/p49-midi-stage.json" p48-evidence/ 2>/dev/null || true
           cp "$RUNNER_TEMP/p53/P53-original-control-panel-stage.json" p48-evidence/ 2>/dev/null || true
           cp "$RUNNER_TEMP/p53/P55-generated-sf2-stage.json" p48-evidence/ 2>/dev/null || true
+          cp "$RUNNER_TEMP/p53/P57-userbank-midi-stage.json" p48-evidence/ 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: P56-Creative-Win95-Original-User-Bank-Apply-Evidence
+          name: P57-Original-Creative-MIDI-CC0-UserBank1-Comparison
           path: p48-evidence/*
           if-no-files-found: warn
           retention-days: 5
