@@ -35,3 +35,15 @@ Development browser; visual design/125A master logo to follow after actual UI ac
 - Real Studio One browser click/typing, scaling, project recall and final visual polish are separate acceptance gates.
 
 **Scope boundary:** The display is a functional dark prototype and deliberately does not counterfeit the authoritative 125A vector logo. Final Sound-Blaster-style faceplate and branding come after functional acceptance.
+## Verifizierter Entwicklungsstand — 2026-11-01
+
+- Autoritativer getesteter Quellstand: `4789270dd6bb73c083ef1739322abccb9c07bc7d` (PR #12, Korrektur PR #13).
+- Windows-VST3: [GitHub Actions #41268102138](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/41268102138), **SUCCESS**.
+- 15/15 CTests PASS, einschließlich Modelltests für SF2/IBK-Browser-Suche, Bankfilter und PREV/NEXT.
+- Steinberg VST3 Validator: **47/47 PASS**, im selben Windows-Lauf.
+- Nativer Engine-Safety-Lauf: [#41268102123](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/41268102123), **13/13 PASS**.
+- Artifact: `125A-AWE-Synthesizer-Windows-x64-DEV` (vollständiger `.vst3`-Ordner einschließlich Ressourcen).
+
+**NICHT AUSGEFÜHRT / NOT RUN:** tatsächliches Öffnen, Darstellung, Scrollen, Anklicken und Tippen des Browsers in einem laufenden Windows-VST3-Host; Host-Parameter- und Projekt-Recall-End-to-End; Studio-One-Praxistest; endgültiges Sound-Blaster-Retro-GUI mit autorisiertem 125A-Masterlogo.
+
+**P17-Backend und Windows-Build geprüft, GUI-Host-Abnahme noch offen. Kein FINAL/Gumroad-Paket.**
