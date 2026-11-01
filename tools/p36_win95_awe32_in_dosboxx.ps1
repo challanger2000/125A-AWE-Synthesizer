@@ -99,6 +99,19 @@ boot C:
     }
     Start-Sleep -Seconds 22
     Capture '022s'
+    # The community Win95 image has a stale NE2000 network device.
+    # Dismiss its warning using an actual key press to check that the
+    # guest remains interactive after the initial graphical boot.
+    try {
+        $wsh = New-Object -ComObject WScript.Shell
+        $activated=$wsh.AppActivate($proc.Id)
+        Write-Host "P36 DOSBox-X foreground activation: $activated"
+        if ($activated) {
+            Start-Sleep -Milliseconds 900
+            $wsh.SendKeys('{ENTER}')
+            Write-Host 'Sent ENTER to dismiss Windows 95 NE2000 warning'
+        }
+    } catch { Write-Warning "Unable to send guest key: $_" }
     Start-Sleep -Seconds 25
     Capture '047s'
     if (-not $proc.HasExited) { try { $proc.Kill();$proc.WaitForExit(5000)|Out-Null } catch {} }
