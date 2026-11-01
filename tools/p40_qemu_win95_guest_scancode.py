@@ -148,7 +148,15 @@ def main():
                 key("ret")
                 time.sleep(8)
                 shot("p41d_099_hardware_class_list")
-                report["p41d_hardware_class_reached"]="needs_visual_verification"
+                # P41e: VERIFIED that this screen is the actual hardware
+                # class list (not the prior detect/search radio choice).
+                # Press S while the list is focused and inspect the
+                # highlighted category before requesting Next.
+                key("s")
+                time.sleep(2)
+                shot("p41e_101_sound_class_candidate")
+                report["p41d_hardware_class_reached"]=True
+                report["p41e_sound_class_selected"]="needs_visual_verification"
                 report["p41d_original_awe32_driver_bound"]=False
             finally:
                 if proc.poll() is None:
