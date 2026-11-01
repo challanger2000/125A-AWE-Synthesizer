@@ -1,0 +1,31 @@
+name: P36 Windows95 OSR2 in DOSBox-X with AWE32 emulation
+on:
+  push:
+    branches: [research/p36-win95-dosboxx-awe32-boot]
+    paths:
+      - tools/p36_win95_awe32_in_dosboxx.ps1
+      - .github/workflows/p36-win95-dosboxx-awe32.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  boot-original-win95-with-emu8000:
+    runs-on: windows-2022
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Win95 OSR2 image boots under DOSBox-X with emulated AWE32
+        shell: pwsh
+        run: ./tools/p36_win95_awe32_in_dosboxx.ps1
+      - name: Publish diagnostics and screen snapshots only, never OS/ROM
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: P36-Win95-DOSBoxX-AWE32-boot-result
+          path: |
+            p36-output/P36-result.json
+            p36-output/dosboxx.stdout.txt
+            p36-output/dosboxx.stderr.txt
+            p36-output/display_*.png
+          if-no-files-found: warn
+          retention-days: 5
