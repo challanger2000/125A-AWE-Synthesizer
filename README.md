@@ -235,3 +235,33 @@ both hardware emulators, Yamaha rhythm PCM, 47/47 Steinberg validation,
 and hashes of the final packaged .IBK resources. Studio One manual
 first-load, changing hardware/program and save/reopen remains a separate
 owner test; never confuse Windows CI with DAW verification.
+
+### P15 follow-up: prompt FM program preview without stale release tails
+
+**Owner Studio One finding:** the historical MAUIFM bank does change the
+sound, but a newly selected program may not become recognizable for
+several seconds and only after repeated note presses. This is unacceptable.
+
+Root-cause candidate from source: `Opl3Midi::NoteOn` allocates all
+never-allocated physical FM voices before it reuses released voices.
+Long release envelopes from previous timbres accumulate and mask the
+new sound. `Opl3Midi::ProgramChange` previously merely updated the
+number without retiring any released old-program notes.
+
+**Correction:** on an actual program change on a given MIDI channel,
+retire the *released* voices of that channel, key them off, damp both
+OPL operators and mark those slots reusable. Active pressed or
+sustain-held voices and other channels are preserved; no extra sample
+loading, chip reinitialization or realtime heap allocation is involved.
+A subsequent note uses the newly selected program immediately, subject
+only to the existing chip/output latency.
+
+**Regression:** `125A_opl3_historical_factory` runs eight old-program
+note-on/off pairs on each independent FM backend, switches to Program
+048 in the **same** chip instance, verifies eight old allocated slots
+are retired and the very first next note produces different audible
+PCM. Additionally, held notes on the selected channel and other
+channels must not be interrupted. This directly covers the real
+failure mode missed by earlier tests which used fresh instances per
+program. Owner Studio One acceptance and click-free transitions
+remain **NOT RUN** until explicitly confirmed.
