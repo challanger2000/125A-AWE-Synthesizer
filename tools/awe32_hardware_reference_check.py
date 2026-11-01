@@ -26,7 +26,7 @@ SRC_SHA = "9ae2217b92af72f706c9631679cd43c3afff507f"
 FILES = {
     "menu": {
         "card": ("demos/mc2_menu_card.flac", "1ccc92765457cc940447bc9b8a2920a53f331763"),
-        "emu": ("demos/mc2_menu_awe32emu.flac", "2f08PLACEHOLDER"),
+        "emu": ("demos/mc2_menu_awe32emu.flac", "21fa0941601bc316d435735d9f35add6cda8a927"),
     },
     "intro": {
         "card": ("demos/mc2_intro_card.flac", "f1414f2c66bc1daf4b60b8ecc77b50998b16eab0"),
