@@ -29,7 +29,8 @@ assert "SMTG_ENABLE_VSTGUI_SUPPORT ON" in cmake
 assert "vstgui_support" in target
 # The SDK VSTGUI module initializer needs a Windows moduleHandle definition.
 # P14 initial CI failed LNK2019 when dllmain.cpp was absent.
-assert "${SDK_ROOT}/public.sdk/source/main/dllmain.cpp" in target
+assert '"${CMAKE_SOURCE_DIR}/external/vst3sdk/public.sdk/source/main/dllmain.cpp"' in target
+assert "${SDK_ROOT}/public.sdk/source/main/dllmain.cpp" not in target, "undefined SDK_ROOT would silently resolve to /public.sdk"
 assert "resource/awe_test_panel.uidesc" in target
 print("P14 STATIC PASS: editor resource, two live parameter tags, VST3 persistence mapping")
 print("NOT RUN: Windows VSTGUI attach, DAW interaction, bank playback, asset browse")
