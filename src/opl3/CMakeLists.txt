@@ -46,3 +46,10 @@ add_executable(awe32_cqm_backend_test "${PROJECT_SOURCE_DIR}/tests/cqm_backend_a
 target_link_libraries(awe32_cqm_backend_test PRIVATE awe32_opl3_midi)
 target_compile_features(awe32_cqm_backend_test PRIVATE cxx_std_23)
 add_test(NAME 125A_cqm_backend_audio COMMAND awe32_cqm_backend_test)
+
+# 125A-owned factory FM timbres: native PCM tests, no external instrument files.
+add_executable(awe32_opl3_builtin_bank_test "${PROJECT_SOURCE_DIR}/tests/opl3_built_in_bank.cpp")
+target_link_libraries(awe32_opl3_builtin_bank_test PRIVATE awe32_opl3_midi)
+target_compile_features(awe32_opl3_builtin_bank_test PRIVATE cxx_std_23)
+add_test(NAME 125A_opl3_builtin_bank COMMAND awe32_opl3_builtin_bank_test)
+
