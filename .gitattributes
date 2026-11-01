@@ -1,0 +1,4 @@
+# The authoritative 125A master SVG must survive Windows checkouts
+# byte-for-byte unchanged. Git for Windows core.autocrlf may otherwise
+# transform LF to CRLF, changing both visual-resource hash and package bytes.
+src/vst3/resource/125A_Logo_Master_FINAL.svg -text
