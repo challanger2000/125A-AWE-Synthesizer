@@ -131,25 +131,38 @@ def main():
                 key("ret")
                 time.sleep(8)
                 shot("p40_088_add_hardware_wizard")
-                # P41d: Verified screenshot p40_088 is NOT a hardware-class
-                # list: it is the wizard's YES/NO search choice.
-                # Initially YES (recommended) is selected. Shift+Tab puts
-                # focus on the radio group; Down selects NO, then Tab moves
-                # focus back to NEXT. Do not select Creative until MEDIA is
-                # actually visible in a screenshot.
-                key("shift-tab")
-                time.sleep(1)
+                # P42: Evidence from P41b screenshot proves the class list
+                # is already OPEN and FOCUSED at this exact checkpoint.
+                # It starts on CD-ROM controllers. Typing s moves to SCSI.
+                # The immediately following entry is Sound, video and game
+                # controllers. Never Shift+Tab here: P41c/P41d showed that
+                # this moves focus onto Cancel instead of the class list.
+                key("s")
+                time.sleep(2)
+                shot("p42_090_scsi_selected")
                 key("down")
-                time.sleep(1)
-                shot("p41d_090_search_no_selected")
-                key("tab")
-                time.sleep(1)
-                shot("p41d_091_next_focused")
+                time.sleep(2)
+                shot("p42_092_sound_video_game_controllers")
                 key("ret")
-                time.sleep(8)
-                shot("p41d_099_hardware_class_list")
-                report["p41d_hardware_class_reached"]="needs_visual_verification"
-                report["p41d_original_awe32_driver_bound"]=False
+                # The original Win95 model database may need time to build.
+                time.sleep(43)
+                shot("p42_135_media_manufacturer_model_page")
+                # Have Disk is only meaningful for Class=MEDIA selection.
+                key("alt-h")
+                time.sleep(3)
+                shot("p42_138_install_from_disk")
+                for ch in "c:\\awe32":
+                    key(symbols.get(ch,ch.lower()))
+                time.sleep(2)
+                shot("p42_140_original_creative_driver_path")
+                key("ret")
+                time.sleep(10)
+                shot("p42_150_creative_awe32_model_candidates")
+                # SAFETY: Observe the original Creative model chooser
+                # before selecting any actual model or driver installation.
+                # A workflow success means only screenshots were captured.
+                report["p42_creative_models_reached"]="needs_visual_verification"
+                report["p42_original_awe32_driver_bound"]=False
             finally:
                 if proc.poll() is None:
                     proc.terminate()
