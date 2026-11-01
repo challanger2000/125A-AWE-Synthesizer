@@ -197,3 +197,35 @@ Status: source contract only until new Windows VST3 build and owner
 Studio One tests. Verify the menu opens, shows `000`..`127`, selecting
 `001` changes the host Program parameter, and that playing a note
 changes timbre when a suitable multi-preset bank is actually loaded.
+
+## P15 DEV: built-in 125A FM presets (no external IBK needed)
+
+The plugin now creates an **independently authored 125A bank of 128
+distinct 2-operator YMF262-register patches** at activation and uses it for
+both Yamaha OPL3 and Creative CQM. The Program selector chooses among these
+register patches without a file. This is **not** a dump of Creative's original
+GM factory patch bank, and the names/numbers do not claim authentic Creative
+GM timbres. These are actual register-level FM sounds, not samples or simulated
+waveforms. A genuine user-provided melodic \`OPL3_IBK\` still replaces the
+internal bank if explicitly configured.
+
+Yamaha OPL3 additionally activates the genuine five-lane YMF262 percussion
+mode with 125A-authored register patches for GM MIDI channel 10. The five
+physical rhythm instruments are bass drum, snare, tom, cymbal and hi-hat;
+many GM percussion notes must share these voices. Creative CQM 0.9-beta
+percussion remains disabled because the actual emulation does not have verified
+rhythm PCM. A valid user \`OPL3_DRUM_IBK\` overrides Yamaha's built-in drum
+bank. An invalid explicitly requested bank retains the existing fail-closed
+behavior (no misleading fallback pretending that file was loaded).
+
+**EMU8000 assets remain different:** \`SF2\` is still user-supplied. The
+original **Creative EMU8000 sample ROM** is proprietary and is **not bundled**
+in the public repository or public Windows artifact. An authorized external
+ROM can continue to be configured with \`ROM\`. An internally authored OPL3
+register bank cannot replace the EMU8000 sampled waveform ROM.
+
+P15 native regression covers the 128 unique register records, separate
+OPL3/CQM PCM for different programs, Yamaha rhythm PCM and CQM rhythm exclusion.
+This is a development candidate pending a passing Windows CI and owner
+Studio One test. Existing VST3 controller IDs and V6 project-state serialization
+remain unchanged.
