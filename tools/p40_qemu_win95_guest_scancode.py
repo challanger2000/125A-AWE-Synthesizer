@@ -139,6 +139,29 @@ def main():
                 key("ret")
                 time.sleep(5)
                 shot("p40_095_vendor_selection")
+                # Windows95 builds the device driver database on first wizard
+                # invocation; 5 seconds was too short in the actual P40 run.
+                # Wait for genuine guest progress rather than inventing that
+                # our original Creative VxD was bound.
+                time.sleep(38)
+                shot("p41_133_after_database_build")
+                # The detected class chooser is keyboard navigable.
+                # Capture after each action: the next action's legitimacy
+                # depends on actual guest screen state.
+                key("s")
+                time.sleep(2)
+                shot("p41_135_first_s_category")
+                key("s")
+                time.sleep(2)
+                shot("p41_137_second_s_category")
+                key("ret")
+                time.sleep(9)
+                shot("p41_146_device_model_selection")
+                # Potential Creative manufacturer setup (Win95 'Have Disk')
+                # is an ALT+H accelerater only where that control exists.
+                key("alt-h")
+                time.sleep(4)
+                shot("p41_150_have_disk_candidate")
             finally:
                 if proc.poll() is None:
                     proc.terminate()
