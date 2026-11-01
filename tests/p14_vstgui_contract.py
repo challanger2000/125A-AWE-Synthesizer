@@ -32,7 +32,12 @@ assert 'for(int index=0;index<128;++index)' in factory
 assert '"%03d"' in factory and 'programs->appendString(label);' in factory
 assert 'parameters.addParameter(programs);' in factory
 assert 'parameters.addParameter(STR16("Program")' not in factory
-assert 'one test tone' in gui.read_text(encoding="utf-8")
+assert 'Factory FM: MAUIFM' in gui.read_text(encoding="utf-8")
+assert 'FactoryBank(L"MAUIFM.IBK")' in factory
+assert 'FactoryBank(L"DRUM.IBK")' in factory
+assert 'state_.ibkPath.empty()' in factory and 'state_.drumIbkPath.empty()' in factory
+assert "resource/MAUIFM.IBK resource/DRUM.IBK resource/IBK_License.txt" in target
+assert "tools/fetch_ibk_resources.py" in target
 assert "SMTG_ENABLE_VSTGUI_SUPPORT ON" in cmake
 assert "vstgui_support" in target
 # The SDK VSTGUI module initializer needs a Windows moduleHandle definition.
@@ -40,5 +45,5 @@ assert "vstgui_support" in target
 assert '"${CMAKE_SOURCE_DIR}/external/vst3sdk/public.sdk/source/main/dllmain.cpp"' in target
 assert "${SDK_ROOT}/public.sdk/source/main/dllmain.cpp" not in target, "undefined SDK_ROOT would silently resolve to /public.sdk"
 assert "resource/awe_test_panel.uidesc" in target
-print("P14 STATIC PASS: two control tags, 128 listed programs, VST3 recall mapping")
+print("P15 STATIC PASS: two control tags, 128 programs, bundled FM bank bindings")
 print("NOT RUN: Windows VSTGUI attach, DAW interaction, bank playback, asset browse")
