@@ -1,6 +1,6 @@
 # P16 – Preset- und Bankverwaltung (Backend)
 
-Status: Entwicklungsstand, Windows-CI noch nicht ausgewertet. Kein fertiger GUI-Browser.
+Status: P16-Backend Windows-CI BESTANDEN; GUI-Browser noch NICHT implementiert.
 
 ## Backend
 
@@ -25,13 +25,22 @@ Status: Entwicklungsstand, Windows-CI noch nicht ausgewertet. Kein fertiger GUI-
 
 | Vertrag | Nachweis | Status |
 | --- | --- | --- |
-| Originalnamen SF2/IBK + Banken 0,2,128 | 125A_p16_preset_catalog | CI AUSSTEHEND |
-| Fehlerhafte, doppelte, abgeschnittene Metadaten | 125A_p16_preset_catalog | CI AUSSTEHEND |
-| Echte Audioausgabe Bank 0/5/128 | 125A_sf2_audio_integration | CI AUSSTEHEND |
-| CC0-MIDI-Override | 125A_sf2_audio_integration | CI AUSSTEHEND |
-| V7, Altformate V1-V6, ungültige Banknummern | 125A_asset_state | CI AUSSTEHEND |
-| VST3, Validator | Windows Actions | CI AUSSTEHEND |
+| Originalnamen SF2/IBK + Banken 0,2,128 | 125A_p16_preset_catalog | PASS – Windows 2026-11-01 |
+| Fehlerhafte, doppelte, abgeschnittene Metadaten | 125A_p16_preset_catalog | PASS – Windows 2026-11-01 |
+| Echte Audioausgabe Bank 0/5/128 | 125A_sf2_audio_integration | PASS – Windows 2026-11-01 |
+| CC0-MIDI-Override | 125A_sf2_audio_integration | PASS – Windows 2026-11-01 |
+| V7, Altformate V1-V6, ungültige Banknummern | 125A_asset_state | PASS – Windows 2026-11-01 |
+| VST3, Validator | Windows Actions | PASS – Windows 2026-11-01 |
 | GUI-Suche, Browser, Controller-Host-End-to-End | nächster Schritt | NOT RUN |
 | Original-SF2 und Studio One Praxistest | spätere Abschlussprüfung | NOT RUN |
 
 Keine unlizenzierte Creative-ROM und keine privaten SF2 im GitHub-Repository.
+## Verifizierter Prüfstand
+
+- Geprüfter Quellcode: `a13133ed8509dfce02139d2a6d1c69e9cf426113` (P16 + Fix PR #10).
+- Windows VST3 Build und vollständiges CTest: [Actions #41266996258](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/41266996258) **SUCCESS, 15/15**.
+- Steinberg-Validator: **47/47 PASS** im selben Lauf.
+- Native Engine-Prüfung: [Actions #41266996267](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/41266996267) **SUCCESS, 13/13**.
+- VST3 Paket einschließlich MAUIFM.IBK und DRUM.IBK durch SHA-Prüfung bestätigt.
+- **NICHT geprüft:** fertiger Preset-Browser, GUI-Suche und Bankliste, VST3 Controller/Host-End-to-End mit Benutzerbedienung, DAW-Projekt-Recall in Studio One und echte Nutzer-SF2s. Für P17 sind diese Punkte explizite Testaufgaben.
+- Kein Gumroad-/FINAL-Release und kein erneuter Studio-One-Test angefordert.
