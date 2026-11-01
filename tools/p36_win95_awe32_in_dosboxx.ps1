@@ -65,6 +65,13 @@ hdma=5
 [emu8k]
 rompath=$romUnix
 memsize=8192
+[ne2000]
+ne2000=true
+nicbase=300
+nicirq=3
+backend=nothing
+[serial]
+serial2=disabled
 [fdc, primary]
 int13fakev86io=true
 [ide, primary]
