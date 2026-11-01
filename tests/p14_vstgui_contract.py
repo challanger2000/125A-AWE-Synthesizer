@@ -41,6 +41,11 @@ assert 'dbOnMouseDown' in browser and 'search_->setImmediateTextChange(true)' in
 assert 'HardwareDescription(engine_)' in browser
 assert 'PresetBrowserModel::Filter(' in browser
 assert 'PresetBrowserModel::Neighbor(' in browser
+# Actual Win32 EditorHost test exposed double callback on CTextButton::kKickStyle:
+# one click produced valueChanged(ON) and valueChanged(OFF).
+assert 'toggle_->setStyle(CTextButton::kOnOffStyle)' in browser
+assert 'SetExpanded(c->getValue()>0.5f)' in browser
+assert 'if(c->getValue()>0.5f)' in browser, "PREV/NEXT must ignore kick reset callback"
 assert 'FactoryBank(L"MAUIFM.IBK")' in factory
 assert 'FactoryBank(L"DRUM.IBK")' in factory
 assert 'state_.ibkPath.empty()' in factory and 'state_.drumIbkPath.empty()' in factory
