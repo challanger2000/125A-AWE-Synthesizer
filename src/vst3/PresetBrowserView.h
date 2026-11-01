@@ -20,7 +20,8 @@ class PresetBrowserView final : public VSTGUI::CViewContainer,
 public:
     PresetBrowserView(const VSTGUI::CRect& rect,
                       Steinberg::Vst::EditController* controller,
-                      const PresetCatalog& sf,const PresetCatalog& fm);
+                      const PresetCatalog& sf,const PresetCatalog& fm,
+                      const std::string& exactLogoPath);
     void onIdle() override;
     void valueChanged(VSTGUI::CControl* c) override;
     int32_t dbGetNumRows(VSTGUI::CDataBrowser*) override;

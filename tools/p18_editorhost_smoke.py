@@ -166,6 +166,18 @@ def different(before,after,region):
                 changed+=1
     return changed
 
+def red_logo_pixels(frame):
+    w,h,raw=frame
+    count=0
+    # Logo view occupies header x18..150 / y8..53. Pixel array is BGRA.
+    for y in range(round(8*h/612),round(54*h/612)):
+        for x in range(round(17*w/860),round(151*w/860)):
+            i=(y*w+x)*4
+            blue,green,red=raw[i],raw[i+1],raw[i+2]
+            if red>=125 and red>=green*2 and red>=blue*1.6:
+                count+=1
+    return count
+
 def click(hwnd,x,y):
     sx,sy=screen_pos(hwnd,x,y)
     if not u.SetForegroundWindow(hwnd):
@@ -268,6 +280,9 @@ def main():
             # Never equate all-black frames to a successful render.
             distinct = len(set(first[2][0::384]))
             check(distinct>3,"EditorHost screen produced non-flat pixels",results)
+            check(red_logo_pixels(first)>15,
+                  "original 125A master red A vector actually painted in editor",
+                  results)
             click(hwnd,730,79)  # hide in-editor browser
             closed=snap(hwnd,args.output/"02_browser_closed.bmp")
             check(different(first,closed,(24,230,825,561))>35,
