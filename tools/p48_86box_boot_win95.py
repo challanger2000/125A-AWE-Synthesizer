@@ -23,7 +23,7 @@ P49_KEYCODES = {
     **dict(zip("asdfghjkl", range(0x1e, 0x27))),
     **dict(zip("zxcvbnm", range(0x2c, 0x33))),
     **dict(zip("1234567890", list(range(0x02, 0x0c)))),
-    "\\": 0x2b, ".": 0x34, "-": 0x0c,
+    "\\": 0x2b, ".": 0x34, "-": 0x0c, "/": 0x35, " ": 0x39,
 }
 
 
@@ -147,9 +147,13 @@ hdd_01_speed = ramdisk
                 send(conn, "step 500")
                 p49_screenshot(conn, args.out, "p49-run-dialog.png", report)
                 fixture_path = "c:\\awe32\\p49-p0.mid"
-                p49_type_path(conn, fixture_path)
+                # Verified historical Windows 95 MPLAYER.EXE command-line
+                # switch: /play starts playback rather than opening stopped.
+                play_command = "c:\\windows\\mplayer.exe /play " + fixture_path
+                p49_type_path(conn, play_command)
                 p49_screenshot(conn, args.out, "p49-run-midi-path.png", report)
                 report["requested_midi_path"] = fixture_path
+                report["requested_midi_command"] = play_command
                 # Do not assert the MIDI is routed to AWE32 until Windows
                 # player UI and register/audio changes actually prove it.
                 baseline = 0
