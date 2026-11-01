@@ -131,6 +131,14 @@ def main():
                 key("ret")
                 time.sleep(8)
                 shot("p40_088_add_hardware_wizard")
+                # Original Windows95 hardware-type list is alphabetical.
+                # Select Sound, video and game controllers via "s".
+                key("s")
+                time.sleep(2)
+                shot("p40_090_sound_category")
+                key("ret")
+                time.sleep(5)
+                shot("p40_095_vendor_selection")
             finally:
                 if proc.poll() is None:
                     proc.terminate()
