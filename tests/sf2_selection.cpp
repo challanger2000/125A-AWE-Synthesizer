@@ -165,6 +165,69 @@ int main() {
         ok &= Check(saturating.Get(Gen::FineTune,-1)==32767,
             "SF2 additive overflow saturates instead of wrapping");
     }
+
+    // P59: a *synthetic metadata-only* regression for the four-layer/octave
+    // architecture observed in the user's SF2 bass. Neither any waveform,
+    // original bank file, nor the user's reference recording is included.
+    // The reference WAV contains D3 (MIDI50) and E3 (MIDI52), NOT the C3
+    // note played in previous automated single-note probes.
+    {
+        Bank octaveBass;
+        octaveBass.version = Version::Sf2;
+        octaveBass.samples.resize(1);
+        octaveBass.samples[0].name = "synthetic 2-cycle source";
+        octaveBass.samples[0].originalKey = 60;
+        octaveBass.samples[0].sampleRate = 44100;
+        octaveBass.samples[0].start = 100;
+        octaveBass.samples[0].end = 420;
+        octaveBass.samples[0].loopStart = 120;
+        octaveBass.samples[0].loopEnd = 400;
+        octaveBass.instruments.resize(1);
+        octaveBass.presets.resize(1);
+        auto& instrument = octaveBass.instruments[0];
+        instrument.global.Set(Gen::OverridingRootKey, 72);
+        instrument.global.Set(Gen::FineTune, -5);
+        instrument.global.Set(Gen::SampleModes, 1);
+        Zone sampleZone;
+        sampleZone.sampleId = 0;
+        instrument.zones.push_back(sampleZone);
+        auto& patch = octaveBass.presets[0];
+        patch.bank = 0; patch.program = 7;
+        for (int index = 0; index < 4; ++index) {
+            Zone layer;
+            layer.instrument = 0;
+            layer.keyLo = 0; layer.keyHi = 69;
+            layer.gen.Set(Gen::Pan, index < 2 ? -1000 : 1000);
+            layer.gen.Set(Gen::CoarseTune, (index == 1 || index == 2) ? 12 : 0);
+            layer.gen.Set(Gen::FineTune, index < 2 ? -1 : 0);
+            patch.zones.push_back(layer);
+        }
+        // Expected pitch offsets in cents relative to a 44.1kHz source,
+        // including four distinct detunings and two octave choices.
+        constexpr std::array<int, 4> d3Cents = {-2206, -1006, -1005, -2205};
+        constexpr std::array<int, 4> e3Cents = {-2006, -806, -805, -2005};
+        for (const int note : {50, 52}) {
+            const auto regions = octaveBass.Select(0, 7, note, 100);
+            const auto expectedPitch = note == 50 ? d3Cents : e3Cents;
+            bool match = regions.size() == 4;
+            if (match) {
+                for (size_t k = 0; k < regions.size(); ++k) {
+                    const auto voice = MakeVoiceParams(
+                        octaveBass, regions[k], note, 100, 0x200010, 0,
+                        Awe32::Driver::Win95);
+                    match &= voice.ipCents == expectedPitch[k];
+                    match &= voice.patchPan == (k < 2 ? 0 : 127);
+                    match &= regions[k].sample == &octaveBass.samples[0];
+                }
+            }
+            ok &= Check(match, note == 50
+                ? "P59: bass D3 correctly splits into two fine-detuned octave pairs"
+                : "P59: bass E3 preserves four layers and correct pitch intervals");
+        }
+        ok &= Check(octaveBass.Select(0,7,70,100).empty(),
+            "P59: original-style layer key range excludes MIDI note 70");
+    }
+
     auto result = bank.SelectInto(12, 7, 66, 90, buffer);
     ok &= Check(result.overflow && result.count == buffer.size(), "oversized preset reports overflow instead of silently truncating");
     for (size_t i = 0; i < result.count; ++i)
