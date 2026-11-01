@@ -9,3 +9,12 @@ Keep upstream snapshot verbatim as the compare/reference; implement independent 
 No ROMs, SoundFonts, Creative drivers, private data or original hardware assets in Git history or distributable artifacts.
 P0: audio callback allocations; global chip/ROM state; fatal()/exit(1); fixed 44.1 kHz chip clock and 980-frame block latency; state/ROM/host lifecycle and legal redistribution verification.
 Evidence labels required: PASS/FAIL/NOT RUN. Never call a build, host test, validator or release PASS without exact run evidence.
+
+Latest verified developer milestone (2026-11-01): **P19 Windows dev GUI**, source
+`198a54379dbd95b9cf9090693048201df9e39791` from branch
+`develop/v0.1.0-upstream-audit`. VST3 Actions #41271495551 SUCCESS,
+16/16 CTests, 47/47 Validator, actual Steinberg EditorHost GUI actions and
+unchanged original 125A SVG resource SHA PASS. Full evidence in
+`docs/P19-SOUND-BLASTER-FACEPLATE.md`. NOT FINAL, no Gumroad release;
+Studio One project recall and owner GUI approval remain NOT RUN. Preserve
+original 125A master blob `bd398ffa3b728b1a847bb519fad8168222bccb48`.
