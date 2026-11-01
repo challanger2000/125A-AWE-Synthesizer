@@ -176,6 +176,16 @@ def main():
                 key("ret")
                 time.sleep(8)
                 shot("p41f_121_creative_media_model")
+                # P41h verified from P41g screenshot: Original Creative
+                # media-INF is accepted and Creative Labs + its AWE32
+                # compatible model appear in the actual Windows95 page.
+                # Advance to device-install confirmation and inspect.
+                key("ret")
+                time.sleep(7)
+                shot("p41h_128_install_confirmation")
+                key("ret")
+                time.sleep(12)
+                shot("p41h_141_after_install_confirm")
                 report["p41d_hardware_class_reached"]=True
                 report["p41e_sound_class_selected"]="verify p41g_101 screenshot"
                 report["p41f_awe32_device_binding"]="unverified"
