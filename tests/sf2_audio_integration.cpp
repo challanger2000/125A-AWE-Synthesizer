@@ -32,7 +32,7 @@ void list(Bytes& b, const char* listType, const Bytes& contents) {
     p.insert(p.end(), contents.begin(), contents.end());
     chunk(b, "LIST", p);
 }
-Bytes makeBank(size_t sampleWords) {
+Bytes makeBank(size_t sampleWords,bool multipleBanks=false) {
     Bytes info, ifil, inam, sdta, pdta, smpl;
     u16(ifil,2);u16(ifil,1);
     chunk(info,"ifil",ifil);
@@ -52,11 +52,25 @@ Bytes makeBank(size_t sampleWords) {
     Bytes phdr,pbag,pgen,inst,ibag,igen,shdr;
     name20(phdr,"125A Sine"); u16(phdr,0);u16(phdr,0);u16(phdr,0);
     u32(phdr,0);u32(phdr,0);u32(phdr,0);
-    name20(phdr,"EOP"); u16(phdr,0);u16(phdr,0);u16(phdr,1);
+    if(multipleBanks) {
+        name20(phdr,"125A High"); u16(phdr,0);u16(phdr,5);u16(phdr,1);
+        u32(phdr,0);u32(phdr,0);u32(phdr,0);
+        name20(phdr,"125A Drum"); u16(phdr,0);u16(phdr,128);u16(phdr,2);
+        u32(phdr,0);u32(phdr,0);u32(phdr,0);
+    }
+    name20(phdr,"EOP"); u16(phdr,0);u16(phdr,0);
+    u16(phdr,multipleBanks?3:1);
     u32(phdr,0);u32(phdr,0);u32(phdr,0);
 
     u16(pbag,0);u16(pbag,0);u16(pbag,1);u16(pbag,0);
+    if(multipleBanks) {
+        u16(pbag,3);u16(pbag,0);u16(pbag,5);u16(pbag,0);
+    }
     u16(pgen,41);u16(pgen,0); // Instrument 0
+    if(multipleBanks) {
+        u16(pgen,41);u16(pgen,0);u16(pgen,51);u16(pgen,12); // +12 semitones
+        u16(pgen,41);u16(pgen,0);u16(pgen,51);u16(pgen,24); // +24 semitones
+    }
 
     name20(inst,"125A Wave");u16(inst,0);
     name20(inst,"EOI");u16(inst,1);
@@ -106,14 +120,16 @@ int main() {
     namespace fs=std::filesystem;
     const fs::path directory=fs::temp_directory_path();
     const fs::path sf=directory/"125A_synthetic_sf2_audio.sf2";
+    const fs::path multi=directory/"125A_synthetic_sf2_banks.sf2";
     const fs::path huge=directory/"125A_synthetic_sf2_overflow.sf2";
     const fs::path large=directory/"125A_synthetic_sf2_8mb_plus.sf2";
     const fs::path rom=directory/"125A_synthetic_sf2_audio.raw";
     struct Cleanup {
-        fs::path a,b,c,d;
-        ~Cleanup(){std::error_code ec;fs::remove(a,ec);fs::remove(b,ec);fs::remove(c,ec);fs::remove(d,ec);}
-    } cleanup{sf,huge,rom,large};
+        fs::path a,b,c,d,e;
+        ~Cleanup(){std::error_code ec;fs::remove(a,ec);fs::remove(b,ec);fs::remove(c,ec);fs::remove(d,ec);fs::remove(e,ec);}
+    } cleanup{sf,huge,rom,large,multi};
     if (!writeFile(sf,makeBank(2048)) ||
+        !writeFile(multi,makeBank(2048,true)) ||
         !writeFile(huge,makeBank(300000)) ||
         !writeFile(large,makeBank(4'300'000)) ||
         !writeFile(rom,Bytes(1048576,0)))return 2;
@@ -137,6 +153,37 @@ int main() {
                     "missing SF2 is rejected") &&
               check(synth.BankCount()==1 && synth.Core().DramData()[reserve+64]==saved,
                     "failed load preserves prior SF2 and DRAM");
+    }
+    {
+        // End-to-end bank routing. Each SF2 bank has an independent pitch
+        // generator, so actual rendered PCM must change, not just a field.
+        const auto renderForBank=[&](uint16_t bank,bool useMidiCC0) {
+            Synth synth(44100);
+            synth.Core().SetDriver(Awe32::Driver::Win95);
+            std::string err;
+            if(!synth.LoadBank(multi.string(),err))return std::vector<int16_t>{};
+            synth.SelectBrowserBank(bank);
+            if(useMidiCC0)synth.ControlChange(0,0,0);
+            synth.ProgramChange(0,0);
+            synth.NoteOn(0,69,127);
+            std::vector<int16_t> pcm(8192);
+            synth.RenderBlock(pcm.data(),4096);
+            return pcm;
+        };
+        const auto bank0=renderForBank(0,false);
+        const auto bank5=renderForBank(5,false);
+        const auto bank128=renderForBank(128,false);
+        const auto midiOverride=renderForBank(5,true);
+        const auto audible=[](const auto& pcm) {
+            return std::any_of(pcm.begin(),pcm.end(),
+                              [](int16_t x){return x!=0;});
+        };
+        ok &= check(bank0.size()==8192&&bank5.size()==8192&&
+                    bank128.size()==8192&&audible(bank0)&&audible(bank5)&&
+                    audible(bank128)&&bank0!=bank5&&bank5!=bank128,
+                    "actual EMU8000 audio differs for SF2 banks 0, 5 and drum 128");
+        ok &= check(midiOverride==bank0,
+                    "MIDI CC0 explicitly overrides the browser-selected SF2 bank");
     }
     {
         Synth synth(48000);
