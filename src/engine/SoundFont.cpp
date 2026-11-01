@@ -1137,10 +1137,14 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
     };
     auto sustainReg = [&](int op) -> int
     {
-        // A missing generator means sustain 0 (decay to silence), not 0x7F.
-        // Measured in the voice block at +0x4A (DCYSUSV) and +0x3A (DCYSUS)
-        // on all 242 notes; for the piano decaying is right.
-        if (!g.Has(op)) return 0;
+        // SF1 (SBK) and SF2 have *different* missing sustain defaults.
+        // Verified legacy SBAWE32.MDI/SBAWE.VXD behavior: an absent SF1
+        // sustain generator maps to register 0 (decay to silence).
+        // In SoundFont 2.04, an absent sustainVolEnv/sustainModEnv generator
+        // has value ZERO ATTENUATION (full level), and the EMU8000 register
+        // must therefore be 0x7F. A shared default of zero made otherwise
+        // valid SF2 basses, pads and organs decay to silence immediately.
+        if (!g.Has(op)) return sf1 ? 0 : 0x7F;
         // SF1: the sustain level in whole decibels above silence, the
         // register has steps of 0.75 dB - so the ratio is 4/3, not 1:1.
         //
@@ -1160,9 +1164,15 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
         // in the bank and the driver wrote 0x7F, while we sent 0x63
         // (= 99 raw).
         if (sf1) return std::clamp<int>(g.value[op] * 4 / 3, 0, 0x7F);
-        // SF2: centibels of attenuation, 0 = full level
+        // SF2 has TWO distinct sustain units:
+        //   sustainVolEnv (37): centibels attenuation from full volume.
+        //   sustainModEnv (29): 0..1000 permille attenuation from modulation
+        //                       envelope peak. This is *not* centibels.
+        if (op == Gen::SustainModEnv)
+            return std::clamp(127 - static_cast<int>(std::lround(
+                std::clamp<int>(g.value[op],0,1000) * 127.0 / 1000.0)),0,127);
         return std::clamp(127 - static_cast<int>(std::lround(
-            g.value[op] / 10.0 / kSustainDbPerStep)), 0, 127);
+            std::max<int>(g.value[op],0) / 10.0 / kSustainDbPerStep)), 0, 127);
     };
 
     // Dependence of the envelope on the note number. Transcribed from
