@@ -7,7 +7,7 @@ MASTER_BLOB="bd398ffa3b728b1a847bb519fad8168222bccb48"
 def verify(path):
     p=Path(path)
     data=p.read_bytes()
-    sha=hashlib.sha1(b"blob "+str(len(data)).encode()+b"\\0"+data).hexdigest()
+    sha=hashlib.sha1(b"blob "+str(len(data)).encode()+b"\0"+data).hexdigest()
     if sha!=MASTER_BLOB:
         raise SystemExit(f"FAIL: 125A branding resource was altered: {p} ({sha})")
     if data.count(b"<path ")!=30:
