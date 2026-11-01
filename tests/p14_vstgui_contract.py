@@ -22,11 +22,12 @@ assert not any(node.attrib.get("control-tag") == "Program"
 factory = (root / "src/vst3/Factory.cpp").read_text(encoding="utf-8")
 cmake = (root / "CMakeLists.txt").read_text(encoding="utf-8")
 target = (root / "src/vst3/CMakeLists.txt").read_text(encoding="utf-8")
+browser = (root / "src/vst3/PresetBrowserView.cpp").read_text(encoding="utf-8")
 assert 'new VSTGUI::VST3Editor(this,"view","awe_test_panel.uidesc")' in factory
 assert 'editor->setDelegate(this)' in factory
 assert 'new PresetBrowserView({0,0,860,612},this,sfCatalog_,fmCatalog_,' in factory
 assert 'FactoryBank(L"125A_Logo_Master_FINAL.svg")' in factory
-assert 'MasterLogoView({18,8,150,53},exactLogoPath)' in browser or        'new MasterLogoView({18,8,150,53},exactLogoPath)' in browser
+assert 'new MasterLogoView({18,8,150,53},exactLogoPath)' in browser
 assert 'kPathFilledEvenOdd' in (root / "src/vst3/MasterLogoView.cpp").read_text(encoding="utf-8")
 assert (root / "src/vst3/resource/125A_Logo_Master_FINAL.svg").is_file()
 assert "resource/125A_Logo_Master_FINAL.svg" in target
@@ -39,7 +40,7 @@ assert 'for(int index=0;index<128;++index)' in factory
 assert '"%03d"' in factory and 'programs->appendString(label);' in factory
 assert 'parameters.addParameter(programs);' in factory
 assert 'parameters.addParameter(STR16("Program")' not in factory
-browser = (root / "src/vst3/PresetBrowserView.cpp").read_text(encoding="utf-8")
+
 assert 'kBank=1002' in browser and 'kProgram=1000' in browser and 'kEngine=1001' in browser
 assert 'getParamNormalized(kBank)' in browser
 assert 'dbOnMouseDown' in browser and 'search_->setImmediateTextChange(true)' in browser
