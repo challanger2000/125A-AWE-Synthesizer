@@ -53,7 +53,7 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     : CViewContainer(rect),controller_(controller),sf_(sf),fm_(fm) {
     setBackgroundColor(kBack);
     addView(new HardwareFaceplate({0,0,860,612}));
-    addView(new MasterLogoView({18,8,150,53},exactLogoPath));
+    addView(new MasterLogoView({18,11,150,50},exactLogoPath));
     title_=MakeLabel({167,15,827,49},"AWE SYNTHESIZER   /   SOUND BLASTER SERIES");
     MakeLabel({24,62,155,91},"HARDWARE",true);
     hardware_=new COptionMenu({176,61,565,95},this,kHardware);

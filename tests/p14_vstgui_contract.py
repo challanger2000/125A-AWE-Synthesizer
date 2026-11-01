@@ -27,7 +27,7 @@ assert 'new VSTGUI::VST3Editor(this,"view","awe_test_panel.uidesc")' in factory
 assert 'editor->setDelegate(this)' in factory
 assert 'new PresetBrowserView({0,0,860,612},this,sfCatalog_,fmCatalog_,' in factory
 assert 'FactoryBank(L"125A_Logo_Master_FINAL.svg")' in factory
-assert 'new MasterLogoView({18,8,150,53},exactLogoPath)' in browser
+assert 'new MasterLogoView({18,11,150,50},exactLogoPath)' in browser
 assert 'kPathFilledEvenOdd' in (root / "src/vst3/MasterLogoView.cpp").read_text(encoding="utf-8")
 assert (root / "src/vst3/resource/125A_Logo_Master_FINAL.svg").is_file()
 assert "resource/125A_Logo_Master_FINAL.svg" in target
