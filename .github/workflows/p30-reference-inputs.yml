@@ -1,0 +1,30 @@
+name: P30 Creative reference inputs — research only
+on:
+  push:
+    branches: [research/p30-creative-dos-awe32-runtime]
+    paths:
+      - .github/workflows/p30-reference-inputs.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-research-inputs:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Retrieve only the original public Creative 1996 DOS reference test files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p original
+          url=https://raw.githubusercontent.com/qb40/sound-blaster-awe32/master/DOS/DEMO
+          curl --fail --silent --show-error --location "$url/DEMO.EXE" -o original/DEMO.EXE
+          curl --fail --silent --show-error --location "$url/SYNTHGM.SF2" -o original/SYNTHGM.SF2
+          [[ "$(git hash-object original/DEMO.EXE)" == "e10b8705c6a46444a998c4f6aa74a1cda2081506" ]]
+          [[ "$(git hash-object original/SYNTHGM.SF2)" == "205a540e5545945b58ab136ef5423327e2066d2c" ]]
+          echo "Original Creative files are exclusively research reference; do not integrate them into the VST3 or distribute."
+      - name: Store temporarily for isolated, non-release research
+        uses: actions/upload-artifact@v4
+        with:
+          name: P30-Creative-Original-Reference-Inputs
+          path: original/
+          retention-days: 1
