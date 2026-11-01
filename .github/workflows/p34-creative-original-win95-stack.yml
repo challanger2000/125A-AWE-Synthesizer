@@ -4,6 +4,7 @@ on:
     branches: [research/p34-win95-original-driver-stack-audit]
     paths:
       - tools/p34_creative_win95_binary_audit.py
+      - tools/p34_validate_win95_sf2_noteon.py
       - .github/workflows/p34-creative-original-win95-stack.yml
   workflow_dispatch:
 permissions:
