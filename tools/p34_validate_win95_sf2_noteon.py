@@ -118,6 +118,7 @@ def synthetic_trace(voices, in_ram):
             (0xE22,(0<<5)|i),(0xA20,address&0xFFFF),
             (0xA22,(address>>16)&255),
             (0xE22,(0<<5)|i),(0xE20,0xE100+i),
+            (0xE22,(1<<5)|i),(0xE20,0xFF10),
             (0xE22,(4<<5)|i),(0xA22,0x7F00),
             (0xA20,0x8000),
             (0xE22,(5<<5)|i),(0xA20,0x7F00),
