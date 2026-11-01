@@ -1,7 +1,7 @@
-name: P49 MIDI note route through original Win95 AWE32 Creative driver
+name: P49c program 7 MIDI via original Win95 Creative AWE32 driver
 on:
   push:
-    branches: [research/p49-win95-midi-note-creative-driver]
+    branches: [research/p49c-win95-midi-program7]
     paths:
       - tools/p40_qemu_win95_guest_scancode.py
       - tools/p48_86box_boot_win95.py
@@ -125,7 +125,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: P49-Original-Creative-MIDI-Win95-Screens-and-Text
+          name: P49c-Original-Creative-MIDI-Program7-Text
           path: p48-evidence/*
           if-no-files-found: warn
           retention-days: 5
