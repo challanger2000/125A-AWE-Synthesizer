@@ -136,7 +136,7 @@ def install(image:Path):
                 if not fs.exists("AWE32/"+path.upper()):
                     raise RuntimeError(f"Guest driver file not written: {path}")
             report["vendor_files_staged"]=len(FILES)
-            report["guest_startup_command"]=entry.decode("ascii")
+            report["guest_startup_command"]=None
     return report
 def main():
     parser=argparse.ArgumentParser()
