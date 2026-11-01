@@ -69,7 +69,7 @@ hdd_01_speed = ramdisk
                     raise AssertionError("Wrong emulated card in P48 VM")
                 if not info.get("hdd"):
                     raise AssertionError("Win95 IDE disk was not mounted")
-                for elapsed in (15000, 30000, 60000):
+                for elapsed in (15000, 30000, 5000, 15000, 30000, 30000):
                     step = send(conn, f"step {elapsed}")
                     report["last_emulated_ms"] = step.get("ms")
                     name = f"win95-{step.get('ms', 0):08d}.png"
@@ -88,6 +88,15 @@ hdd_01_speed = ramdisk
                         send(conn, "key down 0x3b")
                         send(conn, "key up 0x3b")
                         report["f1_cmos_continue_pressed"] = True
+                    if elapsed == 30000:
+                        # P48 run #41348535559: Windows 95 reaches a
+                        # centered "Windows Networking" warning about the
+                        # mismatched NE2000 device. "OK" has keyboard
+                        # focus. Press Enter ONCE, after saving screenshot,
+                        # without changing any actual guest driver state.
+                        send(conn, "key down 0x1c")
+                        send(conn, "key up 0x1c")
+                        report["ne2000_warning_ok_pressed"] = True
                 try:
                     status = send(conn, "status")
                     report["end_status"] = {
@@ -102,6 +111,10 @@ hdd_01_speed = ramdisk
                     lines = trace.read_text(encoding="utf8", errors="replace").splitlines()
                     report["raw_emu8000_write_count"] = max(0, len(lines) - 1)
                     report["raw_emu8000_preview"] = lines[1:4]
+                    report["raw_emu8000_pointer_count"] = sum(
+                        x.endswith(",pointer") for x in lines[1:])
+                    report["raw_emu8000_data_count"] = sum(
+                        x.endswith(",data") for x in lines[1:])
                 try:
                     send(conn, "quit")
                 except (OSError, RuntimeError):
