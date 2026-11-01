@@ -27,3 +27,16 @@ The researcher must review and substitute the instrumented copy when building a 
 5. Parse and compare the raw register sequence to P26, then *separately* investigate audio fidelity. A 86Box-versus-P26 match is **not** physical AWE32-versus-P26 verification.
 
 **Current status:** P43 selected the correct original Creative AWE32 synthesizer and reached the Finish page. P44 performs its controlled confirmation. No genuine register comparison has yet been obtained.
+
+## Exact 86Box AWE32 PnP target (verified upstream source)
+
+The correct target for the original `CTL0021` synthesis logical-device ID is the **AWE32 PnP** family, not an assumed generic/non-PnP Sound Blaster. The Linux ALSA ISA PnP device table maps AWE32 family cards to a `CTL0021` wavetable logical device.
+
+In current 86Box `src/sound/snd_sb.c`, the exact device internal name is `sbawe32_pnp`. It requires **both** of the external 86Box ROM assets:
+
+- `roms/sound/creative/awe32.raw` — mandatory EMU8000 Wave ROM (`EMU8K_ROM_PATH` in `snd_emu8k.h`).
+- `roms/sound/creative/CT3980 PnP.BIN` — mandatory AWE32 PnP ID ROM (`PNP_ROM_SB_AWE32_PNP` in `snd_sb.c`).
+
+The relevant upstream availability guard is `sb_awe32_pnp_available() == rom_present(EMU8K_ROM_PATH) && rom_present(PNP_ROM_SB_AWE32_PNP)`. These ROM images are not bundled in the 125A repo or any CI artifact. Runtime matching of the actual PnP subdevice ID still needs confirmation in the emulator.
+
+Sources: [86Box AWE32 hardware implementation](https://github.com/86Box/86Box/blob/master/src/sound/snd_sb.c), [86Box EMU8000 ROM requirement](https://github.com/86Box/86Box/blob/master/src/include/86box/snd_emu8k.h), [Linux ALSA AWE32 PnP ID mapping](https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux/+/master/sound/isa/sb/sb16.c).
