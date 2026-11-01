@@ -34,3 +34,27 @@ Both runs provide screenshot evidence. The NE2000 warning comes from the guest i
 5. Only an observed register difference can justify altering the stable P26 sound.
 
 **Status: BOOT/VM BLOCKER SOLVED. Original Creative VxD test NOT YET RUN.**
+
+
+## P36 follow-up: actual EMU8000 detection confirmed
+
+After configuring an isolated emulated NE2000 adapter with `backend=nothing`,
+Windows 95 OSR2 continues to boot, and the Windows guest now displays its
+DHCP client (no address is available, because the test has no network).
+Importantly, DOSBox-X emits the **actual hardware setup log**:
+
+```text
+AWE32: EMU8000 on port 620h RAM 8192 KB
+```
+
+CI run: https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/41290110587
+
+This positively verifies the emulator exposes EMU8000 register hardware
+on the expected Creative base port and with 8 MiB RAM while Windows 95
+starts. It **does not** mean the original Creative `SBAWE.VXD` is installed
+or that the Win95 device manager successfully bound a driver.
+The DHCP popup is a separate network warning; no host internet access
+was enabled.
+
+The guest image, ROM and SoundFont were never included in CI artifacts
+or the source repository.
