@@ -50,6 +50,9 @@ try {
 [sdl]
 fullscreen=false
 output=surface
+autolock=true
+mouse_emulation=always
+
 [dosbox]
 title=125A P36 Win95 AWE32
 machine=svga_s3
