@@ -10,10 +10,12 @@
 #include "AssetConfig.h"
 #include "Opl3Midi.h"
 #include "public.sdk/source/vst/vstparameters.h"
+#include "vstgui/plugin-bindings/vst3editor.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <memory>
 #include <string>
 #include <vector>
@@ -307,6 +309,11 @@ public:
         parameters.addParameter(engine);
         return kResultOk;
     }
+    IPlugView* PLUGIN_API createView(FIDString name) override {
+        if(name && std::strcmp(name,ViewType::kEditor)==0)
+            return new VSTGUI::VST3Editor(this,"view","awe_test_panel.uidesc");
+        return nullptr;
+    }
     tresult PLUGIN_API setComponentState(IBStream* stream) override {
         if(!stream)return kInvalidArgument;
         const auto read=[&](void* buffer,size_t n) {
@@ -319,7 +326,8 @@ public:
         if(!AssetState::Read(read,model))return kResultFalse;
         if(setParamNormalized(kProgramID,static_cast<double>(model.program)/127.)!=kResultOk)
             return kResultFalse;
-        return setParamNormalized(kEngineID,static_cast<double>(model.engine));
+        // VST3 StringListParameter has three discrete entries: index / (3-1).
+        return setParamNormalized(kEngineID,static_cast<double>(model.engine)/2.);
     }
 };
 }
