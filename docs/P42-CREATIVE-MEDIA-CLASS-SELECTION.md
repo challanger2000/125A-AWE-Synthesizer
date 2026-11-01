@@ -22,3 +22,14 @@
 - Future proof must establish the original `SBAWE.VXD` device binding against a real or accurately emulated AWE32 and capture genuine MIDI note-on register writes for the user's two bass patches, with patch-specific SF2 behavior and settings recorded.
 - No assertion of 1:1 AWE32 audio is justified by the current screen-navigation checks.
 
+
+## P42 run result — verified
+
+- GitHub Actions run [41338899532](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/41338899532) completed successfully.
+- Screenshot `p42_092_sound_video_game_controllers.png` visibly selects the **Sound, video and game controllers** class. This conclusively fixes the P41 keyboard-focus/class-selection problem.
+- Screenshot `p42_150_creative_awe32_model_candidates.png` visibly shows original Creative manufacturer driver candidates, including **Creative Advanced Wave Effects Synthesis for AWE 32**, with the first **Creative 3D Stereo Enhancement Technology** entry initially highlighted.
+- **No driver model was yet selected or installed in P42.** Original `SBAWE.VXD` binding, emulated AWE32 device presence, note-on registers, and 1:1 audio remain unproven.
+
+## Next controlled step
+
+Select the second Creative model in the verified `Select Device` list (one `Down` key), verify the highlighted name, and confirm that model once. Screenshot the resulting original Windows 95 dialog; do not blindly skip further installation prompts.
