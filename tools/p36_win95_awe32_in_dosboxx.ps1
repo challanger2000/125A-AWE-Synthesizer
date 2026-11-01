@@ -164,15 +164,19 @@ public static class P39Input {
     }
     Start-Sleep -Seconds 24
     Capture '024s'
-    GuestKey('{ENTER}')
-    Start-Sleep -Seconds 2
-    Capture '026s'
-    GuestKey('%n')
+    # DHCP dialog in the actual 640x480 guest window sits at
+    # host screenshot x~320..700 y~410..520; the NO button center
+    # is window-relative x=377,y=341. SDL receives mouse events
+    # even when legacy SendKeys bypass the emulated keyboard scanner.
+    GuestClick 376 343
     Start-Sleep -Seconds 4
-    Capture '031s'
-    GuestKey('{ENTER}')
+    Capture '028s_dhcp_dismiss'
+    GuestClick 376 343
     Start-Sleep -Seconds 3
-    Capture '034s'
+    Capture '031s_after_dialog'
+    # At this point, if the OS desktop is interactive, click the
+    # guest Start button and use its own Run menu.
+
     # DOSBox-X title/menu consumes 44 px above the 640x480 guest.
     $wnd=ForegroundGuest
     $rect=New-Object P39Input+Rect
