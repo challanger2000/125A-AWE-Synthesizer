@@ -18,3 +18,16 @@ unchanged original 125A SVG resource SHA PASS. Full evidence in
 `docs/P19-SOUND-BLASTER-FACEPLATE.md`. NOT FINAL, no Gumroad release;
 Studio One project recall and owner GUI approval remain NOT RUN. Preserve
 original 125A master blob `bd398ffa3b728b1a847bb519fad8168222bccb48`.
+
+Current verified developer checkpoint P20 (2026-11-01): exact tested production source
+`3ec81c27eea46dea751516327c959500974bd913` on
+`develop/v0.1.0-upstream-audit`; Windows VST3 Action #41272929443 SUCCESS,
+16/16 CTests, Steinberg 47/47, real EditorHost Win32 GUI PASS; Engine Safety
+#41272929458 SUCCESS 14/14. P20 prevents an explicitly selected SF2 that
+fails to load from silently playing a sine fallback under real preset names;
+controller receives/GUI shows processor load status via VST3 message.
+The reported TX81Z Lately Bass sound is NOT independently verified: actual
+user SF2, host-received error status and Studio One acoustic parity NOT RUN.
+Do NOT merge P20 sustain-envelope proposal from separate unmerged branch
+`fix/p20-sf2-envelope-defaults` as a diagnosis for this symptom without
+independent evidence. See `docs/P20-SF2-LOAD-DIAGNOSIS.md`. No FINAL release.

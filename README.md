@@ -305,3 +305,16 @@ Gumroad/release design until its owner reviews the look.
 — 16/16 CTests, 47/47 VST3 Validator, visual logo check, search, bank and
 hardware clicks all PASS. See [P19 evidence](docs/P19-SOUND-BLASTER-FACEPLATE.md).
 Studio One project recall and owner visual approval remain NOT RUN.
+
+## P20 — no more silent SoundFont substitution (Windows validated)
+
+The controller can read a SF2's real preset *names* even if the processor
+cannot load the full sampled instrument. Previously such a failure went
+unreported and EMU8000 played a synthetic substitute sine note, misleading
+users into thinking that the named SF2 preset sounded like a bland organ.
+P20 now exposes the actual processor loading result in the native editor and
+prevents substitute notes when an explicitly configured SF2 fails to load.
+Windows VST3 [#41272929443](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/41272929443)
+passed 16/16 CTests, Steinberg 47/47 and EditorHost GUI automation; see
+[P20 diagnosis](docs/P20-SF2-LOAD-DIAGNOSIS.md).
+The exact user's SF2 and claimed TX81Z timbre are NOT YET reproduced or verified.
