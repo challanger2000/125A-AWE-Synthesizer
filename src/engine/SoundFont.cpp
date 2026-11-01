@@ -819,7 +819,47 @@ static void SelectRegionsImpl(const Bank& self, int bankNum, int program, int ke
             // The attenuation is an exception, handled separately above,
             // because the driver adds it only in register units.
             if (self.version == Version::Sf2)
+            {
+                // P26: Preset generators are ADDITIVE offsets from the
+                // instrument's *effective* values, including SF2 defaults.
+                // A missing instrument generator must not silently turn a
+                // preset offset into an absolute value. For example, a
+                // preset delayVolEnv of -3986 against an absent instrument
+                // delay must start from the default -12000, not from zero.
+                // The old behavior inserted an audible ~100 ms delay into
+                // the user's Grungy Ramp and TX81Z Lately Bass patches.
+                constexpr int timeOps[] = {
+                    Gen::DelayModLFO, Gen::DelayVibLFO,
+                    Gen::DelayModEnv, Gen::AttackModEnv,
+                    Gen::HoldModEnv, Gen::DecayModEnv,
+                    Gen::ReleaseModEnv, Gen::DelayVolEnv,
+                    Gen::AttackVolEnv, Gen::HoldVolEnv,
+                    Gen::DecayVolEnv, Gen::ReleaseVolEnv
+                };
+                for (const int op : timeOps)
+                    if (presetGen.Has(op) && !r.gen.Has(op))
+                        r.gen.Set(op, -12000);
+                if (presetGen.Has(Gen::InitialFilterFc) &&
+                    !r.gen.Has(Gen::InitialFilterFc))
+                    r.gen.Set(Gen::InitialFilterFc, 13500);
+                if (presetGen.Has(Gen::ScaleTuning) &&
+                    !r.gen.Has(Gen::ScaleTuning))
+                    r.gen.Set(Gen::ScaleTuning, 100);
                 r.gen.AddFrom(presetGen);
+                // Saturate to the SF2 generator's legal timecents interval
+                // after offsets are applied; a preset cannot push the
+                // effective generator below the -12000 time minimum.
+                for (const int op : timeOps)
+                    if (presetGen.Has(op))
+                        r.gen.Set(op, static_cast<int16_t>(
+                            std::clamp<int>(r.gen.Get(op, -12000), -12000, 8000)));
+                if (presetGen.Has(Gen::InitialFilterFc))
+                    r.gen.Set(Gen::InitialFilterFc, static_cast<int16_t>(
+                        std::clamp<int>(r.gen.Get(Gen::InitialFilterFc, 13500), 1500, 13500)));
+                if (presetGen.Has(Gen::ScaleTuning))
+                    r.gen.Set(Gen::ScaleTuning, static_cast<int16_t>(
+                        std::clamp<int>(r.gen.Get(Gen::ScaleTuning, 100), 0, 1200)));
+            }
             else
                 r.gen.FillFrom(presetGen);
 
