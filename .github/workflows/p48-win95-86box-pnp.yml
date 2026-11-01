@@ -1,10 +1,11 @@
-name: P48 boot private original-driver Win95 guest inside 86Box AWE32 PnP
+name: P49 MIDI note route through original Win95 AWE32 Creative driver
 on:
   push:
-    branches: [research/p48-win95-86box-awe32-pnp-guest]
+    branches: [research/p49-win95-midi-note-creative-driver]
     paths:
       - tools/p40_qemu_win95_guest_scancode.py
       - tools/p48_86box_boot_win95.py
+      - tools/p49_stage_original_midi.py
       - .github/workflows/p48-win95-86box-pnp.yml
   workflow_dispatch:
 permissions:
@@ -15,6 +16,8 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+      - name: Static check of P49 MIDI fixture and Win95 UI scripts
+        run: python -m py_compile tools/p49_stage_original_midi.py tools/p48_86box_boot_win95.py
       - name: Install isolated QEMU and 86Box build dependencies
         run: |
           sudo apt-get update -qq
@@ -45,6 +48,10 @@ jobs:
           python tools/p38_stage_creative_awe32_win95.py \
             "$P48_ORIGINAL_IMAGE" --phase stage \
             --output "$RUNNER_TEMP/p48/p48-stage.json"
+      - name: Stage original deterministic program 0 and 7 MIDI notes in disposable Win95 disk
+        run: |
+          python tools/p49_stage_original_midi.py \
+            --disk "$P48_ORIGINAL_IMAGE" --report "$RUNNER_TEMP/p48/p49-midi-stage.json"
       - name: Complete P46 original Creative driver installation and private disk handoff
         shell: bash
         run: |
@@ -114,10 +121,11 @@ jobs:
           cp "$RUNNER_TEMP/p48/qemu-observations/p40-input-report.json" p48-evidence/ 2>/dev/null || true
           cp "$RUNNER_TEMP/p48/qemu-observations/p40-guest-after-installer.json" p48-evidence/ 2>/dev/null || true
           cp p48-86box-source-sha.txt p48-evidence/ 2>/dev/null || true
+          cp "$RUNNER_TEMP/p48/p49-midi-stage.json" p48-evidence/ 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: P48-86Box-Win95-AWE32-PnP-screens-and-text-only
+          name: P49-Original-Creative-MIDI-Win95-Screens-and-Text
           path: p48-evidence/*
           if-no-files-found: warn
           retention-days: 5
