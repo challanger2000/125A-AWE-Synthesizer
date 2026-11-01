@@ -365,6 +365,7 @@ public:
         engine->appendString(STR16("Yamaha OPL3"));
         engine->appendString(STR16("Creative CQM"));
         parameters.addParameter(engine);
+        ReloadPresetCatalogs(nullptr); // UI thread; indexed metadata only
         return kResultOk;
     }
     IPlugView* PLUGIN_API createView(FIDString name) override {
@@ -387,8 +388,33 @@ public:
         // VST3 StringListParameter has three discrete entries: index / (3-1).
         if(setParamNormalized(kEngineID,static_cast<double>(model.engine)/2.)!=kResultOk)
             return kResultFalse;
-        return setParamNormalized(kBankID,
-            static_cast<double>(model.bank)/AssetState::kMaxBank);
+        if(setParamNormalized(kBankID,
+            static_cast<double>(model.bank)/AssetState::kMaxBank)!=kResultOk)
+            return kResultFalse;
+        ReloadPresetCatalogs(&model); // no sound samples loaded
+        return kResultOk;
+    }
+    // The future VSTGUI browser uses these exact names and bank indices.
+    // They belong to the editor/controller, never the realtime processor.
+    const PresetCatalog& SoundFontPresets() const noexcept {return sfCatalog_;}
+    const PresetCatalog& FmPresets() const noexcept {return fmCatalog_;}
+private:
+    PresetCatalog sfCatalog_{},fmCatalog_{};
+    void ReloadPresetCatalogs(const AssetState::Data* model) {
+        AssetConfig::Paths paths;
+        if(model&&model->pathsSpecified) {
+            paths.sf2=model->sf2Path;
+            paths.ibk=model->ibkPath;
+        } else if(!AssetConfig::Load(paths)) {
+            paths={};
+        }
+        // Clear stale entries when a project points at a new/missing file.
+        sfCatalog_=PresetCatalog{};
+        fmCatalog_=PresetCatalog{};
+        std::string error;
+        if(!paths.sf2.empty())sfCatalog_.LoadSoundFont(paths.sf2,error);
+        const auto melodic=paths.ibk.empty()?FactoryBank(L"MAUIFM.IBK"):paths.ibk;
+        if(!melodic.empty())fmCatalog_.LoadFmIbk(melodic,error);
     }
 };
 }
