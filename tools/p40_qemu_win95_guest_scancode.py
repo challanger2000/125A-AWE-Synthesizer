@@ -148,31 +148,13 @@ def main():
                 key("s")
                 time.sleep(1)
                 shot("p41_092_third_s")
-                key("ret")
-                time.sleep(8)
-                shot("p41_100_after_class_choice")
-                # Windows95 builds the device driver database on first wizard
-                # invocation; 5 seconds was too short in the actual P40 run.
-                # Wait for genuine guest progress rather than inventing that
-                # our original Creative VxD was bound.
-                time.sleep(38)
-                shot("p41_133_after_database_build")
-                # P41b: The 133s capture is ALREADY the manufacturer and
-                # model page (default Adaptec SCSI). Previously pressing S
-                # and Enter mistakenly selected a SCSI adapter. Select
-                # Have Disk right here, BEFORE 'Next'.
-                key("alt-h")
-                time.sleep(3)
-                shot("p41_136_have_disk_dialog")
-                for ch in "c:\\awe32":
-                    key(symbols.get(ch,ch.lower()))
-                time.sleep(1)
-                shot("p41_138_disk_path")
-                key("ret")
-                time.sleep(9)
-                shot("p41_148_creative_models")
-                # Capture original manufacturer/model chooser but DO NOT
-                # blindly install a device without confirming AWE32 class.
+                # Deliberately STOP HERE. Prior run proved the intended
+                # MEDIA class was NOT selected; Return closed the wizard.
+                # A future guest-mouse/class-selection probe must confirm
+                # \"Sound, video and game controllers\" in a screenshot
+                # before choosing Next or Have Disk. No wrong driver install.
+                report["p41_sound_hardware_class_confirmed"]=False
+                report["p41_original_vxd_install_attempted"]=False
             finally:
                 if proc.poll() is None:
                     proc.terminate()
