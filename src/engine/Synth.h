@@ -44,6 +44,9 @@ public:
     size_t BankCount() const { return m_banks.size(); }
     uint64_t RegionOverflowCount() const { return m_regionOverflowCount; }
     const SoundFont::Bank& BankAt(size_t i) const { return *m_banks[i].bank; }
+    // Research only: change the last loaded SF2 bank's merge candidate before
+    // any notes are played. Default remains the P26 additive semantics.
+    bool SetLastBankSf2LegacyFillForDiagnostics(bool enabled);
 
     // Prints the first N started voices with their resulting registers.
     void SetVoiceDebug(int count) { m_debugVoices = count; }
