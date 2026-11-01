@@ -1,13 +1,14 @@
-name: P51 verify timestamped EMU8000 port-write counts on original Win95 MIDI
+name: P53 open original Creative AWE Control Panel with Win95 AWE32 PnP 2MB
 on:
   push:
-    branches: [research/p51-emu8000-immediate-trace]
+    branches: [research/p53-original-creative-control-panel-win95]
     paths:
       - tools/p40_qemu_win95_guest_scancode.py
       - tools/p48_86box_boot_win95.py
       - tools/p49_stage_original_midi.py
       - tools/p50_emu8k_midi_probe.py
       - tools/p45_86box_emu8k_trace.py
+      - tools/p53_stage_creative_cp95.py
       - .github/workflows/p48-win95-86box-pnp.yml
   workflow_dispatch:
 permissions:
@@ -19,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Static check of P50 Win95 MIDI playback and register probe
-        run: python -m py_compile tools/p49_stage_original_midi.py tools/p48_86box_boot_win95.py tools/p50_emu8k_midi_probe.py
+        run: python -m py_compile tools/p49_stage_original_midi.py tools/p48_86box_boot_win95.py tools/p50_emu8k_midi_probe.py tools/p53_stage_creative_cp95.py
       - name: Install isolated QEMU and 86Box build dependencies
         run: |
           sudo apt-get update -qq
@@ -54,6 +55,21 @@ jobs:
         run: |
           python tools/p49_stage_original_midi.py \
             --disk "$P48_ORIGINAL_IMAGE" --report "$RUNNER_TEMP/p48/p49-midi-stage.json"
+      - name: Stage original Creative AWE Control Panel files in temporary guest
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/p53/files"
+          curl -fLsS --retry 3 --max-time 90 \
+            'https://www.philscomputerlab.com/uploads/3/7/2/3/37231621/awecp95.exe' \
+            -o "$RUNNER_TEMP/p53/AWECP95.EXE"
+          test "$(stat -c %s "$RUNNER_TEMP/p53/AWECP95.EXE")" -eq 189630
+          echo '29727ac591abe0a944ec6044455c87c379c44f05b1b782eb84b361690e40e4f4  '"$RUNNER_TEMP/p53/AWECP95.EXE" | sha256sum -c -
+          # Python zipfile ignores old self-extracting DOS/ZIP reparse attributes.
+          python tools/p53_stage_creative_cp95.py \
+            --disk "$P48_ORIGINAL_IMAGE" --sfx "$RUNNER_TEMP/p53/AWECP95.EXE" \
+            --report "$RUNNER_TEMP/p53/P53-original-control-panel-stage.json"
+
       - name: Complete P46 original Creative driver installation and private disk handoff
         shell: bash
         run: |
@@ -124,13 +140,14 @@ jobs:
           cp "$RUNNER_TEMP/p48/qemu-observations/p40-guest-after-installer.json" p48-evidence/ 2>/dev/null || true
           cp p48-86box-source-sha.txt p48-evidence/ 2>/dev/null || true
           cp "$RUNNER_TEMP/p48/p49-midi-stage.json" p48-evidence/ 2>/dev/null || true
+          cp "$RUNNER_TEMP/p53/P53-original-control-panel-stage.json" p48-evidence/ 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: P51-AWE32-Immediate-Trace-Program0-7
+          name: P53-Original-Creative-Win95-Control-Panel-Screenshots
           path: p48-evidence/*
           if-no-files-found: warn
           retention-days: 5
       - name: Destroy all transient Windows and Creative and ROM data
         if: always()
-        run: rm -rf "$RUNNER_TEMP/p48"
+        run: rm -rf "$RUNNER_TEMP/p48" "$RUNNER_TEMP/p53"
