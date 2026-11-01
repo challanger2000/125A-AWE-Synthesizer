@@ -88,7 +88,7 @@ hdd_01_speed = ramdisk
                         send(conn, "key down 0x3b")
                         send(conn, "key up 0x3b")
                         report["f1_cmos_continue_pressed"] = True
-                    if elapsed == 30000:
+                    if elapsed == 30000 and not report.get("ne2000_warning_ok_pressed", False):
                         # P48 run #41348535559: Windows 95 reaches a
                         # centered "Windows Networking" warning about the
                         # mismatched NE2000 device. "OK" has keyboard
