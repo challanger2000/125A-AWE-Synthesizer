@@ -103,9 +103,38 @@ int main() {
             sound[0].gen.Get(Gen::ReleaseVolEnv,-999)==814&&
             sound[0].gen.Get(Gen::FineTune,-999)==-6;
         ok &= Check(composed,"SF2 real-bank-style filter, envelope, chorus and tuning offsets combine");
+        // Sound 000 in the actual bank contains no sustain generators.
+        // In SF2 absence means full sustain, NOT decay-to-zero as for SF1.
+        if (!sound.empty()) {
+            const auto full=MakeVoiceParams(bass,sound[0],60,100,0x200010,0,
+                                           Awe32::Driver::Win95);
+            ok &= Check((full.dcysusv>>8)==0x7F&&(full.dcysus>>8)==0x7F,
+                "SF2 absent volume AND modulation sustain -> full 127");
+            Region adjusted=sound[0];
+            adjusted.gen.Set(Gen::SustainVolEnv,120); // 12 dB -> 16 steps
+            adjusted.gen.Set(Gen::SustainModEnv,600); // 60% below peak
+            const auto explicitSustain=MakeVoiceParams(
+                bass,adjusted,60,100,0x200010,0,Awe32::Driver::Win95);
+            ok &= Check((explicitSustain.dcysusv>>8)==111 &&
+                        (explicitSustain.dcysus>>8)==51,
+                "SF2 explicit volume 120 centibels and mod 600 permille use distinct units");
+            adjusted.gen.Set(Gen::SustainVolEnv,960);
+            adjusted.gen.Set(Gen::SustainModEnv,1000);
+            const auto zeroSustain=MakeVoiceParams(
+                bass,adjusted,60,100,0x200010,0,Awe32::Driver::Win95);
+            ok &= Check((zeroSustain.dcysusv>>8)==0 &&
+                        (zeroSustain.dcysus>>8)==0,
+                "SF2 explicit high attenuation decays to zero as intended");
+        }
         // Protect the previously proven SBK/SF1 driver semantics.
         bass.version=Version::Sf1;
         const auto legacy=bass.Select(0,7,60,100);
+        if (!legacy.empty()) {
+            const auto original=MakeVoiceParams(bass,legacy[0],60,100,0x200010,0,
+                                                 Awe32::Driver::Win95);
+            ok &= Check((original.dcysusv>>8)==0&&(original.dcysus>>8)==0,
+                "SF1 missing sustain retains original hardware register default zero");
+        }
         ok &= Check(legacy.size()==1&&
             legacy[0].gen.Get(Gen::InitialFilterQ,-999)==100&&
             legacy[0].gen.Get(Gen::ChorusEffectsSend,-999)==0&&
