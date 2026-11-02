@@ -965,6 +965,10 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
     vp.loopEndAddr   = loopEnd;
     const int sampleModes = g.Get(Gen::SampleModes, 0);
     vp.looping = (sampleModes & 1) != 0;
+    // SF2 2.04: mode 1 = continuous loop, mode 3 = loop until release.
+    // Do not move a continuous SF2 loop to the tail on NoteOff; P89 showed
+    // unexpected PSST/CSL writes from doing so. Preserve legacy SF1 behaviour.
+    vp.loopOpensOnRelease = vp.looping && (sf1 || ((sampleModes & 3) == 3));
     if (!vp.looping)
     {
         // The EMU8000 can only loop, it has no "one-shot" mode. The driver

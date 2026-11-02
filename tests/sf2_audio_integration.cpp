@@ -33,7 +33,7 @@ void list(Bytes& b, const char* listType, const Bytes& contents) {
     p.insert(p.end(), contents.begin(), contents.end());
     chunk(b, "LIST", p);
 }
-Bytes makeBank(size_t sampleWords,bool multipleBanks=false) {
+Bytes makeBank(size_t sampleWords,bool multipleBanks=false,int loopMode=1,size_t tailWords=16) {
     Bytes info, ifil, inam, sdta, pdta, smpl;
     u16(ifil,2);u16(ifil,1);
     chunk(info,"ifil",ifil);
@@ -95,7 +95,7 @@ Bytes makeBank(size_t sampleWords,bool multipleBanks=false) {
     if(multipleBanks) {
         u16(ibag,5);u16(ibag,0);u16(ibag,7);u16(ibag,0);
     }
-    u16(igen,54);u16(igen,1); // Loop continuously
+    u16(igen,54);u16(igen,loopMode); // SF2 sampleModes: 1=continuous, 3=until release
     u16(igen,53);u16(igen,0); // Sample 0
     if(multipleBanks) {
         // A real SF2 may specify instrument tuning and an additional
@@ -109,7 +109,7 @@ Bytes makeBank(size_t sampleWords,bool multipleBanks=false) {
 
     name20(shdr,"125A Wave");u32(shdr,0);
     u32(shdr,static_cast<uint32_t>(sampleWords));
-    u32(shdr,16);u32(shdr,static_cast<uint32_t>(sampleWords-16));
+    u32(shdr,16);u32(shdr,static_cast<uint32_t>(sampleWords-tailWords));
     u32(shdr,44100);
     shdr.push_back(69);shdr.push_back(0);
     u16(shdr,0);u16(shdr,1);
@@ -165,11 +165,15 @@ int main() {
     const fs::path large=directory/"125A_synthetic_sf2_8mb_plus.sf2";
     const fs::path d4size=directory/"125A_synthetic_sf2_d4_pcm_size.sf2";
     const fs::path rom=directory/"125A_synthetic_sf2_audio.raw";
+    const fs::path mode1=directory/"125A_p91_sf2_mode1.sf2";
+    const fs::path mode3=directory/"125A_p91_sf2_mode3.sf2";
     struct Cleanup {
-        fs::path a,b,c,d,e,f;
-        ~Cleanup(){std::error_code ec;fs::remove(a,ec);fs::remove(b,ec);fs::remove(c,ec);fs::remove(d,ec);fs::remove(e,ec);fs::remove(f,ec);}
-    } cleanup{sf,huge,rom,large,multi,d4size};
+        fs::path a,b,c,d,e,f,g,h;
+        ~Cleanup(){std::error_code ec;for(const auto& p:{a,b,c,d,e,f,g,h})fs::remove(p,ec);}
+    } cleanup{sf,huge,rom,large,multi,d4size,mode1,mode3};
     if (!writeFile(sf,makeBank(2048)) ||
+        !writeFile(mode1,makeBank(2048,false,1,64)) ||
+        !writeFile(mode3,makeBank(2048,false,3,64)) ||
         !writeFile(multi,makeBank(2048,true)) ||
         !writeFile(huge,makeBank(300000)) ||
         !writeFile(large,makeBank(4'300'000)) ||
@@ -219,6 +223,35 @@ int main() {
                     "missing SF2 is rejected") &&
               check(synth.BankCount()==1 && synth.Core().DramData()[reserve+64]==saved,
                     "failed load preserves prior SF2 and DRAM");
+    }
+    {
+        // P91: real NoteOff register regression, synthetic sample only.
+        // Both samples leave 64 words after their loop end, enough to trigger
+        // the previous erroneous mode-1 loop relocation.
+        const auto changedReleaseAddresses=[&](const fs::path& path)->int {
+            Synth synth(44100);
+            synth.Core().SetDriver(Awe32::Driver::Win95);
+            std::string err;
+            if(!synth.LoadBank(path.string(),err))return -1;
+            synth.ProgramChange(0,0);
+            synth.NoteOn(0,69,100);
+            std::array<uint32_t,32> beforePsst{},beforeCsl{};
+            for(int v=0;v<32;++v) {
+                beforePsst[v]=synth.Core().ReadDriver(Emu8000::Reg::PSST,v);
+                beforeCsl[v]=synth.Core().ReadDriver(Emu8000::Reg::CSL,v);
+            }
+            synth.NoteOff(0,69);
+            int changes=0;
+            for(int v=0;v<32;++v)
+                if(beforePsst[v]!=synth.Core().ReadDriver(Emu8000::Reg::PSST,v) ||
+                   beforeCsl[v]!=synth.Core().ReadDriver(Emu8000::Reg::CSL,v))
+                    ++changes;
+            return changes;
+        };
+        ok &= check(changedReleaseAddresses(mode1)==0,
+                    "Win95 SF2 mode 1 does not rewrite PSST/CSL on NoteOff");
+        ok &= check(changedReleaseAddresses(mode3)>0,
+                    "Win95 SF2 mode 3 releases loop into sample tail");
     }
     {
         // End-to-end bank routing. Each SF2 bank has an independent pitch

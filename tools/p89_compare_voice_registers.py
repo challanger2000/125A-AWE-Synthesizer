@@ -115,6 +115,9 @@ def compare(original,native):
         # No proprietary PCM or full trace is exposed. Only ≤4 diagnostic
         # register words per mismatch, for actionable source-level debugging.
         mismatches.append({"voice_slot":voice,"register":name,
+                           "first_write_equal":bool(va and vb and va[0]==vb[0]),
+                           "native_extra_writes_after_matching_prefix":
+                               (len(vb)-len(va) if len(vb)>len(va) and vb[:len(va)]==va else 0),
                            "creative_writes":len(va),"native_writes":len(vb),
                            "creative_first":[f"0x{x:04X}" for x in va[:4]],
                            "native_first":[f"0x{x:04X}" for x in vb[:4]],
@@ -126,6 +129,9 @@ def compare(original,native):
             "native_active_voice_count":len(voices_b),
             "register_series_compared":len(labels),
             "register_series_exactly_equal":identical,
+            "register_series_first_write_equal":sum(1 for key in labels if a.get(key) and b.get(key) and a[key][0]==b[key][0]),
+            "register_series_first_write_different":sum(1 for key in labels if not a.get(key) or not b.get(key) or a[key][0]!=b[key][0]),
+            "register_series_extra_native_writes_matching_prefix":sum(1 for key in labels if len(b.get(key,[]))>len(a.get(key,[])) and b[key][:len(a[key])]==a[key]),
             "register_series_different":len(mismatches),
             "mismatches":mismatches[:100],
             "mismatches_truncated":max(0,len(mismatches)-100),

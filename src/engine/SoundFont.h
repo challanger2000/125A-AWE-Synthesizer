@@ -198,6 +198,9 @@ namespace SoundFont
         uint8_t  releaseRate = 0; // for DCYSUSV at Note Off
         uint8_t  releaseModRate = 0; // for DCYSUS at Note Off (win95 only)
         bool     looping = true;
+        // SF2 mode 1 loops through note-off; mode 3 opens the loop at release.
+        // SF1 keeps the historically measured Creative release behaviour.
+        bool     loopOpensOnRelease = true;
         // Sample end and loop end addresses as the driver keeps them in its
         // patch block (SBAWE32.MDI [si+0x7A] / [si+0x82]); the note-off of the
         // `dos` family opens the loop with them.

@@ -27,6 +27,17 @@ int main() {
     const auto gold=MakeVoiceParams(sf2,r,60,100,base,0,Awe32::Driver::Win95);
     const auto dos=MakeVoiceParams(sf2,r,60,100,base,0,Awe32::Driver::Dos);
     bool ok=true;
+    ok&=check(gold.looping && !gold.loopOpensOnRelease,
+              "Win95 SF2 mode 1 continuous loop survives NoteOff");
+    r.gen.Set(Gen::SampleModes,3);
+    const auto releaseLoop=MakeVoiceParams(sf2,r,60,100,base,0,Awe32::Driver::Win95);
+    ok&=check(releaseLoop.looping && releaseLoop.loopOpensOnRelease,
+              "Win95 SF2 mode 3 opens loop on NoteOff");
+    r.gen.Set(Gen::SampleModes,0);
+    const auto oneShot=MakeVoiceParams(sf2,r,60,100,base,0,Awe32::Driver::Win95);
+    ok&=check(!oneShot.looping && !oneShot.loopOpensOnRelease,
+              "Win95 SF2 mode 0 is one-shot");
+    r.gen.Set(Gen::SampleModes,1);
     ok&=check(gold.ccca>>28==8,"Win95 SF2 initialFilterQ=100 -> Q8");
     ok&=check((gold.tremfrq>>8)==0x15,"Win95 SF2 modLfoToVolume=20 -> tremolo depth21");
     ok&=check(gold.csl>>24==0x7F,"Win95 SF2 chorus=500 -> send127");

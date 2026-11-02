@@ -29,6 +29,7 @@ jobs:
         run: |
           cmake --build build-vst3 --config Release --parallel 2
           ctest --test-dir build-vst3 -C Release --output-on-failure
+          python -m unittest discover -s tests -p test_p89_register_comparison.py -v
       - name: Export real Windows x64 125A VST3 development bundle
         uses: actions/upload-artifact@v4
         with:

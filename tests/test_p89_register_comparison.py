@@ -52,6 +52,20 @@ class P89VoiceRegisters(unittest.TestCase):
         self.assertEqual(result["mismatches"][0]["register"],"ENVVAL")
         self.assertEqual(result["mismatches"][0]["creative_first"],["0x40FF"])
         self.assertEqual(result["mismatches"][0]["native_first"],["0x30FF"])
+    def test_note_off_extra_writes_are_distinguished_from_wrong_first_value(self):
+        result=compare([(1,"CSL_LO",0x0755),(1,"DCYSUSV",0x00FF),(1,"DCYSUSV",0x7F27)],
+                       [(9,"CSL_LO",0x0755),(9,"CSL_LO",0x081E),
+                        (9,"DCYSUSV",0x00FF),(9,"DCYSUSV",0x00FF),
+                        (9,"DCYSUSV",0x7F27)])
+        self.assertEqual(result["register_series_first_write_different"],0)
+        self.assertEqual(result["register_series_first_write_equal"],2)
+        self.assertEqual(result["register_series_different"],2)
+        mismatch={m["register"]:m for m in result["mismatches"]}
+        self.assertTrue(mismatch["CSL_LO"]["first_write_equal"])
+        self.assertEqual(mismatch["CSL_LO"]["native_extra_writes_after_matching_prefix"],1)
+        self.assertTrue(mismatch["DCYSUSV"]["first_write_equal"])
+        self.assertEqual(mismatch["DCYSUSV"]["native_extra_writes_after_matching_prefix"],0)
+
     def test_creative_range_rejects_upload_only(self):
         with tempfile.TemporaryDirectory() as d:
             path=Path(d)/"original.csv"
