@@ -19,6 +19,7 @@ from p50_emu8k_midi_probe import play as p50_play
 from p58_analyze_audio import analyze_wav
 from p60_compare_creative_sf2_upload import analyze as p60_analyze_upload
 from p64_original_win95_midi_trial import run_trial as p64_run_trial
+from p75_private_sf2 import stage as p75_stage_private_sf2
 
 
 # Scancode set 1 (US Win95 layout), only for the fixed laboratory filename.
@@ -62,14 +63,22 @@ def main() -> None:
     ap.add_argument("--disk", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--p64-bridge", action="store_true", help="Run original Win95 MIDI agent through 86Box COM1")
+    ap.add_argument("--private-sf2", type=Path, help="Local original SF2, never commit/upload")
+    ap.add_argument("--sound-card", choices=("sbawe32_pnp","sbawe64_gold"), default="sbawe32_pnp")
     args = ap.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
 
     if not args.disk.is_file() or args.disk.stat().st_size != 536870912:
         raise ValueError("Expected private ephemeral 512MiB Win95 guest disk")
 
+    if args.private_sf2 and not args.p64_bridge:
+        raise ValueError("--private-sf2 requires --p64-bridge")
+    private_report=p75_stage_private_sf2(args.disk,args.private_sf2) if args.private_sf2 else None
+    ram_kib=28672 if args.sound_card=="sbawe64_gold" else 2048
+    card_section={"sbawe32_pnp":"Sound Blaster AWE32 PnP",
+                  "sbawe64_gold":"Sound Blaster AWE64 Gold"}[args.sound_card]
     vm = args.out / "win95-pnp"
-    write_config(vm, "sbawe32_pnp")
+    write_config(vm, args.sound_card)
     cfg = vm / "86box.cfg"
     with cfg.open("a", encoding="utf8") as f:
         f.write(f"""[Storage controllers]
@@ -79,8 +88,8 @@ hdd_01_fn = {args.disk.resolve()}
 hdd_01_parameters = 63, 16, 1040, 0, ide
 hdd_01_ide_channel = 0:0
 hdd_01_speed = ramdisk
-[Sound Blaster AWE32 PnP]
-onboard_ram = 2048
+[{card_section}]
+onboard_ram = {ram_kib}
 """)
     if args.p64_bridge:
         # 86Box 2026 Linux char_pipe server: *.in is guest RX, *.out is TX.
@@ -108,7 +117,8 @@ reconnect = 1
                "--automation-hold", "--automation-seed", "12547"]
 
     report = {"phase": "P48", "guest": "Windows 95 OSR2, original Creative INF staged and installed in QEMU",
-              "hardware": "86Box AWE32 PnP",
+              "hardware": args.sound_card, "sample_ram_kib": ram_kib,
+              "private_sf2_supplied":bool(private_report),
               "windows95_binding_verified": False, "actual_driver_note_trace_verified": False,
               "source_sf2_tested": False, "screens": []}
     with (args.out / "86box-win95-host.log").open("wb") as log:
@@ -120,7 +130,7 @@ reconnect = 1
                 report["machine"] = info.get("machine")
                 report["sound"] = info.get("sound")
                 report["hdd_present"] = bool(info.get("hdd"))
-                if info.get("sound") != "sbawe32_pnp":
+                if info.get("sound") != args.sound_card:
                     raise AssertionError("Wrong emulated card in P48 VM")
                 if not info.get("hdd"):
                     raise AssertionError("Win95 IDE disk was not mounted")
@@ -218,7 +228,9 @@ reconnect = 1
                 # P56: P55 screenshot establishes the Win95 common
                 # dialog has "File Name" focused and "*.sbk;*.sf2" selected.
                 # Enter the staged path exactly, confirm via Return.
-                guest_sf2_path = "c:\\awe32\\p55test.sf2" if args.p64_bridge else "c:\\awe32\\p62test.sf2"
+                guest_sf2_path = ("c:\\awe32\\p75user.sf2" if private_report else
+                                  "c:\\awe32\\p55test.sf2" if args.p64_bridge else
+                                  "c:\\awe32\\p62test.sf2")
                 p49_type_path(conn, guest_sf2_path)
                 p49_screenshot(conn, args.out, "p56-file-selected.png", report)
                 p49_key(conn, 0x1c)
@@ -265,11 +277,12 @@ reconnect = 1
                 if args.p64_bridge:
                     p64_run_trial(conn,args.out,trace,vm/"p64-midi",send,
                                   p49_key,p49_type_path,p49_screenshot,report,
-                                  pcm_fifo=vm/"p65-wavetable")
+                                  pcm_fifo=vm/"p65-wavetable",
+                                   programs=(0,7) if private_report else (0,))
                 report["p55_original_sf2_load_confirmed"] = False
                 report["p53_original_control_panel_loaded"] = False
                 report["p53_original_bank_sf2_loaded"] = False
-                report["p53_86box_sample_ram_kb"] = 2048
+                report["p53_86box_sample_ram_kb"] = ram_kib
                 try:
                     status = send(conn, "status")
                     report["end_status"] = {
@@ -283,7 +296,7 @@ reconnect = 1
                 if trace.exists():
                     lines = trace.read_text(encoding="utf8", errors="replace").splitlines()
                     report["raw_emu8000_write_count"] = max(0, len(lines) - 1)
-                    report["raw_emu8000_preview"] = lines[1:4]
+                    report["raw_emu8000_preview"] = [] if private_report else lines[1:4]
                     report["raw_writes_after_two_midi_launches_delta"] = max(
                         0, len(lines)-1-report["p50_midi_trials"][0]["raw_writes_before"])
                     report["raw_emu8000_pointer_count"] = sum(
