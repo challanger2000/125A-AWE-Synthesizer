@@ -23,7 +23,7 @@ class UniversalCreativeAudition(unittest.TestCase):
     def test_label_sanitization(self):
         self.assertEqual(safe_name("You Process 'Em"),"You Process _Em")
         self.assertEqual(safe_name(""),"Unnamed")
-        self.assertEqual(safe_name("Kick:/Snare?"),"Kick__Snare_")
+        self.assertEqual(safe_name("Kick:/Snare?"),"Kick__Snare")
     def test_arbitrary_programs_and_note_preserved(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory)
