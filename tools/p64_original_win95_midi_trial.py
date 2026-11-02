@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 from p63_send_guest_midi import frame, demo_messages
 from p58_analyze_audio import analyze_wav
+from p65_pcm_receiver import PcmReceiver
 
 
 def connect_linux_86box_fifo(base: Path, timeout_s=12):
@@ -27,7 +28,7 @@ def connect_linux_86box_fifo(base: Path, timeout_s=12):
 
 
 def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
-              send, key, type_path, screenshot, report):
+              send, key, type_path, screenshot, report, pcm_fifo=None):
     # AWE Control Panel has already selected and applied the original SF2.
     # Do not reimplement SF2 loading in our guest agent.
     send(conn,"key down 0x38 0x3e")  # Alt+F4 closes original Control Panel
@@ -46,6 +47,8 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
 
     count_before = max(0,len(trace.read_text(encoding="utf8", errors="replace").splitlines())-1) if trace.is_file() else 0
     fd=connect_linux_86box_fifo(fifo_base)
+    pcm_receiver=PcmReceiver(pcm_fifo) if pcm_fifo else None
+    if pcm_receiver:pcm_receiver.start()
     audio_dir=out/"p64-private-original-creative-wavetable"
     audio_dir.mkdir(exist_ok=True)
     try:
@@ -78,10 +81,12 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
             analysis=analyze_wav(wavetable[0],note=48)
         except Exception as exc:
             analysis={"analysis_error":str(exc)}
+    pcm_report=pcm_receiver.stop() if pcm_receiver else None
     result={"guest_agent_executed_by_win95_run_command":True,
             "original_creative_midi_endpoint_verified":False,
             "original_creative_midi_activity_register_write_delta":max(0,count_after-count_before),
             "original_creative_wavetable_audio":analysis,
+            "direct_86box_pcm_fifo":pcm_report,
             "private_wavetable_file_found":bool(wavetable),
             "raw_private_audio_published":False,
             "sf2_fixture":"original generated P55 SF2 in Creative User Bank1",

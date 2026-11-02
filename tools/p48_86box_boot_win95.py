@@ -100,6 +100,8 @@ reconnect = 1
     env["AWE_TRACE_CSV"] = str(trace.resolve())
     env["SDL_AUDIODRIVER"] = "dummy"
     env["SDL_VIDEODRIVER"] = "x11"
+    if args.p64_bridge:
+        env["AWE_P65_PCM_FIFO"] = str((vm/"p65-wavetable").resolve())
     command = [str(args.binary.resolve()), "-P", str(vm.resolve()),
                "-R", str(args.roms.resolve()),
                "--automation", "unix:" + str(sockpath.resolve()),
@@ -262,7 +264,8 @@ reconnect = 1
                 report["p62_wideband_upload_only"] = not args.p64_bridge
                 if args.p64_bridge:
                     p64_run_trial(conn,args.out,trace,vm/"p64-midi",send,
-                                  p49_key,p49_type_path,p49_screenshot,report)
+                                  p49_key,p49_type_path,p49_screenshot,report,
+                                  pcm_fifo=vm/"p65-wavetable")
                 report["p55_original_sf2_load_confirmed"] = False
                 report["p53_original_control_panel_loaded"] = False
                 report["p53_original_bank_sf2_loaded"] = False

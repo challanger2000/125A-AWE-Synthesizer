@@ -16,6 +16,9 @@ on:
       - tools/p55_stage_generated_sf2.py
       - tools/p64_stage_win95_midi_agent.py
       - tools/p64_original_win95_midi_trial.py
+      - tools/p65_86box_pcm_tap.py
+      - tools/p65_pcm_receiver.py
+      - tests/test_p65_pcm.py
       - src/bridge/p63_win95_guest_midi.c
       - src/bridge/P63MidiWire.h
       - .github/workflows/p64-original-creative-win95-bridge.yml
@@ -46,6 +49,7 @@ jobs:
           ./p63_wire_test
           python -m unittest discover -s tests -p test_p63_bridge.py -v
           python -m unittest discover -s tests -p test_p64_fifo.py -v
+          python -m unittest discover -s tests -p test_p65_pcm.py -v
       - name: Obtain disposable original Win95 installation disk
         shell: bash
         run: |
@@ -118,6 +122,10 @@ jobs:
             --source "$RUNNER_TEMP/p48/86Box/src/sound/snd_emu8k.c" \
             --out "$RUNNER_TEMP/p48/snd_emu8k-instrumented.c"
           cp "$RUNNER_TEMP/p48/snd_emu8k-instrumented.c" "$RUNNER_TEMP/p48/86Box/src/sound/snd_emu8k.c"
+          python tools/p65_86box_pcm_tap.py \
+            --source "$RUNNER_TEMP/p48/86Box/src/sound/sound.c" \
+            --out "$RUNNER_TEMP/p48/p65-sound-instrumented.c"
+          cp "$RUNNER_TEMP/p48/p65-sound-instrumented.c" "$RUNNER_TEMP/p48/86Box/src/sound/sound.c"
           cmake -S "$RUNNER_TEMP/p48/86Box" -B "$RUNNER_TEMP/p48/build" \
             -G Ninja -D CMAKE_BUILD_TYPE=Release -D QT=OFF -D USE_SDL_SHADER=OFF \
             -D AUTOMATION=ON -D MUNT=OFF -D FLUIDSYNTH=OFF -D RTMIDI=OFF \
