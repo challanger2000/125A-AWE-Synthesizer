@@ -23,13 +23,17 @@ class UniversalCreativeAudition(unittest.TestCase):
     def test_label_sanitization(self):
         self.assertEqual(safe_name("You Process 'Em"),"You Process _Em")
         self.assertEqual(safe_name(""),"Unnamed")
-        self.assertEqual(safe_name("Kick:/Snare?"),"Kick__Snare")
+        self.assertEqual(safe_name("Kick:/Snare?"),"Kick_Snare")
     def test_arbitrary_programs_and_note_preserved(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory)
             trace=root/"emu.csv"
             trace.write_text("reg,data\n",encoding="utf8")
             sent=[]
+            midi_frames=[]
+            def mock_transmit(fd,payload,conn,send,pace_ms=25):
+                midi_frames.append(bytes(payload))
+                return len(payload)
             def send(conn,cmd):
                 sent.append(cmd)
                 if cmd.startswith("audio start "):
@@ -47,6 +51,7 @@ class UniversalCreativeAudition(unittest.TestCase):
                         {"bank":0,"program":17,"name":"Industrial"}],
                     "p84_creative_user_bank":1}
             with patch.object(p64,"connect_linux_86box_fifo",side_effect=lambda path:os.open(os.devnull,os.O_WRONLY)), \
+                 patch.object(p64,"send_paced_frame",side_effect=mock_transmit), \
                  patch.object(p64,"analyze_wav",side_effect=lambda wav,note:{"window_rms_dbfs":-20}):
                 trial=p64.run_trial(None,root,trace,root/"midi",send,None,None,screenshot,report,
                                    programs=(0,17),note=36,creative_bank=1,
@@ -55,6 +60,12 @@ class UniversalCreativeAudition(unittest.TestCase):
             self.assertEqual([x["name"] for x in trial["p75_program_results"]],["StandardStuff","Industrial"])
             self.assertTrue(all(x["nonzero_audio"] for x in trial["p75_program_results"]))
             self.assertIn("step 1200",sent)
+            # Both real-note MIDI messages use the chosen drum note 36,
+            # never the historical hard-coded Lately Bass MIDI note 48.
+            ons=[x for x in midi_frames if len(x)==6 and (x[2]&0xF0)==0x90]
+            self.assertEqual(len(ons),2)
+            self.assertEqual([x[3] for x in ons],[36,36])
+            self.assertIn((0xC0,17),[(x[2],x[3]) for x in midi_frames])
             delivered=export(root,root/"private",report)
             self.assertEqual(len(delivered["private_wavs"]),2)
             self.assertTrue(all(Path(x["path"]).is_file() for x in delivered["private_wavs"]))
