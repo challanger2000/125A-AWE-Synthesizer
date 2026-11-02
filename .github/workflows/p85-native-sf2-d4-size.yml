@@ -5,6 +5,7 @@ on:
     paths:
       - src/engine/**
       - tests/sf2_audio_integration.cpp
+      - tools/p86_generic_sf2_probe.cpp
       - CMakeLists.txt
       - .github/workflows/p85-native-sf2-d4-size.yml
   workflow_dispatch:
@@ -22,6 +23,14 @@ jobs:
             -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_OPL3_PROBES=OFF \
             -D125A_BUILD_VST3=OFF -D125A_BUILD_UPSTREAM_CLI=OFF
       - name: Build native SF2 into actual 86Box chip test
-        run: cmake --build build-p85 --parallel 4 --target awe32_sf2_audio_integration_test
+        run: cmake --build build-p85 --parallel 4 --target awe32_sf2_audio_integration_test awe32_p86_generic_sf2_probe
       - name: Run full native EMU8000 integration incl. 25,881,188-byte synthetic SF2
         run: ctest --test-dir build-p85 --output-on-failure -R '^125A_sf2_audio_integration$'
+
+      - name: Export native generic SF2 audition executable only (no user bank/audio/ROM)
+        uses: actions/upload-artifact@v4
+        with:
+          name: P86-Native-Linux-x64-SF2-Audition-Tool
+          path: build-p85/src/engine/awe32_p86_generic_sf2_probe
+          if-no-files-found: error
+          retention-days: 3
