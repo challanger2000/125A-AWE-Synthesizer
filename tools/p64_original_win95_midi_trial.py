@@ -27,6 +27,25 @@ def connect_linux_86box_fifo(base: Path, timeout_s=12):
     raise TimeoutError("86Box COM1 FIFO reader not connected")
 
 
+def send_paced_frame(fd, payload: bytes, conn, send, pace_ms=25):
+    """Transmit one UART character per guest-emulated timeslice.
+
+    Injecting 6 bytes in a single Linux write floods an emulated 8250 UART
+    which has no receiving FIFO in original Windows 95 configurations.
+    Each 25ms guest step lets the actual Windows COM1 ISR/service thread
+    consume a byte before the following one arrives. The guest WinMM code
+    still processes all MIDI messages, not a replacement synth.
+    """
+    if not payload:
+        raise ValueError("Cannot transmit empty COM1 frame")
+    for value in payload:
+        count = os.write(fd, bytes((value,)))
+        if count != 1:
+            raise IOError(f"Short COM1 UART write: {count}")
+        send(conn, f"step {pace_ms}")
+    return len(payload)
+
+
 def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
               send, key, type_path, screenshot, report, pcm_fifo=None):
     # P68 WIN.INI run= launched the CRT-free original Creative MIDI agent
@@ -40,11 +59,14 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
     pcm_receiver=PcmReceiver(pcm_fifo) if pcm_fifo else None
     if pcm_receiver:pcm_receiver.start()
     audio_dir=out/"p64-private-original-creative-wavetable"
+    uart_bytes_sent=0
+    uart_frames_sent=0
     audio_dir.mkdir(exist_ok=True)
     try:
         init=tuple(demo_messages(channel=0,bank=1,program=0,note=48,velocity=100))
         for msg in init:
-            os.write(fd,msg)
+            uart_bytes_sent+=send_paced_frame(fd,msg,conn,send)
+            uart_frames_sent+=1
         send(conn,"step 400")
         # Recording starts before the real original Creative note is sent.
         audio_started=False
@@ -53,10 +75,12 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
             audio_started=True
         except Exception as exc:
             report["p64_audio_start_error"]=str(exc)
-        os.write(fd,frame(0x90,48,100))
+        uart_bytes_sent+=send_paced_frame(fd,frame(0x90,48,100),conn,send)
+        uart_frames_sent+=1
         send(conn,"step 1200")
         screenshot(conn,out,"p64-creative-playing.png",report)
-        os.write(fd,frame(0x80,48,0))
+        uart_bytes_sent+=send_paced_frame(fd,frame(0x80,48,0),conn,send)
+        uart_frames_sent+=1
         send(conn,"step 1200")
         if audio_started:
             send(conn,"audio stop")
@@ -72,7 +96,11 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
         except Exception as exc:
             analysis={"analysis_error":str(exc)}
     pcm_report=pcm_receiver.stop() if pcm_receiver else None
-    result={"guest_agent_executed_by_win95_run_command":False,
+    result={"p74_uart_bytes_injected":uart_bytes_sent,
+            "p74_uart_frames_injected":uart_frames_sent,
+            "p74_uart_guest_step_per_byte_ms":25,
+            "p74_uart_com1_received_confirmed":False,
+            "guest_agent_executed_by_win95_run_command":False,
             "guest_agent_autostart_requested":True,
             "original_creative_midi_endpoint_verified":False,
             "original_creative_midi_activity_register_write_delta":max(0,count_after-count_before),

@@ -20,6 +20,15 @@ static void logline(const char *msg) {
     while(msg[n])++n;
     if(n) { WriteFile(logfd,msg,n,&written,NULL); FlushFileBuffers(logfd); }
 }
+static DWORD p74_uart_debug_bytes=0;
+static void log_byte(unsigned char b) {
+    static const char hex[]="0123456789ABCDEF";
+    char line[]="P74 UART RX 0x00\r\n";
+    if(p74_uart_debug_bytes>=32)return;
+    line[14]=hex[b>>4];
+    line[15]=hex[b&15u];
+    logline(line);
+}
 static char uppercase(char c) {
     if(c>='a' && c<='z')return (char)(c-'a'+'A');
     return c;
@@ -106,7 +115,10 @@ static void run(void) {
             break;
         }
         if(count!=1){Sleep(1);continue;}
+        ++p74_uart_debug_bytes;
+        log_byte(b);
         decoded=p63_midi_feed(&decoder,b,&message);
+        if(decoded<0)logline("P74 UART FRAME REJECTED\r\n");
         if(decoded==1) {
             if(midiOutShortMsg(midi,(DWORD)message)!=MMSYSERR_NOERROR) {
                 logline("ERROR Original Creative midiOutShortMsg\r\n");

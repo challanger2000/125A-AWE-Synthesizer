@@ -16,6 +16,25 @@ p64=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(p64)
 
 
+class PacedFrame(unittest.TestCase):
+    def test_single_byte_uart_writes_and_guest_steps(self):
+        records=[]
+        class FakeOS:
+            @staticmethod
+            def write(fd,packet):
+                records.append(("write",packet))
+                return len(packet)
+        orig=p64.os.write
+        try:
+            p64.os.write=FakeOS.write
+            times=[]
+            count=p64.send_paced_frame(3,bytes((1,2,3,4)),object(),lambda c,cmd:times.append(cmd),25)
+            self.assertEqual(count,4)
+            self.assertEqual(records,[("write",bytes((i,))) for i in (1,2,3,4)])
+            self.assertEqual(times,["step 25"]*4)
+        finally:
+            p64.os.write=orig
+
 @unittest.skipUnless(hasattr(os,"mkfifo"),"Linux FIFO is required")
 class P64Fifo(unittest.TestCase):
     def test_guest_receive_pipe(self):
