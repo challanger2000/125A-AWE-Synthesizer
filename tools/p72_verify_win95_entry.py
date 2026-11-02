@@ -19,7 +19,7 @@ def pe_entry_vma(path: Path) -> int:
     if len(data) < 256 or data[:2] != b"MZ":
         raise ValueError("not an MZ executable")
     peoff, = struct.unpack_from("<I", data, 0x3C)
-    if peoff + 64 > len(data) or data[peoff:peoff+4] != b"PE\\x00\\x00":
+    if peoff + 64 > len(data) or data[peoff:peoff+4] != b"PE\x00\x00":
         raise ValueError("not a PE executable")
     optional = peoff + 24
     magic, = struct.unpack_from("<H", data, optional)
@@ -33,7 +33,7 @@ def pe_entry_vma(path: Path) -> int:
 
 def nm_symbol_vma(output: str, symbol: str) -> int:
     escaped=re.escape(symbol)
-    hits=re.findall(r"^([0-9a-fA-F]{8,16})\\s+[Tt]\\s+"+escaped+r"$",
+    hits=re.findall(r"^([0-9a-fA-F]{8,16})\s+[Tt]\s+"+escaped+r"$",
                     output,re.MULTILINE)
     if len(hits) != 1:
         raise ValueError(f"Expected one defined code symbol {symbol!r}, found {hits}")
