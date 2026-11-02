@@ -7,7 +7,8 @@ p76=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(p76)
 
 def trial():
-    return {"p64_original_win95_midi":{
+    return {"p75_private_sample_upload_plausible":True,
+            "p64_original_win95_midi":{
         "p75_original_private_sf2_test":True,
         "original_creative_midi_activity_register_write_delta":80,
         "p75_program_results":[{"program":0,"nonzero_audio":True},

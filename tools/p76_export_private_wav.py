@@ -59,6 +59,8 @@ def export(original_test_dir: Path, destination: Path,
     trial=original_trial_report.get("p64_original_win95_midi",{})
     if not trial.get("p75_original_private_sf2_test"):
         raise ValueError("P75 ORIGINAL PRIVATE SF2 test was not executed")
+    if not original_trial_report.get("p75_private_sample_upload_plausible",False):
+        raise ValueError("Original Creative user SF2 sample upload NOT established; GM fallback cannot be exported as an original bass")
     if trial.get("original_creative_midi_activity_register_write_delta",0)<=0:
         raise ValueError("Original Creative EMU8000 MIDI did not change registers")
     original=trial.get("p75_program_results",[])

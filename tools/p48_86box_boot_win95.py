@@ -261,6 +261,28 @@ reconnect = 1
                 report["p56_apply_attempted"] = True
                 report["p56_register_writes_after_apply"] = max(
                     0,io_after_apply-io_before_apply)
+                if private_report:
+                    # Don't mistake GM ROM fallback for the user's bank.
+                    # Creative SF2 upload writes its PCM into EMU8000 sample
+                    # memory via the known voice26/reg1 data port. Count only
+                    # the actual Apply window, never generic register writes.
+                    import csv
+                    user_words=0
+                    if trace.is_file():
+                        with trace.open("r",encoding="utf8",errors="replace") as source:
+                            for idx,row in enumerate(csv.DictReader(source)):
+                                if idx<io_before_apply:continue
+                                if idx>=io_after_apply:break
+                                if (row.get("kind")=="data"
+                                    and row.get("reg")=="1"
+                                    and row.get("voice")=="26"
+                                    and row.get("port","").lower() in ("0x0a20","0x0a22")):
+                                    user_words+=1
+                    expected=private_report["sample_data_bytes"]//2
+                    minimum=max(4096,expected//8)
+                    report["p75_private_sample_upload_write_words"]=user_words
+                    report["p75_private_sample_upload_minimum_words"]=minimum
+                    report["p75_private_sample_upload_plausible"]=user_words>=minimum
                 # P60: inspect only the original Creative sample-memory
                 # upload span, before any subsequent MIDI note messages.
                 # Upload private CSV contents stay in ephemeral runner.

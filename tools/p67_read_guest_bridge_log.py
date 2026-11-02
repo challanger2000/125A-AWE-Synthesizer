@@ -72,6 +72,8 @@ def main():
     result["audio_observed"]=bool(result["emu8000_nonzero_pcm_frames"]>0 and result["emu8000_note_register_delta"]>0)
     trial=audio.get("p75_program_results",[])
     result["p75_private_sf2_test"]=bool(audio.get("p75_original_private_sf2_test",False))
+    result["p75_sf2_sample_upload_plausible"]=(not result["p75_private_sf2_test"]) or bool(
+        json.loads(a.audio_report.read_text(encoding="utf8")).get("p75_private_sample_upload_plausible",False))
     result["p75_programs_tested"]=[x.get("program") for x in trial]
     result["p75_both_basses_nonzero"]=(not result["p75_private_sf2_test"]) or (
         result["p75_programs_tested"]==[0,7] and
@@ -86,6 +88,7 @@ def main():
         and result["original_creative_com1_ready"]
         and result["creatives_midi_short_messages_delivered"] >= (8 if result["p75_private_sf2_test"] else 4)
         and result["p75_both_basses_nonzero"]
+        and result["p75_sf2_sample_upload_plausible"]
         and not result["win95_agent_error"]
         and result["audio_observed"])
     if not ok:
