@@ -53,12 +53,12 @@ std::string Safe(const std::string& raw) {
 void Usage() {
     std::cerr<<"Usage: awe32_p86_generic_sf2_probe --sf2 bank.sf2 --rom awe32.raw"
              <<" --out directory [--bank 0..16383] [--programs 0,17]"
-             <<" [--note 0..127] [--velocity 1..127]\n";
+             <<" [--note 0..127] [--velocity 1..127] [--trace-dir path]\n";
 }
 }
 int main(int argc,char** argv) {
     namespace fs=std::filesystem;
-    fs::path sf2,rom,out="125A-P86-Original-SF2-Audition";
+    fs::path sf2,rom,out="125A-P86-Original-SF2-Audition",traceDir;
     int bank=0,note=36,velocity=100;
     std::vector<int> programs{0,17};
     for(int arg=1;arg<argc;arg+=2) {
@@ -67,6 +67,7 @@ int main(int argc,char** argv) {
         if(flag=="--sf2")sf2=value;
         else if(flag=="--rom")rom=value;
         else if(flag=="--out")out=value;
+        else if(flag=="--trace-dir")traceDir=value;
         else if(flag=="--bank"&&Number(value,0,16383,bank)){}
         else if(flag=="--note"&&Number(value,0,127,note)){}
         else if(flag=="--velocity"&&Number(value,1,127,velocity)){}
@@ -91,6 +92,10 @@ int main(int argc,char** argv) {
     }
     std::error_code ec;fs::create_directories(out,ec);
     if(ec){std::cerr<<"ERROR: output directory: "<<ec.message()<<'\n';return 4;}
+    if(!traceDir.empty()) {
+        fs::create_directories(traceDir,ec);
+        if(ec){std::cerr<<"ERROR: trace directory: "<<ec.message()<<'\n';return 4;}
+    }
     std::cout<<"P86: native 86Box EMU8000 (NOT original Win95-driver playback), "
              <<"44.1kHz stereo PCM16, bank "<<bank<<", MIDI note "<<note<<'\n';
     for(int program:programs){
@@ -116,12 +121,21 @@ int main(int argc,char** argv) {
         }
         synth.SelectBrowserBank(static_cast<uint16_t>(bank));
         synth.ProgramChange(0,static_cast<uint8_t>(program));
+        // P89 isolates ONLY note-on and release register writes, never the
+        // original user-SF2 PCM upload during LoadBank or voice initialization.
+        const fs::path tracePath=traceDir.empty()?fs::path{}:
+            traceDir/("B"+std::to_string(bank)+"_P"+std::to_string(program)+
+                      "_N"+std::to_string(note)+"_native-port-write.trace");
+        if(!tracePath.empty()&&!synth.Core().OpenTrace(tracePath.string().c_str())) {
+            std::cerr<<"ERROR: cannot open P89 native register trace\n";return 11;
+        }
         synth.NoteOn(0,static_cast<uint8_t>(note),
                      static_cast<uint8_t>(velocity));
         constexpr uint32_t frames=88200;
         std::vector<int16_t> pcm(static_cast<size_t>(frames)*2,0);
         synth.RenderBlock(pcm.data(),frames);
         synth.NoteOff(0,static_cast<uint8_t>(note));
+        if(!tracePath.empty())synth.Core().CloseTrace();
         int peak=0; double energy=0;
         for(const int16_t v:pcm) {
             int x=v;peak=std::max(peak,std::abs(x));
