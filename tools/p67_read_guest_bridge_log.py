@@ -36,6 +36,7 @@ def main():
     a=p.parse_args()
     with PyFatFS(str(a.disk),offset=partition_offset(a.disk),read_only=True,preserve_case=False) as fs:
         startup=fs.readbytes("AWE32/P68BOOT.LOG").decode("ascii","replace") if fs.exists("AWE32/P68BOOT.LOG") else ""
+        batch=fs.readbytes("AWE32/P68BAT.LOG").decode("ascii","replace") if fs.exists("AWE32/P68BAT.LOG") else ""
         if fs.exists("AWE32/P63LOG.TXT"):
             result=inspect(fs.readbytes("AWE32/P63LOG.TXT"))
         else:
@@ -46,6 +47,7 @@ def main():
                     "win95_agent_error":True,
                     "raw_user_sf2_published":False,
                     "error":"Win95 guest agent never created P63LOG.TXT"}
+    result["p68_startup_batch_launched"] = "P68 STARTUP BATCH" in batch
     result["p68_win95_autostart_launched"]="P68 WIN95 AUTOSTART LOADED" in startup
     result["p68_win95_createprocess_ok"]="P63 CREATEPROCESS SUCCESS" in startup
     result["p68_launch_diagnostic"]=next((line.strip() for line in startup.splitlines() if line.startswith("P63 CREATEPROCESS")), "P68BOOT.LOG not created")

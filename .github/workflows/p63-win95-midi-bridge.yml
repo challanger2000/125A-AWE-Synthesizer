@@ -13,6 +13,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: awe-win95-compile-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   win95-bridge:
     runs-on: ubuntu-24.04

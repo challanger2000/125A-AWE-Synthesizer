@@ -48,6 +48,10 @@ def patch_win_ini(buf: bytes) -> bytes:
         raise ValueError("WIN.INI [windows] run= entry not found or not writable")
     return (newline.join(result)+newline).encode("latin-1")
 
+STARTUP_BATCH = (b"@ECHO OFF\r\n"
+                 b"ECHO P68 STARTUP BATCH>C:\\AWE32\\P68BAT.LOG\r\n"
+                 b"START C:\\AWE32\\P68BOOT.EXE\r\n")
+
 def stage(disk: Path, launcher: Path) -> dict:
     from pyfatfs.PyFatFS import PyFatFS
     from p38_stage_creative_awe32_win95 import partition_offset
@@ -70,10 +74,25 @@ def stage(disk: Path, launcher: Path) -> dict:
             f.write(raw)
         if fs.readbytes("AWE32/P68BOOT.EXE")!=raw:
             raise AssertionError("P68 launcher write did not persist")
+        # Windows 95's user-facing Startup group is an independent launch
+        # mechanism from WIN.INI run=. Verify the folder exists before use.
+        startup = None
+        for path in ("WINDOWS/Start Menu/Programs/StartUp",
+                     "WINDOWS/STARTM~1/PROGRAMS/STARTUP"):
+            if fs.isdir(path):
+                startup = path
+                break
+        if startup is not None:
+            with fs.openbin(startup + "/P68BOOT.BAT", "w") as output:
+                output.write(STARTUP_BATCH)
+            if fs.readbytes(startup + "/P68BOOT.BAT") != STARTUP_BATCH:
+                raise AssertionError("Win95 Startup folder script did not persist")
     return {"phase":"P68","guest_autostart":LAUNCHER,
         "launcher_sha256":hashlib.sha256(raw).hexdigest(),
         "agent_staged":True,
         "run_entry_persisted":True,
+        "win95_startup_folder_script_staged": bool(startup),
+        "win95_startup_folder_path": startup,
         "win95_original_creative_midi_verified":False}
 
 def main():
