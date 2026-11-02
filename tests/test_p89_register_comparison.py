@@ -22,7 +22,7 @@ def native(path,events):
 
 class P89VoiceRegisters(unittest.TestCase):
     def test_pointer_decode_and_sample_upload_filtered(self):
-        self.assertEqual(normalized(0x620,0x1234,(7<<5)|4),(4,"DATA0:R7",0x1234))
+        self.assertEqual(normalized(0x620,0x1234,(7<<5)|4),(4,"CSL_LO",0x1234))
         self.assertIsNone(normalized(0xA20,0x1234,(1<<5)|26))
         self.assertIsNone(normalized(0xE22,0x1234,(1<<5)|26))
     def test_different_voice_ids_not_misclassified_as_wrong_values(self):
@@ -44,12 +44,12 @@ class P89VoiceRegisters(unittest.TestCase):
             self.assertFalse(result["emulated_hardware_1to1_proven"])
             self.assertFalse(result["physical_hardware_parity_proven"])
     def test_one_filter_register_difference_is_located(self):
-        result=compare([(1,"DATA1:R5",0x2222),
-                        (1,"DATA1:R6",0x40FF)],
-                       [(9,"DATA1:R5",0x2222),
-                        (9,"DATA1:R6",0x30FF)])
+        result=compare([(1,"DCYSUSV",0x2222),
+                        (1,"ENVVAL",0x40FF)],
+                       [(9,"DCYSUSV",0x2222),
+                        (9,"ENVVAL",0x30FF)])
         self.assertEqual(result["register_series_different"],1)
-        self.assertEqual(result["mismatches"][0]["register"],"DATA1:R6")
+        self.assertEqual(result["mismatches"][0]["register"],"ENVVAL")
         self.assertEqual(result["mismatches"][0]["creative_first"],["0x40FF"])
         self.assertEqual(result["mismatches"][0]["native_first"],["0x30FF"])
     def test_creative_range_rejects_upload_only(self):
