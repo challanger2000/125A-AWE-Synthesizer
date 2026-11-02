@@ -40,6 +40,10 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
     key(conn,0x13)                  # Run...
     send(conn,"step 500")
     type_path(conn,r"c:\awe32\p63midi.exe")
+    # Win95 consumes injected scan codes asynchronously. P67 screenshot
+    # showed only \"...p63midi.e\" before Return, so execution never started.
+    # Step guest CPU to flush ALL pending keystrokes before pressing Enter.
+    send(conn,"step 1500")
     screenshot(conn,out,"p64-agent-start-command.png",report)
     key(conn,0x1c)
     send(conn,"step 5500")
