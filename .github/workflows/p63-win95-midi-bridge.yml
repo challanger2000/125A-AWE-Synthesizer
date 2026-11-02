@@ -7,6 +7,8 @@ on:
       - 'tools/p63_send_guest_midi.py'
       - 'tests/p63_midi_wire.cpp'
       - 'tests/test_p63_bridge.py'
+      - 'tools/p68_stage_win95_autostart.py'
+      - 'tests/test_p68_ini.py'
       - '.github/workflows/p63-win95-midi-bridge.yml'
   workflow_dispatch:
 permissions:
