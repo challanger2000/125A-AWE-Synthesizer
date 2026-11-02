@@ -1,7 +1,7 @@
-name: P58 verify actual generated sine SF2 waveform via original Win95 Creative MIDI
+name: P60 verify actual original Creative Win95 SF2 upload memory word arithmetic
 on:
   push:
-    branches: [research/p58-sf2-waveform-spectral-confirmation]
+    branches: [research/p60-original-creative-sf2-ram-upload]
     paths:
       - tools/p40_qemu_win95_guest_scancode.py
       - tools/p48_86box_boot_win95.py
@@ -12,6 +12,7 @@ on:
       - tools/p55_stage_generated_sf2.py
       - tools/p57_stage_user_bank_midi.py
       - tools/p58_analyze_audio.py
+      - tools/p60_compare_creative_sf2_upload.py
       - .github/workflows/p48-win95-86box-pnp.yml
   workflow_dispatch:
 permissions:
@@ -159,7 +160,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: P58-Original-Creative-AWE32-SF2-Private-Waveform-Spectrum
+          name: P60-Original-Creative-Win95-SF2-Memory-Upload-Analysis
           path: p48-evidence/*
           if-no-files-found: warn
           retention-days: 5
