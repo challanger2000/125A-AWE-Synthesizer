@@ -22,6 +22,8 @@ on:
       - tools/p67_read_guest_bridge_log.py
       - tools/p75_private_sf2.py
       - tools/p83_generic_sf2.py
+      - tools/p84_export_universal_wav.py
+      - tests/test_p84_universal.py
       - tests/test_p83_generic_sf2.py
       - tools/p76_export_private_wav.py
       - tests/test_p76_private_wav.py
@@ -75,6 +77,7 @@ jobs:
           python -m unittest discover -s tests -p test_p68_ini.py -v
           python -m unittest discover -s tests -p test_p75_sf2.py -v
           python -m unittest discover -s tests -p test_p83_generic_sf2.py -v
+          python -m unittest discover -s tests -p test_p84_universal.py -v
           python -m unittest discover -s tests -p test_p76_private_wav.py -v
           python -m unittest discover -s tests -p test_p72_pe_entry.py -v
           python -m unittest discover -s tests -p test_p69_gold.py -v
