@@ -1,0 +1,21 @@
+name: P87 independent Creative Win95 vs native EMU8000 audio evidence
+on:
+  push:
+    branches: [develop/p63-win95-original-driver-midi-bridge]
+    paths:
+      - tools/p87_audio_parity.py
+      - tests/test_p87_audio_parity.py
+      - .github/workflows/p87-audio-comparison.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  evidence-gates:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare deterministic audio measurements
+        run: python -m pip install --disable-pip-version-check 'numpy>=1.26,<3'
+      - name: Test native WAV copies cannot masquerade as original Win95 audio
+        run: python -m unittest discover -s tests -p test_p87_audio_parity.py -v
