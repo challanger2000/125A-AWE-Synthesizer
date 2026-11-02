@@ -938,12 +938,19 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
     {
         // SF2 stores indices; the correction -1/-2/-3 matches how Creative
         // addresses the same samples in its own SF1 bank (see docs/re-notes).
+        // P89 original Win95 Creative writes one sample later in CCCA,
+        // PSST and CSL for both measured layers. DOS/SDK unchanged.
+        const uint32_t win95Sf2AddressCorrection =
+            (drv == Awe32::Driver::Win95) ? 1u : 0u;
         start     = base + s.start + g.Get(Gen::StartAddrsOffset, 0)
-                    + 32768u * g.Get(Gen::StartAddrsCoarseOffset, 0) - 1;
+                    + 32768u * g.Get(Gen::StartAddrsCoarseOffset, 0)
+                    - 1 + win95Sf2AddressCorrection;
         loopStart = base + s.loopStart + g.Get(Gen::StartloopAddrsOffset, 0)
-                    + 32768u * g.Get(Gen::StartloopAddrsCoarseOffset, 0) - 2;
+                    + 32768u * g.Get(Gen::StartloopAddrsCoarseOffset, 0)
+                    - 2 + win95Sf2AddressCorrection;
         loopEnd   = base + s.loopEnd + g.Get(Gen::EndloopAddrsOffset, 0)
-                    + 32768u * g.Get(Gen::EndloopAddrsCoarseOffset, 0) - 3;
+                    + 32768u * g.Get(Gen::EndloopAddrsCoarseOffset, 0)
+                    - 3 + win95Sf2AddressCorrection;
     }
 
     // The default is **0** = a one-shot sample, not a loop. Not a guess:
@@ -991,6 +998,13 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
     // with `initialFilterQ` 6, 14 or 22 would tell them apart - there the
     // two variants differ. None of our traces has one yet.
     if (sf1) q = g.Get(Gen::InitialFilterQ, 0) >> 3;
+    else if (drv == Awe32::Driver::Win95)
+    {
+        // P89 measured original Creative AWE64 Gold: SF2 Q=100 centibels
+        // yields EMU8000 Q=8; the old normalization yielded Q=6.
+        // Other Q magnitudes still require independent driver verification.
+        q = static_cast<int>(std::lround(g.Get(Gen::InitialFilterQ, 0) / 12.5));
+    }
     else     q = static_cast<int>(std::lround(g.Get(Gen::InitialFilterQ, 0) / 10.0
                                               / kResonanceMaxDb * kCccaQMax));
     q = std::clamp(q, 0, kCccaQMax);
@@ -1020,7 +1034,11 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
 
     // ---- chorus send + loop end -> CSL ----------------------------------
     const int chorus = sf1 ? g.Get(Gen::ChorusEffectsSend, 0)
-                           : static_cast<int>(std::lround(g.Get(Gen::ChorusEffectsSend, 0) * 255.0 / 1000.0));
+                           : (drv == Awe32::Driver::Win95)
+                               // P89 SF2 500 -> original CSL 0x7F; not 0x80.
+                               ? g.Get(Gen::ChorusEffectsSend, 0) * 255 / 1000
+                               : static_cast<int>(std::lround(
+                                     g.Get(Gen::ChorusEffectsSend, 0) * 255.0 / 1000.0));
     // The driver adds 1 to the loop end - but **only in the loop branch**.
     // For a one-shot sample it puts the loop at `end+4 .. end+8` and adds no
     // one:
@@ -1157,6 +1175,10 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
     const double kPefeFcCentsPerStep = 1200.0 * kPefeFilterOctaves / 127.0;
     const double kFmmodFcCentsPerStep = 1200.0 * kFmmodFilterOctaves / 127.0;
     const double kTremCbPerStep      = kTremoloMaxDb * 10.0 / 127.0;
+    // P89 real Win95 Creative: SF2 modLfoToVolume=20 centibels yields
+    // TREMFRQ depth 0x15, old six-dB path yielded 0x2A.
+    const double tremCbPerStep = (!sf1 && drv == Awe32::Driver::Win95)
+        ? (kTremoloChipMaxDb * 10.0 / 127.0) : kTremCbPerStep;
 
     vp.pefe = static_cast<uint16_t>(
         (static_cast<uint8_t>(modAmount(Gen::ModEnvToPitch, kPitchCentsPerStep)) << 8)
@@ -1187,7 +1209,7 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
         (static_cast<uint8_t>(modAmount(Gen::ModLfoToPitch, kPitchCentsPerStep)) << 8)
         | static_cast<uint8_t>(modAmount(Gen::ModLfoToFilterFc, kFmmodFcCentsPerStep, 2)));
     vp.tremfrq = static_cast<uint16_t>(
-        (static_cast<uint8_t>(modAmount(Gen::ModLfoToVolume, kTremCbPerStep, 2)) << 8) | lfo1Freq);
+        (static_cast<uint8_t>(modAmount(Gen::ModLfoToVolume, tremCbPerStep, 2)) << 8) | lfo1Freq);
     vp.fm2frq2 = static_cast<uint16_t>(
         (static_cast<uint8_t>(modAmount(Gen::VibLfoToPitch, kPitchCentsPerStep)) << 8) | lfo2Freq);
 
