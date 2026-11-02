@@ -23,7 +23,8 @@ jobs:
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq gcc-mingw-w64-i686
       - name: Build actual Win32 WinMM guest helper for original Creative driver
         run: |
-          i686-w64-mingw32-gcc -Os -Wall -Wextra -std=c99 -DWINVER=0x0400             -D_WIN32_WINNT=0x0400 -Wl,--major-subsystem-version,4             -Wl,--minor-subsystem-version,0 -o p63_win95_guest_midi.exe             src/bridge/p63_win95_guest_midi.c -lwinmm
+          i686-w64-mingw32-gcc -Os -Wall -Wextra -std=c99 -ffreestanding -fno-builtin -fno-stack-protector -nostdlib -Wl,-e,p63_entry -Wl,--major-subsystem-version,4 -Wl,--minor-subsystem-version,0 -o p63_win95_guest_midi.exe src/bridge/p63_win95_guest_midi.c -lwinmm -lkernel32 -lgcc
+          if i686-w64-mingw32-objdump -p p63_win95_guest_midi.exe | grep -E 'DLL Name:.*(MSVCRT|UCRT|VCRUNTIME|MSVCP)'; then echo 'Unexpected CRT dependency'; exit 1; fi
           file p63_win95_guest_midi.exe
       - name: Verify portable C MIDI protocol against Python sender
         run: |
