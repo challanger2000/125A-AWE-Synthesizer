@@ -163,15 +163,19 @@ int main() {
     const fs::path multi=directory/"125A_synthetic_sf2_banks.sf2";
     const fs::path huge=directory/"125A_synthetic_sf2_overflow.sf2";
     const fs::path large=directory/"125A_synthetic_sf2_8mb_plus.sf2";
+    const fs::path d4size=directory/"125A_synthetic_sf2_d4_pcm_size.sf2";
     const fs::path rom=directory/"125A_synthetic_sf2_audio.raw";
     struct Cleanup {
-        fs::path a,b,c,d,e;
-        ~Cleanup(){std::error_code ec;fs::remove(a,ec);fs::remove(b,ec);fs::remove(c,ec);fs::remove(d,ec);fs::remove(e,ec);}
-    } cleanup{sf,huge,rom,large,multi};
+        fs::path a,b,c,d,e,f;
+        ~Cleanup(){std::error_code ec;fs::remove(a,ec);fs::remove(b,ec);fs::remove(c,ec);fs::remove(d,ec);fs::remove(e,ec);fs::remove(f,ec);}
+    } cleanup{sf,huge,rom,large,multi,d4size};
     if (!writeFile(sf,makeBank(2048)) ||
         !writeFile(multi,makeBank(2048,true)) ||
         !writeFile(huge,makeBank(300000)) ||
         !writeFile(large,makeBank(4'300'000)) ||
+        // P85: 25,881,188 PCM bytes, matching the *size*, not content,
+        // of the user-supplied Alesis D4. No proprietary waveform included.
+        !writeFile(d4size,makeBank(12'940'594)) ||
         !writeFile(rom,Bytes(1048576,0)))return 2;
     bool ok=true;
     std::string error;
@@ -329,6 +333,40 @@ int main() {
         ok &= check(synth.BankCount()==1 &&
                     synth.Core().ChipRam()[reserve+64]==synth.Core().DramData()[reserve+64],
                     "large SF2 copies into actual hardware-emulated chip RAM");
+    }
+    {
+        // P85: a D4-sized SF2 must load to the real 86Box EMU8000 chip.
+        // 25,881,188 bytes of freshly generated sine, NOT user Alesis PCM.
+        // RAM headroom must remain for actual 28 MiB AWE64 Gold operation.
+        Synth synth(44100);
+        synth.Core().SetDriver(Awe32::Driver::Win95);
+        std::string err;
+        bool chipReady=synth.Core().UseBox86Chip(rom.string(),err);
+        ok &= check(chipReady && synth.Core().ChipRamWords()==28672u*512u,
+                    "P85 AWE64 Gold 28MiB 86Box chip initialized");
+        if(chipReady) {
+            synth.Core().PowerOnInit();
+            err.clear();
+            const bool loaded=synth.LoadBank(d4size.string(),err);
+            ok &= check(loaded,"P85 D4-sized 24.68MiB synthetic SF2 loads");
+            if(!loaded) std::cerr<<"P85 load error: "<<err<<'\n';
+            if(loaded) {
+                ok &= check(synth.BankCount()==1 &&
+                            synth.Core().ChipRam()!=nullptr &&
+                            synth.Core().DramSize() <= synth.Core().ChipRamWords() &&
+                            synth.Core().ChipRam()[reserve+64] ==
+                                synth.Core().DramData()[reserve+64],
+                            "P85 whole 24.68MiB SF2 resides in EMU8000 chip RAM");
+                synth.ProgramChange(0,0);
+                synth.NoteOn(0,36,110); // D4-style kick note
+                std::vector<int16_t> pcm(16384*2,0);
+                synth.RenderBlock(pcm.data(),16384);
+                ok &= check(std::any_of(pcm.begin(),pcm.end(),
+                            [](int16_t n){return n!=0;}),
+                            "P85 MIDI note36 generates real chip PCM from large SF2");
+                synth.NoteOff(0,36);
+            }
+        }
     }
     {
         // P27: A direct, synthetic sound test of the authentic 86Box chip's
