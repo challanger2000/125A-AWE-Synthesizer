@@ -83,6 +83,10 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
             audio_started=True
         except Exception as exc:
             report["p64_audio_start_error"]=str(exc)
+        # P89: an isolated original Creative port-write window for one
+        # known program/note. Start AFTER all bank/CC/program messages and
+        # AFTER the complete SF2 upload; end BEFORE changing program again.
+        p89_first_start=max(0,len(trace.read_text(encoding="utf8",errors="replace").splitlines())-1) if trace.is_file() else -1
         uart_bytes_sent+=send_paced_frame(fd,frame(0x90|midi_channel,note,100),conn,send)
         uart_frames_sent+=1
         send(conn,"step 1200")
@@ -92,6 +96,7 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
         send(conn,"step 1200")
         if audio_started:
             send(conn,"audio stop")
+        p89_first_end=max(0,len(trace.read_text(encoding="utf8",errors="replace").splitlines())-1) if trace.is_file() else -1
         p75_program7_before=max(0,len(trace.read_text(encoding="utf8",errors="replace").splitlines())-1) if trace.is_file() else 0
         if second_program is not None:
             other_dir.mkdir(exist_ok=True)
@@ -142,7 +147,11 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
              "nonzero_audio":bool(analysis7 and analysis7.get("window_rms_dbfs",-300)>-299),
              "register_write_delta":max(0,count_after-p75_program7_before),
              "raw_audio_uploaded":False}]
-    result={"p84_midi_channel_0_based":midi_channel,
+    result={"p89_original_first_note_trace_window":{
+                "program":first_program,"note":note,"velocity":100,
+                "start_row":p89_first_start,"end_row":p89_first_end,
+                "window_isolated":p89_first_end>p89_first_start>=0},
+            "p84_midi_channel_0_based":midi_channel,
             "p75_original_private_sf2_test":second_program is not None,
             "p75_program_results":p75_program_reports,
             "p74_uart_bytes_injected":uart_bytes_sent,
