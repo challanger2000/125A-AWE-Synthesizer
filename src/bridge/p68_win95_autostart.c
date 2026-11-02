@@ -29,6 +29,17 @@ void WINAPI p68_entry(void) {
     STARTUPINFOA si={0};
     PROCESS_INFORMATION pi={0};
     DWORD err=0;
+    /* Independent, short-name root marker: proves the Win95 PE entrypoint
+     * has actually executed even when the AWE32 directory log is absent. */
+    HANDLE root=CreateFileA("C:\\P71ROOT.TXT",GENERIC_WRITE,
+                  FILE_SHARE_READ,NULL,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,NULL);
+    if(root!=INVALID_HANDLE_VALUE) {
+        static const char marker[]="P71 ENTRYPOINT EXECUTED\r\n";
+        DWORD written=0;
+        WriteFile(root,marker,sizeof(marker)-1,&written,NULL);
+        FlushFileBuffers(root);
+        CloseHandle(root);
+    }
     log_file=CreateFileA("C:\\AWE32\\P68BOOT.LOG",GENERIC_WRITE,
                   FILE_SHARE_READ,NULL,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,NULL);
     emit("P68 WIN95 AUTOSTART LOADED\r\n");
@@ -48,5 +59,7 @@ void WINAPI p68_entry(void) {
         FlushFileBuffers(log_file);
         CloseHandle(log_file);
     }
-    ExitProcess(err?1:0);
+    /* 71 is a deliberate Win95 COMMAND.COM exit-code probe.  It must be
+     * visible in the Startup .BAT independently of any FAT writeback. */
+    ExitProcess(71);
 }

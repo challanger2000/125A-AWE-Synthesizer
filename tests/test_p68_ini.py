@@ -8,6 +8,9 @@ spec=importlib.util.spec_from_file_location("p68",path)
 p68=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(p68)
 class StartupIni(unittest.TestCase):
+    def test_exit_code_proves_pe_entrypoint_without_fat_log(self):
+        self.assertIn(b"IF ERRORLEVEL 71",p68.STARTUP_BATCH)
+        self.assertIn(b"IF NOT ERRORLEVEL 71",p68.STARTUP_BATCH)
     def test_direct_exe_legacy_startup_diagnostics(self):
         self.assertIn(b"C:\\AWE32\\P68BOOT.EXE\r\n", p68.STARTUP_BATCH)
         self.assertIn(b"IF ERRORLEVEL 1", p68.STARTUP_BATCH)

@@ -36,6 +36,7 @@ def main():
     a=p.parse_args()
     with PyFatFS(str(a.disk),offset=partition_offset(a.disk),read_only=True,preserve_case=False) as fs:
         startup=fs.readbytes("AWE32/P68BOOT.LOG").decode("ascii","replace") if fs.exists("AWE32/P68BOOT.LOG") else ""
+        root_marker=fs.readbytes("P71ROOT.TXT").decode("ascii","replace") if fs.exists("P71ROOT.TXT") else ""
         batch=fs.readbytes("AWE32/P68BAT.LOG").decode("ascii","replace") if fs.exists("AWE32/P68BAT.LOG") else ""
         if fs.exists("AWE32/P63LOG.TXT"):
             result=inspect(fs.readbytes("AWE32/P63LOG.TXT"))
@@ -48,6 +49,9 @@ def main():
                     "raw_user_sf2_published":False,
                     "error":"Win95 guest agent never created P63LOG.TXT"}
     result["p68_startup_batch_launched"] = "P70 STARTUP BATCH" in batch or "P68 STARTUP BATCH" in batch
+    result["p71_entrypoint_executed_root_marker"] = "P71 ENTRYPOINT EXECUTED" in root_marker
+    result["p71_entrypoint_executed_exitcode"] = "P71 ENTRY EXITCODE OBSERVED" in batch
+    result["p71_entrypoint_no_exitcode"] = "P71 ENTRY EXITCODE MISSING" in batch
     result["p70_guest_exe_exists"] = "P68BOOT.EXE EXISTS" in batch
     result["p70_direct_execution_began"] = "DIRECT EXEC BEGIN" in batch
     result["p70_direct_execution_returned"] = "DIRECT EXEC RETURNED" in batch
