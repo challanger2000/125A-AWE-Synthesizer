@@ -29,25 +29,11 @@ def connect_linux_86box_fifo(base: Path, timeout_s=12):
 
 def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
               send, key, type_path, screenshot, report, pcm_fifo=None):
-    # AWE Control Panel has already selected and applied the original SF2.
-    # Do not reimplement SF2 loading in our guest agent.
-    send(conn,"key down 0x38 0x3e")  # Alt+F4 closes original Control Panel
-    send(conn,"key up 0x3e 0x38")
-    send(conn,"step 600")
-    send(conn,"key down 0x1d 0x01")  # Ctrl+Esc, Start
-    send(conn,"key up 0x01 0x1d")
-    send(conn,"step 250")
-    key(conn,0x13)                  # Run...
-    send(conn,"step 500")
-    type_path(conn,r"c:\awe32\p63midi.exe")
-    # Win95 consumes injected scan codes asynchronously. P67 screenshot
-    # showed only \"...p63midi.e\" before Return, so execution never started.
-    # Step guest CPU to flush ALL pending keystrokes before pressing Enter.
-    send(conn,"step 1500")
-    screenshot(conn,out,"p64-agent-start-command.png",report)
-    key(conn,0x1c)
-    send(conn,"step 5500")
-    screenshot(conn,out,"p64-agent-started.png",report)
+    # P68 WIN.INI run= launched the CRT-free original Creative MIDI agent
+    # at Windows 95 startup. Do not try to type the command into Run again:
+    # those keystrokes were reliably accepted but failed to start the EXE.
+    send(conn, "step 2000")
+    screenshot(conn, out, "p68-agent-autostart-state.png", report)
 
     count_before = max(0,len(trace.read_text(encoding="utf8", errors="replace").splitlines())-1) if trace.is_file() else 0
     fd=connect_linux_86box_fifo(fifo_base)
@@ -86,7 +72,8 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
         except Exception as exc:
             analysis={"analysis_error":str(exc)}
     pcm_report=pcm_receiver.stop() if pcm_receiver else None
-    result={"guest_agent_executed_by_win95_run_command":True,
+    result={"guest_agent_executed_by_win95_run_command":False,
+            "guest_agent_autostart_requested":True,
             "original_creative_midi_endpoint_verified":False,
             "original_creative_midi_activity_register_write_delta":max(0,count_after-count_before),
             "original_creative_wavetable_audio":analysis,
