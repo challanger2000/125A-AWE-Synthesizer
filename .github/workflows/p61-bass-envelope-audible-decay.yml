@@ -1,0 +1,22 @@
+name: P61 Verify audible plucked bass envelope on EMU8000 chip
+on:
+  push:
+    branches: [research/p61-bass-envelope-audible-decay]
+    paths:
+      - tests/sf2_audio_integration.cpp
+      - .github/workflows/p61-bass-envelope-audible-decay.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pluck-envelope:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure native EMU8000 SoundFont integration tests
+        run: cmake -S . -B build-p61 -G Ninja -DCMAKE_BUILD_TYPE=Release -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_OPL3_PROBES=OFF
+      - name: Build synthetic SF2 and real EMU8000 audio test
+        run: cmake --build build-p61 --target awe32_sf2_audio_integration_test --parallel 2
+      - name: Confirm pluck decays instead of sustaining like an organ
+        run: ctest --test-dir build-p61 --output-on-failure -V -R '^125A_sf2_audio_integration$'
