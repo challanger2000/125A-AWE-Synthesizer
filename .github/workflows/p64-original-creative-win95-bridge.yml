@@ -20,6 +20,9 @@ on:
       - tools/p65_pcm_receiver.py
       - tests/test_p65_pcm.py
       - tools/p67_read_guest_bridge_log.py
+      - tools/p68_stage_win95_autostart.py
+      - src/bridge/p68_win95_autostart.c
+      - tests/test_p68_ini.py
       - src/bridge/p63_win95_guest_midi.c
       - src/bridge/P63MidiWire.h
       - .github/workflows/p64-original-creative-win95-bridge.yml
@@ -46,12 +49,15 @@ jobs:
       - name: Build native Win95 MIDI bridge and test Linux FIFO protocol
         run: |
           i686-w64-mingw32-gcc -Os -Wall -Wextra -std=c99 -ffreestanding -fno-builtin -fno-stack-protector -nostdlib -Wl,-e,p63_entry -Wl,--major-subsystem-version,4 -Wl,--minor-subsystem-version,0 -o p63_win95_guest_midi.exe src/bridge/p63_win95_guest_midi.c -lwinmm -lkernel32 -lgcc
+          i686-w64-mingw32-gcc -Os -Wall -Wextra -std=c99 -ffreestanding -fno-builtin -fno-stack-protector -nostdlib -Wl,-e,p68_entry -Wl,--major-subsystem-version,4 -Wl,--minor-subsystem-version,0 -o p68_win95_autostart.exe src/bridge/p68_win95_autostart.c -lkernel32 -lgcc
+          if i686-w64-mingw32-objdump -p p68_win95_autostart.exe | grep -E "DLL Name:.*(MSVCRT|UCRT|VCRUNTIME|MSVCP)"; then echo "Unexpected CRT dependency"; exit 1; fi
           if i686-w64-mingw32-objdump -p p63_win95_guest_midi.exe | grep -E "DLL Name:.*(MSVCRT|UCRT|VCRUNTIME|MSVCP)"; then echo "CRT dependency forbidden for stock Win95"; exit 1; fi
           c++ -std=c++17 -o p63_wire_test tests/p63_midi_wire.cpp
           ./p63_wire_test
           python -m unittest discover -s tests -p test_p63_bridge.py -v
           python -m unittest discover -s tests -p test_p64_fifo.py -v
           python -m unittest discover -s tests -p test_p65_pcm.py -v
+          python -m unittest discover -s tests -p test_p68_ini.py -v
       - name: Obtain disposable original Win95 installation disk
         shell: bash
         run: |
@@ -114,6 +120,12 @@ jobs:
             --out "$RUNNER_TEMP/p48/qemu-observations" \
             --guest-keep-copy "$RUNNER_TEMP/p48/private-guest/creative-installed.img"
           test "$(stat -c %s "$RUNNER_TEMP/p48/private-guest/creative-installed.img")" -eq 536870912
+      - name: Stage P68 Win95 autorun launcher in installed guest (avoid UI keyboard races)
+        run: |
+          python tools/p68_stage_win95_autostart.py \
+            --disk "$RUNNER_TEMP/p48/private-guest/creative-installed.img" \
+            --launcher p68_win95_autostart.exe \
+            --report "$RUNNER_TEMP/p48/P68-autostart-staging.json"
       - name: Build instrumented 86Box with automation support (private runner)
         shell: bash
         run: |
@@ -191,6 +203,7 @@ jobs:
           cp "$RUNNER_TEMP/p53/P55-generated-sf2-stage.json" p48-evidence/ 2>/dev/null || true
           cp "$RUNNER_TEMP/p53/P57-userbank-midi-stage.json" p48-evidence/ 2>/dev/null || true
           cp "$RUNNER_TEMP/p53/P64-agent-stage.json" p48-evidence/ 2>/dev/null || true
+          cp "$RUNNER_TEMP/p48/P68-autostart-staging.json" p48-evidence/ 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
