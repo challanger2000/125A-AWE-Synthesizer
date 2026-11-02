@@ -22,6 +22,8 @@ from p64_original_win95_midi_trial import run_trial as p64_run_trial
 from p75_private_sf2 import stage as p75_stage_private_sf2
 from p80_full_sf2_inventory import inventory as p80_inventory
 from p76_export_private_wav import export as p76_export_private_wav
+from p83_generic_sf2 import stage_private as p83_stage_private
+from p84_export_universal_wav import export as p84_export_universal_wav
 
 
 # Scancode set 1 (US Win95 layout), only for the fixed laboratory filename.
@@ -66,6 +68,12 @@ def main() -> None:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--p64-bridge", action="store_true", help="Run original Win95 MIDI agent through 86Box COM1")
     ap.add_argument("--private-sf2", type=Path, help="Local original SF2, never commit/upload")
+    ap.add_argument("--universal-sf2",type=Path,help="Any private SF2; original Creative Win95 driver audition")
+    ap.add_argument("--universal-sf2-bank",type=int,help="SF2 preset bank; default first present bank")
+    ap.add_argument("--universal-programs",help="Comma-separated two SF2 MIDI programs; defaults to first two")
+    ap.add_argument("--universal-creative-bank",type=int,default=1,help="Win95 Creative user bank (CC0), default 1")
+    ap.add_argument("--universal-note",type=int,default=60,help="MIDI audition note (drum kits: 36)")
+    ap.add_argument("--universal-wav-dir",type=Path,help="Private output directory of real original Creative WAVs")
     ap.add_argument("--require-full-bank",action="store_true",help="Require exact original 77-preset bank, not the two-preset test fixture")
     ap.add_argument("--private-wav-dir",type=Path,help="Local private export directory for original two bass WAVs")
     ap.add_argument("--sound-card", choices=("sbawe32_pnp","sbawe64_gold"), default="sbawe32_pnp")
@@ -75,6 +83,14 @@ def main() -> None:
     if not args.disk.is_file() or args.disk.stat().st_size != 536870912:
         raise ValueError("Expected private ephemeral 512MiB Win95 guest disk")
 
+    if args.private_sf2 and args.universal_sf2:
+        raise ValueError("Specify exactly one original or universal SF2 mode")
+    if args.require_full_bank and args.universal_sf2:
+        raise ValueError("Full77 fixture is incompatible with universal SF2 mode")
+    if args.universal_sf2 and not args.p64_bridge:
+        raise ValueError("--universal-sf2 requires --p64-bridge")
+    if args.universal_wav_dir and not args.universal_sf2:
+        raise ValueError("--universal-wav-dir requires --universal-sf2")
     if args.private_sf2 and not args.p64_bridge:
         raise ValueError("--private-sf2 requires --p64-bridge")
     if args.private_wav_dir and not args.private_sf2:
@@ -82,8 +98,34 @@ def main() -> None:
     if args.require_full_bank and not args.private_sf2:
         raise ValueError("--require-full-bank requires --private-sf2")
     full_bank_report=p80_inventory(args.private_sf2.read_bytes()) if args.require_full_bank else None
-    private_report=p75_stage_private_sf2(args.disk,args.private_sf2) if args.private_sf2 else None
     ram_kib=28672 if args.sound_card=="sbawe64_gold" else 2048
+    generic_report=p83_stage_private(args.disk,args.universal_sf2,ram_kib*1024) if args.universal_sf2 else None
+    if generic_report:
+        generic_report["sample_data_bytes"]=generic_report["sample_pcm_bytes"]
+        bank=(args.universal_sf2_bank if args.universal_sf2_bank is not None
+              else generic_report["available_banks"][0])
+        available=[item for item in generic_report["presets"] if item["bank"]==bank]
+        if not available:
+            raise ValueError("Requested SF2 bank %d contains no presets"%bank)
+        if args.universal_programs:
+            raw=args.universal_programs.split(",")
+            if len(raw)!=2:raise ValueError("Exactly two MIDI test programs required")
+            selected=[int(v.strip()) for v in raw]
+        else:
+            selected=[item["program"] for item in available[:2]]
+            if len(selected)==1:selected.append(selected[0])
+        if len(selected)!=2 or any(not 0<=pr<=127 for pr in selected):
+            raise ValueError("Need two valid MIDI test programs")
+        by_program={item["program"]:item for item in available}
+        if any(pr not in by_program for pr in selected):
+            raise ValueError("Selected MIDI program absent in SF2 bank %d"%bank)
+        audition_presets=[by_program[pr] for pr in selected]
+        if not 0<=args.universal_note<=127 or not 0<=args.universal_creative_bank<=127:
+            raise ValueError("Universal MIDI note and Creative bank must be 0..127")
+    else:
+        audition_presets=[]
+    private_report=(generic_report if generic_report else
+                    p75_stage_private_sf2(args.disk,args.private_sf2) if args.private_sf2 else None)
     card_section={"sbawe32_pnp":"Sound Blaster AWE32 PnP",
                   "sbawe64_gold":"Sound Blaster AWE64 Gold"}[args.sound_card]
     vm = args.out / "win95-pnp"
@@ -128,6 +170,10 @@ reconnect = 1
     report = {"phase": "P48", "guest": "Windows 95 OSR2, original Creative INF staged and installed in QEMU",
               "hardware": args.sound_card, "sample_ram_kib": ram_kib,
               "private_sf2_supplied":bool(private_report),
+              "p84_universal_sf2_test":bool(generic_report),
+              "p84_selected_presets":audition_presets,
+              "p84_creative_user_bank":args.universal_creative_bank if generic_report else None,
+              "p84_synthesizer_sample_bytes":generic_report["sample_pcm_bytes"] if generic_report else None,
               "full_77_preset_soundfont_validated":bool(full_bank_report),
               "full_77_preset_sample_bytes":full_bank_report["sample_data_bytes"] if full_bank_report else None,
               "windows95_binding_verified": False, "actual_driver_note_trace_verified": False,
@@ -239,7 +285,8 @@ reconnect = 1
                 # P56: P55 screenshot establishes the Win95 common
                 # dialog has "File Name" focused and "*.sbk;*.sf2" selected.
                 # Enter the staged path exactly, confirm via Return.
-                guest_sf2_path = ("c:\\awe32\\p75user.sf2" if private_report else
+                guest_sf2_path = ("c:\\awe32\\p83user.sf2" if generic_report else
+                                  "c:\\awe32\\p75user.sf2" if private_report else
                                   "c:\\awe32\\p55test.sf2" if args.p64_bridge else
                                   "c:\\awe32\\p62test.sf2")
                 p49_type_path(conn, guest_sf2_path)
@@ -288,7 +335,7 @@ reconnect = 1
                     expected=private_report["sample_data_bytes"]//2
                     # A full 77-preset bank must not be accepted on the
                     # basis of a tiny partial upload or the GM ROM bank.
-                    minimum=(expected*9//10 if full_bank_report else max(128,expected//8))
+                    minimum=(expected*9//10 if (full_bank_report or generic_report) else max(128,expected//8))
                     report["p75_private_sample_upload_write_words"]=user_words
                     report["p75_private_sample_upload_minimum_words"]=minimum
                     report["p75_private_sample_upload_plausible"]=user_words>=minimum
@@ -313,7 +360,13 @@ reconnect = 1
                     p64_run_trial(conn,args.out,trace,vm/"p64-midi",send,
                                   p49_key,p49_type_path,p49_screenshot,report,
                                   pcm_fifo=vm/"p65-wavetable",
-                                   programs=(0,7) if private_report else (0,))
+                                   programs=tuple(item["program"] for item in audition_presets) if generic_report else ((0,7) if private_report else (0,)),
+                                   note=args.universal_note if generic_report else 48,
+                                   creative_bank=args.universal_creative_bank if generic_report else 1,
+                                   preset_names={item["program"]:item["name"] for item in audition_presets} if generic_report else ({0:"Grungy Ramp Bass",7:"TX81Z Lately Bass"} if private_report else None))
+                    if args.universal_wav_dir:
+                        report["p84_universal_wav_export"]=p84_export_universal_wav(
+                            args.out,args.universal_wav_dir,report)
                     if args.private_wav_dir:
                         report["p76_private_wav_export"]=p76_export_private_wav(
                             args.out,args.private_wav_dir,report)

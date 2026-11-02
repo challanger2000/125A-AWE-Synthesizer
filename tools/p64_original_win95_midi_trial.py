@@ -47,7 +47,14 @@ def send_paced_frame(fd, payload: bytes, conn, send, pace_ms=25):
 
 
 def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
-              send, key, type_path, screenshot, report, pcm_fifo=None, programs=(0,)):
+              send, key, type_path, screenshot, report, pcm_fifo=None, programs=(0,), note=48, creative_bank=1, preset_names=None):
+    if not programs or len(programs)>2 or any(not 0<=v<=127 for v in programs):
+        raise ValueError("Select one or two valid MIDI program numbers")
+    if not 0<=note<=127 or not 0<=creative_bank<=127:
+        raise ValueError("Invalid MIDI note or Creative user bank")
+    first_program=programs[0]
+    second_program=programs[1] if len(programs)==2 else None
+    names=preset_names or {}
     # P68 WIN.INI run= launched the CRT-free original Creative MIDI agent
     # at Windows 95 startup. Do not try to type the command into Run again:
     # those keystrokes were reliably accepted but failed to start the EXE.
@@ -64,7 +71,7 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
     uart_frames_sent=0
     audio_dir.mkdir(exist_ok=True)
     try:
-        init=tuple(demo_messages(channel=0,bank=1,program=0,note=48,velocity=100))
+        init=tuple(demo_messages(channel=0,bank=creative_bank,program=first_program,note=note,velocity=100))
         for msg in init:
             uart_bytes_sent+=send_paced_frame(fd,msg,conn,send)
             uart_frames_sent+=1
@@ -76,19 +83,19 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
             audio_started=True
         except Exception as exc:
             report["p64_audio_start_error"]=str(exc)
-        uart_bytes_sent+=send_paced_frame(fd,frame(0x90,48,100),conn,send)
+        uart_bytes_sent+=send_paced_frame(fd,frame(0x90,note,100),conn,send)
         uart_frames_sent+=1
         send(conn,"step 1200")
         screenshot(conn,out,"p64-creative-playing.png",report)
-        uart_bytes_sent+=send_paced_frame(fd,frame(0x80,48,0),conn,send)
+        uart_bytes_sent+=send_paced_frame(fd,frame(0x80,note,0),conn,send)
         uart_frames_sent+=1
         send(conn,"step 1200")
         if audio_started:
             send(conn,"audio stop")
         p75_program7_before=max(0,len(trace.read_text(encoding="utf8",errors="replace").splitlines())-1) if trace.is_file() else 0
-        if 7 in programs:
+        if second_program is not None:
             other_dir.mkdir(exist_ok=True)
-            for msg in demo_messages(channel=0,bank=1,program=7,note=48,velocity=100):
+            for msg in demo_messages(channel=0,bank=creative_bank,program=second_program,note=note,velocity=100):
                 send_paced_frame(fd,msg,conn,send)
             send(conn,"step 400")
             p75_recording=False
@@ -112,30 +119,30 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
     analysis=None
     if wavetable:
         try:
-            analysis=analyze_wav(wavetable[0],note=48)
+            analysis=analyze_wav(wavetable[0],note=note)
         except Exception as exc:
             analysis={"analysis_error":str(exc)}
     pcm_report=pcm_receiver.stop() if pcm_receiver else None
     p75_program_reports=[]
-    if 7 in programs:
+    if second_program is not None:
         second=[p for p in sorted(other_dir.rglob("*.wav")) if "wavetable" in p.name.lower()]
         analysis7=None
         if second:
             try:
-                analysis7=analyze_wav(second[0],note=48)
+                analysis7=analyze_wav(second[0],note=note)
             except Exception as exc:
                 analysis7={"analysis_error":str(exc)}
         p75_program_reports=[
-            {"program":0,"name":"Grungy Ramp Bass","bank_select_cc0":1,
+            {"program":first_program,"name":names.get(first_program,"Preset "+str(first_program)),"bank_select_cc0":creative_bank,
              "wavetable_statistics":analysis,
              "nonzero_audio":bool(analysis and analysis.get("window_rms_dbfs",-300)>-299),
              "raw_audio_uploaded":False},
-            {"program":7,"name":"TX81Z Lately Bass","bank_select_cc0":1,
+            {"program":second_program,"name":names.get(second_program,"Preset "+str(second_program)),"bank_select_cc0":creative_bank,
              "wavetable_statistics":analysis7,
              "nonzero_audio":bool(analysis7 and analysis7.get("window_rms_dbfs",-300)>-299),
              "register_write_delta":max(0,count_after-p75_program7_before),
              "raw_audio_uploaded":False}]
-    result={"p75_original_private_sf2_test":7 in programs,
+    result={"p75_original_private_sf2_test":second_program is not None,
             "p75_program_results":p75_program_reports,
             "p74_uart_bytes_injected":uart_bytes_sent,
             "p74_uart_frames_injected":uart_frames_sent,
@@ -149,7 +156,7 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
             "direct_86box_pcm_fifo":pcm_report,
             "private_wavetable_file_found":bool(wavetable),
             "raw_private_audio_published":False,
-            "sf2_fixture":"local private original SF2" if 7 in programs else "original generated P55 SF2 in Creative User Bank1",
+            "sf2_fixture":"local private original SF2" if second_program is not None else "original generated P55 SF2 in Creative User Bank1",
             "notes":"A screenshot verifies the actual guest process, register activity and audio must separately confirm MIDI route"}
     report["p64_original_win95_midi"]=result
     return result

@@ -64,7 +64,8 @@ def main():
     result["p68_win95_autostart_launched"]="P68 WIN95 AUTOSTART LOADED" in startup
     result["p68_win95_createprocess_ok"]="P63 CREATEPROCESS SUCCESS" in startup
     result["p68_launch_diagnostic"]=next((line.strip() for line in startup.splitlines() if line.startswith("P63 CREATEPROCESS")), "P68BOOT.LOG not created")
-    audio=json.loads(a.audio_report.read_text(encoding="utf8")).get("p64_original_win95_midi",{})
+    full_report=json.loads(a.audio_report.read_text(encoding="utf8"))
+    audio=full_report.get("p64_original_win95_midi",{})
     pcm=audio.get("direct_86box_pcm_fifo") or {}
     result["emu8000_pcm_stream_frames"]=pcm.get("frames",0)
     result["emu8000_nonzero_pcm_frames"]=pcm.get("nonzero_frames",0)
@@ -73,10 +74,13 @@ def main():
     trial=audio.get("p75_program_results",[])
     result["p75_private_sf2_test"]=bool(audio.get("p75_original_private_sf2_test",False))
     result["p75_sf2_sample_upload_plausible"]=(not result["p75_private_sf2_test"]) or bool(
-        json.loads(a.audio_report.read_text(encoding="utf8")).get("p75_private_sample_upload_plausible",False))
+        full_report.get("p75_private_sample_upload_plausible",False))
     result["p75_programs_tested"]=[x.get("program") for x in trial]
+    result["p84_universal_sf2_test"]=bool(full_report.get("p84_universal_sf2_test"))
+    expected=( [x["program"] for x in full_report.get("p84_selected_presets",[])]
+              if result["p84_universal_sf2_test"] else [0,7])
     result["p75_both_basses_nonzero"]=(not result["p75_private_sf2_test"]) or (
-        result["p75_programs_tested"]==[0,7] and
+        result["p75_programs_tested"]==expected and
         all(x.get("nonzero_audio",False) for x in trial) and
         trial[1].get("register_write_delta",0)>0)
     a.out.parent.mkdir(parents=True,exist_ok=True)
