@@ -11,8 +11,6 @@ import hashlib
 import json
 import re
 from pathlib import Path
-from pyfatfs.PyFatFS import PyFatFS
-from p38_stage_creative_awe32_win95 import partition_offset
 
 LAUNCHER = r"C:\AWE32\P68BOOT.EXE"
 MAX_EXE = 100_000
@@ -51,6 +49,8 @@ def patch_win_ini(buf: bytes) -> bytes:
     return (newline.join(result)+newline).encode("latin-1")
 
 def stage(disk: Path, launcher: Path) -> dict:
+    from pyfatfs.PyFatFS import PyFatFS
+    from p38_stage_creative_awe32_win95 import partition_offset
     raw=launcher.read_bytes()
     if not 512<=len(raw)<=MAX_EXE or raw[:2]!=b"MZ":
         raise ValueError("Unexpected or missing Win95 CRT-free launcher EXE")
