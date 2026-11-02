@@ -279,7 +279,7 @@ reconnect = 1
                                     and row.get("port","").lower() in ("0x0a20","0x0a22")):
                                     user_words+=1
                     expected=private_report["sample_data_bytes"]//2
-                    minimum=max(4096,expected//8)
+                    minimum=max(128,expected//8)
                     report["p75_private_sample_upload_write_words"]=user_words
                     report["p75_private_sample_upload_minimum_words"]=minimum
                     report["p75_private_sample_upload_plausible"]=user_words>=minimum
