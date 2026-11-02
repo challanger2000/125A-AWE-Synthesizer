@@ -1,0 +1,38 @@
+name: P63 build native Win95 original-driver MIDI bridge
+on:
+  push:
+    branches: [develop/p63-win95-original-driver-midi-bridge]
+    paths:
+      - 'src/bridge/**'
+      - 'tools/p63_send_guest_midi.py'
+      - 'tests/p63_midi_wire.cpp'
+      - 'tests/test_p63_bridge.py'
+      - '.github/workflows/p63-win95-midi-bridge.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  win95-bridge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native Windows 95 x86 cross compiler
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq gcc-mingw-w64-i686
+      - name: Build actual Win32 WinMM guest helper for original Creative driver
+        run: |
+          i686-w64-mingw32-gcc -Os -Wall -Wextra -std=c99 -DWINVER=0x0400             -D_WIN32_WINNT=0x0400 -Wl,--major-subsystem-version,4             -Wl,--minor-subsystem-version,0 -o p63_win95_guest_midi.exe             src/bridge/p63_win95_guest_midi.c -lwinmm
+          file p63_win95_guest_midi.exe
+      - name: Verify portable C MIDI protocol against Python sender
+        run: |
+          c++ -std=c++17 -Wall -Wextra -pedantic -o p63_wire_test tests/p63_midi_wire.cpp
+          ./p63_wire_test
+          python -m unittest discover -s tests -p test_p63_bridge.py -v
+      - name: Archive only newly-authored guest helper
+        uses: actions/upload-artifact@v4
+        with:
+          name: P63-Win95-Original-Creative-MIDI-Agent
+          path: p63_win95_guest_midi.exe
+          retention-days: 7
