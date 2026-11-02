@@ -35,6 +35,7 @@ def main():
     p.add_argument("--audio-report",type=Path,required=True)
     a=p.parse_args()
     with PyFatFS(str(a.disk),offset=partition_offset(a.disk),read_only=True,preserve_case=False) as fs:
+        startup=fs.readbytes("AWE32/P68BOOT.LOG").decode("ascii","replace") if fs.exists("AWE32/P68BOOT.LOG") else ""
         if fs.exists("AWE32/P63LOG.TXT"):
             result=inspect(fs.readbytes("AWE32/P63LOG.TXT"))
         else:
@@ -45,6 +46,9 @@ def main():
                     "win95_agent_error":True,
                     "raw_user_sf2_published":False,
                     "error":"Win95 guest agent never created P63LOG.TXT"}
+    result["p68_win95_autostart_launched"]="P68 WIN95 AUTOSTART LOADED" in startup
+    result["p68_win95_createprocess_ok"]="P63 CREATEPROCESS SUCCESS" in startup
+    result["p68_launch_diagnostic"]=next((line.strip() for line in startup.splitlines() if line.startswith("P63 CREATEPROCESS")), "P68BOOT.LOG not created")
     audio=json.loads(a.audio_report.read_text(encoding="utf8")).get("p64_original_win95_midi",{})
     pcm=audio.get("direct_86box_pcm_fifo") or {}
     result["emu8000_pcm_stream_frames"]=pcm.get("frames",0)
@@ -54,7 +58,8 @@ def main():
     a.out.parent.mkdir(parents=True,exist_ok=True)
     a.out.write_text(json.dumps(result,indent=2)+"\n",encoding="utf8")
     print(json.dumps(result,indent=2))
-    ok=(result["agent_launched_in_actual_win95"]
+    ok=(result["p68_win95_createprocess_ok"]
+        and result["agent_launched_in_actual_win95"]
         and result["original_creative_winmm_endpoint_selected"]
         and result["original_creative_com1_ready"]
         and result["creatives_midi_short_messages_delivered"]>=4
