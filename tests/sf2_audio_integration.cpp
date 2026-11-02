@@ -74,17 +74,9 @@ Bytes makeBank(size_t sampleWords,bool multipleBanks=false,bool pluckEnvelope=fa
     u16(phdr,multipleBanks?3:1);
     u32(phdr,0);u32(phdr,0);u32(phdr,0);
 
-    u16(pbag,0);u16(pbag,0);u16(pbag,pluckEnvelope?4:1);u16(pbag,0);
+    u16(pbag,0);u16(pbag,0);u16(pbag,1);u16(pbag,0);
     if(multipleBanks) {
         u16(pbag,4);u16(pbag,0);u16(pbag,6);u16(pbag,0);
-    }
-    if (pluckEnvelope) {
-        // Non-proprietary SF2 metadata only; modeled on the plucked
-        // behaviour we need to distinguish from a sustained organ tone.
-        // Use the real SF2 generator units and legal generator ordering.
-        u16(pgen,34);u16(pgen,static_cast<unsigned>(-7973 & 0xffff));
-        u16(pgen,36);u16(pgen,static_cast<unsigned>(-1200 & 0xffff));
-        u16(pgen,37);u16(pgen,960); // 96 dB sustain attenuation
     }
     u16(pgen,41);u16(pgen,0); // Instrument 0
     if(multipleBanks) {
@@ -99,9 +91,18 @@ Bytes makeBank(size_t sampleWords,bool multipleBanks=false,bool pluckEnvelope=fa
         name20(inst,"125A Wave C");u16(inst,2);
     }
     name20(inst,"EOI");u16(inst,multipleBanks?3:1);
-    u16(ibag,0);u16(ibag,0);u16(ibag,2);u16(ibag,0);
+    u16(ibag,0);u16(ibag,0);u16(ibag,pluckEnvelope?5:2);u16(ibag,0);
     if(multipleBanks) {
         u16(ibag,5);u16(ibag,0);u16(ibag,7);u16(ibag,0);
+    }
+    if (pluckEnvelope) {
+        // Instrument-zone generator values are absolute. Putting negative
+        // timecents in a PRESET would add them to the default -12000,
+        // producing a nearly instantaneous attack+decay instead of the
+        // intended musical 10ms attack / 500ms decay.
+        u16(igen,34);u16(igen,static_cast<unsigned>(-7973 & 0xffff));
+        u16(igen,36);u16(igen,static_cast<unsigned>(-1200 & 0xffff));
+        u16(igen,37);u16(igen,960);
     }
     u16(igen,54);u16(igen,1); // Loop continuously
     u16(igen,53);u16(igen,0); // Sample 0
