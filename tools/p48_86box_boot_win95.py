@@ -202,7 +202,7 @@ onboard_ram = 2048
                 # P56: P55 screenshot establishes the Win95 common
                 # dialog has "File Name" focused and "*.sbk;*.sf2" selected.
                 # Enter the staged path exactly, confirm via Return.
-                guest_sf2_path = "c:\\awe32\\p55test.sf2"
+                guest_sf2_path = "c:\\awe32\\p62test.sf2"
                 p49_type_path(conn, guest_sf2_path)
                 p49_screenshot(conn, args.out, "p56-file-selected.png", report)
                 p49_key(conn, 0x1c)
@@ -241,77 +241,12 @@ onboard_ram = 2048
                 # P57: same note through historical Creative MIDI stack,
                 # first GM bank 0, then AWECP32 USER bank 1 (CC0=1).
                 # No synthetic I/O injection: only original guest MPLAYER.
+                # P62 isolates sample transfer. Original MIDI audio/spectrum
+                # probes from P57/P58 are deliberately omitted: this bank
+                # contains a wideband probe, not the earlier P55 sine.
                 report["p57_original_midi_trials"] = []
-                for bank, filename in ((0, "p57-gm.mid"), (1, "p57-u1.mid")):
-                    if bank == 1:
-                        # MPLAYER remains open/stopped after previous note.
-                        send(conn, "key down 0x38 0x3e")   # Alt+F4
-                        send(conn, "key up 0x3e 0x38")
-                        send(conn, "step 400")
-                    send(conn, "key down 0x1d 0x01")       # Ctrl+Esc
-                    send(conn, "key up 0x01 0x1d")
-                    send(conn, "step 300")
-                    p49_key(conn, 0x13)                    # Run
-                    send(conn, "step 500")
-                    command = "c:\\windows\\mplayer.exe /play c:\\awe32\\" + filename
-                    p49_type_path(conn, command)
-                    p49_screenshot(conn, args.out,
-                                   f"p57-bank{bank}-command.png", report)
-                    count_before = (
-                        len(trace.read_text(encoding="utf8",errors="replace").splitlines())-1
-                        if trace.is_file() else 0
-                    )
-                    private_audio = args.out / f"p58-private-wavetable-bank{bank}"
-                    private_audio.mkdir(parents=True, exist_ok=True)
-                    try:
-                        # Record each exact 86Box sound stream as WAV in
-                        # an ephemeral directory (never artifact-uploaded).
-                        send(conn, f"audio start {private_audio.resolve()}")
-                        audio_started = True
-                    except Exception:
-                        audio_started = False
-                    p49_key(conn, 0x1c)
-                    send(conn, "step 1000")
-                    p49_screenshot(conn, args.out,
-                                   f"p57-bank{bank}-playing.png", report)
-                    level_1s = send(conn, "audio level 1000")
-                    count_1s = (
-                        len(trace.read_text(encoding="utf8",errors="replace").splitlines())-1
-                        if trace.is_file() else 0
-                    )
-                    send(conn, "step 4000")
-                    p49_screenshot(conn, args.out,
-                                   f"p57-bank{bank}-finished.png", report)
-                    level_5s = send(conn, "audio level 5000")
-                    try:
-                        send(conn, "audio stop")
-                    except Exception:
-                        pass
-                    count_5s = (
-                        len(trace.read_text(encoding="utf8",errors="replace").splitlines())-1
-                        if trace.is_file() else 0
-                    )
-                    spectrum = None
-                    wav = private_audio / "wavetable.wav"
-                    if wav.is_file():
-                        spectrum = analyze_wav(wav)
-                    report["p57_original_midi_trials"].append({
-                        "p58_wavetable_spectrum":spectrum,
-                        "bank_cc0":bank,
-                        "midi_fixture":filename,
-                        "gm_program_zero_based":0,
-                        "note":48, "velocity":100,
-                        "audio_recording_started":audio_started,
-                        "wavetable_first_second":level_1s.get("streams",{}).get("wavetable",{}),
-                        "wavetable_five_seconds":level_5s.get("streams",{}).get("wavetable",{}),
-                        "additional_register_writes_first_second":max(0,count_1s-count_before),
-                        "additional_register_writes_full":max(0,count_5s-count_before),
-                        "actual_user_bank_sound_confirmed":False,
-                    })
-                # A successful audio stream alone cannot prove bank1
-                # routing; compare register data and waveforms separately.
-
-                report["p55_original_sf2_load_confirmed"] = False
+                report["p62_wideband_upload_only"] = True
+                                report["p55_original_sf2_load_confirmed"] = False
                 report["p53_original_control_panel_loaded"] = False
                 report["p53_original_bank_sf2_loaded"] = False
                 report["p53_86box_sample_ram_kb"] = 2048
