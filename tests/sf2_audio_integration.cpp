@@ -33,7 +33,7 @@ void list(Bytes& b, const char* listType, const Bytes& contents) {
     p.insert(p.end(), contents.begin(), contents.end());
     chunk(b, "LIST", p);
 }
-Bytes makeBank(size_t sampleWords,bool multipleBanks=false) {
+Bytes makeBank(size_t sampleWords,bool multipleBanks=false,bool pluckEnvelope=false) {
     Bytes info, ifil, inam, sdta, pdta, smpl;
     u16(ifil,2);u16(ifil,1);
     chunk(info,"ifil",ifil);
@@ -91,9 +91,18 @@ Bytes makeBank(size_t sampleWords,bool multipleBanks=false) {
         name20(inst,"125A Wave C");u16(inst,2);
     }
     name20(inst,"EOI");u16(inst,multipleBanks?3:1);
-    u16(ibag,0);u16(ibag,0);u16(ibag,2);u16(ibag,0);
+    u16(ibag,0);u16(ibag,0);u16(ibag,pluckEnvelope?5:2);u16(ibag,0);
     if(multipleBanks) {
         u16(ibag,5);u16(ibag,0);u16(ibag,7);u16(ibag,0);
+    }
+    if (pluckEnvelope) {
+        // Instrument-zone generator values are absolute. Putting negative
+        // timecents in a PRESET would add them to the default -12000,
+        // producing a nearly instantaneous attack+decay instead of the
+        // intended musical 10ms attack / 500ms decay.
+        u16(igen,34);u16(igen,static_cast<unsigned>(-7973 & 0xffff));
+        u16(igen,36);u16(igen,static_cast<unsigned>(-1200 & 0xffff));
+        u16(igen,37);u16(igen,960);
     }
     u16(igen,54);u16(igen,1); // Loop continuously
     u16(igen,53);u16(igen,0); // Sample 0
@@ -161,14 +170,16 @@ int main() {
     const fs::path directory=fs::temp_directory_path();
     const fs::path sf=directory/"125A_synthetic_sf2_audio.sf2";
     const fs::path multi=directory/"125A_synthetic_sf2_banks.sf2";
+    const fs::path pluck=directory/"125A_synthetic_sf2_plucked_bass.sf2";
     const fs::path huge=directory/"125A_synthetic_sf2_overflow.sf2";
     const fs::path large=directory/"125A_synthetic_sf2_8mb_plus.sf2";
     const fs::path rom=directory/"125A_synthetic_sf2_audio.raw";
     struct Cleanup {
-        fs::path a,b,c,d,e;
-        ~Cleanup(){std::error_code ec;fs::remove(a,ec);fs::remove(b,ec);fs::remove(c,ec);fs::remove(d,ec);fs::remove(e,ec);}
-    } cleanup{sf,huge,rom,large,multi};
+        fs::path a,b,c,d,e,f;
+        ~Cleanup(){std::error_code ec;fs::remove(a,ec);fs::remove(b,ec);fs::remove(c,ec);fs::remove(d,ec);fs::remove(e,ec);fs::remove(f,ec);}
+    } cleanup{sf,huge,rom,large,multi,pluck};
     if (!writeFile(sf,makeBank(2048)) ||
+        !writeFile(pluck,makeBank(2048,false,true)) ||
         !writeFile(multi,makeBank(2048,true)) ||
         !writeFile(huge,makeBank(300000)) ||
         !writeFile(large,makeBank(4'300'000)) ||
@@ -402,6 +413,84 @@ int main() {
                         "P27 CSL chorus send changes 86Box DSP output");
             ok &= check(change(dry,wetReverb)>1000,
                         "P27 PTRX reverb send changes 86Box DSP output");
+        }
+    }
+    // P61: Audible envelope acceptance in the real 86Box EMU8000 DSP,
+    // not merely a successful SF2 generator parse. The user's reference
+    // bass has a short attack/decay, unlike a held organ-like tone.
+    // This fixture contains *generated sine PCM only*; no user's bank.
+    {
+        const auto renderBass=[&](const fs::path& bankPath) {
+            Synth synth(44100);
+            synth.Core().SetDriver(Awe32::Driver::Win95);
+            std::string err;
+            if (!synth.Core().UseBox86Chip(rom.string(),err) ||
+                synth.Core().ChipVariant()!=Emu8000Core::Chip::Box86)
+                return std::vector<int16_t>{};
+            synth.Core().PowerOnInit();
+            if (!synth.LoadBank(bankPath.string(),err))
+                return std::vector<int16_t>{};
+            if (bankPath==pluck) {
+                const auto probe=SoundFont::Load(pluck.string());
+                const auto layers=probe.Select(0,0,69,100);
+                std::cout<<"P61 soundfont valid="<<probe.valid
+                    <<" layers="<<layers.size()<<'\n';
+                if (!layers.empty()) {
+                    const auto& g=layers[0].gen;
+                    const auto vp=SoundFont::MakeVoiceParams(
+                        probe,layers[0],69,100,0x200010,0,Awe32::Driver::Win95);
+                    std::cout<<"P61 generators sustain="<<g.Get(SoundFont::Gen::SustainVolEnv,-999)
+                        <<" decay="<<g.Get(SoundFont::Gen::DecayVolEnv,-999)
+                        <<" attack="<<g.Get(SoundFont::Gen::AttackVolEnv,-999)
+                        <<" DCYSUSV=0x"<<std::hex<<vp.dcysusv
+                        <<" ATKHLDV=0x"<<vp.atkhldv
+                        <<" ENVVOL=0x"<<vp.envvol<<std::dec<<'\n';
+                }
+            }
+            synth.ProgramChange(0,0);
+            synth.NoteOn(0,69,100);
+            std::vector<int16_t> samples(44100*2*2,0); // 2 s stereo
+            synth.RenderBlock(samples.data(),88200);
+            return samples;
+        };
+        const auto sustained=renderBass(sf);
+        const auto plucked=renderBass(pluck);
+        const auto rms=[](const std::vector<int16_t>& samples,
+                          double first,double last) {
+            const size_t a=static_cast<size_t>(first*44100);
+            const size_t b=static_cast<size_t>(last*44100);
+            if (samples.size()<b*2 || b<=a)
+                return 0.0;
+            double energy=0.0;
+            for (size_t i=a;i<b;++i)
+                for (size_t ch=0;ch<2;++ch) {
+                    const double x=samples[i*2+ch]/32768.0;
+                    energy+=x*x;
+                }
+            return std::sqrt(energy/(2*(b-a)));
+        };
+        const bool complete=sustained.size()==176400&&plucked.size()==176400;
+        ok &= check(complete,
+            "P61 generated sustained/plucked SF2s render full 2 s on 86Box");
+        if (complete) {
+            std::cout<<"P61 time window plucked RMS "
+                <<"0.000-0.015="<<rms(plucked,0,.015)
+                <<" 0.015-0.030="<<rms(plucked,.015,.030)
+                <<" 0.030-0.060="<<rms(plucked,.030,.060)
+                <<" 0.060-0.130="<<rms(plucked,.060,.130)<<'\n';
+            const double pluckEarly=rms(plucked,.06,.13);
+            const double pluckLate=rms(plucked,1.35,1.60);
+            const double sustainEarly=rms(sustained,.06,.13);
+            const double sustainLate=rms(sustained,1.35,1.60);
+            const bool genuineDecay=pluckEarly>1e-5 &&
+                pluckLate < pluckEarly*0.10 &&
+                sustainEarly>1e-5 &&
+                sustainLate > sustainEarly*0.20;
+            std::cout<<"P61 measured 86Box RMS early/late plucked="
+                <<pluckEarly<<"/"<<pluckLate
+                <<" sustained="<<sustainEarly<<"/"<<sustainLate<<'\n';
+            ok &= check(genuineDecay,
+                "P61 SF2 sustain=960 and decay generator audibly stops the pluck");
         }
     }
     std::cout<<(ok?"SF2/EMU8000 END-TO-END PASS":"SF2/EMU8000 END-TO-END FAIL")<<'\n';
