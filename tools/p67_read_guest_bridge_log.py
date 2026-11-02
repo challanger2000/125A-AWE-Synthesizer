@@ -37,6 +37,7 @@ def main():
     with PyFatFS(str(a.disk),offset=partition_offset(a.disk),read_only=True,preserve_case=False) as fs:
         startup=fs.readbytes("AWE32/P68BOOT.LOG").decode("ascii","replace") if fs.exists("AWE32/P68BOOT.LOG") else ""
         root_marker=fs.readbytes("P71ROOT.TXT").decode("ascii","replace") if fs.exists("P71ROOT.TXT") else ""
+        midi_marker=fs.readbytes("P73MIDI.TXT").decode("ascii","replace") if fs.exists("P73MIDI.TXT") else ""
         batch=fs.readbytes("AWE32/P68BAT.LOG").decode("ascii","replace") if fs.exists("AWE32/P68BAT.LOG") else ""
         if fs.exists("AWE32/P63LOG.TXT"):
             result=inspect(fs.readbytes("AWE32/P63LOG.TXT"))
@@ -49,6 +50,9 @@ def main():
                     "raw_user_sf2_published":False,
                     "error":"Win95 guest agent never created P63LOG.TXT"}
     result["p68_startup_batch_launched"] = "P70 STARTUP BATCH" in batch or "P68 STARTUP BATCH" in batch
+    result["p73_midi_entrypoint_executed"] = "P73 WIN95 MIDI ENTRYPOINT EXECUTED" in midi_marker
+    result["p73_midi_started_and_running_after_1sec"] = "P63 STILL RUNNING AFTER 1 SEC" in startup
+    result["p73_midi_early_exit_diagnostic"] = next((line.strip() for line in startup.splitlines() if line.startswith("P63 EXITED BEFORE") or line.startswith("P63 WAIT ERROR")), "")
     result["p71_entrypoint_executed_root_marker"] = "P71 ENTRYPOINT EXECUTED" in root_marker
     result["p71_entrypoint_executed_exitcode"] = "P71 ENTRY EXITCODE OBSERVED" in batch
     result["p71_entrypoint_no_exitcode"] = "P71 ENTRY EXITCODE MISSING" in batch

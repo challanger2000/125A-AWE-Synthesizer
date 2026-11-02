@@ -48,6 +48,19 @@ void WINAPI p68_entry(void) {
                       NULL,NULL,&si,&pi)) {
         emit("P63 CREATEPROCESS SUCCESS pid=");
         hex32(pi.dwProcessId);emit("\r\n");
+        {
+            DWORD wait=WaitForSingleObject(pi.hProcess,1000);
+            DWORD status=0;
+            if(wait==WAIT_TIMEOUT) emit("P63 STILL RUNNING AFTER 1 SEC\r\n");
+            else if(wait==WAIT_OBJECT_0) {
+                emit("P63 EXITED BEFORE 1 SEC status=");
+                if(GetExitCodeProcess(pi.hProcess,&status)) hex32(status);
+                else emit("unknown");
+                emit("\r\n");
+            } else {
+                emit("P63 WAIT ERROR=");hex32(GetLastError());emit("\r\n");
+            }
+        }
         CloseHandle(pi.hThread);
         CloseHandle(pi.hProcess);
     } else {

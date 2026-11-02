@@ -18,7 +18,7 @@ static void logline(const char *msg) {
     DWORD n=0,written=0;
     if(logfd==INVALID_HANDLE_VALUE)return;
     while(msg[n])++n;
-    if(n)WriteFile(logfd,msg,n,&written,NULL);
+    if(n) { WriteFile(logfd,msg,n,&written,NULL); FlushFileBuffers(logfd); }
 }
 static char uppercase(char c) {
     if(c>='a' && c<='z')return (char)(c-'a'+'A');
@@ -122,6 +122,17 @@ done:
     if(logfd!=INVALID_HANDLE_VALUE){FlushFileBuffers(logfd);CloseHandle(logfd);}
 }
 void WINAPI p63_entry(void) {
+    /* P73 independent entrypoint witness: leave a durable FAT root marker
+     * before opening WinMM, COM1 or waiting for inbound MIDI. */
+    HANDLE mark=CreateFileA("C:\\P73MIDI.TXT",GENERIC_WRITE,
+                         FILE_SHARE_READ,NULL,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,NULL);
+    if(mark!=INVALID_HANDLE_VALUE) {
+        static const char literal[]="P73 WIN95 MIDI ENTRYPOINT EXECUTED\r\n";
+        DWORD written=0;
+        WriteFile(mark,literal,sizeof(literal)-1,&written,NULL);
+        FlushFileBuffers(mark);
+        CloseHandle(mark);
+    }
     run();
     ExitProcess(0);
 }
