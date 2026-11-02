@@ -17,6 +17,7 @@ from pathlib import Path
 from p47_86box_emu8k_smoke import send, wait_socket, write_config
 from p50_emu8k_midi_probe import play as p50_play
 from p58_analyze_audio import analyze_wav
+from p60_compare_creative_sf2_upload import analyze as p60_analyze_upload
 
 
 # Scancode set 1 (US Win95 layout), only for the fixed laboratory filename.
@@ -228,6 +229,12 @@ onboard_ram = 2048
                 report["p56_apply_attempted"] = True
                 report["p56_register_writes_after_apply"] = max(
                     0,io_after_apply-io_before_apply)
+                # P60: inspect only the original Creative sample-memory
+                # upload span, before any subsequent MIDI note messages.
+                # Upload private CSV contents stay in ephemeral runner.
+                if trace.is_file():
+                    report["p60_original_sf2_upload"] = p60_analyze_upload(
+                        trace, io_before_apply, io_after_apply)
                 # These flags require *visual inspection* and evidence of
                 # successful original Creative user-bank load/DRAM delta.
                 report["p56_original_sf2_load_verified"] = False
