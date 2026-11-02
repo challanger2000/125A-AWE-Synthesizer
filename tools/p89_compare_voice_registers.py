@@ -46,6 +46,7 @@ def original_csv(path,start,end):
     if start<0 or end<=start:raise ValueError("Original Creative note I/O boundaries are invalid")
     if not Path(path).is_file():raise FileNotFoundError(path)
     out=[]
+    index=-1
     with open(path,newline="",encoding="utf8") as source:
         rows=csv.DictReader(source)
         for index,row in enumerate(rows):
@@ -118,7 +119,8 @@ def compare(original,native):
             "register_series_different":len(mismatches),
             "mismatches":mismatches[:100],
             "mismatches_truncated":max(0,len(mismatches)-100),
-            "emulated_hardware_1to1_proven":len(mismatches)==0,
+            "note_register_series_equal":len(mismatches)==0,
+            "emulated_hardware_1to1_proven":False,
             "physical_hardware_parity_proven":False}
 
 def main():
