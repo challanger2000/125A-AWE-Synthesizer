@@ -47,7 +47,7 @@ def send_paced_frame(fd, payload: bytes, conn, send, pace_ms=25):
 
 
 def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
-              send, key, type_path, screenshot, report, pcm_fifo=None):
+              send, key, type_path, screenshot, report, pcm_fifo=None, programs=(0,)):
     # P68 WIN.INI run= launched the CRT-free original Creative MIDI agent
     # at Windows 95 startup. Do not try to type the command into Run again:
     # those keystrokes were reliably accepted but failed to start the EXE.
@@ -59,6 +59,7 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
     pcm_receiver=PcmReceiver(pcm_fifo) if pcm_fifo else None
     if pcm_receiver:pcm_receiver.start()
     audio_dir=out/"p64-private-original-creative-wavetable"
+    other_dir=out/"p75-private-program7"
     uart_bytes_sent=0
     uart_frames_sent=0
     audio_dir.mkdir(exist_ok=True)
@@ -84,6 +85,25 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
         send(conn,"step 1200")
         if audio_started:
             send(conn,"audio stop")
+        p75_program7_before=max(0,len(trace.read_text(encoding="utf8",errors="replace").splitlines())-1) if trace.is_file() else 0
+        if 7 in programs:
+            other_dir.mkdir(exist_ok=True)
+            for msg in demo_messages(channel=0,bank=1,program=7,note=48,velocity=100):
+                send_paced_frame(fd,msg,conn,send)
+            send(conn,"step 400")
+            p75_recording=False
+            try:
+                send(conn,f"audio start {other_dir.resolve()}")
+                p75_recording=True
+            except Exception as exc:
+                report["p75_recording_error"]=str(exc)
+            send_paced_frame(fd,frame(0x90,48,100),conn,send)
+            send(conn,"step 1200")
+            screenshot(conn,out,"p75-program7-playing.png",report)
+            send_paced_frame(fd,frame(0x80,48,0),conn,send)
+            send(conn,"step 1200")
+            if p75_recording:
+                send(conn,"audio stop")
     finally:
         os.close(fd)
     count_after=max(0,len(trace.read_text(encoding="utf8", errors="replace").splitlines())-1) if trace.is_file() else count_before
@@ -96,7 +116,28 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
         except Exception as exc:
             analysis={"analysis_error":str(exc)}
     pcm_report=pcm_receiver.stop() if pcm_receiver else None
-    result={"p74_uart_bytes_injected":uart_bytes_sent,
+    p75_program_reports=[]
+    if 7 in programs:
+        second=[p for p in sorted(other_dir.rglob("*.wav")) if "wavetable" in p.name.lower()]
+        analysis7=None
+        if second:
+            try:
+                analysis7=analyze_wav(second[0],note=48)
+            except Exception as exc:
+                analysis7={"analysis_error":str(exc)}
+        p75_program_reports=[
+            {"program":0,"name":"Grungy Ramp Bass","bank_select_cc0":1,
+             "wavetable_statistics":analysis,
+             "nonzero_audio":bool(analysis and analysis.get("window_rms_dbfs",-300)>-299),
+             "raw_audio_uploaded":False},
+            {"program":7,"name":"TX81Z Lately Bass","bank_select_cc0":1,
+             "wavetable_statistics":analysis7,
+             "nonzero_audio":bool(analysis7 and analysis7.get("window_rms_dbfs",-300)>-299),
+             "register_write_delta":max(0,count_after-p75_program7_before),
+             "raw_audio_uploaded":False}]
+    result={"p75_original_private_sf2_test":7 in programs,
+            "p75_program_results":p75_program_reports,
+            "p74_uart_bytes_injected":uart_bytes_sent,
             "p74_uart_frames_injected":uart_frames_sent,
             "p74_uart_guest_step_per_byte_ms":25,
             "p74_uart_com1_received_confirmed":False,
@@ -108,7 +149,7 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
             "direct_86box_pcm_fifo":pcm_report,
             "private_wavetable_file_found":bool(wavetable),
             "raw_private_audio_published":False,
-            "sf2_fixture":"original generated P55 SF2 in Creative User Bank1",
+            "sf2_fixture":"local private original SF2" if 7 in programs else "original generated P55 SF2 in Creative User Bank1",
             "notes":"A screenshot verifies the actual guest process, register activity and audio must separately confirm MIDI route"}
     report["p64_original_win95_midi"]=result
     return result
