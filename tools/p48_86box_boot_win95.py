@@ -246,7 +246,7 @@ onboard_ram = 2048
                 # contains a wideband probe, not the earlier P55 sine.
                 report["p57_original_midi_trials"] = []
                 report["p62_wideband_upload_only"] = True
-                                report["p55_original_sf2_load_confirmed"] = False
+                report["p55_original_sf2_load_confirmed"] = False
                 report["p53_original_control_panel_loaded"] = False
                 report["p53_original_bank_sf2_loaded"] = False
                 report["p53_86box_sample_ram_kb"] = 2048
