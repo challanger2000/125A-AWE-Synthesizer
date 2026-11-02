@@ -24,6 +24,7 @@ from p80_full_sf2_inventory import inventory as p80_inventory
 from p76_export_private_wav import export as p76_export_private_wav
 from p83_generic_sf2 import stage_private as p83_stage_private
 from p84_export_universal_wav import export as p84_export_universal_wav
+from p87_win95_six_note_capture import capture_six as p87_capture_six
 
 
 # Scancode set 1 (US Win95 layout), only for the fixed laboratory filename.
@@ -75,6 +76,7 @@ def main() -> None:
     ap.add_argument("--universal-midi-channel",type=int,choices=range(1,17),help="MIDI channel 1..16; defaults to channel 10 for SF2 bank128, else 1")
     ap.add_argument("--universal-note",type=int,default=60,help="MIDI audition note (drum kits: 36)")
     ap.add_argument("--universal-wav-dir",type=Path,help="Private output directory of real original Creative WAVs")
+    ap.add_argument("--p87-six-wav-dir",type=Path,help="Private six-note original Win95 Creative D4 WAV export, requires universal SF2 and Gold")
     ap.add_argument("--require-full-bank",action="store_true",help="Require exact original 77-preset bank, not the two-preset test fixture")
     ap.add_argument("--private-wav-dir",type=Path,help="Local private export directory for original two bass WAVs")
     ap.add_argument("--sound-card", choices=("sbawe32_pnp","sbawe64_gold"), default="sbawe32_pnp")
@@ -90,6 +92,10 @@ def main() -> None:
         raise ValueError("Full77 fixture is incompatible with universal SF2 mode")
     if args.universal_sf2 and not args.p64_bridge:
         raise ValueError("--universal-sf2 requires --p64-bridge")
+    if args.p87_six_wav_dir and (not args.universal_sf2 or args.sound_card!="sbawe64_gold"):
+        raise ValueError("--p87-six-wav-dir requires --universal-sf2 and --sound-card sbawe64_gold")
+    if args.p87_six_wav_dir and (args.universal_sf2_bank not in (None,0)):
+        raise ValueError("P87 Alesis program 0/17 six-note bank requires SF2 bank 0")
     if args.universal_wav_dir and not args.universal_sf2:
         raise ValueError("--universal-wav-dir requires --universal-sf2")
     if args.private_sf2 and not args.p64_bridge:
@@ -374,6 +380,13 @@ reconnect = 1
                     if args.private_wav_dir:
                         report["p76_private_wav_export"]=p76_export_private_wav(
                             args.out,args.private_wav_dir,report)
+                    if args.p87_six_wav_dir:
+                        report["p87_original_win95_six_notes"]=p87_capture_six(
+                            conn,send,vm/"p64-midi",report,
+                            args.out/"p87-six-original-win95",
+                            args.p87_six_wav_dir,
+                            bank_select=args.universal_creative_bank,
+                            channel=midi_channel)
                 report["p55_original_sf2_load_confirmed"] = False
                 report["p53_original_control_panel_loaded"] = False
                 report["p53_original_bank_sf2_loaded"] = False
