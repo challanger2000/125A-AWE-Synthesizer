@@ -20,6 +20,7 @@ from p58_analyze_audio import analyze_wav
 from p60_compare_creative_sf2_upload import analyze as p60_analyze_upload
 from p64_original_win95_midi_trial import run_trial as p64_run_trial
 from p75_private_sf2 import stage as p75_stage_private_sf2
+from p76_export_private_wav import export as p76_export_private_wav
 
 
 # Scancode set 1 (US Win95 layout), only for the fixed laboratory filename.
@@ -64,6 +65,7 @@ def main() -> None:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--p64-bridge", action="store_true", help="Run original Win95 MIDI agent through 86Box COM1")
     ap.add_argument("--private-sf2", type=Path, help="Local original SF2, never commit/upload")
+    ap.add_argument("--private-wav-dir",type=Path,help="Local private export directory for original two bass WAVs")
     ap.add_argument("--sound-card", choices=("sbawe32_pnp","sbawe64_gold"), default="sbawe32_pnp")
     args = ap.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
@@ -73,6 +75,8 @@ def main() -> None:
 
     if args.private_sf2 and not args.p64_bridge:
         raise ValueError("--private-sf2 requires --p64-bridge")
+    if args.private_wav_dir and not args.private_sf2:
+        raise ValueError("--private-wav-dir requires --private-sf2")
     private_report=p75_stage_private_sf2(args.disk,args.private_sf2) if args.private_sf2 else None
     ram_kib=28672 if args.sound_card=="sbawe64_gold" else 2048
     card_section={"sbawe32_pnp":"Sound Blaster AWE32 PnP",
@@ -279,6 +283,9 @@ reconnect = 1
                                   p49_key,p49_type_path,p49_screenshot,report,
                                   pcm_fifo=vm/"p65-wavetable",
                                    programs=(0,7) if private_report else (0,))
+                    if args.private_wav_dir:
+                        report["p76_private_wav_export"]=p76_export_private_wav(
+                            args.out,args.private_wav_dir,report)
                 report["p55_original_sf2_load_confirmed"] = False
                 report["p53_original_control_panel_loaded"] = False
                 report["p53_original_bank_sf2_loaded"] = False
