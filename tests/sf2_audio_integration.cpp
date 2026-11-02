@@ -429,6 +429,23 @@ int main() {
             synth.Core().PowerOnInit();
             if (!synth.LoadBank(bankPath.string(),err))
                 return std::vector<int16_t>{};
+            if (bankPath==pluck) {
+                const auto probe=SoundFont::Load(pluck.string());
+                const auto layers=probe.Select(0,0,69,100);
+                std::cout<<"P61 soundfont valid="<<probe.valid
+                    <<" layers="<<layers.size()<<'\n';
+                if (!layers.empty()) {
+                    const auto& g=layers[0].gen;
+                    const auto vp=SoundFont::MakeVoiceParams(
+                        probe,layers[0],69,100,0x200010,0,Awe32::Driver::Win95);
+                    std::cout<<"P61 generators sustain="<<g.Get(SoundFont::Gen::SustainVolEnv,-999)
+                        <<" decay="<<g.Get(SoundFont::Gen::DecayVolEnv,-999)
+                        <<" attack="<<g.Get(SoundFont::Gen::AttackVolEnv,-999)
+                        <<" DCYSUSV=0x"<<std::hex<<vp.dcysusv
+                        <<" ATKHLDV=0x"<<vp.atkhldv
+                        <<" ENVVOL=0x"<<vp.envvol<<std::dec<<'\n';
+                }
+            }
             synth.ProgramChange(0,0);
             synth.NoteOn(0,69,100);
             std::vector<int16_t> samples(44100*2*2,0); // 2 s stereo
@@ -455,6 +472,11 @@ int main() {
         ok &= check(complete,
             "P61 generated sustained/plucked SF2s render full 2 s on 86Box");
         if (complete) {
+            std::cout<<"P61 time window plucked RMS "
+                <<"0.000-0.015="<<rms(plucked,0,.015)
+                <<" 0.015-0.030="<<rms(plucked,.015,.030)
+                <<" 0.030-0.060="<<rms(plucked,.030,.060)
+                <<" 0.060-0.130="<<rms(plucked,.060,.130)<<'\n';
             const double pluckEarly=rms(plucked,.06,.13);
             const double pluckLate=rms(plucked,1.35,1.60);
             const double sustainEarly=rms(sustained,.06,.13);
