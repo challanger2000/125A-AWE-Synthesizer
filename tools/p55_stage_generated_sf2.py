@@ -32,10 +32,20 @@ def name20(name: str) -> bytes:
     return raw.ljust(20, b"\0")
 
 
-def make_sf2() -> bytes:
+def make_sf2(wideband: bool=False) -> bytes:
     frames = 4410
-    pcm = [int(round(11500 * math.sin(2 * math.pi * 440 * i / 44100)))
-           for i in range(frames)]
+    if wideband:
+        # P62: a copyright-free three-frequency sample distinguishes the
+        # Creative frequency-dependent upload filter from a mere -6 dB gain.
+        # The original P55 sine remains unchanged for the earlier tests.
+        pcm = [int(round(10500 * (
+            0.44 * math.sin(2 * math.pi * 440 * i / 44100)
+            + 0.34 * math.sin(2 * math.pi * 4400 * i / 44100)
+            + 0.22 * math.sin(2 * math.pi * 12000 * i / 44100))))
+            for i in range(frames)]
+    else:
+        pcm = [int(round(11500 * math.sin(2 * math.pi * 440 * i / 44100)))
+               for i in range(frames)]
     data = struct.pack("<" + "h" * frames, *pcm) + b"\0" * (46 * 2)
     info = list_chunk(b"INFO",
         chunk(b"ifil", struct.pack("<HH", 2, 1)),
@@ -77,6 +87,7 @@ def main() -> None:
     p.add_argument("--report", type=Path, required=True)
     a = p.parse_args()
     sf2 = make_sf2()
+    p62 = make_sf2(wideband=True)
     if not sf2.startswith(b"RIFF") or sf2[8:12] != b"sfbk":
         raise AssertionError("Invalid SF2 RIFF form")
     with PyFatFS(str(a.disk), offset=partition_offset(a.disk),
@@ -86,6 +97,10 @@ def main() -> None:
             f.write(sf2)
         if fs.readbytes("AWE32/P55TEST.SF2") != sf2:
             raise AssertionError("Guest FAT stored a different P55 test SF2")
+        with fs.openbin("AWE32/P62TEST.SF2", "w") as f:
+            f.write(p62)
+        if fs.readbytes("AWE32/P62TEST.SF2") != p62:
+            raise AssertionError("Guest FAT stored a different P62 wideband SF2")
     report = {
         "phase": "P55", "file": "C:\\AWE32\\P55TEST.SF2",
         "size_bytes": len(sf2), "sha256": hashlib.sha256(sf2).hexdigest(),
@@ -93,7 +108,14 @@ def main() -> None:
         "waveform": "generated 440 Hz sine", "samples": 1,
         "original_creative_bank_load_verified": False,
         "user_original_synth512_bank_present": False,
-        "original_user_soundfont_bytes_uploaded": False}
+        "original_user_soundfont_bytes_uploaded": False,
+        "p62_wideband": {
+            "file": "C:\\AWE32\\P62TEST.SF2",
+            "size_bytes": len(p62),
+            "sha256": hashlib.sha256(p62).hexdigest(),
+            "freq_components_hz": [440, 4400, 12000],
+            "source": "original synthetic laboratory waveform",
+            "user_soundfont_contains": False}}
     a.report.parent.mkdir(parents=True, exist_ok=True)
     a.report.write_text(json.dumps(report, indent=2)+"\n", encoding="utf8")
     print(json.dumps(report, indent=2))

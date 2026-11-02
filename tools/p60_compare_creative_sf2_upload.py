@@ -33,7 +33,7 @@ def _pre_emphasis_win95(samples: list[int]) -> list[int]:
 
 
 def _expected_pcm() -> list[int]:
-    sf2 = make_sf2()
+    sf2 = make_sf2(wideband=True)
     i = sf2.find(b"smpl")
     if i < 0:
         raise AssertionError("Generated SF2 contains no smpl chunk")
@@ -48,6 +48,7 @@ def _expected_pcm() -> list[int]:
 def analyze(trace: Path, start_count: int, end_count: int) -> dict:
     input_pcm = _expected_pcm()
     filtered_pcm = _pre_emphasis_win95(input_pcm)
+    half_pcm = [int(round(x/2.0)) for x in input_pcm]
     words = []
     with trace.open("r", encoding="utf8", errors="replace") as f:
         reader = csv.DictReader(f)
@@ -60,13 +61,13 @@ def analyze(trace: Path, start_count: int, end_count: int) -> dict:
                 and row.get("voice") == "26"
                 and row.get("port", "").lower() in ("0x0a20", "0x0a22")):
                 words.append(_signed16(int(row["value"], 16)))
-    summary = {"phase": "P60", "test_source": "generated P55 440Hz sine, not user SF2",
+    summary = {"phase": "P62", "test_source": "generated 440Hz + 4400Hz + 12000Hz wideband SF2, not user SF2",
         "source_pcm_words":len(input_pcm),
         "original_driver_memory_write_words":len(words),
         "raw_sf2_bytes_publicly_uploaded":False,
         "raw_emu8000_memory_trace_publicly_uploaded":False,
         "driver_syntax": "original Win95 Creative AWECP32 through 86Box EMU8000",
-        "hypotheses": ["unmodified SF2 PCM", "SF1-style Win95 pre-emphasis /8"]}
+        "hypotheses": ["unmodified SF2 PCM", "uniform half-amplitude SF2 PCM", "SF1-style Win95 pre-emphasis /8"]}
     if len(words) < 256:
         summary["result"] = "Insufficient EMU8000 RAM writes for upload comparison"
         return summary
@@ -75,27 +76,40 @@ def analyze(trace: Path, start_count: int, end_count: int) -> dict:
     n = min(3200, len(words), 4410)
     stride=4
     limit=max(0, min(len(words)-n, 2048))
-    rankings=[]
-    for offset in range(0,limit+1):
+    candidates = {
+        "raw": input_pcm[:n:stride],
+        "half_gain": half_pcm[:n:stride],
+        "preemphasis8": filtered_pcm[:n:stride],
+    }
+    rankings = {key: [] for key in candidates}
+    # The P60 first sample alignment was word 17, with 36 extra words
+    # relative to the actual smpl chunk. Allow a 128-word shift to account
+    # for guard/reserve effects without confusing nonlocal audio matches.
+    for offset in range(0,min(limit,128)+1):
         x=words[offset:offset+n:stride]
         if len(x)<128:
             continue
-        ys=(input_pcm[:n:stride],filtered_pcm[:n:stride])
-        err=[sum((v-s)**2 for v,s in zip(x,y))/len(x) for y in ys]
-        rankings.append((min(err),offset,err[0],err[1]))
-    if not rankings:
+        for key,y in candidates.items():
+            err=sum((v-s)**2 for v,s in zip(x,y))/len(x)
+            rankings[key].append((err,offset))
+    if not all(rankings.values()):
         summary["result"]="No sufficient continuous memory transfer segment"
         return summary
-    score,offset,rawerr,preerr=min(rankings,key=lambda z:z[0])
+    best = {key:min(values,key=lambda pair:pair[0])
+            for key,values in rankings.items()}
+    closest = min(best,key=lambda key:best[key][0])
+    score, offset = best[closest]
     summary.update({
         "sample_window_words":n,
+        "chosen_model":closest,
         "best_contiguous_word_offset":offset,
-        "unmodified_pcm_rmse_units":round(math.sqrt(rawerr),2),
-        "win95_sf1_style_preemphasis_rmse_units":round(math.sqrt(preerr),2),
-        "closer_hypothesis":("unmodified SF2 PCM" if rawerr < preerr
-                             else "SF1-style Win95 pre-emphasis /8"),
+        "unmodified_pcm_rmse_units":round(math.sqrt(best["raw"][0]),2),
+        "half_amplitude_pcm_rmse_units":round(math.sqrt(best["half_gain"][0]),2),
+        "win95_sf1_style_preemphasis_rmse_units":round(math.sqrt(best["preemphasis8"][0]),2),
+        "best_alignment_by_model": {k:v[1] for k,v in best.items()},
         "best_rmse_units":round(math.sqrt(score),2),
-        "analysis_scope_note":"Only source test sine; not the original user bass bank"
+        "analysis_scope_note":"Wideband ORIGINAL synthetic bank, never private user SF2",
+        "discriminator": "high-frequency dependence distinguishes Creative pre-emphasis from a uniform half-gain"
     })
     # A close numerical fit, not just smaller error, is required to call
     # either upload model confirmed.
