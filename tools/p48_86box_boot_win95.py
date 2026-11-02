@@ -18,6 +18,7 @@ from p47_86box_emu8k_smoke import send, wait_socket, write_config
 from p50_emu8k_midi_probe import play as p50_play
 from p58_analyze_audio import analyze_wav
 from p60_compare_creative_sf2_upload import analyze as p60_analyze_upload
+from p64_original_win95_midi_trial import run_trial as p64_run_trial
 
 
 # Scancode set 1 (US Win95 layout), only for the fixed laboratory filename.
@@ -60,6 +61,7 @@ def main() -> None:
     ap.add_argument("--roms", type=Path, required=True)
     ap.add_argument("--disk", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--p64-bridge", action="store_true", help="Run original Win95 MIDI agent through 86Box COM1")
     args = ap.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
 
@@ -79,6 +81,18 @@ hdd_01_ide_channel = 0:0
 hdd_01_speed = ramdisk
 [Sound Blaster AWE32 PnP]
 onboard_ram = 2048
+""")
+    if args.p64_bridge:
+        # 86Box 2026 Linux char_pipe server: *.in is guest RX, *.out is TX.
+        # P64 writes the host MIDI into *.in without injecting EMU8000 registers.
+        with cfg.open("a",encoding="utf8") as f:
+            f.write("""[Ports (COM & LPT)]
+serial1_enabled = 1
+serial1_device = pipe
+[Named Pipe (COM) #1]
+path = """+str((vm/"p64-midi").resolve())+"""
+mode = 1
+reconnect = 1
 """)
     trace = vm / "driver-potential-emu8000-io.csv"
     sockpath = vm / "automation.sock"
@@ -202,7 +216,7 @@ onboard_ram = 2048
                 # P56: P55 screenshot establishes the Win95 common
                 # dialog has "File Name" focused and "*.sbk;*.sf2" selected.
                 # Enter the staged path exactly, confirm via Return.
-                guest_sf2_path = "c:\\awe32\\p62test.sf2"
+                guest_sf2_path = "c:\\awe32\\p55test.sf2" if args.p64_bridge else "c:\\awe32\\p62test.sf2"
                 p49_type_path(conn, guest_sf2_path)
                 p49_screenshot(conn, args.out, "p56-file-selected.png", report)
                 p49_key(conn, 0x1c)
@@ -232,7 +246,7 @@ onboard_ram = 2048
                 # P60: inspect only the original Creative sample-memory
                 # upload span, before any subsequent MIDI note messages.
                 # Upload private CSV contents stay in ephemeral runner.
-                if trace.is_file():
+                if trace.is_file() and not args.p64_bridge:
                     report["p60_original_sf2_upload"] = p60_analyze_upload(
                         trace, io_before_apply, io_after_apply)
                 # These flags require *visual inspection* and evidence of
@@ -245,7 +259,10 @@ onboard_ram = 2048
                 # probes from P57/P58 are deliberately omitted: this bank
                 # contains a wideband probe, not the earlier P55 sine.
                 report["p57_original_midi_trials"] = []
-                report["p62_wideband_upload_only"] = True
+                report["p62_wideband_upload_only"] = not args.p64_bridge
+                if args.p64_bridge:
+                    p64_run_trial(conn,args.out,trace,vm/"p64-midi",send,
+                                  p49_key,p49_type_path,p49_screenshot,report)
                 report["p55_original_sf2_load_confirmed"] = False
                 report["p53_original_control_panel_loaded"] = False
                 report["p53_original_bank_sf2_loaded"] = False
