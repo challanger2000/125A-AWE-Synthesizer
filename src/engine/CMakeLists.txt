@@ -66,3 +66,11 @@ target_include_directories(awe32_sf2_timbre_probe PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/src/vst3" "${UPSTREAM_SRC}")
 target_link_libraries(awe32_sf2_timbre_probe PRIVATE awe32_chip_safety)
 set_target_properties(awe32_sf2_timbre_probe PROPERTIES CXX_STANDARD 23)
+
+# P86: generic non-DAW 86Box audition of any private user SF2.
+# Native probe never bundles/redistributes sample banks or ROMs.
+add_executable(awe32_p86_generic_sf2_probe "${PROJECT_SOURCE_DIR}/tools/p86_generic_sf2_probe.cpp")
+target_include_directories(awe32_p86_generic_sf2_probe PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/src/vst3" "${UPSTREAM_SRC}")
+target_link_libraries(awe32_p86_generic_sf2_probe PRIVATE awe32_chip_safety)
+set_target_properties(awe32_p86_generic_sf2_probe PROPERTIES CXX_STANDARD 23)
