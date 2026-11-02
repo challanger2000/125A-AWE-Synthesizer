@@ -59,6 +59,20 @@ class UniversalCreativeAudition(unittest.TestCase):
             self.assertEqual(len(delivered["private_wavs"]),2)
             self.assertTrue(all(Path(x["path"]).is_file() for x in delivered["private_wavs"]))
             self.assertTrue(any("P017-Industrial" in x["path"] for x in delivered["private_wavs"]))
+    def test_single_preset_fixture_requires_unique_capture_filenames(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            for sub in ("p64-private-original-creative-wavetable","p75-private-program7"):
+                wav_fixture(root/sub/"fake-wavetable.wav")
+            report={"p84_universal_sf2_test":True,
+                    "p75_private_sample_upload_plausible":True,
+                    "p84_selected_presets":[{"bank":0,"program":0,"name":"Only preset"}]*2,
+                    "p84_creative_user_bank":1,
+                    "p64_original_win95_midi":{"p75_program_results":[
+                        {"program":0,"nonzero_audio":True},
+                        {"program":0,"nonzero_audio":True}]}}
+            result=export(root,root/"private",report)
+            self.assertEqual(len({x["path"] for x in result["private_wavs"]}),2)
     def test_reject_unverified_upload(self):
         with tempfile.TemporaryDirectory() as directory:
             with self.assertRaisesRegex(ValueError,"upload"):

@@ -72,6 +72,7 @@ def main() -> None:
     ap.add_argument("--universal-sf2-bank",type=int,help="SF2 preset bank; default first present bank")
     ap.add_argument("--universal-programs",help="Comma-separated two SF2 MIDI programs; defaults to first two")
     ap.add_argument("--universal-creative-bank",type=int,default=1,help="Win95 Creative user bank (CC0), default 1")
+    ap.add_argument("--universal-midi-channel",type=int,choices=range(1,17),help="MIDI channel 1..16; defaults to channel 10 for SF2 bank128, else 1")
     ap.add_argument("--universal-note",type=int,default=60,help="MIDI audition note (drum kits: 36)")
     ap.add_argument("--universal-wav-dir",type=Path,help="Private output directory of real original Creative WAVs")
     ap.add_argument("--require-full-bank",action="store_true",help="Require exact original 77-preset bank, not the two-preset test fixture")
@@ -120,6 +121,7 @@ def main() -> None:
         if any(pr not in by_program for pr in selected):
             raise ValueError("Selected MIDI program absent in SF2 bank %d"%bank)
         audition_presets=[by_program[pr] for pr in selected]
+        midi_channel=(args.universal_midi_channel-1 if args.universal_midi_channel else (9 if bank==128 else 0))
         if not 0<=args.universal_note<=127 or not 0<=args.universal_creative_bank<=127:
             raise ValueError("Universal MIDI note and Creative bank must be 0..127")
     else:
@@ -173,6 +175,7 @@ reconnect = 1
               "p84_universal_sf2_test":bool(generic_report),
               "p84_selected_presets":audition_presets,
               "p84_creative_user_bank":args.universal_creative_bank if generic_report else None,
+              "p84_midi_channel_0_based":midi_channel if generic_report else None,
               "p84_synthesizer_sample_bytes":generic_report["sample_pcm_bytes"] if generic_report else None,
               "full_77_preset_soundfont_validated":bool(full_bank_report),
               "full_77_preset_sample_bytes":full_bank_report["sample_data_bytes"] if full_bank_report else None,
@@ -363,6 +366,7 @@ reconnect = 1
                                    programs=tuple(item["program"] for item in audition_presets) if generic_report else ((0,7) if private_report else (0,)),
                                    note=args.universal_note if generic_report else 48,
                                    creative_bank=args.universal_creative_bank if generic_report else 1,
+                                   midi_channel=midi_channel if generic_report else 0,
                                    preset_names={item["program"]:item["name"] for item in audition_presets} if generic_report else ({0:"Grungy Ramp Bass",7:"TX81Z Lately Bass"} if private_report else None))
                     if args.universal_wav_dir:
                         report["p84_universal_wav_export"]=p84_export_universal_wav(

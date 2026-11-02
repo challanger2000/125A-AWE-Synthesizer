@@ -34,9 +34,11 @@ def export(out,private_destination,report):
         if len(wavs)!=1:
             raise FileNotFoundError("No unambiguous original EMU8000 WAV for program %d"%preset["program"])
         stats=pcm_stats(wavs[0])
-        filename=("125A-AWE-UserBank%03d-SF2Bank%03d-P%03d-%s.wav"
+        repeated=expected[0]["bank"]==expected[1]["bank"] and expected[0]["program"]==expected[1]["program"]
+        suffix=("-Take%d"%(ix+1)) if repeated else ""
+        filename=("125A-AWE-UserBank%03d-SF2Bank%03d-P%03d-%s%s.wav"
                   %(report["p84_creative_user_bank"],preset["bank"],
-                    preset["program"],safe_name(preset["name"])))
+                    preset["program"],safe_name(preset["name"]),suffix))
         copies.append((wavs[0],filename,stats,preset))
     dest=Path(private_destination)
     dest.mkdir(parents=True,exist_ok=True)

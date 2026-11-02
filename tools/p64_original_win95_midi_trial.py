@@ -47,11 +47,11 @@ def send_paced_frame(fd, payload: bytes, conn, send, pace_ms=25):
 
 
 def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
-              send, key, type_path, screenshot, report, pcm_fifo=None, programs=(0,), note=48, creative_bank=1, preset_names=None):
+              send, key, type_path, screenshot, report, pcm_fifo=None, programs=(0,), note=48, creative_bank=1, preset_names=None, midi_channel=0):
     if not programs or len(programs)>2 or any(not 0<=v<=127 for v in programs):
         raise ValueError("Select one or two valid MIDI program numbers")
-    if not 0<=note<=127 or not 0<=creative_bank<=127:
-        raise ValueError("Invalid MIDI note or Creative user bank")
+    if not 0<=note<=127 or not 0<=creative_bank<=127 or not 0<=midi_channel<=15:
+        raise ValueError("Invalid MIDI note, Creative user bank or channel")
     first_program=programs[0]
     second_program=programs[1] if len(programs)==2 else None
     names=preset_names or {}
@@ -71,7 +71,7 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
     uart_frames_sent=0
     audio_dir.mkdir(exist_ok=True)
     try:
-        init=tuple(demo_messages(channel=0,bank=creative_bank,program=first_program,note=note,velocity=100))
+        init=tuple(demo_messages(channel=midi_channel,bank=creative_bank,program=first_program,note=note,velocity=100))
         for msg in init:
             uart_bytes_sent+=send_paced_frame(fd,msg,conn,send)
             uart_frames_sent+=1
@@ -83,11 +83,11 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
             audio_started=True
         except Exception as exc:
             report["p64_audio_start_error"]=str(exc)
-        uart_bytes_sent+=send_paced_frame(fd,frame(0x90,note,100),conn,send)
+        uart_bytes_sent+=send_paced_frame(fd,frame(0x90|midi_channel,note,100),conn,send)
         uart_frames_sent+=1
         send(conn,"step 1200")
         screenshot(conn,out,"p64-creative-playing.png",report)
-        uart_bytes_sent+=send_paced_frame(fd,frame(0x80,note,0),conn,send)
+        uart_bytes_sent+=send_paced_frame(fd,frame(0x80|midi_channel,note,0),conn,send)
         uart_frames_sent+=1
         send(conn,"step 1200")
         if audio_started:
@@ -95,7 +95,7 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
         p75_program7_before=max(0,len(trace.read_text(encoding="utf8",errors="replace").splitlines())-1) if trace.is_file() else 0
         if second_program is not None:
             other_dir.mkdir(exist_ok=True)
-            for msg in demo_messages(channel=0,bank=creative_bank,program=second_program,note=note,velocity=100):
+            for msg in demo_messages(channel=midi_channel,bank=creative_bank,program=second_program,note=note,velocity=100):
                 send_paced_frame(fd,msg,conn,send)
             send(conn,"step 400")
             p75_recording=False
@@ -104,10 +104,10 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
                 p75_recording=True
             except Exception as exc:
                 report["p75_recording_error"]=str(exc)
-            send_paced_frame(fd,frame(0x90,48,100),conn,send)
+            send_paced_frame(fd,frame(0x90|midi_channel,note,100),conn,send)
             send(conn,"step 1200")
             screenshot(conn,out,"p75-program7-playing.png",report)
-            send_paced_frame(fd,frame(0x80,48,0),conn,send)
+            send_paced_frame(fd,frame(0x80|midi_channel,note,0),conn,send)
             send(conn,"step 1200")
             if p75_recording:
                 send(conn,"audio stop")
@@ -142,7 +142,8 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
              "nonzero_audio":bool(analysis7 and analysis7.get("window_rms_dbfs",-300)>-299),
              "register_write_delta":max(0,count_after-p75_program7_before),
              "raw_audio_uploaded":False}]
-    result={"p75_original_private_sf2_test":second_program is not None,
+    result={"p84_midi_channel_0_based":midi_channel,
+            "p75_original_private_sf2_test":second_program is not None,
             "p75_program_results":p75_program_reports,
             "p74_uart_bytes_injected":uart_bytes_sent,
             "p74_uart_frames_injected":uart_frames_sent,
