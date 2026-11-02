@@ -17,7 +17,7 @@ class PEEntry(unittest.TestCase):
             d=bytearray(256)
             d[:2]=b"MZ"
             struct.pack_into("<I",d,0x3C,0x80)
-            d[0x80:0x84]=b"PE\\x00\\x00".replace(b"\\x00",b"\x00")
+            d[0x80:0x84]=b"PE\x00\x00"
             struct.pack_into("<H",d,0x80+24,0x10b)
             struct.pack_into("<I",d,0x80+24+16,0x1095)
             struct.pack_into("<I",d,0x80+24+28,0x400000)
