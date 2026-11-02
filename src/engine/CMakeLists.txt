@@ -74,3 +74,10 @@ target_include_directories(awe32_p86_generic_sf2_probe PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/src/vst3" "${UPSTREAM_SRC}")
 target_link_libraries(awe32_p86_generic_sf2_probe PRIVATE awe32_chip_safety)
 set_target_properties(awe32_p86_generic_sf2_probe PROPERTIES CXX_STANDARD 23)
+
+# P90: exact observable Creative SF2 driver mappings (synthetic region tests).
+add_executable(awe32_p90_sf2_driver_registers_test "${PROJECT_SOURCE_DIR}/tests/p90_sf2_driver_registers.cpp")
+target_include_directories(awe32_p90_sf2_driver_registers_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${UPSTREAM_SRC}")
+target_link_libraries(awe32_p90_sf2_driver_registers_test PRIVATE awe32_chip_safety)
+set_target_properties(awe32_p90_sf2_driver_registers_test PROPERTIES CXX_STANDARD 23)
+add_test(NAME 125A_p90_sf2_driver_registers COMMAND awe32_p90_sf2_driver_registers_test)
