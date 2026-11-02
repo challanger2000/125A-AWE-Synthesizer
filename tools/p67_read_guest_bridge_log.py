@@ -32,6 +32,7 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument("--disk",type=Path,required=True)
     p.add_argument("--out",type=Path,required=True)
+    p.add_argument("--audio-report",type=Path,required=True)
     a=p.parse_args()
     with PyFatFS(str(a.disk),offset=partition_offset(a.disk),read_only=True,preserve_case=False) as fs:
         if fs.exists("AWE32/P63LOG.TXT"):
@@ -44,6 +45,12 @@ def main():
                     "win95_agent_error":True,
                     "raw_user_sf2_published":False,
                     "error":"Win95 guest agent never created P63LOG.TXT"}
+    audio=json.loads(a.audio_report.read_text(encoding="utf8")).get("p64_original_win95_midi",{})
+    pcm=audio.get("direct_86box_pcm_fifo") or {}
+    result["emu8000_pcm_stream_frames"]=pcm.get("frames",0)
+    result["emu8000_nonzero_pcm_frames"]=pcm.get("nonzero_frames",0)
+    result["emu8000_note_register_delta"]=audio.get("original_creative_midi_activity_register_write_delta",0)
+    result["audio_observed"]=bool(result["emu8000_nonzero_pcm_frames"]>0 and result["emu8000_note_register_delta"]>0)
     a.out.parent.mkdir(parents=True,exist_ok=True)
     a.out.write_text(json.dumps(result,indent=2)+"\n",encoding="utf8")
     print(json.dumps(result,indent=2))
@@ -51,7 +58,8 @@ def main():
         and result["original_creative_winmm_endpoint_selected"]
         and result["original_creative_com1_ready"]
         and result["creatives_midi_short_messages_delivered"]>=4
-        and not result["win95_agent_error"])
+        and not result["win95_agent_error"]
+        and result["audio_observed"])
     if not ok:
         raise SystemExit("P67 FAIL: original Win95 Creative WinMM MIDI path is not proven")
 

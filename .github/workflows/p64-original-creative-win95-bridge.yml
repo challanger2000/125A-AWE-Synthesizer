@@ -19,6 +19,7 @@ on:
       - tools/p65_86box_pcm_tap.py
       - tools/p65_pcm_receiver.py
       - tests/test_p65_pcm.py
+      - tools/p67_read_guest_bridge_log.py
       - src/bridge/p63_win95_guest_midi.c
       - src/bridge/P63MidiWire.h
       - .github/workflows/p64-original-creative-win95-bridge.yml
@@ -167,6 +168,12 @@ jobs:
             --disk "$RUNNER_TEMP/p48/private-guest/creative-installed.img" \
             --out "$RUNNER_TEMP/p48/results" \
             --p64-bridge
+      - name: P67 verify real Creative Win95 MIDI and actual EMU8000 PCM
+        run: |
+          python tools/p67_read_guest_bridge_log.py \
+            --disk "$RUNNER_TEMP/p48/private-guest/creative-installed.img" \
+            --audio-report "$RUNNER_TEMP/p48/results/P48-report.json" \
+            --out "$RUNNER_TEMP/p48/results/P67-guest-bridge-verification.json"
       - name: Publish screenshots and text ONLY, never Microsoft OS/Creative drivers/ROMs
         if: always()
         shell: bash
@@ -174,6 +181,7 @@ jobs:
           mkdir -p p48-evidence
           cp "$RUNNER_TEMP/p48/results/"*.png p48-evidence/ 2>/dev/null || true
           cp "$RUNNER_TEMP/p48/results/P48-report.json" p48-evidence/ 2>/dev/null || true
+          cp "$RUNNER_TEMP/p48/results/P67-guest-bridge-verification.json" p48-evidence/ 2>/dev/null || true
           cp "$RUNNER_TEMP/p48/results/86box-win95-host.log" p48-evidence/ 2>/dev/null || true
           cp "$RUNNER_TEMP/p48/qemu-observations/p40-input-report.json" p48-evidence/ 2>/dev/null || true
           cp "$RUNNER_TEMP/p48/qemu-observations/p40-guest-after-installer.json" p48-evidence/ 2>/dev/null || true
