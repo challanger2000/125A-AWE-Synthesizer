@@ -47,7 +47,12 @@ def main():
                     "win95_agent_error":True,
                     "raw_user_sf2_published":False,
                     "error":"Win95 guest agent never created P63LOG.TXT"}
-    result["p68_startup_batch_launched"] = "P68 STARTUP BATCH" in batch
+    result["p68_startup_batch_launched"] = "P70 STARTUP BATCH" in batch or "P68 STARTUP BATCH" in batch
+    result["p70_guest_exe_exists"] = "P68BOOT.EXE EXISTS" in batch
+    result["p70_direct_execution_began"] = "DIRECT EXEC BEGIN" in batch
+    result["p70_direct_execution_returned"] = "DIRECT EXEC RETURNED" in batch
+    result["p70_direct_execution_nonzero"] = "DIRECT EXEC NONZERO" in batch
+    result["p70_guest_exe_missing"] = "P68BOOT.EXE MISSING" in batch
     result["p68_win95_autostart_launched"]="P68 WIN95 AUTOSTART LOADED" in startup
     result["p68_win95_createprocess_ok"]="P63 CREATEPROCESS SUCCESS" in startup
     result["p68_launch_diagnostic"]=next((line.strip() for line in startup.splitlines() if line.startswith("P63 CREATEPROCESS")), "P68BOOT.LOG not created")

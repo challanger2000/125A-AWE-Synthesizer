@@ -8,6 +8,11 @@ spec=importlib.util.spec_from_file_location("p68",path)
 p68=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(p68)
 class StartupIni(unittest.TestCase):
+    def test_direct_exe_legacy_startup_diagnostics(self):
+        self.assertIn(b"C:\\AWE32\\P68BOOT.EXE\r\n", p68.STARTUP_BATCH)
+        self.assertIn(b"IF ERRORLEVEL 1", p68.STARTUP_BATCH)
+        self.assertNotIn(b"START C:\\AWE32", p68.STARTUP_BATCH)
+
     def test_empty_run_in_windows(self):
         original=b"[windows]\r\nload=\r\nrun=\r\n[desktop]\r\npattern=0\r\n"
         out=p68.patch_win_ini(original)

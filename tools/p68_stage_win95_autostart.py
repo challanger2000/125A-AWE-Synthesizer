@@ -49,8 +49,17 @@ def patch_win_ini(buf: bytes) -> bytes:
     return (newline.join(result)+newline).encode("latin-1")
 
 STARTUP_BATCH = (b"@ECHO OFF\r\n"
-                 b"ECHO P68 STARTUP BATCH>C:\\AWE32\\P68BAT.LOG\r\n"
-                 b"START C:\\AWE32\\P68BOOT.EXE\r\n")
+                 b"ECHO P70 STARTUP BATCH>C:\\AWE32\\P68BAT.LOG\r\n"
+                 b"IF NOT EXIST C:\\AWE32\\P68BOOT.EXE GOTO MISSING\r\n"
+                 b"ECHO P68BOOT.EXE EXISTS>>C:\\AWE32\\P68BAT.LOG\r\n"
+                 b"ECHO DIRECT EXEC BEGIN>>C:\\AWE32\\P68BAT.LOG\r\n"
+                 b"C:\\AWE32\\P68BOOT.EXE\r\n"
+                 b"IF ERRORLEVEL 1 ECHO DIRECT EXEC NONZERO>>C:\\AWE32\\P68BAT.LOG\r\n"
+                 b"ECHO DIRECT EXEC RETURNED>>C:\\AWE32\\P68BAT.LOG\r\n"
+                 b"GOTO DONE\r\n"
+                 b":MISSING\r\n"
+                 b"ECHO P68BOOT.EXE MISSING>>C:\\AWE32\\P68BAT.LOG\r\n"
+                 b":DONE\r\n")
 
 def stage(disk: Path, launcher: Path) -> dict:
     from pyfatfs.PyFatFS import PyFatFS

@@ -1,0 +1,3 @@
+## P70 – confirmed failure, targeted Win95 loader diagnosis
+
+The P69 full test did **not** fail in the AWE64-Gold hardware smoke. It failed in the original Creative MIDI gate. The FAT image shows `P68BAT.LOG` (Win95 Startup group batch executed), but neither `P68BOOT.LOG` nor `P63LOG.TXT` (neither PE executable reached its first log line). A direct executable launch in the batch now records file existence and return/nonzero status rather than using `START`; both freshly linked PE32 applications explicitly disable newer NX/ASLR header flags to target original Win95. This is a hypothesis-driven compatibility fix, not a proven root cause until the guest reports success. Do not mark the complete bridge as passed if P67 still fails.
