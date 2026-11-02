@@ -20,6 +20,8 @@ on:
       - tools/p65_pcm_receiver.py
       - tests/test_p65_pcm.py
       - tools/p67_read_guest_bridge_log.py
+      - tools/p75_private_sf2.py
+      - tests/test_p75_sf2.py
       - tools/p47_86box_emu8k_smoke.py
       - tests/test_p69_gold.py
       - tools/p68_stage_win95_autostart.py
@@ -67,6 +69,7 @@ jobs:
           python -m unittest discover -s tests -p test_p64_fifo.py -v
           python -m unittest discover -s tests -p test_p65_pcm.py -v
           python -m unittest discover -s tests -p test_p68_ini.py -v
+          python -m unittest discover -s tests -p test_p75_sf2.py -v
           python -m unittest discover -s tests -p test_p72_pe_entry.py -v
           python -m unittest discover -s tests -p test_p69_gold.py -v
       - name: Obtain disposable original Win95 installation disk
