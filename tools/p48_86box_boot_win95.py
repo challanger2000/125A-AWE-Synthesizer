@@ -20,6 +20,7 @@ from p58_analyze_audio import analyze_wav
 from p60_compare_creative_sf2_upload import analyze as p60_analyze_upload
 from p64_original_win95_midi_trial import run_trial as p64_run_trial
 from p75_private_sf2 import stage as p75_stage_private_sf2
+from p80_full_sf2_inventory import inventory as p80_inventory
 from p76_export_private_wav import export as p76_export_private_wav
 
 
@@ -65,6 +66,7 @@ def main() -> None:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--p64-bridge", action="store_true", help="Run original Win95 MIDI agent through 86Box COM1")
     ap.add_argument("--private-sf2", type=Path, help="Local original SF2, never commit/upload")
+    ap.add_argument("--require-full-bank",action="store_true",help="Require exact original 77-preset bank, not the two-preset test fixture")
     ap.add_argument("--private-wav-dir",type=Path,help="Local private export directory for original two bass WAVs")
     ap.add_argument("--sound-card", choices=("sbawe32_pnp","sbawe64_gold"), default="sbawe32_pnp")
     args = ap.parse_args()
@@ -77,6 +79,9 @@ def main() -> None:
         raise ValueError("--private-sf2 requires --p64-bridge")
     if args.private_wav_dir and not args.private_sf2:
         raise ValueError("--private-wav-dir requires --private-sf2")
+    if args.require_full_bank and not args.private_sf2:
+        raise ValueError("--require-full-bank requires --private-sf2")
+    full_bank_report=p80_inventory(args.private_sf2.read_bytes()) if args.require_full_bank else None
     private_report=p75_stage_private_sf2(args.disk,args.private_sf2) if args.private_sf2 else None
     ram_kib=28672 if args.sound_card=="sbawe64_gold" else 2048
     card_section={"sbawe32_pnp":"Sound Blaster AWE32 PnP",
@@ -123,6 +128,8 @@ reconnect = 1
     report = {"phase": "P48", "guest": "Windows 95 OSR2, original Creative INF staged and installed in QEMU",
               "hardware": args.sound_card, "sample_ram_kib": ram_kib,
               "private_sf2_supplied":bool(private_report),
+              "full_77_preset_soundfont_validated":bool(full_bank_report),
+              "full_77_preset_sample_bytes":full_bank_report["sample_data_bytes"] if full_bank_report else None,
               "windows95_binding_verified": False, "actual_driver_note_trace_verified": False,
               "source_sf2_tested": False, "screens": []}
     with (args.out / "86box-win95-host.log").open("wb") as log:
@@ -251,7 +258,7 @@ reconnect = 1
                 send(conn, "key up 0x1e 0x38")
                 send(conn, "step 1500")
                 p49_screenshot(conn, args.out, "p56-apply-result-1s.png", report)
-                send(conn, "step 4000")
+                send(conn, "step 10000" if full_bank_report else "step 4000")
                 p49_screenshot(conn, args.out, "p56-apply-result-5s.png", report)
                 io_after_apply = (
                     len(trace.read_text(encoding="utf8", errors="replace").splitlines())-1
@@ -279,7 +286,9 @@ reconnect = 1
                                     and row.get("port","").lower() in ("0x0a20","0x0a22")):
                                     user_words+=1
                     expected=private_report["sample_data_bytes"]//2
-                    minimum=max(128,expected//8)
+                    # A full 77-preset bank must not be accepted on the
+                    # basis of a tiny partial upload or the GM ROM bank.
+                    minimum=(expected*9//10 if full_bank_report else max(128,expected//8))
                     report["p75_private_sample_upload_write_words"]=user_words
                     report["p75_private_sample_upload_minimum_words"]=minimum
                     report["p75_private_sample_upload_plausible"]=user_words>=minimum
