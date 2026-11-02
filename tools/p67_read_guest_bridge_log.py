@@ -70,6 +70,13 @@ def main():
     result["emu8000_nonzero_pcm_frames"]=pcm.get("nonzero_frames",0)
     result["emu8000_note_register_delta"]=audio.get("original_creative_midi_activity_register_write_delta",0)
     result["audio_observed"]=bool(result["emu8000_nonzero_pcm_frames"]>0 and result["emu8000_note_register_delta"]>0)
+    trial=audio.get("p75_program_results",[])
+    result["p75_private_sf2_test"]=bool(audio.get("p75_original_private_sf2_test",False))
+    result["p75_programs_tested"]=[x.get("program") for x in trial]
+    result["p75_both_basses_nonzero"]=(not result["p75_private_sf2_test"]) or (
+        result["p75_programs_tested"]==[0,7] and
+        all(x.get("nonzero_audio",False) for x in trial) and
+        trial[1].get("register_write_delta",0)>0)
     a.out.parent.mkdir(parents=True,exist_ok=True)
     a.out.write_text(json.dumps(result,indent=2)+"\n",encoding="utf8")
     print(json.dumps(result,indent=2))
@@ -77,7 +84,8 @@ def main():
         and result["agent_launched_in_actual_win95"]
         and result["original_creative_winmm_endpoint_selected"]
         and result["original_creative_com1_ready"]
-        and result["creatives_midi_short_messages_delivered"]>=4
+        and result["creatives_midi_short_messages_delivered"] >= (8 if result["p75_private_sf2_test"] else 4)
+        and result["p75_both_basses_nonzero"]
         and not result["win95_agent_error"]
         and result["audio_observed"])
     if not ok:
