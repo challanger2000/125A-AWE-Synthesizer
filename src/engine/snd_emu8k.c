@@ -687,7 +687,20 @@ emu8k_work_reverb_fitted(emu8k_t *emu8k, int32_t *inbuf, int32_t *outbuf, int co
                 emu8k->rv_ap_pos[ch][i] = (pos + 1) % emu8k->rv_ap_len[ch][i];
                 acc              = buf - acc;
             }
-            outbuf[2 * n + ch] += (int32_t) ((acc * emu8k->rv_out_gain + er[ch]) * 32768.0f);
+            /* P101 CT4390 Hall 1 calibration. The P98 MIDI-verified
+             * hardware recording gives a -4.42..-4.56 dB *absolute
+             * side-channel* deficit for nine independent nonzero Hall-1
+             * sends (A/B/C, 33/67/100%). This nearly constant 4.5 dB
+             * residual is in the effect return, not the dry SF2 voice or
+             * CC91-to-register conversion (which matches SBAWE.VXD).
+             *
+             * Apply one preset-scoped gain to BOTH the early reflections
+             * and the fitted comb tail. Preserve the measured decay,
+             * filtering, creative register writes and every other preset.
+             * We do not represent this as a silicon DSP reconstruction. */
+            const float return_gain = (emu8k->rv_preset == 3) ? 1.68f : 1.0f;
+            outbuf[2 * n + ch] += (int32_t) ((acc * emu8k->rv_out_gain + er[ch])
+                                             * return_gain * 32768.0f);
         }
     }
 }
