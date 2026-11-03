@@ -7,6 +7,7 @@ on:
       - 'tools/p98_*'
       - 'tools/p99_*'
       - 'src/engine/CMakeLists.txt'
+      - 'src/engine/snd_emu8k.c'
       - '.github/workflows/p97-physical-awe64-audio.yml'
   workflow_dispatch:
 permissions:
