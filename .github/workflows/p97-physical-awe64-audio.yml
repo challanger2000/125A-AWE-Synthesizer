@@ -1,0 +1,73 @@
+name: P97 analog AWE64 Gold vs native 125A EMU8000
+on:
+  push:
+    branches: [develop/p97-awe64-physical-audio-comparison]
+    paths:
+      - 'tools/p97_*'
+      - 'src/engine/CMakeLists.txt'
+      - '.github/workflows/p97-physical-awe64-audio.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  physical-reference-90s:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch original AWE64 Gold FLAC, historical test SF2/MIDI, and ephemeral wave ROM
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/p97" p97-evidence
+          base='https://raw.githubusercontent.com/mrbumpy409/SoundFont-Spec-Test'
+          curl -fLsS --retry 3 --max-time 90 "$base/67c0405ea9/sf_spec_test.sf2" -o "$RUNNER_TEMP/p97/reference-v3.sf2"
+          curl -fLsS --retry 3 --max-time 90 "$base/67c0405ea9/sf_spec_test.mid" -o "$RUNNER_TEMP/p97/reference-v3.mid"
+          curl -fLsS --retry 3 --max-time 120 \
+            "$base/main/recordings/Sound%20Blaster%20AWE64%20Gold%20%28CT4390%29%20%28test%20v3.0%29.flac" \
+            -o "$RUNNER_TEMP/p97/CT4390.flac"
+          test "$(git hash-object "$RUNNER_TEMP/p97/reference-v3.sf2")" = 4768c4a0215abf49c7a2bb51ada5ba3494faa1c5
+          test "$(git hash-object "$RUNNER_TEMP/p97/reference-v3.mid")" = c720631fb2f74f46ce4e2fb0c12be7905353fcfe
+          test "$(git hash-object "$RUNNER_TEMP/p97/CT4390.flac")" = 9d5fa80197dd6f6170c039cb840e613949546ba9
+          curl -fLsS --retry 3 --max-time 90 \
+            https://raw.githubusercontent.com/86Box/roms/master/sound/creative/awe32.raw \
+            -o "$RUNNER_TEMP/p97/awe32.raw"
+          test "$(stat -c %s "$RUNNER_TEMP/p97/awe32.raw")" -ge 1048576
+      - name: Isolate MIDI and audio analysis dependencies
+        run: |
+          python3 -m venv "$RUNNER_TEMP/p97/venv"
+          "$RUNNER_TEMP/p97/venv/bin/pip" -q install numpy scipy soundfile mido
+      - name: Convert original 264-second MIDI to native 44.1kHz sample timeline
+        run: |
+          "$RUNNER_TEMP/p97/venv/bin/python" tools/p97_prepare_midi.py \
+            --midi "$RUNNER_TEMP/p97/reference-v3.mid" \
+            --tsv "$RUNNER_TEMP/p97/events.tsv" \
+            --json p97-evidence/P97-original-MIDI.json
+      - name: Compile 125A native chip runner, no VST3 or alternate soundfont engine
+        run: |
+          cmake -S . -B build-p97 -G Ninja \
+            -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_OPL3_PROBES=OFF -D125A_BUILD_VST3=OFF
+          cmake --build build-p97 --target awe32_p97_midi_renderer --parallel 4
+      - name: Render first 90 seconds with the actual 86Box EMU8000 core
+        run: |
+          ./build-p97/src/engine/awe32_p97_midi_renderer \
+            --rom "$RUNNER_TEMP/p97/awe32.raw" \
+            --sf2 "$RUNNER_TEMP/p97/reference-v3.sf2" \
+            --events "$RUNNER_TEMP/p97/events.tsv" \
+            --out "$RUNNER_TEMP/p97/native-90s.wav" --seconds 90
+      - name: Compare real CT4390 analog FLAC vs 125A native audio
+        run: |
+          "$RUNNER_TEMP/p97/venv/bin/python" tools/p97_compare_hardware_audio.py \
+            --reference "$RUNNER_TEMP/p97/CT4390.flac" \
+            --native "$RUNNER_TEMP/p97/native-90s.wav" --seconds 90 \
+            --out p97-evidence/P97-AWE64-Gold-versus-125A-90s.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: P97-Real-AWE64-Gold-versus-125A-Metrics
+          path: p97-evidence/*.json
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Destroy ephemeral ROM and original recording
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/p97"
