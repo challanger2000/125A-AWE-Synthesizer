@@ -1,6 +1,7 @@
 // P97: MIDI playback through 125A's real 86Box EMU8000 core at 44.1 kHz.
 // No replacement synthesizer or proprietary ROM is embedded.
 #include "Synth.h"
+#include "Emu8000Effects.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -49,6 +50,31 @@ std::vector<Event> events(const std::string& name) {
     if(result.empty())throw std::runtime_error("No MIDI events");
     return result;
 }
+// The published CT4390 recording uses Hall 1 / Chorus 1, whereas the native
+// engine defaults to Hall 2 / Chorus 3. Program the actual EMU8000 INIT
+// register banks and HWCF5 LFO speed on the 86Box chip. No production DSP
+// code is altered and no post-EQ is used to fit the analog reference.
+void physicalFxPreset(Emu8000Core& core) {
+    using Emu8000::Reg;
+    for(size_t i=0;i<28;++i) {
+        const auto slot=Emu8000Fx::kReverbSlots[i];
+        Reg reg=Reg::INIT1;
+        if(slot.init==2)reg=Reg::INIT2;
+        else if(slot.init==3)reg=Reg::INIT3;
+        else if(slot.init==4)reg=Reg::INIT4;
+        else if(slot.init!=1)throw std::runtime_error("Invalid Creative reverb INIT bank");
+        core.Write(reg,slot.slot,Emu8000Fx::kReverbParm[3][i]);
+    }
+    const auto& chorus=Emu8000Fx::kChorusPresets[0]; // Creative Chorus 1
+    core.Write(Reg::INIT3,0x09,chorus.feedback);
+    core.Write(Reg::INIT3,0x0c,chorus.delaySamples);
+    core.Write(Reg::INIT4,0x03,chorus.depth);
+    core.WriteReg32(Emu8000::MakeSel(1,Emu8000::Port::Data1,
+                                    Emu8000::Hwcf::kHWCF5),
+                    chorus.lfoFreq);
+    std::cout<<"P97 CT4390 reference effect registers: Hall 1, Chorus 1"
+             <<", HWCF5 "<<chorus.lfoFreq<<"\n";
+}
 void dispatch(Synth& synth,const Event& e) {
     auto ch=uint8_t(e.channel);
     if(e.type=="note_on") {
@@ -86,6 +112,7 @@ int main(int argc,char** argv) {
            synth.Core().ChipVariant()!=Emu8000Core::Chip::Box86)
             throw std::runtime_error("Actual 86Box EMU8000 / ROM failed: "+error);
         synth.Core().PowerOnInit();
+        physicalFxPreset(synth.Core());
         if(!synth.LoadBank(sf2,error))
             throw std::runtime_error("Real test SoundFont failed: "+error);
         synth.SelectBrowserBank(0);
