@@ -1,7 +1,7 @@
 name: P88 current 125A AWE Windows VST3 CI
 on:
   push:
-    branches: [develop/p63-win95-original-driver-midi-bridge]
+    branches: [develop/p63-win95-original-driver-midi-bridge, develop/p97-awe64-physical-audio-comparison]
     paths: ['.gitattributes', 'src/vst3/**', 'src/engine/**', 'src/opl3/**', 'tests/**', 'tools/p18_editorhost_smoke.py', 'CMakeLists.txt', '.github/workflows/p88-windows-vst3.yml']
   workflow_dispatch:
 permissions:
