@@ -95,6 +95,44 @@ namespace
                 return r;
         return 0x7E;
     }
+    // SF2 Win95 generator 26/34 converter (SBAWE.VXD, original binary
+    // branch C119C1D9, file offset 0xFEA4). This is NOT the SF1 millisecond
+    // attack lookup: SoundFont 2 has already stored absolute timecents.
+    // Compare -8828 -> 0x7E, -1200 -> 0x18 with actual Creative assembly.
+    // Arithmetic divisions below intentionally truncate like x86 IDIV.
+    int AttackRateFromSf2Timecents(int timecents)
+    {
+        if (timecents <= -600)
+            return std::min(128, (37 - timecents) / 75 + 8);
+        if (timecents >= 4300) return 1;
+        const int quotient = (timecents + 500) / 150;
+        const int mantissa = ((~quotient) & 7) | 8;
+        const int shift = quotient / 8;
+        return std::max(1, shift >= 0 && shift < 32
+            ? (mantissa >> shift) : 1);
+    }
+
+    // Exact SBAWE.VXD SF2 freqModLFO/freqVibLFO converter, branch
+    // C119C180 (original file around 0xFE62). The driver does not compute
+    // Hertz and round by the physical 0.042-Hz step: it calculates
+    // 2^((cents+9126)/1200) as a linear 16.16 octave approximation.
+    // A single generic routine serves BOTH LFOs, not any preset by name.
+    int LfoFrequencyFromSf2Cents(int cents)
+    {
+        if (cents <= -16000) return 0;
+        const int fixed = static_cast<int>(
+            (static_cast<int64_t>(cents + 0x23A6) * 65536) / 1200);
+        // 32-bit SAR of fixed by 16 (floor division for negative values).
+        const int octave = (fixed >= 0) ? fixed / 65536
+                      : -(((-fixed) + 65535) / 65536);
+        const int fraction = static_cast<int>(
+            static_cast<uint32_t>(fixed) & 0xFFFFu);
+        const int shift = 16 - octave;
+        if (shift < 0) return 255;
+        if (shift >= 32) return 0;
+        return std::min(255, (65536 + fraction) >> shift);
+    }
+
     // When the generator is not in the bank, the default value from the
     // driver's table applies, which comes to 0x7D. Verified on 242 notes of
     // MINUET and on the presets `organ3`, `jazzgtr`, `fretlessbs` and
@@ -196,6 +234,22 @@ namespace
         if (oct > 15) oct = 15;
         const int rem = v % 1200;
         return (oct << 12) | (rem * 3 + (rem * 31) / 75);
+    }
+
+    // P96 EXPERIMENTAL: The real Creative Win95 SF2 register sweep (P94)
+    // has a slope of 3.414 IP units per input cent, instead of the
+    // 4096/1200 used by the legacy SF1/DOS cents converter above.
+    // At native 44100 Hz this rational candidate matches all 28 program-0
+    // IP writes (notes 45..56,60,61) and the 4 program-7 voices.
+    // It is a measured candidate, NOT yet a proven VXD implementation.
+    // Use 64-bit signed arithmetic and floor for negative cents.
+    int Win95Sf2PitchFromCents(double cents)
+    {
+        const int64_t integerCents = static_cast<int64_t>(std::llround(cents));
+        const int64_t product = integerCents * 1707;
+        const int64_t offset = product >= 0 ? (product / 500)
+            : -(((-product) + 499) / 500);
+        return static_cast<int>(std::clamp<int64_t>(0xE000LL + offset, 0, 0xFFFF));
     }
 
     double TimecentsToMs(int tc) { return std::pow(2.0, tc / 1200.0) * 1000.0; }
@@ -938,12 +992,19 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
     {
         // SF2 stores indices; the correction -1/-2/-3 matches how Creative
         // addresses the same samples in its own SF1 bank (see docs/re-notes).
+        // P89 original Win95 Creative writes one sample later in CCCA,
+        // PSST and CSL for both measured layers. DOS/SDK unchanged.
+        const uint32_t win95Sf2AddressCorrection =
+            (drv == Awe32::Driver::Win95) ? 1u : 0u;
         start     = base + s.start + g.Get(Gen::StartAddrsOffset, 0)
-                    + 32768u * g.Get(Gen::StartAddrsCoarseOffset, 0) - 1;
+                    + 32768u * g.Get(Gen::StartAddrsCoarseOffset, 0)
+                    - 1 + win95Sf2AddressCorrection;
         loopStart = base + s.loopStart + g.Get(Gen::StartloopAddrsOffset, 0)
-                    + 32768u * g.Get(Gen::StartloopAddrsCoarseOffset, 0) - 2;
+                    + 32768u * g.Get(Gen::StartloopAddrsCoarseOffset, 0)
+                    - 2 + win95Sf2AddressCorrection;
         loopEnd   = base + s.loopEnd + g.Get(Gen::EndloopAddrsOffset, 0)
-                    + 32768u * g.Get(Gen::EndloopAddrsCoarseOffset, 0) - 3;
+                    + 32768u * g.Get(Gen::EndloopAddrsCoarseOffset, 0)
+                    - 3 + win95Sf2AddressCorrection;
     }
 
     // The default is **0** = a one-shot sample, not a loop. Not a guess:
@@ -958,6 +1019,10 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
     vp.loopEndAddr   = loopEnd;
     const int sampleModes = g.Get(Gen::SampleModes, 0);
     vp.looping = (sampleModes & 1) != 0;
+    // SF2 2.04: mode 1 = continuous loop, mode 3 = loop until release.
+    // Do not move a continuous SF2 loop to the tail on NoteOff; P89 showed
+    // unexpected PSST/CSL writes from doing so. Preserve legacy SF1 behaviour.
+    vp.loopOpensOnRelease = vp.looping && (sf1 || ((sampleModes & 3) == 3));
     if (!vp.looping)
     {
         // The EMU8000 can only loop, it has no "one-shot" mode. The driver
@@ -991,6 +1056,13 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
     // with `initialFilterQ` 6, 14 or 22 would tell them apart - there the
     // two variants differ. None of our traces has one yet.
     if (sf1) q = g.Get(Gen::InitialFilterQ, 0) >> 3;
+    else if (drv == Awe32::Driver::Win95)
+    {
+        // P89 measured original Creative AWE64 Gold: SF2 Q=100 centibels
+        // yields EMU8000 Q=8; the old normalization yielded Q=6.
+        // Other Q magnitudes still require independent driver verification.
+        q = static_cast<int>(std::lround(g.Get(Gen::InitialFilterQ, 0) / 12.5));
+    }
     else     q = static_cast<int>(std::lround(g.Get(Gen::InitialFilterQ, 0) / 10.0
                                               / kResonanceMaxDb * kCccaQMax));
     q = std::clamp(q, 0, kCccaQMax);
@@ -1020,7 +1092,11 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
 
     // ---- chorus send + loop end -> CSL ----------------------------------
     const int chorus = sf1 ? g.Get(Gen::ChorusEffectsSend, 0)
-                           : static_cast<int>(std::lround(g.Get(Gen::ChorusEffectsSend, 0) * 255.0 / 1000.0));
+                           : (drv == Awe32::Driver::Win95)
+                               // P89 SF2 500 -> original CSL 0x7F; not 0x80.
+                               ? g.Get(Gen::ChorusEffectsSend, 0) * 255 / 1000
+                               : static_cast<int>(std::lround(
+                                     g.Get(Gen::ChorusEffectsSend, 0) * 255.0 / 1000.0));
     // The driver adds 1 to the loop end - but **only in the loop branch**.
     // For a one-shot sample it puts the loop at `end+4 .. end+8` and adds no
     // one:
@@ -1075,7 +1151,10 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
     const double centsTotal = pitchCents
         + std::log2(s.sampleRate / static_cast<double>(44100)) * 1200.0;
     vp.ipCents = static_cast<int>(centsTotal);
-    vp.ip = static_cast<uint16_t>(std::clamp(PitchFromCents(centsTotal), 0, 65535));
+    const int newIp = (!sf1 && drv == Awe32::Driver::Win95)
+        ? Win95Sf2PitchFromCents(centsTotal)
+        : std::clamp(PitchFromCents(centsTotal), 0, 65535);
+    vp.ip = static_cast<uint16_t>(newIp);
 
     // ---- patch attenuation and filter -> IFATN ----------------------------
     // The attenuation is assembled only in the Synth layer by the formula
@@ -1157,6 +1236,10 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
     const double kPefeFcCentsPerStep = 1200.0 * kPefeFilterOctaves / 127.0;
     const double kFmmodFcCentsPerStep = 1200.0 * kFmmodFilterOctaves / 127.0;
     const double kTremCbPerStep      = kTremoloMaxDb * 10.0 / 127.0;
+    // P89 real Win95 Creative: SF2 modLfoToVolume=20 centibels yields
+    // TREMFRQ depth 0x15, old six-dB path yielded 0x2A.
+    const double tremCbPerStep = (!sf1 && drv == Awe32::Driver::Win95)
+        ? (kTremoloChipMaxDb * 10.0 / 127.0) : kTremCbPerStep;
 
     vp.pefe = static_cast<uint16_t>(
         (static_cast<uint8_t>(modAmount(Gen::ModEnvToPitch, kPitchCentsPerStep)) << 8)
@@ -1170,24 +1253,28 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
     const int lfo1Freq = sf1 ? (g.Has(Gen::FreqModLFO)
                                     ? ((g.value[Gen::FreqModLFO] * 2) & 0xFF)
                                     : 128)
-                             : std::clamp<int>(static_cast<int>(std::lround(
-                                   8.176 * std::pow(2.0, g.Get(Gen::FreqModLFO, 0) / 1200.0)
-                                   / kLfoHzPerStep)), 0, 255);
+                             : (drv == Awe32::Driver::Win95)
+                                 ? LfoFrequencyFromSf2Cents(g.Get(Gen::FreqModLFO, 0))
+                                 : std::clamp<int>(static_cast<int>(std::lround(
+                                       8.176 * std::pow(2.0, g.Get(Gen::FreqModLFO, 0) / 1200.0)
+                                       / kLfoHzPerStep)), 0, 255);
     // Note: the driver **lets the result overflow the byte**, it does not
     // clip it. Measured on RELAX: `freqVibLFO 132` -> 264 -> written 0x08,
     // we had given 0xFF.
     const int lfo2Freq = sf1 ? (g.Has(Gen::FreqVibLFO)
                                     ? ((g.value[Gen::FreqVibLFO] * 2) & 0xFF)
                                     : 0)
-                             : std::clamp<int>(static_cast<int>(std::lround(
-                                   8.176 * std::pow(2.0, g.Get(Gen::FreqVibLFO, 0) / 1200.0)
-                                   / kLfoHzPerStep)), 0, 255);
+                             : (drv == Awe32::Driver::Win95)
+                                 ? LfoFrequencyFromSf2Cents(g.Get(Gen::FreqVibLFO, 0))
+                                 : std::clamp<int>(static_cast<int>(std::lround(
+                                       8.176 * std::pow(2.0, g.Get(Gen::FreqVibLFO, 0) / 1200.0)
+                                       / kLfoHzPerStep)), 0, 255);
 
     vp.fmmod = static_cast<uint16_t>(
         (static_cast<uint8_t>(modAmount(Gen::ModLfoToPitch, kPitchCentsPerStep)) << 8)
         | static_cast<uint8_t>(modAmount(Gen::ModLfoToFilterFc, kFmmodFcCentsPerStep, 2)));
     vp.tremfrq = static_cast<uint16_t>(
-        (static_cast<uint8_t>(modAmount(Gen::ModLfoToVolume, kTremCbPerStep, 2)) << 8) | lfo1Freq);
+        (static_cast<uint8_t>(modAmount(Gen::ModLfoToVolume, tremCbPerStep, 2)) << 8) | lfo1Freq);
     vp.fm2frq2 = static_cast<uint16_t>(
         (static_cast<uint8_t>(modAmount(Gen::VibLfoToPitch, kPitchCentsPerStep)) << 8) | lfo2Freq);
 
@@ -1276,7 +1363,9 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
     vp.atkhldv = static_cast<uint16_t>(
         (HoldFromMs(keyScaled(Gen::HoldVolEnv, Gen::KeynumToVolEnvHold, false)) << 8)
         | (g.Has(Gen::AttackVolEnv)
-               ? AttackRateFromMs(timeMs(Gen::AttackVolEnv, 0.0))
+               ? (!sf1 && drv == Awe32::Driver::Win95)
+                   ? AttackRateFromSf2Timecents(g.value[Gen::AttackVolEnv])
+                   : AttackRateFromMs(timeMs(Gen::AttackVolEnv, 0.0))
                : kAttackDefaultRate));
     vp.dcysusv = static_cast<uint16_t>(
         (sustainReg(Gen::SustainVolEnv) << 8)
@@ -1287,7 +1376,9 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
     vp.atkhld = static_cast<uint16_t>(
         (HoldFromMs(keyScaled(Gen::HoldModEnv, Gen::KeynumToModEnvHold, false)) << 8)
         | (g.Has(Gen::AttackModEnv)
-               ? AttackRateFromMs(timeMs(Gen::AttackModEnv, 0.0))
+               ? (!sf1 && drv == Awe32::Driver::Win95)
+                   ? AttackRateFromSf2Timecents(g.value[Gen::AttackModEnv])
+                   : AttackRateFromMs(timeMs(Gen::AttackModEnv, 0.0))
                : kAttackDefaultRate));
     vp.dcysus = static_cast<uint16_t>(
         (sustainReg(Gen::SustainModEnv) << 8)

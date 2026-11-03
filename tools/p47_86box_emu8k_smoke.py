@@ -93,6 +93,9 @@ def check_trace(csv_path: Path) -> dict:
 def run_one(args: argparse.Namespace, card: str) -> dict:
     vm = args.out / card
     write_config(vm, card)
+    if card == "sbawe64_gold":
+        with (vm / "86box.cfg").open("a", encoding="utf8") as cfg:
+            cfg.write("[Sound Blaster AWE64 Gold]\nonboard_ram = 28672\n")
     trace = (vm / "emu8000-io.csv").resolve()
     sockpath = (vm / "automation.sock").resolve()
     logfile = vm / "86box.log"
@@ -113,9 +116,15 @@ def run_one(args: argparse.Namespace, card: str) -> dict:
                 if not status.get("held", False):
                     raise AssertionError("Automation-hold was not effective")
                 info_text = json.dumps(info, sort_keys=True)
+                if card == "sbawe64_gold" and info.get("sound") != "sbawe64_gold":
+                    raise AssertionError("AWE64 Gold model was not instantiated")
                 if card not in info_text and "AWE32" not in info_text:
                     raise AssertionError(f"Expected {card} not found in 86Box info: {info_text[:1500]}")
-                result = {"card": card, "status": {"held": status["held"]},
+                result = {"card": card,
+                          "configured_sample_ram_kib": 28672 if card == "sbawe64_gold" else None,
+                          "ram_size_confirmed_by_live_driver": False,
+                          "wave_rom_bytes_required": 1048576,
+                          "status": {"held": status["held"]},
                           "machine_info": info, "emulated_windows95_driver": False,
                           "real_hardware_trace": False}
                 if card == "sbawe32":
@@ -150,6 +159,8 @@ def main() -> None:
     ap.add_argument("--binary", type=Path, required=True)
     ap.add_argument("--roms", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--cards", nargs="+", default=["sbawe32", "sbawe32_pnp"],
+                    choices=["sbawe32", "sbawe32_pnp", "sbawe64_gold"])
     args = ap.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     checks = []
@@ -157,7 +168,7 @@ def main() -> None:
               "driver_trace_captured": False, "physical_card_tested": False,
               "checks": checks}
     try:
-        for card in ("sbawe32", "sbawe32_pnp"):
+        for card in args.cards:
             checks.append(run_one(args, card))
         report["success"] = True
     except Exception as exc:

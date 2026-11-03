@@ -1,0 +1,256 @@
+name: P64 original Creative Windows95 MIDI agent to 86Box AWE32
+on:
+  push:
+    branches: [develop/p63-win95-original-driver-midi-bridge]
+    paths:
+      - tools/p40_qemu_win95_guest_scancode.py
+      - tools/p48_86box_boot_win95.py
+      - tools/p49_stage_original_midi.py
+      - tools/p50_emu8k_midi_probe.py
+      - tools/p45_86box_emu8k_trace.py
+      - tools/p53_stage_creative_cp95.py
+      - tools/p55_stage_generated_sf2.py
+      - tools/p57_stage_user_bank_midi.py
+      - tools/p58_analyze_audio.py
+      - tools/p60_compare_creative_sf2_upload.py
+      - tools/p55_stage_generated_sf2.py
+      - tools/p64_stage_win95_midi_agent.py
+      - tools/p64_original_win95_midi_trial.py
+      - tools/p65_86box_pcm_tap.py
+      - tools/p65_pcm_receiver.py
+      - tests/test_p65_pcm.py
+      - tools/p67_read_guest_bridge_log.py
+      - tools/p75_private_sf2.py
+      - tools/p83_generic_sf2.py
+      - tools/p84_export_universal_wav.py
+      - tests/test_p84_universal.py
+      - tests/test_p83_generic_sf2.py
+      - tools/p76_export_private_wav.py
+      - tests/test_p76_private_wav.py
+      - tests/test_p75_sf2.py
+      - tools/p47_86box_emu8k_smoke.py
+      - tests/test_p69_gold.py
+      - tools/p68_stage_win95_autostart.py
+      - tools/p72_verify_win95_entry.py
+      - tests/test_p72_pe_entry.py
+      - src/bridge/p68_win95_autostart.c
+      - tests/test_p68_ini.py
+      - src/bridge/p63_win95_guest_midi.c
+      - src/bridge/P63MidiWire.h
+      - .github/workflows/p64-original-creative-win95-bridge.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: awe-creative-win95-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  win95-86box-pnp:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Static check of P50 Win95 MIDI playback and register probe
+        run: python -m py_compile tools/p49_stage_original_midi.py tools/p48_86box_boot_win95.py tools/p50_emu8k_midi_probe.py tools/p53_stage_creative_cp95.py tools/p55_stage_generated_sf2.py
+      - name: Install isolated QEMU and 86Box build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+            build-essential cmake ninja-build git xvfb xauth curl p7zip-full \
+            gcc-mingw-w64-i686 qemu-system-x86 libfreetype-dev libgles2-mesa-dev libsdl3-dev \
+            libpng-dev libc6-dev librtmidi-dev libopenal-dev libslirp-dev \
+            libfluidsynth-dev libvdeplug-dev libserialport-dev libzstd-dev
+          python -m pip install --disable-pip-version-check pyfatfs==1.1.0 "setuptools<81"
+      - name: Build native Win95 MIDI bridge and test Linux FIFO protocol
+        run: |
+          i686-w64-mingw32-gcc -Os -Wall -Wextra -std=c99 -ffreestanding -fno-builtin -fno-stack-protector -nostdlib -Wl,-e,_p63_entry@0 -Wl,--disable-dynamicbase,--disable-nxcompat -Wl,--major-subsystem-version,4 -Wl,--minor-subsystem-version,0 -o p63_win95_guest_midi.exe src/bridge/p63_win95_guest_midi.c -lwinmm -lkernel32 -lgcc
+          i686-w64-mingw32-gcc -Os -Wall -Wextra -std=c99 -ffreestanding -fno-builtin -fno-stack-protector -nostdlib -Wl,-e,_p68_entry@0 -Wl,--disable-dynamicbase,--disable-nxcompat -Wl,--major-subsystem-version,4 -Wl,--minor-subsystem-version,0 -o p68_win95_autostart.exe src/bridge/p68_win95_autostart.c -lkernel32 -lgcc
+          python tools/p72_verify_win95_entry.py p63_win95_guest_midi.exe _p63_entry@0
+          python tools/p72_verify_win95_entry.py p68_win95_autostart.exe _p68_entry@0
+          if i686-w64-mingw32-objdump -p p68_win95_autostart.exe | grep -E "DLL Name:.*(MSVCRT|UCRT|VCRUNTIME|MSVCP)"; then echo "Unexpected CRT dependency"; exit 1; fi
+          if i686-w64-mingw32-objdump -p p63_win95_guest_midi.exe | grep -E "DLL Name:.*(MSVCRT|UCRT|VCRUNTIME|MSVCP)"; then echo "CRT dependency forbidden for stock Win95"; exit 1; fi
+          c++ -std=c++17 -o p63_wire_test tests/p63_midi_wire.cpp
+          ./p63_wire_test
+          python -m unittest discover -s tests -p test_p63_bridge.py -v
+          python -m unittest discover -s tests -p test_p64_fifo.py -v
+          python -m unittest discover -s tests -p test_p65_pcm.py -v
+          python -m unittest discover -s tests -p test_p68_ini.py -v
+          python -m unittest discover -s tests -p test_p75_sf2.py -v
+          python -m unittest discover -s tests -p test_p83_generic_sf2.py -v
+          python -m unittest discover -s tests -p test_p84_universal.py -v
+          python -m unittest discover -s tests -p test_p76_private_wav.py -v
+          python -m unittest discover -s tests -p test_p72_pe_entry.py -v
+          python -m unittest discover -s tests -p test_p69_gold.py -v
+      - name: Obtain disposable original Win95 installation disk
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/p48/private-guest"
+          curl -fL --retry 3 --max-time 240 \
+            'https://www.rekoba.de/~cs/v86/win95/Windows95b_p9x-0.9.91_512MB.img.7z' \
+            -o "$RUNNER_TEMP/p48/private-guest/win95.7z"
+          7z x -y "-o$RUNNER_TEMP/p48/private-guest" \
+            "$RUNNER_TEMP/p48/private-guest/win95.7z" >/dev/null
+          image="$(find "$RUNNER_TEMP/p48/private-guest" -name '*.img' -type f | head -1)"
+          test -n "$image"
+          test "$(stat -c %s "$image")" -eq 536870912
+          echo "P48_ORIGINAL_IMAGE=$image" >> "$GITHUB_ENV"
+      - name: Stage Creative original Win95 INF and vendor files into temporary disk
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/p38_stage_creative_awe32_win95.py \
+            "$P48_ORIGINAL_IMAGE" --phase stage \
+            --output "$RUNNER_TEMP/p48/p48-stage.json"
+      - name: Stage original deterministic program 0 and 7 MIDI notes in disposable Win95 disk
+        run: |
+          python tools/p49_stage_original_midi.py \
+            --disk "$P48_ORIGINAL_IMAGE" --report "$RUNNER_TEMP/p48/p49-midi-stage.json"
+      - name: Stage original Creative AWE Control Panel files in temporary guest
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/p53/files"
+          curl -fLsS --retry 3 --max-time 90 \
+            'https://www.philscomputerlab.com/uploads/3/7/2/3/37231621/awecp95.exe' \
+            -o "$RUNNER_TEMP/p53/AWECP95.EXE"
+          test "$(stat -c %s "$RUNNER_TEMP/p53/AWECP95.EXE")" -eq 189630
+          echo '29727ac591abe0a944ec6044455c87c379c44f05b1b782eb84b361690e40e4f4  '"$RUNNER_TEMP/p53/AWECP95.EXE" | sha256sum -c -
+          # Python zipfile ignores old self-extracting DOS/ZIP reparse attributes.
+          python tools/p53_stage_creative_cp95.py \
+            --disk "$P48_ORIGINAL_IMAGE" --sfx "$RUNNER_TEMP/p53/AWECP95.EXE" \
+            --report "$RUNNER_TEMP/p53/P53-original-control-panel-stage.json"
+
+      - name: Stage generated original nonproprietary SF2 on disposable Win95 disk
+        run: |
+          python tools/p55_stage_generated_sf2.py \
+            --disk "$P48_ORIGINAL_IMAGE" \
+            --report "$RUNNER_TEMP/p53/P55-generated-sf2-stage.json"
+      - name: Stage P63 Win95 original-driver MIDI agent inside ephemeral guest
+        run: |
+          python tools/p64_stage_win95_midi_agent.py --disk "$P48_ORIGINAL_IMAGE" --exe p63_win95_guest_midi.exe --report "$RUNNER_TEMP/p53/P64-agent-stage.json"
+      - name: Stage original MIDI control and user-bank select fixtures
+        run: |
+          python tools/p57_stage_user_bank_midi.py \
+            --disk "$P48_ORIGINAL_IMAGE" \
+            --report "$RUNNER_TEMP/p53/P57-userbank-midi-stage.json"
+      - name: Complete P46 original Creative driver installation and private disk handoff
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/p40_qemu_win95_guest_scancode.py \
+            --image "$P48_ORIGINAL_IMAGE" \
+            --out "$RUNNER_TEMP/p48/qemu-observations" \
+            --guest-keep-copy "$RUNNER_TEMP/p48/private-guest/creative-installed.img"
+          test "$(stat -c %s "$RUNNER_TEMP/p48/private-guest/creative-installed.img")" -eq 536870912
+      - name: Stage P68 Win95 autorun launcher in installed guest (avoid UI keyboard races)
+        run: |
+          python tools/p68_stage_win95_autostart.py \
+            --disk "$RUNNER_TEMP/p48/private-guest/creative-installed.img" \
+            --launcher p68_win95_autostart.exe \
+            --report "$RUNNER_TEMP/p48/P68-autostart-staging.json"
+      - name: Build instrumented 86Box with automation support (private runner)
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --quiet --depth 1 https://github.com/86Box/86Box.git "$RUNNER_TEMP/p48/86Box"
+          git -C "$RUNNER_TEMP/p48/86Box" rev-parse HEAD > p48-86box-source-sha.txt
+          python tools/p45_86box_emu8k_trace.py \
+            --source "$RUNNER_TEMP/p48/86Box/src/sound/snd_emu8k.c" \
+            --out "$RUNNER_TEMP/p48/snd_emu8k-instrumented.c"
+          cp "$RUNNER_TEMP/p48/snd_emu8k-instrumented.c" "$RUNNER_TEMP/p48/86Box/src/sound/snd_emu8k.c"
+          python tools/p65_86box_pcm_tap.py \
+            --source "$RUNNER_TEMP/p48/86Box/src/sound/sound.c" \
+            --out "$RUNNER_TEMP/p48/p65-sound-instrumented.c"
+          cp "$RUNNER_TEMP/p48/p65-sound-instrumented.c" "$RUNNER_TEMP/p48/86Box/src/sound/sound.c"
+          cmake -S "$RUNNER_TEMP/p48/86Box" -B "$RUNNER_TEMP/p48/build" \
+            -G Ninja -D CMAKE_BUILD_TYPE=Release -D QT=OFF -D USE_SDL_SHADER=OFF \
+            -D AUTOMATION=ON -D MUNT=OFF -D FLUIDSYNTH=OFF -D RTMIDI=OFF \
+            -D SOUNDCANVAS=OFF -D DISCORD=OFF
+          cmake --build "$RUNNER_TEMP/p48/build" --parallel 4
+      - name: Stage minimal official AWE32 PnP plus Pentium BIOS plus VGA ROM privately
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/p48/roms"
+          mkdir -p "$root/sound/creative" "$root/machines/p55t2p4" "$root/video/vga"
+          curl -fLsS --retry 3 --max-time 120 \
+            'https://raw.githubusercontent.com/86Box/roms/master/sound/creative/awe32.raw' \
+            -o "$root/sound/creative/awe32.raw"
+          curl -fLsS --retry 3 --max-time 120 \
+            'https://raw.githubusercontent.com/86Box/roms/master/sound/creative/CT3980%20PnP.BIN' \
+            -o "$root/sound/creative/CT3980 PnP.BIN"
+          curl -fLsS --retry 3 --max-time 120 \
+            'https://raw.githubusercontent.com/86Box/roms/master/sound/creative/CT4540%20PnP.BIN' \
+            -o "$root/sound/creative/CT4540 PnP.BIN"
+          curl -fLsS --retry 3 --max-time 120 \
+            'https://raw.githubusercontent.com/86Box/roms/master/machines/p55t2p4/0207_j2.bin' \
+            -o "$root/machines/p55t2p4/0207_j2.bin"
+          curl -fLsS --retry 3 --max-time 120 \
+            'https://raw.githubusercontent.com/86Box/roms/master/video/vga/ibm_vga.bin' \
+            -o "$root/video/vga/ibm_vga.bin"
+          test "$(stat -c %s "$root/sound/creative/awe32.raw")" -eq 1048576
+          test "$(stat -c %s "$root/sound/creative/CT3980 PnP.BIN")" -eq 512
+          test "$(stat -c %s "$root/sound/creative/CT4540 PnP.BIN")" -eq 512
+          test "$(stat -c %s "$root/machines/p55t2p4/0207_j2.bin")" -eq 131072
+          test "$(stat -c %s "$root/video/vga/ibm_vga.bin")" -eq 32768
+      - name: Validate AWE64 Gold with 28MiB RAM and authentic 1MiB Wave ROM (separate smoke)
+        shell: bash
+        run: |
+          set -euo pipefail
+          Xvfb :97 -screen 0 1024x768x24 -nolisten tcp > "$RUNNER_TEMP/p48/xvfb-gold.log" 2>&1 &
+          export DISPLAY=:97 SDL_AUDIODRIVER=dummy
+          sleep 2
+          python tools/p47_86box_emu8k_smoke.py \
+            --binary "$RUNNER_TEMP/p48/build/src/86Box" \
+            --roms "$RUNNER_TEMP/p48/roms" \
+            --cards sbawe64_gold \
+            --out "$RUNNER_TEMP/p48/gold-smoke"
+      - name: Boot original Win95 driver install on 86Box PnP card and capture screens
+        shell: bash
+        run: |
+          set -euo pipefail
+          Xvfb :99 -screen 0 1024x768x24 -nolisten tcp > "$RUNNER_TEMP/p48/xvfb.log" 2>&1 &
+          export DISPLAY=:99 SDL_AUDIODRIVER=dummy
+          sleep 2
+          python tools/p48_86box_boot_win95.py \
+            --binary "$RUNNER_TEMP/p48/build/src/86Box" \
+            --roms "$RUNNER_TEMP/p48/roms" \
+            --disk "$RUNNER_TEMP/p48/private-guest/creative-installed.img" \
+            --out "$RUNNER_TEMP/p48/results" \
+            --p64-bridge
+      - name: P67 verify real Creative Win95 MIDI and actual EMU8000 PCM
+        run: |
+          python tools/p67_read_guest_bridge_log.py \
+            --disk "$RUNNER_TEMP/p48/private-guest/creative-installed.img" \
+            --audio-report "$RUNNER_TEMP/p48/results/P48-report.json" \
+            --out "$RUNNER_TEMP/p48/results/P67-guest-bridge-verification.json"
+      - name: Publish screenshots and text ONLY, never Microsoft OS/Creative drivers/ROMs
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p p48-evidence
+          cp "$RUNNER_TEMP/p48/results/"*.png p48-evidence/ 2>/dev/null || true
+          cp "$RUNNER_TEMP/p48/results/P48-report.json" p48-evidence/ 2>/dev/null || true
+          cp "$RUNNER_TEMP/p48/results/P67-guest-bridge-verification.json" p48-evidence/ 2>/dev/null || true
+          cp "$RUNNER_TEMP/p48/results/86box-win95-host.log" p48-evidence/ 2>/dev/null || true
+          cp "$RUNNER_TEMP/p48/qemu-observations/p40-input-report.json" p48-evidence/ 2>/dev/null || true
+          cp "$RUNNER_TEMP/p48/qemu-observations/p40-guest-after-installer.json" p48-evidence/ 2>/dev/null || true
+          cp p48-86box-source-sha.txt p48-evidence/ 2>/dev/null || true
+          cp "$RUNNER_TEMP/p48/p49-midi-stage.json" p48-evidence/ 2>/dev/null || true
+          cp "$RUNNER_TEMP/p53/P53-original-control-panel-stage.json" p48-evidence/ 2>/dev/null || true
+          cp "$RUNNER_TEMP/p53/P55-generated-sf2-stage.json" p48-evidence/ 2>/dev/null || true
+          cp "$RUNNER_TEMP/p53/P57-userbank-midi-stage.json" p48-evidence/ 2>/dev/null || true
+          cp "$RUNNER_TEMP/p53/P64-agent-stage.json" p48-evidence/ 2>/dev/null || true
+          cp "$RUNNER_TEMP/p48/P68-autostart-staging.json" p48-evidence/ 2>/dev/null || true
+          cp "$RUNNER_TEMP/p48/gold-smoke/P47-report.json" p48-evidence/P69-gold-hardware-smoke.json 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: P64-Original-Creative-Win95-MIDI-EndToEnd-Results
+          path: p48-evidence/*
+          if-no-files-found: warn
+          retention-days: 5
+      - name: Destroy all transient Windows and Creative and ROM data
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/p48" "$RUNNER_TEMP/p53"

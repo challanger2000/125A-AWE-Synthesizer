@@ -1,0 +1,23 @@
+name: P96 measured Creative SF2 pitch – native regression
+on:
+  push:
+    branches: [develop/p96-win95-sf2-pitch-candidate]
+    paths:
+      - 'src/engine/**'
+      - 'tests/p90_sf2_driver_registers.cpp'
+      - '.github/workflows/p96-pitch-candidate.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  candidate-engine-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure native EMU8000 probes (no vendor ROM or private SF2)
+        run: cmake -S . -B build -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_OPL3_PROBES=OFF -D125A_BUILD_VST3=OFF
+      - name: Build native SoundFont and Synth engine regression targets together
+        run: cmake --build build --parallel 3
+      - name: Run complete native CTest suite with P96 32 original pitch vectors
+        run: ctest --test-dir build --output-on-failure

@@ -1163,8 +1163,10 @@ void Synth::StartVoice(int voice, uint8_t channel, uint8_t note, uint8_t velocit
         const uint32_t increment = PitchIncrement(static_cast<uint16_t>(pitch));
         const uint32_t filterTarget = static_cast<uint32_t>(cutoff) << 8;
 
-        // Silencing: the driver writes 0x00FF, not 0x0080. VTFT goes twice.
-        m_core.Write(Reg::DCYSUSV, voice, 0x00FFu);
+        // AllocateVoiceVxd already silenced the chosen voice with DCYSUSV
+        // 0x00FF. Do not write that register a second time at note start:
+        // P89 original Creative emitted one initial 0x00FF, native emitted two.
+        // VTFT still gets its two documented writes.
         m_core.Write(Reg::VTFT,    voice, 0x0000FFFFu);
         m_core.Write(Reg::VTFT,    voice, 0x0000FFFFu);
         m_core.Write(Reg::CVCF,    voice, 0x0000FFFFu);
@@ -1344,7 +1346,7 @@ void Synth::StartVoice(int voice, uint8_t channel, uint8_t note, uint8_t velocit
         // Same rule as SBAWE32.MDI: a looped sample with at least 0x14 words
         // after the loop end gets its loop moved behind the end at note-off
         // (block +0x06 = sample end + 4, relax/georgia traces: PSST 983F, CSL 9843).
-        a.vxdNoteEnd = (vp.looping && (vp.sampleEndAddr - vp.loopEndAddr) >= 0x14u)
+        a.vxdNoteEnd = (vp.loopOpensOnRelease && (vp.sampleEndAddr - vp.loopEndAddr) >= 0x14u)
                      ? vp.sampleEndAddr + 4 : 0u;
         a.vxdPanTarget = a.vxdPanCur = static_cast<uint8_t>(pan);
         a.vxdPanTimer = -1;

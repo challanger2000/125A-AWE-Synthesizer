@@ -1,0 +1,24 @@
+name: P89 EMU8000 original Creative vs native register comparator
+on:
+  push:
+    branches: [develop/p63-win95-original-driver-midi-bridge]
+    paths:
+      - tools/p89_compare_voice_registers.py
+      - tools/p86_generic_sf2_probe.cpp
+      - tools/p64_original_win95_midi_trial.py
+      - tests/test_p89_register_comparison.py
+      - .github/workflows/p89-register-comparison.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  register-comparison:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile all new P89 register tools
+        run: |
+          python -m py_compile tools/p89_compare_voice_registers.py tools/p64_original_win95_midi_trial.py tests/test_p89_register_comparison.py
+      - name: Run independent register trace and evidence-gate tests
+        run: python -m unittest discover -s tests -p test_p89_register_comparison.py -v

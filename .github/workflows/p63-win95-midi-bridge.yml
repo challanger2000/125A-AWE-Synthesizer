@@ -1,0 +1,55 @@
+name: P63 build native Win95 original-driver MIDI bridge
+on:
+  push:
+    branches: [develop/p63-win95-original-driver-midi-bridge]
+    paths:
+      - 'src/bridge/**'
+      - 'tools/p63_send_guest_midi.py'
+      - 'tests/p63_midi_wire.cpp'
+      - 'tests/test_p63_bridge.py'
+      - 'tools/p68_stage_win95_autostart.py'
+      - 'tools/p72_verify_win95_entry.py'
+      - 'tests/test_p72_pe_entry.py'
+      - 'tests/test_p68_ini.py'
+      - '.github/workflows/p63-win95-midi-bridge.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: awe-win95-compile-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  win95-bridge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native Windows 95 x86 cross compiler
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq gcc-mingw-w64-i686
+      - name: Build actual Win32 WinMM guest helper for original Creative driver
+        run: |
+          i686-w64-mingw32-gcc -Os -Wall -Wextra -std=c99 -ffreestanding -fno-builtin -fno-stack-protector -nostdlib -Wl,-e,_p63_entry@0 -Wl,--disable-dynamicbase,--disable-nxcompat -Wl,--major-subsystem-version,4 -Wl,--minor-subsystem-version,0 -o p63_win95_guest_midi.exe src/bridge/p63_win95_guest_midi.c -lwinmm -lkernel32 -lgcc
+          if i686-w64-mingw32-objdump -p p63_win95_guest_midi.exe | grep -E 'DLL Name:.*(MSVCRT|UCRT|VCRUNTIME|MSVCP)'; then echo 'Unexpected CRT dependency'; exit 1; fi
+          i686-w64-mingw32-gcc -Os -Wall -Wextra -std=c99 -ffreestanding -fno-builtin -fno-stack-protector -nostdlib -Wl,-e,_p68_entry@0 -Wl,--disable-dynamicbase,--disable-nxcompat -Wl,--major-subsystem-version,4 -Wl,--minor-subsystem-version,0 -o p68_win95_autostart.exe src/bridge/p68_win95_autostart.c -lkernel32 -lgcc
+          python tools/p72_verify_win95_entry.py p63_win95_guest_midi.exe _p63_entry@0
+          python tools/p72_verify_win95_entry.py p68_win95_autostart.exe _p68_entry@0
+          if i686-w64-mingw32-objdump -p p68_win95_autostart.exe | grep -E 'DLL Name:.*(MSVCRT|UCRT|VCRUNTIME|MSVCP)'; then exit 1; fi
+          file p68_win95_autostart.exe
+          file p63_win95_guest_midi.exe
+      - name: Verify portable C MIDI protocol against Python sender
+        run: |
+          c++ -std=c++17 -Wall -Wextra -pedantic -o p63_wire_test tests/p63_midi_wire.cpp
+          ./p63_wire_test
+          python -m unittest discover -s tests -p test_p63_bridge.py -v
+          python -m unittest discover -s tests -p test_p68_ini.py -v
+          python -m unittest discover -s tests -p test_p72_pe_entry.py -v
+      - name: Archive only newly-authored guest helper
+        uses: actions/upload-artifact@v4
+        with:
+          name: P63-Win95-Original-Creative-MIDI-Agent
+          path: |
+            p63_win95_guest_midi.exe
+            p68_win95_autostart.exe
+          retention-days: 7
