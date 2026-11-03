@@ -128,3 +128,47 @@ Overall high-frequency differences occur even outside the dedicated filter tests
 4. Do not alter production DSP based on generic global EQ or claim physical 1:1 accuracy. P96 64/64 original Win95 note register history remains the gate for any justified change.
 
 **P97 measures real analog hardware similarity; it does not establish bit-accurate physical hardware parity.**
+
+
+## P97 flat-EQ correction verified — 2026-11-03
+
+The published physical CT4390 recording has bass and treble **0 dB**, but the native Win95 EMU8000 initial register array previously left the emulated treble shelf at **index 9 (+7.9 dB)**. P97's renderer now writes only the original Creative INIT3/INIT4 register words for **bass index 5 / treble index 5 (0 dB / 0 dB)** and reads the registers back, failing on an incorrect decode. This is an acquisition-condition correction in P97, **not** a fitted spectral equalizer or a modification of the VST3 production engine. The original 264-second MIDI, FLAC and SF2 hashes are unchanged.
+
+- Fix: [commit 8fa0b77](https://github.com/challanger2000/125A-AWE-Synthesizer/commit/8fa0b77196ca8bc526000ea99754d112bcbc40d0).
+- Original 264-second comparison (unmatched EQ): [run #41730602579](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/41730602579), SUCCESS.
+- Retest with matching real-hardware 0 dB EQ: [run #41731911493](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/41731911493), SUCCESS. Run log: \`P97 CT4390 matched 0 dB equalizer: bass 5/5, treble 5/5; Creative INIT3/INIT4 registers verified\`.
+
+### Global spectrum: native minus physical, equal-level matched
+
+| Band (Hz) | Original incorrect test | Matched-EQ retest |
+|---|---:|---:|
+| 50–200 | +2.456 dB | +2.943 dB |
+| 200–500 | −1.483 dB | −1.180 dB |
+| 500–2000 | +0.280 dB | +0.263 dB |
+| 2000–5000 | +4.872 dB | **+0.164 dB** |
+| 5000–10000 | +5.924 dB | **−0.525 dB** |
+| 10000–20000 | +7.140 dB | **−0.085 dB** |
+
+Global envelope correlation increased from 0.95155 to **0.95402**; waveform correlation remains poor (**0.01349**, from 0.01049), so bit-level or phase matching is NOT established.
+
+### Previous "1.9x filter RMS" discrepancy was primarily a test-configuration artifact
+
+| Test section | Native / hardware RMS, unmatched | Native / hardware RMS, matched EQ |
+|---|---:|---:|
+| Filter cutoff (64.5–76.5s) | 1.887× | **0.974×** |
+| Filter resonance (76.5–84.5s) | 1.927× | **1.047×** |
+| Velocity to filter (126.5–157.5s) | 1.579× | **1.035×** |
+| Exclusive class (260.5–264s) | 1.609× | **0.983×** |
+
+These section RMS comparisons do **not** demonstrate exact cutoff curves, resonance/Q or envelope timings. They only invalidate the earlier inference that the 1.9x ratio by itself proves a faulty filter.
+
+### Remaining acoustic discrepancies — P97 is OPEN
+
+- **Reverb section 169–198.5s:** native/hardware RMS **0.749×**, high band 10–20 kHz **−5.754 dB**. It requires a dedicated return/tail and timing investigation, plus recording-condition verification. Do not raise reverb gain on speculation.
+- **Attenuation section 84.5–90s:** native/hardware RMS **0.795×**.
+- **Volume envelope 0–8s:** 0.866×; mod LFO 40–50s: 0.867×.
+- **Keynum-to-decay/hold:** some narrow spectral ratios remain anomalously high in bands with low reference energy. Need absolute power, time alignment and distinct test-note segmentation before attributing to chip/filter.
+- **Digital S/PDIF reference** at 44.1 kHz with exact MIDI/SF2/effects settings is still not available. Analog RCA at 48 kHz cannot establish sample-level hardware parity.
+- Hardware EQ is now matched for this experiment; that does **not** imply that the emulation's power-on defaults should universally change, because original DOS/Win95 Creative configuration may intentionally vary.
+
+**Acceptance remains unmet:** matching RMS and broad-band spectra is necessary but not sufficient for the 1:1 hardware goal. Leave P97 open; retain original measurements as a documented invalid-control condition, not as evidence of a 7 dB chip error.
