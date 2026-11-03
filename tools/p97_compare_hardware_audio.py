@@ -72,10 +72,20 @@ spectral=[{"band_hz":f"{lo}-{hi}",
            "native_minus_real_db_level_matched":round(float(10*np.log10(
                max(power_native[i],1e-12)/max(power_real[i],1e-12))+gain_db),3)}
           for i,(lo,hi) in enumerate(bands)]
-sections=[("volume_envelope",0,8),("modulation_envelope",8,16),
-          ("keynum_decay",16,30),("keynum_hold",30,40),
-          ("modulation_lfo",40,50),("vibrato_lfo",50,55),
-          ("mod_wheel",55,60),("scale_tuning",60,64),("filter",64,a.seconds)]
+sections=[
+ ("01_volume_envelope",0,8),("02_modulation_envelope",8,16),
+ ("03_keynum_to_decay",16,30),("04_keynum_to_hold",30,40),
+ ("05_modulation_lfo",40,50),("06_vibrato_lfo",50,55),
+ ("07_modwheel",55,60),("08_scale_tune",60,64.5),
+ ("09_filter_cutoff",64.5,76.5),("10_filter_resonance",76.5,84.5),
+ ("11_attenuation",84.5,90),("12_negative_attenuation",90,95.513542),
+ ("13_velocity_attenuation",95.513542,126.5),
+ ("14_velocity_filter",126.5,157.5),
+ ("15_cc1_filter",157.5,164),("16_sample_offset",164,169),
+ ("17_reverb",169,198.5),("18_chorus",198.5,228.5),
+ ("19_interpolation",228.5,237.5),("20_pitch_bend",237.5,260.5),
+ ("21_exclusive_class",260.5,a.seconds)]
+
 detailed=[]
 for label,start,end in sections:
     lo=int(start*sample_rate);hi=min(int(end*sample_rate),maxlen)

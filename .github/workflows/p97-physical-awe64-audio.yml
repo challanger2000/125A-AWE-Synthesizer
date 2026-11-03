@@ -10,7 +10,7 @@ on:
 permissions:
   contents: read
 jobs:
-  physical-reference-90s:
+  physical-reference-264s:
     runs-on: ubuntu-24.04
     timeout-minutes: 18
     steps:
@@ -48,19 +48,19 @@ jobs:
           cmake -S . -B build-p97 -G Ninja \
             -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_OPL3_PROBES=OFF -D125A_BUILD_VST3=OFF
           cmake --build build-p97 --target awe32_p97_midi_renderer --parallel 4
-      - name: Render first 90 seconds with the actual 86Box EMU8000 core
+      - name: Render complete 264 seconds through the original EMU8000 chip
         run: |
           ./build-p97/src/engine/awe32_p97_midi_renderer \
             --rom "$RUNNER_TEMP/p97/awe32.raw" \
             --sf2 "$RUNNER_TEMP/p97/reference-v3.sf2" \
             --events "$RUNNER_TEMP/p97/events.tsv" \
-            --out "$RUNNER_TEMP/p97/native-90s.wav" --seconds 90
+            --out "$RUNNER_TEMP/p97/native-264s.wav" --seconds 264
       - name: Compare real CT4390 analog FLAC vs 125A native audio
         run: |
           "$RUNNER_TEMP/p97/venv/bin/python" tools/p97_compare_hardware_audio.py \
             --reference "$RUNNER_TEMP/p97/CT4390.flac" \
-            --native "$RUNNER_TEMP/p97/native-90s.wav" --seconds 90 \
-            --out p97-evidence/P97-AWE64-Gold-versus-125A-90s.json
+            --native "$RUNNER_TEMP/p97/native-90s.wav" --seconds 264 \
+            --out p97-evidence/P97-AWE64-Gold-versus-125A-264s.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
