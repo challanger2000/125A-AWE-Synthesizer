@@ -51,7 +51,7 @@ def main():
            "qemu-system-i386","-machine","pc,acpi=off","-cpu","pentium",
            "-m","64","-drive",f"file={disk},format=raw,if=ide,media=disk",
            "-vga","std","-display","none","-boot","c",
-           "-net","none","-rtc","base=localtime","-no-reboot",
+           "-net","none","-rtc","base=localtime",
            "-serial","none","-monitor",f"unix:{mon},server=on,wait=off"
         ]
         with log.open("wb") as f:
@@ -180,9 +180,17 @@ def main():
                 shot("p44_183_after_finish")
                 time.sleep(25)
                 shot("p44_208_after_driver_setup")
-                report["p44_finished_confirmed_model"]="AWE32 synthesis model selected in P43"
-                report["p44_original_awe32_driver_bound"]=False
-                report["p44_note_on_register_trace"]=False
+                # P46: The P44 screenshot explicitly requests a restart,
+                # with YES already focused. This VM now allows guest reboot
+                # instead of QEMU's previous -no-reboot shutdown behavior.
+                key("ret")
+                time.sleep(18)
+                shot("p46_226_after_original_win95_reboot")
+                time.sleep(40)
+                shot("p46_266_win95_postboot_driver_state")
+                report["p46_restart_requested"]=True
+                report["p46_original_awe32_driver_bound"]="not yet proven"
+                report["p46_note_on_register_trace"]=False
             finally:
                 if proc.poll() is None:
                     proc.terminate()
