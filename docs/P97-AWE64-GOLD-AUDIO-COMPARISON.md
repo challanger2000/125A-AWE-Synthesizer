@@ -172,3 +172,8 @@ These section RMS comparisons do **not** demonstrate exact cutoff curves, resona
 - Hardware EQ is now matched for this experiment; that does **not** imply that the emulation's power-on defaults should universally change, because original DOS/Win95 Creative configuration may intentionally vary.
 
 **Acceptance remains unmet:** matching RMS and broad-band spectra is necessary but not sufficient for the 1:1 hardware goal. Leave P97 open; retain original measurements as a documented invalid-control condition, not as evidence of a 7 dB chip error.
+
+
+### Reverb implementation limitation (confirmed in source)
+
+The active 86Box-derived chip backend \`src/engine/snd_emu8k.c\` defines \`REVERB_FITTED\`: the unknown hardware reverb DSP is approximated by a comb/allpass network fitted to measured tail windows from a physical card. The original per-preset Creative INIT register values are decoded, but this **does not execute the proprietary hardware effect algorithm bit-for-bit**. Consequently the remaining reverb section RMS ratio (0.749x) must be investigated by separate *instrument-only send*, *CC91-only send*, and *combined send* note groups plus dry/tail ratios, rather than hiding the difference with a fixed global gain. A future matched S/PDIF recording would make a phase-cleaner comparison possible. Preserve P97 as OPEN until the effects path and dry signal are independently checked.
