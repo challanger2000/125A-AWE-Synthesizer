@@ -93,3 +93,38 @@ The filter sections show larger native RMS than real hardware, and the high-freq
 - The 86Box output and a real CT4390 may differ at the actual audio-rendering layer even when the original Win95 driver register series match.
 - Additional EQ ambiguity: the 125A core defines measured EQ shelves, but its 86Box render path takes the 86Box chip PCM output rather than the core's auxiliary floating-point FX/EQ render. Therefore one must verify what EQ behavior is actually implemented in the 86Box chip path and what settings the CT4390 reference used; do not simply add compensating EQ to conceal a source mismatch.
 - **Next priority:** controlled 44.1 kHz S/PDIF capture from physical CT4390 with matched v3.0 SF2/MIDI and FX settings, ideally plus a dry run. Until then, preserve the production audio engine unchanged and investigate mismatch by individual test segments and original chip behavior.
+
+
+## P97: Complete real AWE64 Gold CT4390 acoustic comparison (verified 2026-11-03)
+
+- [Full 264-second P97 CI #41730602579](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/41730602579): **SUCCESS, 12/12 steps**; 21 historical SF2 test sections, 2,199 MIDI messages.
+- **CT4390 analog RCA recording**: 48kHz stereo PCM16 FLAC, Hall 1 / Chorus 1; 125A genuine 86Box EMU8000 chip rendered original v3.0 SF2 and MIDI at 44.1 kHz, then resampled to 48 kHz for numeric comparison only. The reference has an unknown analog output / ADC transfer function.
+- **Log-RMS envelope correlation = 0.95155** (264s, 50ms bins); waveform correlation = 0.01049, so NOT a sample-exact digital match. Gain matching −0.179 dB. Coarse timing offset 0 ms with 50 ms resolution; not a sample-accurate latency measurement.
+- Relative native versus physical after global gain match: 50–200 Hz +2.46 dB; 200–500 Hz −1.48 dB; 500–2000 Hz +0.28 dB; 2000–5000 Hz +4.87 dB; 5000–10000 Hz +5.92 dB; 10000–20000 Hz +7.14 dB.
+- In the native P97 render Hall 1 / Chorus 1 were programmed via EMU8000 INIT/HWCF5 registers for this test. Original production sound engine remains unchanged.
+- Numerical JSON artifact is under the full P97 CI run; neither original FLAC nor ROM nor test SF2 is redistributed in source or CI artifacts.
+
+### Focus areas from section-by-section results
+
+| SoundFont test | CT4390 analog RMS | 125A RMS | envelope correlation | Priority |
+|---|---:|---:|---:|---|
+| Volume envelope | 0.153282 | 0.136022 | 0.97066 | Compare envelope shape after per-note gain alignment |
+| Initial filter cutoff | 0.079871 | 0.150714 | 0.93177 | Native +5.52 dB RMS; verify filter, gain and old AWE filter shape |
+| Filter resonance | 0.064179 | 0.123641 | 0.93762 | Native +5.70 dB RMS; verify hardware Q limiting |
+| Velocity-to-filter | 0.037317 | 0.058928 | 0.93430 | Native +3.97 dB RMS; check AWE-era velocity semantics |
+| Reverb | 0.052302 | 0.046041 | 0.95388 | Native −1.11 dB RMS; isolate wet/dry |
+| Chorus | 0.046945 | 0.054561 | 0.95631 | Native +1.31 dB RMS; isolate wet/dry |
+| Interpolation | 0.121614 | 0.117680 | 0.96228 | Within 0.29 dB RMS; inspect per-note spectral slope |
+| Pitchbend | 0.262520 | 0.263973 | 0.96345 | Within 0.05 dB RMS; requires pitch tracking |
+| Exclusive class | 0.041540 | 0.066821 | 0.92197 | Native +4.13 dB RMS; investigate cut-off/release |
+
+Overall high-frequency differences occur even outside the dedicated filter tests; they cannot all be assigned to the EMU8000 filter. The output reports a maximum magnitude of 32768 on PCM16: quantify clipping prevalence separately.
+
+### Next proof gates
+
+1. Isolate dry constant-note and white-noise test windows and measure actual per-note spectrum and envelopes rather than whole-section mixed power.
+2. Ask the original CT4390 recording contributor for **44.1 kHz lossless S/PDIF** of the same historic v3.0 test, both effects on and off, if possible. Current contributor issue: https://github.com/mrbumpy409/SoundFont-Spec-Test/issues/2.
+3. Separate effects and analog signal-chain contributions; characterize timing drift, hardware frequency response and sample-rate conversion.
+4. Do not alter production DSP based on generic global EQ or claim physical 1:1 accuracy. P96 64/64 original Win95 note register history remains the gate for any justified change.
+
+**P97 measures real analog hardware similarity; it does not establish bit-accurate physical hardware parity.**
