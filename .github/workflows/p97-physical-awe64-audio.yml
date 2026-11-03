@@ -4,6 +4,7 @@ on:
     branches: [develop/p97-awe64-physical-audio-comparison]
     paths:
       - 'tools/p97_*'
+      - 'tools/p98_*'
       - 'src/engine/CMakeLists.txt'
       - '.github/workflows/p97-physical-awe64-audio.yml'
   workflow_dispatch:
@@ -61,6 +62,14 @@ jobs:
             --reference "$RUNNER_TEMP/p97/CT4390.flac" \
             --native "$RUNNER_TEMP/p97/native-264s.wav" --seconds 264 \
             --out p97-evidence/P97-AWE64-Gold-versus-125A-264s.json
+      - name: P98 compare MIDI-verified Hall/Chorus A/B/C individual notes
+        run: |
+          "$RUNNER_TEMP/p97/venv/bin/python" tools/p98_effect_subtests.py \
+            --reference "$RUNNER_TEMP/p97/CT4390.flac" \
+            --native "$RUNNER_TEMP/p97/native-264s.wav" \
+            --events "$RUNNER_TEMP/p97/events.tsv" \
+            --p97-report p97-evidence/P97-AWE64-Gold-versus-125A-264s.json \
+            --out p97-evidence/P98-Effects-A-B-C-Subtests.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
