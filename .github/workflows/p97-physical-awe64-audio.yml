@@ -59,7 +59,7 @@ jobs:
         run: |
           "$RUNNER_TEMP/p97/venv/bin/python" tools/p97_compare_hardware_audio.py \
             --reference "$RUNNER_TEMP/p97/CT4390.flac" \
-            --native "$RUNNER_TEMP/p97/native-90s.wav" --seconds 264 \
+            --native "$RUNNER_TEMP/p97/native-264s.wav" --seconds 264 \
             --out p97-evidence/P97-AWE64-Gold-versus-125A-264s.json
       - uses: actions/upload-artifact@v4
         if: always()
