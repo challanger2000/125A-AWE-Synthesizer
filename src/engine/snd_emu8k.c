@@ -2149,9 +2149,22 @@ emu8k_work_chorus(int32_t *inbuf, int32_t *outbuf, emu8k_chorus_eng_t *engine, i
          * linearly between the extremes. */
         const double phase = ((engine->lfo_pos.int_address & 0xFFFF) + engine->lfo_pos.fract_address / 65536.0) / 65536.0;
         const double tri   = (phase < 0.5) ? (4.0 * phase - 1.0) : (3.0 - 4.0 * phase);
-        double offset_lfo = tri * (double) engine->lfodepth_multip;
-        double delay_l    = (double) engine->delay_samples_central + offset_lfo;
-        double delay_r    = delay_l - engine->delay_offset_samples_right;
+        const double offset_lfo = tri * (double) engine->lfodepth_multip;
+        const double delay_l    = (double) engine->delay_samples_central + offset_lfo;
+        /* P100: keep HWCF4 as the *additional* right-tap delay, but do not
+         * mistake its zero value for a mono chorus. Creative's original
+         * preset tables explicitly program HWCF4=0 for Chorus 1-4 and the
+         * feedback/flanger presets. The physical CT4390 v3.0 capture shows
+         * substantial stereo side energy even at Chorus 1 / HWCF4=0, while
+         * the former delay_r=delay_l collapsed both wet taps to mono.
+         *
+         * A phase-opposed LFO tap is a bounded stereo approximation:
+         * centre delay and modulation depth retain their Creative values,
+         * and only the right tap changes. Short Delay presets (depth=0)
+         * still use their HWCF4 inter-channel time offset unchanged.
+         * This is not a claim of a reverse-engineered silicon DSP circuit. */
+        const double delay_r    = (double) engine->delay_samples_central
+                                - offset_lfo - engine->delay_offset_samples_right;
 
         int32_t dat_l = emu8k_chorus_tap(engine->chorus_left_buffer, engine->write, delay_l);
         int32_t dat_r = emu8k_chorus_tap(engine->chorus_left_buffer, engine->write, delay_r);
