@@ -14,3 +14,34 @@ An offline MIDI-event reader plays the same MIDI on our Win95-profile native 86B
 **Scope is analog hardware characterization, not digital bit-for-bit parity**. Hall1 and Chorus1 and unmeasured input analog components may contribute to differences. Do not adjust the engine to fit analog measurements without investigating independent implementation and driver evidence.
 
 No original Creative ROM, SF2 or FLAC is included in source or uploaded as test artifact. Only numerical report JSON is retained.
+
+
+## Measured P97 result — 2026-11-03
+
+Verified successful [90-second physical hardware CI run](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/41729469575), commit \`7c71229e3d23690af6670cfe8ba3ebe2a1d0779e\`. Metrics downloaded from artifact \`P97-Real-AWE64-Gold-versus-125A-Metrics\`, JSON \`P97-AWE64-Gold-versus-125A-90s.json\`.
+
+- 181 MIDI events in the first 90 seconds; 5,761,504 nonzero stereo PCM samples produced by native 86Box EMU8000.
+- 90.0 seconds aligned; reported envelope-based lag 0 ms at **50 ms resolution**, NOT sub-sample synchronization.
+- Log-RMS envelope correlation **0.94784** (high similarity in overall envelope shape).
+- Mono waveform correlation **-0.02068** (no waveform-level correspondence established).
+- Global level alignment **-0.343 dB** for native-to-physical comparison.
+- After global level alignment, native-minus-physical integrated spectral energy:
+  - 50–200 Hz: **+16.726 dB**
+  - 200–500 Hz: **-2.680 dB**
+  - 500–2000 Hz: **+0.804 dB**
+  - 2000–5000 Hz: **+5.263 dB**
+  - 5000–10000 Hz: **+6.255 dB**
+  - 10000–20000 Hz: **+7.003 dB**
+- In the 64–90 second *filter* section, hardware RMS **0.093618**, native RMS **0.134975**; this signals a specific section to investigate without assigning the cause prematurely.
+
+**Interpretation:** P97 CI SUCCESS demonstrates the reproducible physical-hardware measurement path; it **does not mean the two audio renders match**. Large low-/high-frequency differences remain. High envelope correlation does not resolve the discrepancies. This is a comparison to the 86Box EMU8000 chip model rather than a proven bit-identical physical chip. No production SF2/filter, interpolation, reverb or EQ parameters were changed to fit this analog recording.
+
+**Important limitations before causal conclusions:**
+
+1. CT4390 recording uses analog RCA to a 48 kHz ADC; only the emulated 44.1 kHz output is resampled. Analog transfer response, level processing, and clock differences are uncontrolled.
+2. Both reference and native runs are set nominally to Hall 1 / Chorus 1; preset-name agreement does not independently establish the same underlying effects DSP behavior.
+3. The spectral measure integrates all active full-second blocks across the first 90 seconds. It is not a per-voice or per-generator filter measurement; the +16.7 dB low-band difference must not be mistaken for a single cutoff parameter error.
+4. The comparison excludes the later dedicated SoundFont test sections, so dedicated reverb/chorus 1-to-1 behavior is **not tested** here.
+5. S/PDIF capture at native 44.1 kHz and matched dry/wet settings from CT4390 would help separate synthesizer discrepancies from the analog recording chain. The public test result is not a substitute for that hardware capture.
+
+**Next evidence-driven work:** measure spectra and stereo behavior by individual test segment; verify CC/NRPN MIDI-event handling and effect-state setup; request the digital S/PDIF reference; compare dry single-note sample/filter/loop curves separately before changing the audio engine.
