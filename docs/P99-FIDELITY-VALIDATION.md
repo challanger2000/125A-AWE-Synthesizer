@@ -25,3 +25,57 @@ Request original AWE64 Gold CT4390 **lossless 44.1-kHz S/PDIF**, Creative driver
 **Next unresolved silicon-level issue:** the current 86Box-derived EMU8000 backend runs an explicitly **fitted** reverb/chorus network. New measurements can validate its audio behaviour but cannot extract an undocumented proprietary chip DSP algorithm solely from Creative's effect preset registers.
 
 Research references (concept only): [FSVR capture generation](https://github.com/musicastudio/FSVR/blob/main/tools/make_capture_set.py), [analysis](https://github.com/musicastudio/FSVR/blob/main/tools/analyze_capture.py), [batch bench](https://github.com/musicastudio/FSVR/blob/main/tools/bench_captures.py), [regression fingerprints](https://github.com/musicastudio/FSVR/blob/main/tools/regress.py). **FSVR is GPLv3; no source code was copied.**
+
+## P100/P101 validated audio fixes (2026-11-03)
+
+Production DSP updated in `src/engine/snd_emu8k.c`; test tools, SF2 mapping,
+Creative driver register writes, filters and original Wave ROM remain unchanged.
+Do not confuse a workflow PASS with proof of 1:1 silicon fidelity.
+
+### P100: Chorus 1 wet stereo
+
+The former 86Box-derived chorus tapped `delay_r=delay_l-HWCF4`; original
+Creative Chorus 1-4 sets HWCF4 to zero, which made the rendered wet return
+unintentionally mono. The new stereo approximation uses opposing LFO phases
+on the left and right delay taps while keeping the Creative center-delay,
+depth, rate and feedback and preserving HWCF4 for the separate short-delay
+presets. This is not a claim about the hidden hardware internal routing.
+
+[Full original AWE64 CT4390 264s comparison, SUCCESS](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/41741146787):
+
+| P99 chorus group at max send | Previous stereo-width error | Corrected |
+|---|---:|---:|
+| Instrument A | -54.375 dB | +0.839 dB |
+| CC93 B | -44.538 dB | -0.281 dB |
+| Combined C | -54.790 dB | -1.527 dB |
+
+### P101: Hall 1 return
+
+For nine MIDI-verified nonzero Hall-1 send notes, the rendered **absolute**
+side channel was -4.42 to -4.56 dB below physical hardware, consistent across
+A instrument send, B CC91, C combined. Therefore only **Hall 1** receives
+an empirically grounded `1.68x` wet return adjustment, applied to both early
+reflections and the comb tail. No dry-source gain, CC91 mapping, other hall
+presets or filter parameters changed. The CC91 90/100 conversion is independently
+verified in the original Creative driver; it is not a parameter to guess.
+
+[Full original AWE64 CT4390 264s comparison, SUCCESS](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/41741503720):
+
+| P99 Hall 1 group at max send | Previous level error | Corrected |
+|---|---:|---:|
+| Instrument A | -3.925 dB | -0.460 dB |
+| CC91 B | -2.198 dB | -0.412 dB |
+| Combined C | -3.896 dB | -0.431 dB |
+
+Corrected Hall 1 side/mid errors at max send: +0.557 dB (A), +0.433 dB (B),
++0.516 dB (C). Overall 264s fixed-reference spectral levels remain
+approximately consistent. Dry 0%-send test notes are still about +1.4 dB high
+after the global level match; the Hall calibration does not claim to correct
+that separate source/analog-level discrepancy.
+
+### Validation boundary
+
+The 264-second comparison uses a real CT4390 analog capture. A single matched
+global gain is used. No S/PDIF, user hardware, or 100% sample/bit parity is
+required to claim the measured improvement, but audible parity over all
+SoundFonts/presets is **not** established by this fixture alone.
