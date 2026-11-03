@@ -5,6 +5,7 @@ on:
     paths:
       - 'tools/p97_*'
       - 'tools/p98_*'
+      - 'tools/p99_*'
       - 'src/engine/CMakeLists.txt'
       - '.github/workflows/p97-physical-awe64-audio.yml'
   workflow_dispatch:
@@ -70,11 +71,24 @@ jobs:
             --events "$RUNNER_TEMP/p97/events.tsv" \
             --p97-report p97-evidence/P97-AWE64-Gold-versus-125A-264s.json \
             --out p97-evidence/P98-Effects-A-B-C-Subtests.json
+      - name: P99 separate gain and spectral-shape fidelity; save native regression fingerprints
+        run: |
+          "$RUNNER_TEMP/p97/venv/bin/python" -m py_compile tools/p99_fidelity_audit.py
+          "$RUNNER_TEMP/p97/venv/bin/python" tools/p99_fidelity_audit.py \
+            --p97 p97-evidence/P97-AWE64-Gold-versus-125A-264s.json \
+            --p98 p97-evidence/P98-Effects-A-B-C-Subtests.json \
+            --native "$RUNNER_TEMP/p97/native-264s.wav" \
+            --midi "$RUNNER_TEMP/p97/reference-v3.mid" \
+            --sf2 "$RUNNER_TEMP/p97/reference-v3.sf2" \
+            --out p97-evidence/P99-Fidelity-Audit.json \
+            --summary p97-evidence/P99-Fidelity-Summary.md
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: P97-Real-AWE64-Gold-versus-125A-Metrics
-          path: p97-evidence/*.json
+          path: |
+            p97-evidence/*.json
+            p97-evidence/*.md
           retention-days: 7
           if-no-files-found: warn
       - name: Destroy ephemeral ROM and original recording
