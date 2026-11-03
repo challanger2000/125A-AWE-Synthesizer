@@ -98,5 +98,44 @@ int main() {
     ok&=check(neutral.ccca>>28==0,"Win95 SF2 zero Q remains zero");
     ok&=check(neutral.tremfrq>>8==0,"Win95 SF2 zero tremolo remains zero");
     ok&=check(neutral.csl>>24==0,"Win95 SF2 zero chorus remains zero");
+    // P96 measured original Win95 SF2 P94 pitch sweep (same sample/zone
+    // across notes 45..61) and two independent original program-7 voices.
+    // The raw user SoundFont is never needed for these regression vectors.
+    r.gen.Set(Gen::OverridingRootKey,45);
+    r.gen.Set(Gen::CoarseTune,-12);
+    struct PitchVector { int note; uint16_t plus; uint16_t minus; };
+    const PitchVector sweep[] = {
+        {45,0xD010,0xCFEE}, {46,0xD165,0xD143},
+        {47,0xD2BB,0xD298}, {48,0xD410,0xD3EE},
+        {49,0xD565,0xD543}, {50,0xD6BB,0xD699},
+        {51,0xD810,0xD7EE}, {52,0xD966,0xD943},
+        {53,0xDABB,0xDA99}, {54,0xDC10,0xDBEE},
+        {55,0xDD66,0xDD44}, {56,0xDEBB,0xDE99},
+        {60,0xE411,0xE3EF}, {61,0xE566,0xE544}
+    };
+    bool sweepCorrect=true;
+    for (const auto& v : sweep)
+    {
+        r.gen.Set(Gen::FineTune,5);
+        const auto a=MakeVoiceParams(sf2,r,v.note,100,base,0,Awe32::Driver::Win95);
+        r.gen.Set(Gen::FineTune,-5);
+        const auto b=MakeVoiceParams(sf2,r,v.note,100,base,0,Awe32::Driver::Win95);
+        sweepCorrect &= a.ip==v.plus && b.ip==v.minus;
+    }
+    ok&=check(sweepCorrect,
+              "P96 candidate matches 28 original Creative program0 pitch writes");
+    r.gen.Set(Gen::OverridingRootKey,72);
+    r.gen.Set(Gen::CoarseTune,0);
+    r.gen.Set(Gen::FineTune,-6);
+    const auto p7a=MakeVoiceParams(sf2,r,48,100,base,0,Awe32::Driver::Win95);
+    r.gen.Set(Gen::CoarseTune,12);
+    const auto p7b=MakeVoiceParams(sf2,r,48,100,base,0,Awe32::Driver::Win95);
+    r.gen.Set(Gen::FineTune,-5);
+    const auto p7c=MakeVoiceParams(sf2,r,48,100,base,0,Awe32::Driver::Win95);
+    r.gen.Set(Gen::CoarseTune,0);
+    const auto p7d=MakeVoiceParams(sf2,r,48,100,base,0,Awe32::Driver::Win95);
+    ok&=check(p7a.ip==0xBFE9 && p7b.ip==0xCFEA &&
+              p7c.ip==0xCFEE && p7d.ip==0xBFED,
+              "P96 candidate matches 4 original Creative program7 pitch writes");
     return ok?0:1;
 }

@@ -236,6 +236,22 @@ namespace
         return (oct << 12) | (rem * 3 + (rem * 31) / 75);
     }
 
+    // P96 EXPERIMENTAL: The real Creative Win95 SF2 register sweep (P94)
+    // has a slope of 3.414 IP units per input cent, instead of the
+    // 4096/1200 used by the legacy SF1/DOS cents converter above.
+    // At native 44100 Hz this rational candidate matches all 28 program-0
+    // IP writes (notes 45..56,60,61) and the 4 program-7 voices.
+    // It is a measured candidate, NOT yet a proven VXD implementation.
+    // Use 64-bit signed arithmetic and floor for negative cents.
+    int Win95Sf2PitchFromCents(double cents)
+    {
+        const int64_t integerCents = static_cast<int64_t>(std::llround(cents));
+        const int64_t product = integerCents * 1707;
+        const int64_t offset = product >= 0 ? (product / 500)
+            : -(((-product) + 499) / 500);
+        return static_cast<int>(std::clamp<int64_t>(0xE000LL + offset, 0, 0xFFFF));
+    }
+
     double TimecentsToMs(int tc) { return std::pow(2.0, tc / 1200.0) * 1000.0; }
 
     // Absolute cents (SF2) -> IFATN units (quarter semitones from 125 Hz).
@@ -1135,7 +1151,10 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
     const double centsTotal = pitchCents
         + std::log2(s.sampleRate / static_cast<double>(44100)) * 1200.0;
     vp.ipCents = static_cast<int>(centsTotal);
-    vp.ip = static_cast<uint16_t>(std::clamp(PitchFromCents(centsTotal), 0, 65535));
+    const int newIp = (!sf1 && drv == Awe32::Driver::Win95)
+        ? Win95Sf2PitchFromCents(centsTotal)
+        : std::clamp(PitchFromCents(centsTotal), 0, 65535);
+    vp.ip = static_cast<uint16_t>(newIp);
 
     // ---- patch attenuation and filter -> IFATN ----------------------------
     // The attenuation is assembled only in the Synth layer by the formula
