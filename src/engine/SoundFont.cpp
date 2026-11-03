@@ -95,6 +95,44 @@ namespace
                 return r;
         return 0x7E;
     }
+    // SF2 Win95 generator 26/34 converter (SBAWE.VXD, original binary
+    // branch C119C1D9, file offset 0xFEA4). This is NOT the SF1 millisecond
+    // attack lookup: SoundFont 2 has already stored absolute timecents.
+    // Compare -8828 -> 0x7E, -1200 -> 0x18 with actual Creative assembly.
+    // Arithmetic divisions below intentionally truncate like x86 IDIV.
+    int AttackRateFromSf2Timecents(int timecents)
+    {
+        if (timecents <= -600)
+            return std::min(128, (37 - timecents) / 75 + 8);
+        if (timecents >= 4300) return 1;
+        const int quotient = (timecents + 500) / 150;
+        const int mantissa = ((~quotient) & 7) | 8;
+        const int shift = quotient / 8;
+        return std::max(1, shift >= 0 && shift < 32
+            ? (mantissa >> shift) : 1);
+    }
+
+    // Exact SBAWE.VXD SF2 freqModLFO/freqVibLFO converter, branch
+    // C119C180 (original file around 0xFE62). The driver does not compute
+    // Hertz and round by the physical 0.042-Hz step: it calculates
+    // 2^((cents+9126)/1200) as a linear 16.16 octave approximation.
+    // A single generic routine serves BOTH LFOs, not any preset by name.
+    int LfoFrequencyFromSf2Cents(int cents)
+    {
+        if (cents <= -16000) return 0;
+        const int fixed = static_cast<int>(
+            (static_cast<int64_t>(cents + 0x23A6) * 65536) / 1200);
+        // 32-bit SAR of fixed by 16 (floor division for negative values).
+        const int octave = (fixed >= 0) ? fixed / 65536
+                      : -(((-fixed) + 65535) / 65536);
+        const int fraction = static_cast<int>(
+            static_cast<uint32_t>(fixed) & 0xFFFFu);
+        const int shift = 16 - octave;
+        if (shift < 0) return 255;
+        if (shift >= 32) return 0;
+        return std::min(255, (65536 + fraction) >> shift);
+    }
+
     // When the generator is not in the bank, the default value from the
     // driver's table applies, which comes to 0x7D. Verified on 242 notes of
     // MINUET and on the presets `organ3`, `jazzgtr`, `fretlessbs` and
@@ -1196,18 +1234,22 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
     const int lfo1Freq = sf1 ? (g.Has(Gen::FreqModLFO)
                                     ? ((g.value[Gen::FreqModLFO] * 2) & 0xFF)
                                     : 128)
-                             : std::clamp<int>(static_cast<int>(std::lround(
-                                   8.176 * std::pow(2.0, g.Get(Gen::FreqModLFO, 0) / 1200.0)
-                                   / kLfoHzPerStep)), 0, 255);
+                             : (drv == Awe32::Driver::Win95)
+                                 ? LfoFrequencyFromSf2Cents(g.Get(Gen::FreqModLFO, 0))
+                                 : std::clamp<int>(static_cast<int>(std::lround(
+                                       8.176 * std::pow(2.0, g.Get(Gen::FreqModLFO, 0) / 1200.0)
+                                       / kLfoHzPerStep)), 0, 255);
     // Note: the driver **lets the result overflow the byte**, it does not
     // clip it. Measured on RELAX: `freqVibLFO 132` -> 264 -> written 0x08,
     // we had given 0xFF.
     const int lfo2Freq = sf1 ? (g.Has(Gen::FreqVibLFO)
                                     ? ((g.value[Gen::FreqVibLFO] * 2) & 0xFF)
                                     : 0)
-                             : std::clamp<int>(static_cast<int>(std::lround(
-                                   8.176 * std::pow(2.0, g.Get(Gen::FreqVibLFO, 0) / 1200.0)
-                                   / kLfoHzPerStep)), 0, 255);
+                             : (drv == Awe32::Driver::Win95)
+                                 ? LfoFrequencyFromSf2Cents(g.Get(Gen::FreqVibLFO, 0))
+                                 : std::clamp<int>(static_cast<int>(std::lround(
+                                       8.176 * std::pow(2.0, g.Get(Gen::FreqVibLFO, 0) / 1200.0)
+                                       / kLfoHzPerStep)), 0, 255);
 
     vp.fmmod = static_cast<uint16_t>(
         (static_cast<uint8_t>(modAmount(Gen::ModLfoToPitch, kPitchCentsPerStep)) << 8)
@@ -1302,7 +1344,9 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
     vp.atkhldv = static_cast<uint16_t>(
         (HoldFromMs(keyScaled(Gen::HoldVolEnv, Gen::KeynumToVolEnvHold, false)) << 8)
         | (g.Has(Gen::AttackVolEnv)
-               ? AttackRateFromMs(timeMs(Gen::AttackVolEnv, 0.0))
+               ? (!sf1 && drv == Awe32::Driver::Win95)
+                   ? AttackRateFromSf2Timecents(g.value[Gen::AttackVolEnv])
+                   : AttackRateFromMs(timeMs(Gen::AttackVolEnv, 0.0))
                : kAttackDefaultRate));
     vp.dcysusv = static_cast<uint16_t>(
         (sustainReg(Gen::SustainVolEnv) << 8)
@@ -1313,7 +1357,9 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
     vp.atkhld = static_cast<uint16_t>(
         (HoldFromMs(keyScaled(Gen::HoldModEnv, Gen::KeynumToModEnvHold, false)) << 8)
         | (g.Has(Gen::AttackModEnv)
-               ? AttackRateFromMs(timeMs(Gen::AttackModEnv, 0.0))
+               ? (!sf1 && drv == Awe32::Driver::Win95)
+                   ? AttackRateFromSf2Timecents(g.value[Gen::AttackModEnv])
+                   : AttackRateFromMs(timeMs(Gen::AttackModEnv, 0.0))
                : kAttackDefaultRate));
     vp.dcysus = static_cast<uint16_t>(
         (sustainReg(Gen::SustainModEnv) << 8)

@@ -38,6 +38,47 @@ int main() {
     ok&=check(!oneShot.looping && !oneShot.loopOpensOnRelease,
               "Win95 SF2 mode 0 is one-shot");
     r.gen.Set(Gen::SampleModes,1);
+    // P92 independent original Creative converter code / P91 genuine
+    // register measurement: note 48, velocity 100, two generated test layers.
+    r.gen.Set(Gen::FreqModLFO,-617);
+    r.gen.Set(Gen::AttackVolEnv,-8828);
+    const auto p92=MakeVoiceParams(sf2,r,60,100,base,0,Awe32::Driver::Win95);
+    ok&=check((p92.tremfrq&0xFF)==0x8B,
+              "P92 original Win95 freqModLFO -617 cents -> 0x8B");
+    ok&=check((p92.fm2frq2&0xFF)==0xCD,
+              "P92 original Win95 missing freqVibLFO (0 cents) -> 0xCD");
+    ok&=check((p92.atkhldv&0xFF)==0x7E,
+              "P92 original Win95 attackVolEnv -8828 tc -> 0x7E");
+    r.gen.Set(Gen::FreqModLFO,-16000);
+    const auto minimumLfo=MakeVoiceParams(sf2,r,60,100,base,0,Awe32::Driver::Win95);
+    ok&=check((minimumLfo.tremfrq&0xFF)==0,
+              "P92 negative 16000-cent LFO lower clamp -> 0");
+    r.gen.Set(Gen::FreqModLFO,4500);
+    const auto maximumLfo=MakeVoiceParams(sf2,r,60,100,base,0,Awe32::Driver::Win95);
+    ok&=check((maximumLfo.tremfrq&0xFF)==255,
+              "P92 high LFO frequency clamps to 255");
+    r.gen.Set(Gen::FreqModLFO,0);
+    r.gen.Set(Gen::AttackVolEnv,-1200);
+    r.gen.Set(Gen::AttackModEnv,-1200);
+    const auto halfSecond=MakeVoiceParams(sf2,r,60,100,base,0,Awe32::Driver::Win95);
+    ok&=check((halfSecond.atkhldv&0xFF)==0x18 &&
+              (halfSecond.atkhld&0xFF)==0x18,
+              "P92 both SF2 envelope attack converters -1200 tc -> 0x18");
+    r.gen.Set(Gen::AttackVolEnv,-600);
+    const auto branchEdge=MakeVoiceParams(sf2,r,60,100,base,0,Awe32::Driver::Win95);
+    ok&=check((branchEdge.atkhldv&0xFF)==0x10,
+              "P92 original Creative attack piecewise transition -600 -> 16");
+    r.gen.Set(Gen::AttackVolEnv,-599);
+    const auto branchNext=MakeVoiceParams(sf2,r,60,100,base,0,Awe32::Driver::Win95);
+    ok&=check((branchNext.atkhldv&0xFF)==0x0F,
+              "P92 original Creative attack piecewise transition -599 -> 15");
+    r.gen.Set(Gen::AttackVolEnv,-8828);
+    r.gen.Set(Gen::FreqModLFO,-617);
+    const auto legacy=MakeVoiceParams(sf2,r,60,100,base,0,Awe32::Driver::Dos);
+    ok&=check((legacy.tremfrq&0xFF)==0x88 && 
+              (legacy.fm2frq2&0xFF)==0xC3 &&
+              (legacy.atkhldv&0xFF)==0x7D,
+              "P92 DOS SF2 path retains prior Hz/ms conversion unchanged");
     ok&=check(gold.ccca>>28==8,"Win95 SF2 initialFilterQ=100 -> Q8");
     ok&=check((gold.tremfrq>>8)==0x15,"Win95 SF2 modLfoToVolume=20 -> tremolo depth21");
     ok&=check(gold.csl>>24==0x7F,"Win95 SF2 chorus=500 -> send127");
