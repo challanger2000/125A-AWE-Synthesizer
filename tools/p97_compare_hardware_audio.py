@@ -86,14 +86,43 @@ sections=[
  ("19_interpolation",228.5,237.5),("20_pitch_bend",237.5,260.5),
  ("21_exclusive_class",260.5,a.seconds)]
 
+def section_spectrum(x,y):
+    """Compare only this named test interval, using the SAME global level match."""
+    n=min(len(x),len(y))//sample_rate
+    ph=np.zeros(len(bands)); pn=np.zeros(len(bands)); active_s=0
+    window=np.hanning(sample_rate)
+    for i in range(n):
+        r=x[i*sample_rate:(i+1)*sample_rate]
+        e=y[i*sample_rate:(i+1)*sample_rate]
+        if np.sqrt(np.mean(r*r))<.002:continue
+        rf=np.abs(np.fft.rfft(r.mean(axis=1)*window))**2
+        ef=np.abs(np.fft.rfft(e.mean(axis=1)*window))**2
+        for j,(lo,hi) in enumerate(bands):
+            ix=(freq>=lo)&(freq<hi)
+            ph[j]+=rf[ix].sum()
+            pn[j]+=ef[ix].sum()
+        active_s+=1
+    if not active_s:return 0,[]
+    return active_s,[{"band_hz":f"{lo}-{hi}",
+            "native_minus_real_db_level_matched":round(float(
+                10*np.log10(max(pn[j],1e-12)/max(ph[j],1e-12))+gain_db),3)}
+            for j,(lo,hi) in enumerate(bands)]
+
 detailed=[]
 for label,start,end in sections:
     lo=int(start*sample_rate);hi=min(int(end*sample_rate),maxlen)
     if hi-lo<sample_rate:continue
     x=ref[lo:hi];y=emulated[lo:hi]
+    sr=rms_bins(x);se=rms_bins(y)
+    section_env_corr=float(np.corrcoef(np.log10(np.maximum(sr,1e-6)),
+                                       np.log10(np.maximum(se,1e-6)))[0,1])
+    active_s,section_bands=section_spectrum(x,y)
     detailed.append({"test":label,"time_s":[start,end],
                      "hardware_rms":round(float(np.sqrt(np.mean(x*x))),6),
-                     "native_rms":round(float(np.sqrt(np.mean(y*y))),6)})
+                     "native_rms":round(float(np.sqrt(np.mean(y*y))),6),
+                     "rms_envelope_log_correlation":round(section_env_corr,5),
+                     "active_spectral_seconds":active_s,
+                     "band_spectrum":section_bands})
 report={
   "experiment":"P97 genuine AWE64 Gold CT4390 RCA analog hardware audio comparison",
   "source_recording":"48kHz 16-bit stereo FLAC, RCA line out into RME Babyface Pro FS; Hall 1 / Chorus 1",
@@ -118,4 +147,8 @@ print("P97 ANALOG HARDWARE RESULT:",{"time":report["aligned_audio_seconds"],
       "lag_ms":lag*50,"env_corr":report["rms_envelope_log_correlation"],
       "wave_corr":report["mono_audio_correlation"],
       "level_db":report["hardware_to_native_global_gain_match_db"],
-      "spectral":spectral})
+      "spectral":spectral,
+      "worst_sections_by_low_band_delta_db":sorted(
+          [(s["test"],s["band_spectrum"][0]["native_minus_real_db_level_matched"])
+           for s in detailed if s["band_spectrum"]],
+          key=lambda pair:abs(pair[1]),reverse=True)[:5]})
