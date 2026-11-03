@@ -75,6 +75,44 @@ void physicalFxPreset(Emu8000Core& core) {
     std::cout<<"P97 CT4390 reference effect registers: Hall 1, Chorus 1"
              <<", HWCF5 "<<chorus.lfoFreq<<"\n";
 }
+
+// The physical CT4390 recording was made with the AWE Control Panel bass
+// AND treble controls at 0 dB. The Win95 driver power-on arrays on our test
+// bench leave treble at +7.9 dB (factory index 9). Apply the actual Creative
+// flat-EQ register words here, not a corrective post-render EQ: both sources
+// must use the same hardware setting before a spectral comparison is valid.
+// This is a P97-only test setup; production engine and presets are untouched.
+void physicalFlatEq(Emu8000Core& core) {
+    using Emu8000::Reg;
+    constexpr int kFlat = 5;
+    struct Slot { Reg reg; int slot; };
+    static constexpr Slot bassSlots[] = {
+        {Reg::INIT4,0x01},{Reg::INIT4,0x11}
+    };
+    static constexpr Slot trebleSlots[] = {
+        {Reg::INIT3,0x11},{Reg::INIT3,0x13},{Reg::INIT3,0x1b},
+        {Reg::INIT4,0x07},{Reg::INIT4,0x0b},{Reg::INIT4,0x0d},
+        {Reg::INIT4,0x17},{Reg::INIT4,0x19}
+    };
+    for(size_t i=0;i<2;++i)
+        core.Write(bassSlots[i].reg,bassSlots[i].slot,
+                   Emu8000Fx::kEqBassParm[kFlat][i]);
+    for(size_t i=0;i<8;++i)
+        core.Write(trebleSlots[i].reg,trebleSlots[i].slot,
+                   Emu8000Fx::kEqTrebleParm[kFlat][i]);
+    uint16_t words[10];
+    for(size_t i=0;i<2;++i)
+        words[i]=static_cast<uint16_t>(core.Read(bassSlots[i].reg,bassSlots[i].slot));
+    for(size_t i=0;i<8;++i)
+        words[2+i]=static_cast<uint16_t>(core.Read(trebleSlots[i].reg,trebleSlots[i].slot));
+    int decodedBass=-1,decodedTreble=-1;
+    Emu8000Fx::EqIndexFromInit(words,decodedBass,decodedTreble);
+    if(decodedBass!=kFlat || decodedTreble!=kFlat)
+        throw std::runtime_error("P97 flat EQ register verification failed");
+    std::cout<<"P97 CT4390 matched 0 dB equalizer: bass 5/5, treble 5/5; "
+             <<"Creative INIT3/INIT4 registers verified\n";
+}
+
 void dispatch(Synth& synth,const Event& e) {
     auto ch=uint8_t(e.channel);
     if(e.type=="note_on") {
@@ -113,6 +151,7 @@ int main(int argc,char** argv) {
             throw std::runtime_error("Actual 86Box EMU8000 / ROM failed: "+error);
         synth.Core().PowerOnInit();
         physicalFxPreset(synth.Core());
+        physicalFlatEq(synth.Core());
         if(!synth.LoadBank(sf2,error))
             throw std::runtime_error("Real test SoundFont failed: "+error);
         synth.SelectBrowserBank(0);
