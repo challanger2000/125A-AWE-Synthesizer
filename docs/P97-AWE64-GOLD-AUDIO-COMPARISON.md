@@ -45,3 +45,51 @@ Verified successful [90-second physical hardware CI run](https://github.com/chal
 5. S/PDIF capture at native 44.1 kHz and matched dry/wet settings from CT4390 would help separate synthesizer discrepancies from the analog recording chain. The public test result is not a substitute for that hardware capture.
 
 **Next evidence-driven work:** measure spectra and stereo behavior by individual test segment; verify CC/NRPN MIDI-event handling and effect-state setup; request the digital S/PDIF reference; compare dry single-note sample/filter/loop curves separately before changing the audio engine.
+
+
+## Full 264-second hardware comparison — verified SUCCESS
+
+Full test [Actions #41730602579](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/41730602579), commit \`b8ccbf79938543a1cf77dddb1b968b694d284d48\`, succeeded after fixing the 264s WAV filename in the workflow. It rendered 264s, dispatched 2,199 MIDI events within that finite time window and uploaded the original numerical report with a per-section breakdown. The predecessor [#41729977888](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/41729977888) failed only because it attempted to open \`native-90s.wav\` after rendering \`native-264s.wav\`.
+
+### Global metrics (hardware CT4390 analog vs native 86Box EMU8000)
+
+| Measurement | Full 264s |
+| --- | ---: |
+| Log-RMS envelope correlation | 0.95155 |
+| Mono waveform correlation | 0.01049 |
+| Coarse envelope-alignment offset | 0 ms (50 ms bins; not phase alignment) |
+| Global native gain adjustment | -0.179 dB |
+
+Frequency band difference (native minus analog reference; after global gain match):
+
+| Hz | dB |
+| --- | ---: |
+| 50–200 | +2.456 |
+| 200–500 | -1.483 |
+| 500–2000 | +0.280 |
+| 2000–5000 | +4.872 |
+| 5000–10000 | +5.924 |
+| 10000–20000 | +7.140 |
+
+The earlier **+16.726 dB at 50–200 Hz is first-90s-only**, not a whole-recording discrepancy. The spectral tilt above 2 kHz is widespread and is not confined to the SoundFont low-pass filter test.
+
+### Critical segment results
+
+| Original test section | CT4390 RMS | 86Box native RMS | Envelope correlation |
+| --- | ---: | ---: | ---: |
+| 09 Filter cutoff (64.5–76.5s) | 0.079871 | 0.150714 | 0.93177 |
+| 10 Filter resonance (76.5–84.5s) | 0.064179 | 0.123641 | 0.93762 |
+| 14 Velocity to filter (126.5–157.5s) | 0.037317 | 0.058928 | 0.93430 |
+| 17 Reverb (169–198.5s) | 0.052302 | 0.046041 | 0.95388 |
+| 18 Chorus (198.5–228.5s) | 0.046945 | 0.054561 | 0.95631 |
+| 20 Pitch bend (237.5–260.5s) | 0.262520 | 0.263973 | 0.96345 |
+
+The filter sections show larger native RMS than real hardware, and the high-frequency excess appears in many other sections, too. Test 03/04 low-band spectral ratios exceed +20/+30 dB, but very small reference band energy can inflate log ratios; do not treat these as gain controls or fix targets without inspecting absolute powers.
+
+### Status and boundaries
+
+- **COMPLETE:** full 264s original hardware comparison pipeline, deterministic original v3.0 MIDI/SF2, per-section numerical metrics, successful CI.
+- **NOT PROVEN:** 1:1 digital/audio accuracy, individual reverb/chorus DSP parity, physical sound-card filter shape, or waveform phase correspondence.
+- The 86Box output and a real CT4390 may differ at the actual audio-rendering layer even when the original Win95 driver register series match.
+- Additional EQ ambiguity: the 125A core defines measured EQ shelves, but its 86Box render path takes the 86Box chip PCM output rather than the core's auxiliary floating-point FX/EQ render. Therefore one must verify what EQ behavior is actually implemented in the 86Box chip path and what settings the CT4390 reference used; do not simply add compensating EQ to conceal a source mismatch.
+- **Next priority:** controlled 44.1 kHz S/PDIF capture from physical CT4390 with matched v3.0 SF2/MIDI and FX settings, ideally plus a dry run. Until then, preserve the production audio engine unchanged and investigate mismatch by individual test segments and original chip behavior.
