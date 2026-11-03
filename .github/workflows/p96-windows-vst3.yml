@@ -1,0 +1,106 @@
+name: P96 fixed-point SF2 pitch Windows VST3 validation
+on:
+  push:
+    branches: [develop/p96-windows-vst3-validation]
+    paths: ['.gitattributes', 'src/vst3/**', 'src/engine/**', 'src/opl3/**', 'tests/**', 'tools/p18_editorhost_smoke.py', 'CMakeLists.txt', '.github/workflows/p96-windows-vst3.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  vst3-dev:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Retrieve exact Steinberg SDK 3.8.1
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch v3.8.1_build_84 --recurse-submodules https://github.com/steinbergmedia/vst3sdk.git external/vst3sdk
+          $hash = (git -C external/vst3sdk rev-parse HEAD).Trim()
+          if ($hash -ne "3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96") { throw "Unexpected SDK: $hash" }
+      - name: Configure VS2022 x64
+        shell: pwsh
+        run: cmake -S . -B build-vst3 -G "Visual Studio 17 2022" -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_EDITORHOST_TEST=ON
+      - name: Compile developer VST3
+        shell: pwsh
+        run: cmake --build build-vst3 --config Release --target 125A_AWE_Synthesizer --parallel 2
+      - name: Run engine and SF2 native tests
+        shell: pwsh
+        run: |
+          cmake --build build-vst3 --config Release --parallel 2
+          ctest --test-dir build-vst3 -C Release --output-on-failure
+          python -m unittest discover -s tests -p test_p89_register_comparison.py -v
+      - name: Export real Windows x64 125A VST3 development bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: P88-125A-AWE-Synthesizer-Windows-x64-VST3-DEV
+          path: build-vst3/VST3/Release/
+          if-no-files-found: error
+          retention-days: 5
+      - name: Stage standalone ROM-backed SF2 timbre test executable
+        shell: pwsh
+        run: |
+          $probe = Get-ChildItem build-vst3 -Filter awe32_sf2_timbre_probe.exe -Recurse |
+            Where-Object { $_.FullName -match 'Release' } |
+            Select-Object -First 1 -ExpandProperty FullName
+          if (-not $probe) { throw "SF2 timbre probe binary missing" }
+          New-Item -ItemType Directory -Force build-vst3/audio-probe | Out-Null
+          Copy-Item $probe build-vst3/audio-probe/
+          @'
+          125A EMU8000 sound comparison (private SoundFont and ROM stay local).
+          Double-click awe32_sf2_timbre_probe.exe on the Windows machine that
+          has %APPDATA%\125A\AWE Synthesizer\assets.cfg configured.
+          It writes isolated held-note WAVs for program 000 and 007 to
+          125A-SF2-Timbre-Probe in the current working directory.
+          Note C3 (MIDI 48), velocity 100, 2 seconds, 44100 Hz PCM16.
+          Real 86Box + wave ROM mandatory; no silent alternate-engine fallback.
+          If a project overrides the global assets.cfg, explicit command line:
+          awe32_sf2_timbre_probe.exe --rom "C:\path\awe32.raw" --sf2 "C:\path\bank.sf2"
+          '@ | Set-Content build-vst3/audio-probe/START-HERE.txt -Encoding utf8
+      - name: Upload native private-asset audio verification tool
+        uses: actions/upload-artifact@v4
+        with:
+          name: 125A-AWE-EMU8000-SF2-Timbre-Probe-Windows-x64
+          path: build-vst3/audio-probe/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Normalize moduleinfo to strict JSON
+        shell: pwsh
+        run: python tools/normalize_vst3_metadata.py build-vst3/VST3/Release/125A_AWE_Synthesizer.vst3/Contents/Resources/moduleinfo.json
+      - name: Verify actual bundled original IBK factory banks
+        shell: pwsh
+        run: python tools/verify_ibk_bundle.py build-vst3/VST3/Release/125A_AWE_Synthesizer.vst3/Contents/Resources
+      - name: Verify unchanged 125A master vector in source and VST3 package
+        shell: pwsh
+        run: |
+          python tools/verify_logo_resource.py src/vst3/resource/125A_Logo_Master_FINAL.svg build-vst3/VST3/Release/125A_AWE_Synthesizer.vst3/Contents/Resources/125A_Logo_Master_FINAL.svg
+      - name: Build Steinberg reference EditorHost (real VST3 GUI)
+        continue-on-error: true
+        shell: pwsh
+        run: cmake --build build-vst3 --config Release --target editorhost --parallel 2
+      - name: P18 real Win32 EditorHost GUI smoke
+        continue-on-error: true
+        shell: pwsh
+        timeout-minutes: 4
+        run: |
+          $editor = Get-ChildItem build-vst3 -Filter editorhost.exe -Recurse |
+            Where-Object { $_.FullName -match 'Release' } |
+            Select-Object -First 1 -ExpandProperty FullName
+          $plugin = (Resolve-Path "build-vst3/VST3/Release/125A_AWE_Synthesizer.vst3").Path
+          if (-not $editor) { throw "Compiled EditorHost binary missing" }
+          python tools/p18_editorhost_smoke.py --editorhost "$editor" --plugin "$plugin" --output build-vst3/gui-smoke
+      - name: Keep actual GUI screenshots and interaction results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 125A-P18-EditorHost-Win32-GUI-Evidence
+          path: build-vst3/gui-smoke/
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Export ROM-free developer VST3 bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: 125A-AWE-Synthesizer-Windows-x64-DEV
+          path: build-vst3/VST3/Release/
+          if-no-files-found: error
+          retention-days: 7
