@@ -81,3 +81,10 @@ target_include_directories(awe32_p90_sf2_driver_registers_test PRIVATE "${CMAKE_
 target_link_libraries(awe32_p90_sf2_driver_registers_test PRIVATE awe32_chip_safety)
 set_target_properties(awe32_p90_sf2_driver_registers_test PROPERTIES CXX_STANDARD 23)
 add_test(NAME 125A_p90_sf2_driver_registers COMMAND awe32_p90_sf2_driver_registers_test)
+
+# P97 standalone, offline, MIDI-accurate original SoundFont test renderer.
+# Only public MIDI/SF2 fixtures are downloaded in CI, not embedded here.
+add_executable(awe32_p97_midi_renderer "../../tools/p97_midi_renderer.cpp")
+target_include_directories(awe32_p97_midi_renderer PRIVATE ".")
+target_link_libraries(awe32_p97_midi_renderer PRIVATE awe32_chip_safety)
+set_target_properties(awe32_p97_midi_renderer PROPERTIES CXX_STANDARD 23)
