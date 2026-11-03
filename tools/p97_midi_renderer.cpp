@@ -28,6 +28,8 @@ void header(std::ofstream& f,uint64_t frames) {
 std::vector<Event> events(const std::string& name) {
     std::ifstream f(name); if(!f)throw std::runtime_error("Event TSV unavailable");
     std::string s;std::getline(f,s);
+    // Python csv writes CRLF rows; std::getline removes only LF.
+    if(!s.empty() && s.back()=='\r')s.pop_back();
     if(s!="frame\ttime_sec\ttype\tchannel\ta\tb")
         throw std::runtime_error("Unknown event TSV schema");
     std::vector<Event> result;uint64_t last=0;
