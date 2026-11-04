@@ -192,18 +192,20 @@ int main() {
         const bool loaded=notLoaded.LoadBank(
             (directory/"125A_missing_configured.sf2").string(),error);
         ok &= check(!loaded&&!error.empty()&&
-                    !AWE125::AllowEmuNoteOn(true,loaded),
+                    !AWE125::AllowEmuNoteOn(true,loaded,false),
                     "failed configured SF2 suppresses misleading substitute-sine NoteOn");
         std::vector<int16_t> silent(8192);
-        if(AWE125::AllowEmuNoteOn(true,loaded))
+        if(AWE125::AllowEmuNoteOn(true,loaded,false))
             notLoaded.NoteOn(0,69,127);
         notLoaded.RenderBlock(silent.data(),4096);
         ok &= check(std::all_of(silent.begin(),silent.end(),
                     [](int16_t x){return x==0;}),
                     "failed SF2 produces silence instead of playing a fake patch");
-        ok &= check(!AWE125::AllowEmuNoteOn(false,false) &&
-                    AWE125::AllowEmuNoteOn(true,true),
-                    "AWE-only plugin is silent until a valid SF2 actually loads");
+        ok &= check(!AWE125::AllowEmuNoteOn(false,false,false) &&
+                    !AWE125::AllowEmuNoteOn(true,true,false) &&
+                    !AWE125::AllowEmuNoteOn(true,false,true) &&
+                    AWE125::AllowEmuNoteOn(true,true,true),
+                    "AWE VST3 outputs only with both SF2 and ROM-backed 86Box core");
     }
     constexpr size_t reserve=16;
     constexpr size_t copiedWords=2048+46;

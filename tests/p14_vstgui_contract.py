@@ -27,7 +27,14 @@ assert "opl_->" not in f and "cqm_->" not in f
 assert "new PresetBrowserView({0,0,1040,680},this,sfCatalog_,fmCatalog_," in f
 assert 'new VSTGUI::VST3Editor(this,"view","awe_test_panel.uidesc")' in f
 assert 'sendTextMessage(("125A_SF2_STATUS:"+sf2Status).c_str())' in f
-assert 'AllowEmuNoteOn(sf2Configured_,sf2Loaded_)' in f
+assert 'AllowEmuNoteOn(sf2Configured_,sf2Loaded_,' in f
+assert 'synth_->Core().ChipVariant()==Emu8000Core::Chip::Box86))' in f
+assert 'Original-Wave-ROM erforderlich: ROM LADEN' in f
+assert 'hostActive_=true;' in f and 'hostActive_=false;' in f
+assert 'active=hostActive_;' in f
+assert 'if(active&&romReady)' in f
+assert 'ROM: ERFORDERLICH' in f
+assert 'return sf2Configured && sf2Loaded && romBacked86BoxActive;' in (root/'src/vst3/Sf2LoadPolicy.h').read_text(encoding='utf-8')
 assert 'msg->setMessageID("125A_SF2_LOAD")' in f
 assert 'msg->setMessageID("125A_ROM_LOAD")' in f
 assert 'FIDStringsEqual(msg->getMessageID(),"125A_ROM_LOAD")' in f
@@ -40,7 +47,7 @@ assert 'getBinary("Path",bytes,bytesCount)' in f
 assert 'sendTextMessage("125A_SF2_ACK:OK")' in f
 assert '"125A_HW_INFO:"' in f and 'HardwareDescriptor()' in f
 assert 'core.ChipVariant()==Emu8000Core::Chip::Box86' in f
-assert 'CORE: INTERN' in f and 'ROM: NICHT GELADEN' in f
+assert 'CORE: INAKTIV' in f and 'ROM: ERFORDERLICH' in f
 assert 'core.ChipRamWords()' in f and 'BankAt(i).sampleData.size()' in f
 assert 'hardwareInfoProvider_' in h and 'hardwareInfoLabel_' in h
 assert 'addView(new ChipPackage(' in b and '32 VOICES  /  44.1 kHz' in b

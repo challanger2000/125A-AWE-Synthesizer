@@ -98,41 +98,62 @@ public:
         std::lock_guard<std::mutex> lock(engineMutex_);
         if(active) {
             if(!capacity_)return kResultFalse;
-            synth_=std::make_unique<Synth>(rate_);
-            synth_->Core().SetDriver(Awe32::Driver::Win95);
+            hostActive_=true;
+            synth_.reset();
             assetError_.clear();
             ResolveAssets();
             sf2Configured_=!state_.sf2Path.empty();
             sf2Loaded_=false;
-            std::string sf2Status="SF2 nicht konfiguriert: kein echter SoundFont-Klang.";
-            if(!state_.romPath.empty()) {
-                std::string error;
-                if(!synth_->Core().UseBox86Chip(state_.romPath,error))
-                    assetError_=std::move(error);
-            }
-            synth_->Core().PowerOnInit();
-            for(int i=0;i<kGuiCount;++i)
-                synth_->SetGuiControl(i,float(state_.controls[i])/AssetState::kControlScale);
-            if(sf2Configured_) {
-                std::string error;
-                if(synth_->LoadBank(state_.sf2Path,error)) {
-                    sf2Loaded_=true;
-                    sf2Status="SF2-Audio geladen.";
-                } else {
-                    assetError_="SF2-Ladefehler: "+(error.empty() ?
-                        std::string("unbekannter Grund"):error);
-                    sf2Status=assetError_;
+            std::string status;
+            if(state_.romPath.empty()) {
+                // Strict AWE64 mode: ROM absent means NO software fallback.
+                // The editor still opens, allowing the user to load the ROM.
+                status="Original-Wave-ROM erforderlich: ROM LADEN. Bis dahin kein Audio.";
+            } else {
+                try {
+                    auto chip=std::make_unique<Synth>(rate_);
+                    chip->Core().SetDriver(Awe32::Driver::Win95);
+                    std::string error;
+                    if(!chip->Core().UseBox86Chip(state_.romPath,error) ||
+                       chip->Core().ChipVariant()!=Emu8000Core::Chip::Box86) {
+                        assetError_="ROM-Ladefehler: "+(error.empty() ?
+                            std::string("86Box-EMU8000 konnte nicht starten"):error);
+                        status=assetError_;
+                    } else {
+                        chip->Core().PowerOnInit();
+                        for(int i=0;i<kGuiCount;++i)
+                            chip->SetGuiControl(i,
+                                float(state_.controls[i])/AssetState::kControlScale);
+                        status="Original-ROM geladen: SF2 LADEN.";
+                        if(sf2Configured_) {
+                            if(chip->LoadBank(state_.sf2Path,error)) {
+                                sf2Loaded_=true;
+                                status="86Box-EMU8000: ROM und SF2 geladen.";
+                            } else {
+                                assetError_="SF2-Ladefehler: "+(error.empty() ?
+                                    std::string("unbekannter Grund"):error);
+                                status=assetError_;
+                            }
+                        }
+                        chip->SelectBrowserBank(static_cast<uint16_t>(state_.bank));
+                        for(int c=0;c<16;++c)
+                            chip->ProgramChange(static_cast<uint8_t>(c),
+                                                static_cast<uint8_t>(state_.program));
+                        synth_=std::move(chip);
+                    }
+                } catch(const std::exception& e) {
+                    assetError_="ROM-Ladefehler: "+std::string(e.what());
+                    status=assetError_;
+                    synth_.reset();
                 }
             }
-            synth_->SelectBrowserBank(static_cast<uint16_t>(state_.bank));
-            for(int c=0;c<16;++c)synth_->ProgramChange(static_cast<uint8_t>(c),
-                static_cast<uint8_t>(state_.program));
-            // This is a non-realtime activation callback. The VST3 connection
-            // passes the actual processor loading outcome to the GUI, not
-            // just the SF2 phdr names the controller happened to parse.
-            sendTextMessage(("125A_SF2_STATUS:"+sf2Status).c_str());
+            sendTextMessage(("125A_SF2_STATUS:"+status).c_str());
             sendTextMessage(("125A_HW_INFO:"+HardwareDescriptor()).c_str());
-        } else {synth_.reset();}
+        } else {
+            hostActive_=false;
+            sf2Loaded_=false;
+            synth_.reset();
+        }
         return AudioEffect::setActive(active);
     }
     // Binary connection message, not the SDK's 255-char text-message path.
@@ -164,7 +185,7 @@ public:
                 std::lock_guard<std::mutex> lock(engineMutex_);
                 model=state_;
                 sampleRate=rate_;
-                active=bool(synth_);
+                active=hostActive_;
             }
             std::string error;
             std::unique_ptr<Synth> prepared;
@@ -203,7 +224,8 @@ public:
                 state_.romPath=path;
                 state_.pathsSpecified=true;
                 sf2Configured_=!model.sf2Path.empty();
-                sf2Loaded_=active&&sf2Configured_;
+                sf2Loaded_=active&&sf2Configured_&&
+                    bool(synth_)&&synth_->Core().ChipVariant()==Emu8000Core::Chip::Box86;
                 info=HardwareDescriptor();
             }
             sendTextMessage(("125A_HW_INFO:"+info).c_str());
@@ -225,22 +247,23 @@ public:
         if(!AssetState::validPath(path))return kInvalidArgument;
         uint32_t sampleRate=44100;
         AssetState::Data model;
-        bool active=false;
+        bool active=false,romReady=false;
         {
             std::lock_guard<std::mutex> lock(engineMutex_);
             sampleRate=rate_;
             model=state_;
-            active=bool(synth_);
+            active=hostActive_;
+            romReady=synth_ && synth_->Core().ChipVariant()==Emu8000Core::Chip::Box86;
         }
         std::string error;
         std::unique_ptr<Synth> replacement;
-        if(active) {
+        if(active&&romReady) {
             try {
                 replacement=std::make_unique<Synth>(sampleRate);
                 replacement->Core().SetDriver(Awe32::Driver::Win95);
-                if(!model.romPath.empty() &&
-                   !replacement->Core().UseBox86Chip(model.romPath,error))
-                    error="Wave ROM: "+error;
+                if(!replacement->Core().UseBox86Chip(model.romPath,error) ||
+                   replacement->Core().ChipVariant()!=Emu8000Core::Chip::Box86)
+                    error="Wave ROM: "+(error.empty()?std::string("86Box nicht gestartet"):error);
                 else {
                     replacement->Core().PowerOnInit();
                     for(int i=0;i<kGuiCount;++i)
@@ -266,7 +289,7 @@ public:
             state_.sf2Path=path;
             state_.pathsSpecified=true;
             sf2Configured_=true;
-            sf2Loaded_=active;
+            sf2Loaded_=active&&romReady;
         }
         std::string sysInfo;
         {
@@ -274,9 +297,11 @@ public:
             sysInfo=HardwareDescriptor();
         }
         sendTextMessage(("125A_HW_INFO:"+sysInfo).c_str());
-        sendTextMessage(active ?
-            "125A_SF2_STATUS:SF2 geladen - SoundFont aktiv." :
-            "125A_SF2_STATUS:SF2 gewaehlt - Laden bei Aktivierung.");
+        sendTextMessage(active&&!romReady ?
+            "125A_SF2_STATUS:SF2 gewaehlt. Original-Wave-ROM erforderlich: ROM LADEN." :
+            (active ?
+                "125A_SF2_STATUS:86Box-EMU8000: ROM und SF2 geladen." :
+                "125A_SF2_STATUS:SF2 gewaehlt - Laden bei Aktivierung."));
         sendTextMessage("125A_SF2_ACK:OK");
         return kResultOk;
     }
@@ -408,7 +433,8 @@ public:
                e.noteOn.pitch>=0&&e.noteOn.pitch<=127&&std::isfinite(e.noteOn.velocity)) {
                 const uint8_t vel=static_cast<uint8_t>(std::clamp(
                     int(std::lround(e.noteOn.velocity*127.f)),0,127));
-                if(AllowEmuNoteOn(sf2Configured_,sf2Loaded_))
+                if(AllowEmuNoteOn(sf2Configured_,sf2Loaded_,
+                    synth_->Core().ChipVariant()==Emu8000Core::Chip::Box86))
                     synth_->NoteOn(static_cast<uint8_t>(e.noteOn.channel),
                                    static_cast<uint8_t>(e.noteOn.pitch),vel);
             }else if(e.type==Event::kNoteOffEvent&&e.noteOff.channel>=0&&
@@ -429,11 +455,12 @@ private:
     AssetState::Data state_{};
     std::string assetError_;
     mutable std::mutex engineMutex_; // never block realtime rendering
+    bool hostActive_=false; // may be true while no ROM / no core exists
     bool sf2Configured_=false,sf2Loaded_=false; // written outside process()
     // Report the currently running chip, not merely paths in assets.cfg.
     // Call under engineMutex_ from non-realtime code only.
     std::string HardwareDescriptor() const {
-        if(!synth_)return "RAM --  |  ROM: INAKTIV  |  CORE: INAKTIV";
+        if(!synth_)return "RAM --  |  ROM: ERFORDERLICH  |  CORE: INAKTIV";
         const auto& core=synth_->Core();
         const bool box=core.ChipVariant()==Emu8000Core::Chip::Box86;
         if(!box)
