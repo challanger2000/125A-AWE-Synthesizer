@@ -791,7 +791,7 @@ private:
                 static_cast<uint8_t>(rtProgram_.load(std::memory_order_relaxed)));
         liveMidi_.Replay(target);
     }
-    static std::string DescribePrepared(const Synth* synth) {
+    static std::string DescribePrepared(Synth* synth) {
         if(!synth)return "RAM --  |  ROM: ERFORDERLICH  |  CORE: INAKTIV";
         const auto& core=synth->Core();
         if(core.ChipVariant()!=Emu8000Core::Chip::Box86)
