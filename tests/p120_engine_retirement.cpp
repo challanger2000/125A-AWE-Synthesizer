@@ -2,6 +2,8 @@
 #include <atomic>
 #include <chrono>
 #include <iostream>
+#include <future>
+#include <algorithm>
 #include <memory>
 #include <thread>
 struct Engine {
@@ -19,10 +21,14 @@ int main() {
     constexpr unsigned kSwaps=1000;
     std::atomic<unsigned> destroyed{0},wrongThread{0};
     std::atomic<unsigned> ready{0},advance{0},finished{0};
-    std::thread::id audioThread;
+    std::promise<std::thread::id> announced;
+    auto audioId=announced.get_future();
+    std::atomic<bool> initialized{false};
     AWE125::RealtimeEngineExchange<Engine> exchange;
     std::thread audio([&] {
-        audioThread=std::this_thread::get_id();
+        announced.set_value(std::this_thread::get_id());
+        while(!initialized.load(std::memory_order_acquire))
+            std::this_thread::yield();
         for(unsigned i=1;i<=kSwaps;++i) {
             {
                 auto guard=exchange.Read();
@@ -34,9 +40,7 @@ int main() {
             finished.store(i,std::memory_order_release);
         }
     });
-    // Give the reader a stable ID for destructor thread tracking before
-    // publishing the initial object; the reader hasn't started yet.
-    while(audioThread==std::thread::id{}) std::this_thread::yield();
+    const auto audioThread=audioId.get();
     auto make=[&](unsigned id) {
         auto p=std::make_unique<Engine>();
         p->id=id;p->destroyed=&destroyed;p->wrongThread=&wrongThread;
@@ -44,6 +48,7 @@ int main() {
         return p;
     };
     exchange.Publish(make(1));
+    initialized.store(true,std::memory_order_release);
     unsigned maxRetired=0;
     for(unsigned i=1;i<=kSwaps;++i) {
         while(ready.load(std::memory_order_acquire)<i)
