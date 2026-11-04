@@ -8,7 +8,7 @@ uidesc=ET.parse(root/"src/vst3/resource/awe_test_panel.uidesc").getroot()
 assert uidesc.tag=="vstgui-ui-description"
 templates=uidesc.findall("template")
 assert len(templates)==1
-assert templates[0].attrib["size"]=="1040, 680"
+assert templates[0].attrib["size"]=="1200, 780"
 tags={it.attrib["name"]:int(it.attrib["tag"])
       for it in uidesc.findall("./control-tags/control-tag")}
 assert tags=={"Program":1000,"SF2Bank":1002},tags
@@ -24,7 +24,7 @@ assert 'kGuiFirstID=1100' in f
 assert 'new RangeParameter(labels[i],kGuiFirstID+i' in f
 assert "kEngineID" not in f and 'STR16("Hardware")' not in f
 assert "opl_->" not in f and "cqm_->" not in f
-assert "new PresetBrowserView({0,0,1040,680},this,sfCatalog_,fmCatalog_," in f
+assert "new PresetBrowserView({0,0,1200,780},this,sfCatalog_,fmCatalog_," in f
 assert 'new VSTGUI::VST3Editor(this,"view","awe_test_panel.uidesc")' in f
 assert 'sendTextMessage(("125A_SF2_STATUS:"+status).c_str())' in f
 assert 'AllowEmuNoteOn(sf2Configured_||gmLoaded_,' in f
@@ -44,7 +44,7 @@ assert 'msg->setMessageID("125A_ROM_LOAD")' in f
 assert 'FIDStringsEqual(msg->getMessageID(),"125A_ROM_LOAD")' in f
 assert 'sendTextMessage("125A_ROM_ACK:OK")' in f
 assert 'romLoadRequest_' in h and 'kLoadRom=3108' in h
-assert 'MakeButton({677,83,826,122},kLoadRom,"ROM LADEN")' in b
+assert 'MakeButton({906,139,1033,174},kLoadRom,"ROM LADEN")' in b
 assert 'NativeChooseFile(path,true)' in b and 'NativeChooseFile(path,false)' in b
 assert 'GetOpenFileNameW(&ofn)' in b
 assert 'getBinary("Path",bytes,bytesCount)' in f
@@ -54,7 +54,7 @@ assert 'core.ChipVariant()==Emu8000Core::Chip::Box86' in f
 assert 'CORE: INAKTIV' in f and 'ROM: ERFORDERLICH' in f
 assert 'core.ChipRamWords()' in f and 'BankAt(i).sampleData.size()' in f
 assert 'hardwareInfoProvider_' in h and 'hardwareInfoLabel_' in h
-assert 'addView(new ChipPackage(' in b and '32 VOICES  /  44.1 kHz' in b
+assert 'addView(new HardwareFaceplate({0,0,1200,780}))' in b and '32 VOICES  /  44.1 kHz' in b
 assert 'SyncHardwareInfo();' in b
 assert 'sfCatalog_=std::move(sf2PendingCatalog_)' in f
 assert 'std::try_to_lock' in f
@@ -72,10 +72,16 @@ assert 'kVersion = 9u' in state and 'kControlCount = 12' in state
 assert 'kVolumeID=MasterOutput::kParamID' in f
 assert 'state_.masterVolume' in f and 'volumeGain_.setTarget(' in f
 assert 'masterVolume_' in h and 'masterVolumeValue_' in h
-assert 'new HardwareKnob({124,536,182,594},this,kMasterVolume)' in b
+assert 'new HardwareKnob({115,626,177,688},this,kMasterVolume)' in b
 assert 'controller_->getParamNormalized(kMasterVolume)' in b
+assert 'activeBankMenu_=new COptionMenu({85,211,235,252},this,kActiveBank)' in b
+assert 'programMenu_=new COptionMenu({303,211,685,252},this,kDirectPreset)' in b
+assert 'RebuildActiveMenus();' in b and 'SyncActiveMenuSelection();' in b
+assert 'sf_.Find(bank_,id)' in b
+assert 'ChooseExistingProgram(' in b
+assert 'kActiveBank=3109,kDirectPreset=3110' in h
 assert 'm_guiControls[11]' in syn
-assert 'MasterLogoView({18,11,150,51},exactLogoPath)' in b
+assert 'MakeLabel({30,14,206,65},"125A",false)' in b
 assert (root/"src/vst3/resource/125A_Logo_Master_FINAL.svg").is_file()
 assert 'resource/125A_Logo_Master_FINAL.svg' in cmake
 assert 'resource/MAUIFM.IBK' not in cmake
@@ -86,4 +92,4 @@ assert "ChangeParameter(kBankParam,double(bank)/16383.)" in b
 assert "controller_->getParamNormalized(kBankParam)*16383." in b
 assert "this,kBankFilter" in b and "tag==kBankFilter" in b
 assert "this,kBank)" not in b and "getParamNormalized(kBank)" not in b
-print("P106 STATIC PASS: AWE-only VST3, SF2 picker IPC, browser, 12 overlay knobs, master volume, V9 recall")
+print("P117 STATIC PASS: AWE-only VST3, SF2 picker IPC, browser, 12 overlay knobs, master volume, V9 recall")
