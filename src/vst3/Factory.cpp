@@ -987,6 +987,19 @@ public:
             MidiProgramRouting::Unit(static_cast<unsigned>(channel)));
         return kResultTrue;
     }
+    tresult PLUGIN_API setParamNormalized(
+        ParamID id,ParamValue value) override {
+        const auto result=EditControllerEx1::setParamNormalized(id,value);
+        if(result==kResultOk&&id==kProgramID) {
+            // Legacy GUI-wide Program control still selects all channels.
+            // Keep the 16 new Program Change parameters in sync for host
+            // inspection; the processor receives just the original ID 1000.
+            for(unsigned ch=0;ch<16;++ch)
+                EditControllerEx1::setParamNormalized(
+                    MidiProgramRouting::ParamID(ch),value);
+        }
+        return result;
+    }
     tresult receiveText(const char8* msg) override {
         // P119: ACKs are correlated to their original request and ignored
         // after a newer host project recall. Thread synchronization covers
