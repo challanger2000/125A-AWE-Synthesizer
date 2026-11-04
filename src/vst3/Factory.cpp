@@ -14,6 +14,7 @@
 #include "Sf2LoadPolicy.h"
 #include "RomGmBank.h"
 #include "MidiControlMapping.h"
+#include "MidiLiveState.h"
 #include "public.sdk/source/vst/vstparameters.h"
 #include "public.sdk/source/main/moduleinit.h"
 #include "pluginterfaces/base/ustring.h"
@@ -476,7 +477,10 @@ public:
             // preparation invalidates the candidate, never overwrite newer.
             if(epoch!=assetGeneration_||active!=hostActive_||rate_!=sampleRate)
                 return kResultFalse;
-            if(active)synth_.swap(prepared);
+            if(active) {
+                if(prepared)liveMidi_.Replay(*prepared);
+                synth_.swap(prepared);
+            }
             state_=std::move(candidate);
             volumeGain_.restore(state_.masterVolume);
             sf2Configured_=!state_.sf2Path.empty();
@@ -556,9 +560,14 @@ public:
                 state_.controls[idx]=static_cast<uint32_t>(
                     std::lround(val*AssetState::kControlScale));
                 if(synth_)synth_->SetGuiControl(idx,static_cast<float>(val));
-            } else if(synth_) {
+            } else {
                 const auto midi=MidiControlMapping::Decode(id);
                 if(!midi.valid)return;
+                // Remember parameter-only MIDI even without a ROM/engine.
+                // One-shot CC 120/123 are forwarded but never replayed.
+                liveMidi_.Accept(static_cast<unsigned>(midi.channel),
+                                 midi.number,val);
+                if(!synth_)return;
                 const uint8_t channel=static_cast<uint8_t>(midi.channel);
                 if(midi.number==129)
                     synth_->PitchBend(channel,MidiControlMapping::PitchBend(val));
@@ -682,6 +691,7 @@ private:
     bool sf2Configured_=false,sf2Loaded_=false; // written outside process()
     bool gmLoaded_=false; // only true for validated ROM-backed 1MGM bank
     uint64_t assetGeneration_=0; // invalidates stale prepared reloads
+    MidiLiveState liveMidi_{}; // owned/updated under engineMutex_, survives asset swaps
     // Apply parameter state as late as possible when a prepared SF2 or ROM
     // replaces the engine. Audio/automation may have changed while loading.
     // Caller holds engineMutex_; this method performs no file I/O.
@@ -693,6 +703,7 @@ private:
         for(int ch=0;ch<16;++ch)
             target.ProgramChange(static_cast<uint8_t>(ch),
                 static_cast<uint8_t>(state_.program));
+        liveMidi_.Replay(target); // restore pedals, bend, expression and RPN
     }
     // Report the currently running chip, not merely paths in assets.cfg.
     // Call under engineMutex_ from non-realtime code only.
