@@ -148,11 +148,12 @@ int main(int argc,char** argv) {
                  "ReleasePeak,ReleaseRMS,ReleaseRailSamples,ReleaseRailFrames,"
                  "ReleaseLongestRailRunFrames,ReleaseNearRailSamples,ReleaseFirstRailFrame,"
                  "Status\n";
-        int measured=0,rails=0;
+        int processed=0,measured=0,rails=0;
         for(const auto& p:kTargets) {
             const auto* preset=source.FindPreset(0,p.id);
             if(!preset)throw std::runtime_error("Missing exact SF2 program "+std::to_string(p.id));
             for(int vel:kVelocities) {
+                ++processed;
                 constexpr int note=48; // identical to P112
                 const auto regions=source.Select(0,p.id,note,vel);
                 if(regions.empty()) {
@@ -197,7 +198,7 @@ int main(int argc,char** argv) {
         std::cout<<"P113_RESULT measured="<<measured<<" with_rails="<<rails
                  <<" report="<<dest.string()<<"\n"
                  <<"RAIL_PRESENT indicates 16-bit full-scale samples, NOT automatically audible clipping.\n";
-        return measured==33?0:3;
+        return processed==33?0:3;
     } catch(const std::exception& e) {
         std::cerr<<"P113_ERROR: "<<e.what()<<"\n";
         return 1;
