@@ -10,11 +10,12 @@
 #include <utility>
 #include <vector>
 
-// P120: one serialized realtime reader per VST3 processor instance.
+// P120: one or more concurrent realtime readers per processor instance.
 // Publish is serialized by the caller's control mutex; read never takes a
 // mutex, allocates or destroys an engine. Retired engines are collected on
-// a dedicated NON-audio maintenance thread after the last reader which
-// could have observed each engine finishes. Four retained generations max:
+// a dedicated NON-audio maintenance thread only when ALL readers have
+// completed. The seq_cst acquire-before-pointer-load avoids reclaim races.
+// Four retained generations max:
 // backpressure affects only Publish/control threads, never audio processing.
 namespace AWE125 {
 template<class T>
@@ -26,23 +27,21 @@ public:
         explicit Guard(RealtimeEngineExchange& owner) noexcept
             : owner_(&owner) {
             // Registration MUST precede load of active_ in the global SC order.
-            generation_=owner_->entered_.fetch_add(1,std::memory_order_seq_cst)+1;
+            owner_->readers_.fetch_add(1,std::memory_order_seq_cst);
             ptr_=owner_->active_.load(std::memory_order_seq_cst);
         }
         Guard(const Guard&)=delete;
         Guard& operator=(const Guard&)=delete;
         Guard(Guard&&)=delete;
         ~Guard() {
-            // Single-reader contract: completions are in registration order.
-            // The audio callback performs only this atomic store, NO notify.
-            owner_->finished_.store(generation_,std::memory_order_seq_cst);
+            // Only atomic decrement, no free/lock/notification on audio thread.
+            owner_->readers_.fetch_sub(1,std::memory_order_seq_cst);
         }
         T* get() const noexcept {return ptr_;}
         T* operator->() const noexcept {return ptr_;}
         explicit operator bool() const noexcept {return ptr_!=nullptr;}
     private:
         RealtimeEngineExchange* owner_;
-        std::uint64_t generation_=0;
         T* ptr_=nullptr;
     };
     RealtimeEngineExchange()=default;
@@ -75,8 +74,7 @@ public:
         }
         T* const old=active_.exchange(next.release(),std::memory_order_seq_cst);
         if(old) {
-            const auto barrier=entered_.load(std::memory_order_seq_cst);
-            retired_.push_back({std::unique_ptr<T>(old),barrier});
+            retired_.emplace_back(old);
             if(!collector_.joinable())
                 collector_=std::thread([this]{CollectLoop();});
         }
@@ -94,18 +92,12 @@ public:
         return retired_.size();
     }
 private:
-    struct Retired {
-        std::unique_ptr<T> object;
-        std::uint64_t lastPotentialReader=0;
-    };
     // Protected by mutex_, NOT called from the audio callback.
     void CollectLocked() {
-        const auto complete=finished_.load(std::memory_order_seq_cst);
-        const auto oldSize=retired_.size();
-        std::erase_if(retired_,[&](const Retired& r) {
-            return r.lastPotentialReader<=complete;
-        });
-        if(oldSize!=retired_.size())changed_.notify_all();
+        if(readers_.load(std::memory_order_seq_cst)==0 && !retired_.empty()) {
+            retired_.clear();
+            changed_.notify_all();
+        }
     }
     void CollectLoop() {
         std::unique_lock<std::mutex> lock(mutex_);
@@ -115,10 +107,10 @@ private:
         }
     }
     std::atomic<T*> active_{nullptr};
-    std::atomic<std::uint64_t> entered_{0},finished_{0};
+    std::atomic<unsigned> readers_{0};
     mutable std::mutex mutex_;
     std::condition_variable changed_;
-    std::vector<Retired> retired_;
+    std::vector<std::unique_ptr<T>> retired_;
     std::thread collector_;
     bool stopping_=false;
 };
