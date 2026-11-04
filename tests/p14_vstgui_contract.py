@@ -76,7 +76,8 @@ assert 'PresetBrowserModel::Filter(0,sf_,fm_' in b
 assert 'PresetBrowserModel::Neighbor(0,sf_,fm_' in b
 assert 'toggle_->setStyle(CTextButton::kOnOffStyle)' in b
 assert 'if(control->getValue()>0.5f)' in b
-assert 'kVersion = 9u' in state and 'kControlCount = 12' in state
+assert 'kVersion = 10u' in state and 'kControlCount = 12' in state
+assert 'candidate.channelPrograms.fill(program)' in state
 assert 'kVolumeID=MasterOutput::kParamID' in f
 assert 'rtMaster_' in f and 'volumeGain_.setTarget(' in f
 assert 'masterVolume_' in h and 'masterVolumeValue_' in h
