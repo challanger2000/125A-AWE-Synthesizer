@@ -112,3 +112,15 @@ set_target_properties(awe32_p113_sf2_output_rail_diagnostic
     PROPERTIES CXX_STANDARD 23)
 add_test(NAME 125A_p113_rail_meter_selftest
     COMMAND awe32_p113_sf2_output_rail_diagnostic --selftest)
+
+
+# P114: genuine final 32-bit 86Box mix before int16 conversion.
+# The tap is off by default and never modifies the output signal.
+add_executable(awe32_p114_raw_32bit_audit
+    "../../tools/p114_raw_32bit_audit.cpp")
+target_include_directories(awe32_p114_raw_32bit_audit PRIVATE
+    "." "../../src/vst3" "../../upstream/AWE32Emu/AWE32Emu/src")
+target_link_libraries(awe32_p114_raw_32bit_audit PRIVATE awe32_chip_safety)
+set_target_properties(awe32_p114_raw_32bit_audit PROPERTIES CXX_STANDARD 23)
+add_test(NAME 125A_p114_raw_tap_selftest
+    COMMAND awe32_p114_raw_32bit_audit --selftest)
