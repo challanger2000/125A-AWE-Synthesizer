@@ -109,6 +109,18 @@ public:
     }
     CMouseEventResult onMouseDown(CPoint& where,const CButtonState& buttons) override {
         if(!(buttons&kLButton))return kMouseEventNotHandled;
+        // Explicit Ctrl-click neutral/unity reset. Our custom drag handler
+        // must not rely on an inherited CControl shortcut being invoked.
+        if(buttons&kControl) {
+            if(getValue()!=getDefaultValue()) {
+                beginEdit();
+                setValue(getDefaultValue());
+                valueChanged();
+                endEdit();
+                invalid();
+            }
+            return kMouseEventHandled;
+        }
         lastX_=where.x;lastY_=where.y;dragging_=true;
         beginEdit();
         return kMouseEventHandled;
