@@ -133,6 +133,8 @@ private:
     CCoord lastX_=0.,lastY_=0.;
 };
 std::string BankLabel(uint16_t id) {
+    if(id==16383)return "GM ROM - Original";
+    if(id==16382)return "GM ROM - Drumkit";
     return id==128 ? "Bank 128 - Drumkits" : "Bank "+std::to_string(id);
 }
 std::string DisplayName(const std::string& path) {

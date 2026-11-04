@@ -44,7 +44,8 @@ public:
     // the user slot on loading - otherwise they would override the GM
     // presets. The drum bank 128 stays where it is.
     bool LoadBank(const std::string& path, std::string& error,
-                  bool samplesInRom = false, int midiBank = -1);
+                  bool samplesInRom = false, int midiBank = -1,
+                  int midiDrumBank = -1);
 
     size_t BankCount() const { return m_banks.size(); }
     uint64_t RegionOverflowCount() const { return m_regionOverflowCount; }

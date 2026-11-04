@@ -133,6 +133,33 @@ public:
         error.clear();
         return true;
     }
+    // Append the user's original GM ROM preset metadata; no waveform is copied.
+    // Standard bank 0 remains available beneath a later overriding SF2.
+    // Banks 16383/16382 are reserved for explicit original ROM GM/drums.
+    bool AppendRomGm(const std::string& path,std::string& error) {
+        PresetCatalog gm;
+        if(!gm.LoadSoundFont(path,error))return false;
+        auto candidate=entries_;
+        for(const auto& e:gm.Entries()) {
+            if(e.bank!=0 && e.bank!=128)continue;
+            const uint16_t virtualBank=e.bank==0?16383:16382;
+            if(!Find(e.bank,e.program))candidate.push_back(e);
+            PresetEntry rom=e;
+            rom.bank=virtualBank;
+            rom.name="ROM: "+rom.name;
+            candidate.erase(std::remove_if(candidate.begin(),candidate.end(),
+                [&](const PresetEntry& p){
+                    return p.bank==rom.bank && p.program==rom.program;
+                }),candidate.end());
+            candidate.push_back(std::move(rom));
+        }
+        std::sort(candidate.begin(),candidate.end(),[](const auto& a,const auto& b){
+            return a.bank!=b.bank?a.bank<b.bank:a.program<b.program;
+        });
+        entries_.swap(candidate);
+        error.clear();
+        return true;
+    }
     bool LoadFmIbk(const std::string& path,std::string& error) {
         IbkBank bank;
         if(!bank.Load(path,error))return false;

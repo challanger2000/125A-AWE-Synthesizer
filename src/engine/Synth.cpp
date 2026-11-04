@@ -145,15 +145,17 @@ bool Synth::LoadWaveRom(const std::string& path, std::string& error)
 }
 
 bool Synth::LoadBank(const std::string& path, std::string& error, bool samplesInRom,
-                     int midiBank)
+                     int midiBank, int midiDrumBank)
 {
     SoundFont::Bank bank = SoundFont::Load(path);
     if (!bank.valid) { error = bank.errorMessage; return false; }
     bank.samplesInRom = samplesInRom;
 
-    if (midiBank >= 0)
-        for (SoundFont::Preset& p : bank.presets)
-            if (p.bank == 0) p.bank = midiBank;
+    if (midiBank >= 0 || midiDrumBank >= 0)
+        for (SoundFont::Preset& p : bank.presets) {
+            if (p.bank == 0 && midiBank >= 0) p.bank = midiBank;
+            else if (p.bank == 128 && midiDrumBank >= 0) p.bank = midiDrumBank;
+        }
 
     // Compute in a local value: failed loads must never advance the
     // persistent DRAM allocator or change BankCount().
