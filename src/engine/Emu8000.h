@@ -89,6 +89,40 @@ public:
 
     int16_t ReadSample(uint32_t address) const;
 
+    // P114 opt-in diagnostic of the FINAL native 86Box int32 stereo mix,
+    // immediately before the existing int16 output clamp at 44100 Hz.
+    // Never changes audio, filter state, MIDI or ROM data. Only the
+    // standalone P114 utility enables this tap on its own audio thread.
+    struct RawOutputStats {
+        uint64_t frames=0, exceededSamples=0, exceededFrames=0;
+        uint64_t longestExceededRun=0, currentExceededRun=0;
+        int64_t firstExceededFrame=-1, minRaw=0, maxRaw=0, maxAbsRaw=0;
+        int64_t overshootSum=0;
+        void RecordFrame(int32_t left,int32_t right) noexcept {
+            bool over=false;
+            for(int32_t value : {left,right}) {
+                minRaw=std::min<int64_t>(minRaw,value);
+                maxRaw=std::max<int64_t>(maxRaw,value);
+                const int64_t n=static_cast<int64_t>(value);
+                const int64_t magnitude=n<0?-n:n;
+                maxAbsRaw=std::max(maxAbsRaw,magnitude);
+                if(value>32767 || value< -32768) {
+                    over=true;
+                    ++exceededSamples;
+                    overshootSum+=(value>32767) ? n-32767 : -32768-n;
+                }
+            }
+            if(over) {
+                ++exceededFrames;
+                if(firstExceededFrame<0)firstExceededFrame=static_cast<int64_t>(frames);
+                ++currentExceededRun;
+                longestExceededRun=std::max(longestExceededRun,currentExceededRun);
+            } else currentExceededRun=0;
+            ++frames;
+        }
+    };
+    void SetRawOutputTap(RawOutputStats* tap) noexcept { m_rawOutputTap=tap; }
+
     // ---- render ----------------------------------------------------------
     // out = interleaved stereo int16, numFrames frames at the output rate.
     void RenderBlock(int16_t* out, uint32_t numFrames);
@@ -333,6 +367,7 @@ private:
 
     Chip m_chip = Chip::Ours;
     Emu8000Box m_box;
+    RawOutputStats* m_rawOutputTap=nullptr; // disabled in normal playback
     int  m_chipRamKb = 28672;  // 28 MiB max physical EMU8000 DRAM (125A fixed default)
 
     RegFile m_regs{};
