@@ -76,6 +76,32 @@ jobs:
           path: build-vst3/audio-probe/
           if-no-files-found: error
           retention-days: 7
+      - name: Stage P109 private SF2 all-preset diagnostic
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem build-vst3 -Filter awe32_p109_sf2_preset_audit.exe -Recurse |
+            Where-Object { $_.FullName -match 'Release' } |
+            Select-Object -First 1 -ExpandProperty FullName
+          if (-not $exe) { throw "P109 diagnostic missing" }
+          New-Item -ItemType Directory -Force build-vst3/p109-audit | Out-Null
+          Copy-Item $exe build-vst3/p109-audit/
+          Copy-Item tools/p109-start-audit.ps1 build-vst3/p109-audit/
+          Copy-Item tools/p109-start-audit.cmd build-vst3/p109-audit/
+          @'
+          P109: ALLE PRESSETS DER EIGENEN SF2 DIAGNOSTIZIEREN
+          Entpacken. Dann p109-start-audit.cmd doppelt anklicken.
+          Original-ROM und SF2 in den zwei Windows-Dialogen auswaehlen.
+          Bericht 125A-P109-Preset-Audit.csv in diesem Ordner erzeugen.
+          NUR die CSV-Datei in den Chat hochladen (keine ROM, keine SF2).
+          Keine Installation erforderlich. Keine Plugin-/Projektdateien aendern.
+          '@ | Set-Content build-vst3/p109-audit/START-HERE.txt -Encoding UTF8
+      - name: Upload P109 SF2 all-preset test
+        uses: actions/upload-artifact@v4
+        with:
+          name: 125A-P109-Alle-Presets-Tester-Windows-x64
+          path: build-vst3/p109-audit/
+          if-no-files-found: error
+          retention-days: 7
       - name: Build Steinberg reference EditorHost (real VST3 GUI)
         shell: pwsh
         run: cmake --build build-vst3 --config Release --target editorhost --parallel 2
