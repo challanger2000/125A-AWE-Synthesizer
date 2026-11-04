@@ -721,7 +721,7 @@ emu8k_work_reverb_fitted(emu8k_t *emu8k, int32_t *inbuf, int32_t *outbuf, int co
             var = (var & 0xffff0000) | (val);         \
             break;                                    \
         case 2:                                       \
-            var = (var & 0x0000ffff) | ((val) << 16); \
+            var = (var & UINT32_C(0x0000ffff)) | ((uint32_t)(uint16_t)(val) << 16); \
             break;                                    \
     }
 
