@@ -909,7 +909,8 @@ public:
         parameters.addParameter(banks);
         parameters.addParameter(new RangeParameter(STR16("Master Volume"),
             kVolumeID,STR16("%"),0.,100.,100.,0));
-        // Stable hidden host parameters for 16 MIDI channels. Distinct IDs
+        // Stable automatable host parameters for 16 MIDI channels. VST3
+        // kIsHidden would imply read-only and break IMidiMapping. Distinct IDs
         // prevent MIDI sustain or pitch bend on one channel changing another.
         for(uint32_t ch=0;ch<MidiControlMapping::kChannels;++ch)
             for(size_t i=0;i<MidiControlMapping::kControls.size();++i) {
@@ -921,7 +922,7 @@ public:
                 parameters.addParameter(new RangeParameter(title,
                     MidiControlMapping::ParamID(ch,static_cast<uint32_t>(i)),
                     nullptr,0.,1.,MidiControlMapping::InitialNormalized(spec),0,
-                    ParameterInfo::kCanAutomate|ParameterInfo::kIsHidden));
+                    ParameterInfo::kCanAutomate));
             }
         constexpr const char16* labels[kGuiCount]={
             STR16("Amp Attack"),STR16("Amp Decay"),STR16("Amp Sustain Reduction"),
