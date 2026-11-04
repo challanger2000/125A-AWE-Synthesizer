@@ -3,6 +3,7 @@
 #include "SoundFont.h"
 #include "Emu8000Regs.h"
 #include <cstdint>
+#include <cmath>
 #include <iostream>
 using namespace SoundFont;
 namespace {
@@ -38,6 +39,21 @@ int main() {
     ok&=check(!oneShot.looping && !oneShot.loopOpensOnRelease,
               "Win95 SF2 mode 0 is one-shot");
     r.gen.Set(Gen::SampleModes,1);
+    // P104: original CT4390 analog SoundFont Spec Test #11 confirms its
+    // historic 0.4-dB-per-dB SF2 initialAttenuation response, rather than
+    // modern SF2 1:1. Check Win95 versus the untouched DOS mapping.
+    for (const int cb : {0, 50, 100, 150, 300})
+    {
+        r.gen.Set(Gen::InitialAttenuation, static_cast<int16_t>(cb));
+        const auto win95 = MakeVoiceParams(sf2,r,60,100,base,0,Awe32::Driver::Win95);
+        const auto oldDos = MakeVoiceParams(sf2,r,60,100,base,0,Awe32::Driver::Dos);
+        const int expectedWin95 = static_cast<int>(std::lround(cb * .4 / 10. / .375));
+        const int expectedDos = static_cast<int>(std::lround(cb / 10. / .375));
+        ok &= check(win95.patchAttenUnits == expectedWin95
+                    && oldDos.patchAttenUnits == expectedDos,
+                    "P104 hardware Win95 SF2 0.4x attenuation; DOS unmodified");
+    }
+    r.gen.Set(Gen::InitialAttenuation, 0);
     // P92 independent original Creative converter code / P91 genuine
     // register measurement: note 48, velocity 100, two generated test layers.
     r.gen.Set(Gen::FreqModLFO,-617);

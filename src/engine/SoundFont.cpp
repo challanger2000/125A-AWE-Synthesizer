@@ -1174,10 +1174,22 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
     }
     else
     {
-        // SF2: centibels (0.1 dB) -> units of 0.375 dB.
+        // SF2 stores initialAttenuation in centibels. The Win95 Creative
+        // AWE hardware uses its historical *0.4 attenuation response*, not
+        // a modern SF2 player's nominal 1.0 dB per dB. The original
+        // SoundFont Spec Test #11 records +5 SF2 dB as approximately +2 dB
+        // attenuation on an AWE64 Gold; P103's 5-step hardware playback
+        // independently finds 2.258 dB per +5 SF2 dB, whereas the previous
+        // Win95 path rendered 4.250 dB. Preserve the legacy DOS family,
+        // whose converter and existing compatibility regressions are distinct.
+        // This corrects the SF2-to-register mapping; chip 0.375-dB IFATN
+        // quantization and verified Creative MIDI attenuation curves remain.
+        const double hardwareSf2AttenuationScale =
+            (drv == Awe32::Driver::Win95) ? 0.4 : 1.0;
         vp.patchAttenUnits = static_cast<uint8_t>(std::clamp(
             static_cast<int>(std::lround(g.Get(Gen::InitialAttenuation, 0)
-                                         / 10.0 / kAttenDbPerStep)), 0, 255));
+                       * hardwareSf2AttenuationScale
+                       / 10.0 / kAttenDbPerStep)), 0, 255));
     }
 
     // SF1 stores initialFilterFc as 0..127, the IFATN register has an

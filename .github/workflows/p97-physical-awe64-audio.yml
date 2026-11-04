@@ -10,6 +10,7 @@ on:
       - 'tools/p103_*'
       - 'src/engine/CMakeLists.txt'
       - 'src/engine/snd_emu8k.c'
+      - 'src/engine/SoundFont.cpp'
       - '.github/workflows/p97-physical-awe64-audio.yml'
   workflow_dispatch:
 permissions:
