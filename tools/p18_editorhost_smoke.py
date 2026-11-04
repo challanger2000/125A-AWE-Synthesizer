@@ -147,7 +147,7 @@ def client_size(hwnd):
 
 def screen_pos(hwnd, x, y):
     sz = client_size(hwnd)
-    pt = POINT(round(x*sz[0]/1040), round(y*sz[1]/680))
+    pt = POINT(round(x*sz[0]/1200), round(y*sz[1]/780))
     if not u.ClientToScreen(hwnd, ctypes.byref(pt)):
         raise RuntimeError("ClientToScreen failed")
     return pt.x, pt.y
@@ -155,7 +155,7 @@ def screen_pos(hwnd, x, y):
 def snap(hwnd, filename):
     w,h = client_size(hwnd)
     x,y = screen_pos(hwnd, 0, 0)
-    if w < 1020 or h < 660:
+    if w < 1180 or h < 760:
         raise RuntimeError(f"Editor window wrong dimensions {w}x{h}")
     src = u.GetDC(None)
     mem = gdi.CreateCompatibleDC(src)
@@ -191,7 +191,7 @@ def different(before,after,region):
     if (w,h)!=(w2,h2):
         raise RuntimeError("Editor size changed unexpectedly")
     x0,y0,x1,y1 = region
-    scale_x,scale_y = w/1040,h/680
+    scale_x,scale_y = w/1200,h/780
     x0,x1 = round(x0*scale_x),round(x1*scale_x)
     y0,y1 = round(y0*scale_y),round(y1*scale_y)
     changed = 0
@@ -202,15 +202,15 @@ def different(before,after,region):
                 changed+=1
     return changed
 
-def red_logo_pixels(frame):
+def gold_brand_pixels(frame):
+    """P117: the first-stage native VSTGUI '125A' text is gold, not a bitmap."""
     w,h,raw=frame
     count=0
-    # Logo view occupies header x18..150 / y8..53. Pixel array is BGRA.
-    for y in range(round(8*h/680),round(54*h/680)):
-        for x in range(round(17*w/1040),round(151*w/1040)):
+    for y in range(round(15*h/780),round(65*h/780)):
+        for x in range(round(30*w/1200),round(206*w/1200)):
             i=(y*w+x)*4
             blue,green,red=raw[i],raw[i+1],raw[i+2]
-            if red>=125 and red>=green*2 and red>=blue*1.6:
+            if red>=145 and green>=105 and red>=green and blue<green:
                 count+=1
     return count
 
@@ -328,50 +328,50 @@ def main():
             time.sleep(1.0)
             first=snap(hwnd,args.output/"01_initial.bmp")
             w,h,_=first
-            check(w>=1020 and h>=660,
+            check(w>=1180 and h>=760,
                   f"real hardware editor dimensions {w}x{h}",results)
             distinct=len(set(first[2][0::384]))
             check(distinct>3,"editor painted nonflat hardware faceplate",results)
-            check(red_logo_pixels(first)>15,
-                  "authentic 125A red-vector logo painted",results)
-            click(hwnd,917,178)
+            check(gold_brand_pixels(first)>15,
+                  "P117 gold 125A brand painted using native VSTGUI",results)
+            click(hwnd,1094,224)
             closed=snap(hwnd,args.output/"02_browser_closed.bmp")
-            check(different(first,closed,(650,285,1015,652))>35,
+            check(different(first,closed,(805,253,1173,734))>35,
                   "browser toggle hides preset table and filter",results)
-            click(hwnd,917,178)
+            click(hwnd,1094,224)
             reopened=snap(hwnd,args.output/"03_browser_reopened.bmp")
-            check(different(closed,reopened,(650,285,1015,652))>35,
+            check(different(closed,reopened,(805,253,1173,734))>35,
                   "browser toggle reopens searchable preset list",results)
-            drag(hwnd,116,286,116,251)
+            drag(hwnd,112,345,112,319)
             moved=snap(hwnd,args.output/"04_knob_dragged.bmp")
-            check(different(reopened,moved,(85,262,175,365))>15,
+            check(different(reopened,moved,(72,310,175,413))>15,
                   "amp attack knob responds to physical mouse drag",results)
-            click(hwnd,550,564)
+            click(hwnd,709,618)
             reset=snap(hwnd,args.output/"05_reset_original.bmp")
-            check(different(moved,reset,(85,262,175,365))>15,
+            check(different(moved,reset,(72,310,175,413))>15,
                   "reset restores 0-percent original SoundFont value",results)
-            click(hwnd,796,323)
+            click(hwnd,998,326)
             text_input("DRUM")
             searched=snap(hwnd,args.output/"07_search_drum.bmp")
-            check(different(reset,searched,(654,346,1013,650))>10,
+            check(different(reset,searched,(805,349,1173,731))>10,
                   "preset search filters SF2 bank 128 rows",results)
-            click(hwnd,723,359)
+            click(hwnd,851,376)
             selected=snap(hwnd,args.output/"08_bank128_selected.bmp")
-            check(different(searched,selected,(214,157,753,198))>8,
+            check(different(searched,selected,(30,114,850,155))>8,
                   "bank 128 sound selection updates instrument label",results)
             # Cancel ROM chooser: do not mutate the running bank or UI.
-            click(hwnd,751,103)
+            click(hwnd,967,155)
             key(0x1B)
             time.sleep(.45)
             after_rom_cancel=snap(hwnd,args.output/"09_rom_dialog_cancelled.bmp")
-            check(different(selected,after_rom_cancel,(211,156,755,199))<20,
+            check(different(selected,after_rom_cancel,(30,114,850,155))<20,
                   "native ROM chooser cancels without changing selected preset",results)
             # Canceling the Windows SF2 chooser must be equally harmless.
-            click(hwnd,915,103)
+            click(hwnd,1110,155)
             key(0x1B)
             time.sleep(.65)
             after_cancel=snap(hwnd,args.output/"09_sf2_dialog_cancelled.bmp")
-            check(different(selected,after_cancel,(211,156,755,199))<20,
+            check(different(selected,after_cancel,(30,114,850,155))<20,
                   "native SF2 chooser cancels without mutating current preset",results)
             u.PostMessageW(hwnd,0x0010,0,0)
             proc.wait(timeout=10)
@@ -384,7 +384,7 @@ def main():
             (args.output/"result.json").write_text(
                 json.dumps({"results":results,"passed":all(x["pass"] for x in results)},
                            indent=2),encoding="utf-8")
-    print("P106 WIN32 AWE-ONLY EDITORHOST GUI SMOKE PASS",flush=True)
+    print("P117 WIN32 DIRECT-PRESET LAYOUT EDITORHOST GUI SMOKE PASS",flush=True)
 
 if __name__=="__main__":
     try:main()
