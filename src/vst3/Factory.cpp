@@ -15,6 +15,7 @@
 #include "RomGmBank.h"
 #include "MidiControlMapping.h"
 #include "MidiProgramRouting.h"
+#include "MidiQueueOrdering.h"
 #include "MidiLiveState.h"
 #include "RealtimeEngineExchange.h"
 #include "public.sdk/source/vst/vstparameters.h"
@@ -612,6 +613,7 @@ public:
                 cursor.queue=q;
                 cursor.id=q->getParameterId();
                 cursor.count=q->getPointCount();
+                cursor.sourceOrdinal=i;
                 if(advance(cursor))paramCursors_[activeQueues++]=cursor;
             }
         }
@@ -622,6 +624,11 @@ public:
         bool masterCurveActive=false;
         std::array<MasterOutput::Curve,kGuiCount> overlayCurves{};
         std::array<bool,kGuiCount> overlayEnabled{};
+        std::array<MasterOutput::Curve,16> pitchCurves{};
+        std::array<bool,16> pitchEnabled{};
+        std::array<int16_t,16> lastPitch{};
+        lastPitch.fill(INT16_MIN); // force first exact sample update
+        bool hasPitchCurve=false;
         const auto readPoint=+[](void* context,int32_t index,
                                  int32_t& offset,double& value)->bool {
             auto* queue=static_cast<IParamValueQueue*>(context);
@@ -643,6 +650,17 @@ public:
                     double(rtControls_[idx].load(std::memory_order_relaxed))/
                     AssetState::kControlScale);
                 overlayEnabled[idx]=true;
+            } else {
+                const auto midi=MidiControlMapping::Decode(c.id);
+                if(midi.valid&&midi.number==129) {
+                    const int ch=midi.channel;
+                    const auto previous=liveMidi_.Get(
+                        static_cast<unsigned>(ch)).values[
+                        MidiControlMapping::Index(129)];
+                    pitchCurves[ch].reset(c.queue,readPoint,c.count,previous);
+                    pitchEnabled[ch]=true;
+                    hasPitchCurve=true;
+                }
             }
         }
         auto apply=[&](ParamID id,ParamValue val) {
@@ -720,8 +738,27 @@ public:
         const auto render=[&](int32 end) {
             end=std::clamp(end,position,data.numSamples);
             if(canRender&&end>position) {
-                synth_->RenderBlock(scratch_.data()+2*size_t(position),
-                                    static_cast<uint32_t>(end-position));
+                if(hasPitchCurve) {
+                    // Render in samples only during continuous pitchbend
+                    // automation. Sparse and dense VST3 curves now generate
+                    // identical register values at every frame.
+                    for(int32 frame=position;frame<end;++frame) {
+                        for(int ch=0;ch<16;++ch)if(pitchEnabled[ch]) {
+                            const int16_t bend=MidiControlMapping::PitchBend(
+                                pitchCurves[ch].valueAt(frame));
+                            if(lastPitch[ch]!=bend) {
+                                synth_->PitchBend(static_cast<uint8_t>(ch),bend);
+                                lastPitch[ch]=bend;
+                            }
+                        }
+                        synth_->RenderBlock(
+                            scratch_.data()+2*size_t(frame),1);
+                    }
+                } else {
+                    synth_->RenderBlock(
+                        scratch_.data()+2*size_t(position),
+                        static_cast<uint32_t>(end-position));
+                }
                 for(int32 i=position;i<end;++i) {
                     // Host automation is already a continuous curve.
                     // Manual/discrete changes retain the 64-frame dezipper.
@@ -755,7 +792,13 @@ public:
             int32 which=-1,at=data.numSamples;
             for(int32 i=0;i<activeQueues;++i) {
                 const auto time=std::max(position,paramCursors_[i].offset);
-                if(which<0||time<at) {which=i;at=time;}
+                const auto& cur=paramCursors_[i];
+                if(which<0||MidiQueueOrdering::Earlier(
+                    time,cur.id,cur.sourceOrdinal,
+                    at,paramCursors_[which].id,
+                    paramCursors_[which].sourceOrdinal)) {
+                    which=i;at=time;
+                }
             }
             const int32 midiAt=eventReady
                 ?std::clamp(currentEvent.sampleOffset,position,data.numSamples)
@@ -811,7 +854,7 @@ private:
     struct ParameterCursor {
         IParamValueQueue* queue=nullptr;
         ParamID id=0;
-        int32 point=0,count=0,offset=0;
+        int32 point=0,count=0,offset=0,sourceOrdinal=0;
         ParamValue value=0.;
     };
     std::array<ParameterCursor,1024> paramCursors_{};
