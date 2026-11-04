@@ -101,4 +101,4 @@ assert "ChangeParameter(kBankParam,double(bank)/16383.)" in b
 assert "controller_->getParamNormalized(kBankParam)*16383." in b
 assert "this,kBankFilter" in b and "tag==kBankFilter" in b
 assert "this,kBank)" not in b and "getParamNormalized(kBank)" not in b
-print("P117 STATIC PASS: AWE-only VST3, SF2 picker IPC, browser, 12 overlay knobs, master volume, V9 recall")
+print("P117 STATIC PASS: AWE-only VST3, SF2 picker IPC, browser, 12 overlay knobs, master volume, V10 recall (V1-V9 migration)")
