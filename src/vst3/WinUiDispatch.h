@@ -15,13 +15,17 @@ namespace AWE125 {
 class WinUiDispatch {
 public:
     using Handler=bool(*)(void*); // return true when delivery needs a retry
+    using RefCallback=void(*)(void*);
     WinUiDispatch()=default;
     WinUiDispatch(const WinUiDispatch&)=delete;
     WinUiDispatch& operator=(const WinUiDispatch&)=delete;
     ~WinUiDispatch(){Stop();}
-    bool Start(void* ctx,Handler callback,HINSTANCE module) {
+    bool Start(void* ctx,Handler callback,HINSTANCE module,
+               RefCallback retain=nullptr,RefCallback release=nullptr) {
         if(hwnd_.load(std::memory_order_acquire)||!callback||!module)return false;
         context_=ctx;handler_=callback;module_=module;
+        retain_=retain;release_=release;
+        ownerThread_=GetCurrentThreadId();
         {
             std::lock_guard<std::mutex> guard(classMutex_);
             if(classRefs_==0) {
@@ -59,6 +63,8 @@ private:
     HINSTANCE module_=nullptr;
     void* context_=nullptr;
     Handler handler_=nullptr;
+    RefCallback retain_=nullptr,release_=nullptr;
+    DWORD ownerThread_=0;
     void Stop() {
         const HWND h=hwnd_.exchange(nullptr,std::memory_order_acq_rel);
         if(h) {
@@ -83,9 +89,19 @@ private:
         auto* self=reinterpret_cast<WinUiDispatch*>(
             GetWindowLongPtrW(hwnd,GWLP_USERDATA));
         if(self && (msg==kNotify || (msg==WM_TIMER&&wp==kTimer))) {
-            const bool retry=self->handler_&&self->handler_(self->context_);
+            // Copy callbacks before calling foreign host code. The host can
+            // synchronously release the last reference from restartComponent.
+            // Retain the owner through callback AND SetTimer/KillTimer; only
+            // then release, which may destroy this WinUiDispatch instance.
+            void* const context=self->context_;
+            const auto handler=self->handler_;
+            const auto retain=self->retain_;
+            const auto release=self->release_;
+            if(retain)retain(context);
+            const bool retry=handler&&handler(context);
             if(retry)SetTimer(hwnd,kTimer,250,nullptr);
             else KillTimer(hwnd,kTimer);
+            if(release)release(context); // never access self after this point
             return 0;
         }
         return DefWindowProcW(hwnd,msg,wp,lp);
@@ -97,7 +113,8 @@ namespace AWE125 {
 class WinUiDispatch {
 public:
     using Handler=bool(*)(void*);
-    bool Start(void*,Handler,void*){return false;}
+    using RefCallback=void(*)(void*);
+    bool Start(void*,Handler,void*,RefCallback=nullptr,RefCallback=nullptr){return false;}
     void Post() const noexcept {}
     bool Active() const noexcept {return false;}
 };
