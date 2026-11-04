@@ -374,6 +374,12 @@ public:
         return static_cast<IEditController*>(new Controller);
     }
     tresult receiveText(const char8* msg) override {
+        constexpr char ack[]="125A_SF2_ACK:";
+        if(msg && std::strncmp(msg,ack,sizeof(ack)-1)==0) {
+            std::lock_guard<std::mutex> lock(sf2StatusMutex_);
+            sf2PendingAck_=msg+sizeof(ack)-1;
+            return kResultOk;
+        }
         constexpr char prefix[]="125A_SF2_STATUS:";
         if(msg&&std::strncmp(msg,prefix,sizeof(prefix)-1)==0) {
             std::lock_guard<std::mutex> guard(sf2StatusMutex_);
@@ -381,6 +387,53 @@ public:
             return kResultOk;
         }
         return EditControllerEx1::receiveText(msg);
+    }
+    // Called only on the editor/UI thread. Keep the PresetCatalog object
+    // stable: the VSTGUI browser stores a const reference to it.
+    uint64_t CatalogRevision() {
+        std::string ack;
+        {
+            std::lock_guard<std::mutex> lock(sf2StatusMutex_);
+            ack.swap(sf2PendingAck_);
+        }
+        if(ack=="OK" && !sf2PendingPath_.empty()) {
+            sfCatalog_=std::move(sf2PendingCatalog_);
+            sf2Path_=std::move(sf2PendingPath_);
+            ++sfCatalogRevision_;
+        } else if(!ack.empty()) sf2PendingPath_.clear();
+        return sfCatalogRevision_;
+    }
+    std::string CurrentSf2Path() const {return sf2Path_;}
+    bool RequestSf2Load(const std::string& path) {
+        if(!AssetState::validPath(path)||path.empty()||!sf2PendingPath_.empty())
+            return false;
+        PresetCatalog candidate;
+        std::string error;
+        if(!candidate.LoadSoundFont(path,error)) {
+            std::lock_guard<std::mutex> lock(sf2StatusMutex_);
+            sf2AudioStatus_="SF2-Ladefehler: "+error;
+            return false;
+        }
+        auto* msg=allocateMessage();
+        if(!msg) {
+            std::lock_guard<std::mutex> lock(sf2StatusMutex_);
+            sf2AudioStatus_="SF2-Ladefehler: Host ohne Nachrichtenverbindung.";
+            return false;
+        }
+        sf2PendingPath_=path;
+        sf2PendingCatalog_=std::move(candidate);
+        msg->setMessageID("125A_SF2_LOAD");
+        msg->getAttributes()->setBinary("Path",path.data(),
+                                         static_cast<uint32>(path.size()));
+        const auto result=sendMessage(msg);
+        msg->release();
+        if(result!=kResultOk) {
+            sf2PendingPath_.clear();
+            std::lock_guard<std::mutex> lock(sf2StatusMutex_);
+            sf2AudioStatus_="SF2-Ladefehler: Prozessor nicht erreichbar.";
+            return false;
+        }
+        return true;
     }
     std::string Sf2AudioStatus() const {
         std::lock_guard<std::mutex> guard(sf2StatusMutex_);
@@ -467,6 +520,11 @@ public:
     const PresetCatalog& FmPresets() const noexcept {return fmCatalog_;}
 private:
     PresetCatalog sfCatalog_{},fmCatalog_{};
+    std::string sf2Path_;
+    std::string sf2PendingPath_;
+    PresetCatalog sf2PendingCatalog_{};
+    uint64_t sfCatalogRevision_=0;
+    std::string sf2PendingAck_;
     mutable std::mutex sf2StatusMutex_;
     std::string sf2AudioStatus_="SF2-Audiostatus noch nicht vom Prozessor bestaetigt.";
     void ReloadPresetCatalogs(const AssetState::Data* model) {
