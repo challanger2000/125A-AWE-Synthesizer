@@ -1,5 +1,6 @@
 #pragma once
 #include "PresetBrowserModel.h"
+#include "MasterOutput.h"
 #include "vstgui/lib/cdatabrowser.h"
 #include "vstgui/lib/idatabrowserdelegate.h"
 #include "vstgui/lib/controls/coptionmenu.h"
@@ -49,6 +50,7 @@ private:
                          kFilter=3104,kBankFilter=3105,kLoadSf2=3106,kReset=3107,
                          kLoadRom=3108;
     static constexpr int kGuiFirst=1100,kGuiCount=12;
+    static constexpr int kMasterVolume=static_cast<int>(MasterOutput::kParamID);
     Steinberg::Vst::EditController* controller_;
     const PresetCatalog& sf_;
     const PresetCatalog& fm_; // legacy catalog only; never user-selectable
@@ -67,6 +69,8 @@ private:
     std::string searchText_;
     std::vector<uint16_t> filterBanks_;
     std::vector<PresetBrowserModel::Row> rows_;
+    VSTGUI::CControl* masterVolume_=nullptr;
+    VSTGUI::CTextLabel* masterVolumeValue_=nullptr;
     std::array<VSTGUI::CControl*,kGuiCount> controls_{};
     std::array<VSTGUI::CTextLabel*,kGuiCount> values_{};
     VSTGUI::COptionMenu* bankMenu_=nullptr;
