@@ -60,4 +60,21 @@ inline bool Load(Paths& result) {
     result=std::move(fallback);
     return true;
 }
+// The processor and controller must resolve the same ROM path after VST3
+// project restore. Previously Controller::ReloadPresetCatalogs ignored the
+// explicit model.romPath, hiding SYNTHGM.SBK in the UI although audio loaded.
+inline bool ResolveController(const AssetState::Data* model,Paths& result) {
+    if(model&&model->pathsSpecified) {
+        if(!AssetState::validPath(model->romPath)||
+           !AssetState::validPath(model->sf2Path)||
+           !AssetState::validPath(model->ibkPath)||
+           !AssetState::validPath(model->drumIbkPath))return false;
+        Paths candidate{model->romPath,model->sf2Path,
+                        model->ibkPath,model->drumIbkPath};
+        result=std::move(candidate);
+        return true;
+    }
+    return Load(result);
+}
+
 }
