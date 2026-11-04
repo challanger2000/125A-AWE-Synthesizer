@@ -24,7 +24,7 @@ assert 'kGuiFirstID=1100' in f
 assert 'new RangeParameter(labels[i],kGuiFirstID+i' in f
 assert "kEngineID" not in f and 'STR16("Hardware")' not in f
 assert "opl_->" not in f and "cqm_->" not in f
-assert "new PresetBrowserView({0,0,1040,720},this,sfCatalog_,fmCatalog_," in f
+assert "new PresetBrowserView({0,0,1040,680},this,sfCatalog_,fmCatalog_," in f
 assert 'new VSTGUI::VST3Editor(this,"view","awe_test_panel.uidesc")' in f
 assert 'sendTextMessage(("125A_SF2_STATUS:"+sf2Status).c_str())' in f
 assert 'AllowEmuNoteOn(sf2Configured_,sf2Loaded_)' in f

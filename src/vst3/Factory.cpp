@@ -475,7 +475,7 @@ public:
         const VSTGUI::UIAttributes&,const VSTGUI::IUIDescription*,
         VSTGUI::VST3Editor*) override {
         if(name&&std::strcmp(name,"AwePresetBrowser")==0)
-            return new PresetBrowserView({0,0,1040,720},this,sfCatalog_,fmCatalog_,
+            return new PresetBrowserView({0,0,1040,680},this,sfCatalog_,fmCatalog_,
                 FactoryBank(L"125A_Logo_Master_FINAL.svg"),
                 [this]() {return Sf2AudioStatus();},
                 [this](const std::string& path) {return RequestSf2Load(path);},
