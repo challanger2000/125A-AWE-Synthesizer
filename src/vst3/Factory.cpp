@@ -100,73 +100,83 @@ public:
         return kResultOk;
     }
     tresult PLUGIN_API setActive(TBool active) override {
-        std::lock_guard<std::mutex> lock(engineMutex_);
-        if(active) {
-            if(!capacity_)return kResultFalse;
-            hostActive_=true;
-            ++assetGeneration_;
-            synth_.reset();
-            assetError_.clear();
-            ResolveAssets();
-            sf2Configured_=!state_.sf2Path.empty();
-            sf2Loaded_=false;
-            gmLoaded_=false;
-            std::string status;
-            if(state_.romPath.empty()) {
-                // Strict AWE64 mode: ROM absent means NO software fallback.
-                // The editor still opens, allowing the user to load the ROM.
-                status="Original-Wave-ROM erforderlich: ROM LADEN. Bis dahin kein Audio.";
-            } else {
-                try {
-                    auto chip=std::make_unique<Synth>(rate_);
-                    chip->Core().SetDriver(Awe32::Driver::Win95);
-                    std::string error;
-                    if(!chip->Core().UseBox86Chip(state_.romPath,error) ||
-                       chip->Core().ChipVariant()!=Emu8000Core::Chip::Box86) {
-                        assetError_="ROM-Ladefehler: "+(error.empty() ?
-                            std::string("86Box-EMU8000 konnte nicht starten"):error);
-                        status=assetError_;
-                    } else {
-                        chip->Core().PowerOnInit();
-                        for(int i=0;i<kGuiCount;++i)
-                            chip->SetGuiControl(i,
-                                float(state_.controls[i])/AssetState::kControlScale);
-                        const auto banks=RomGmBank::LoadBanks(
-                            *chip,state_.romPath,state_.sf2Path);
-                        gmLoaded_=banks.gm;
-                        sf2Loaded_=banks.sf2;
-                        if(sf2Configured_&&!sf2Loaded_) {
-                            assetError_="SF2-Ladefehler: "+banks.sf2Error;
-                            status=assetError_;
-                        } else if(gmLoaded_&&sf2Loaded_)
-                            status="86Box: originale GM-ROM-Bank und SF2 geladen.";
-                        else if(gmLoaded_)
-                            status="86Box: originale 1MGM-Bank (SYNTHGM.SBK) geladen.";
-                        else if(sf2Loaded_)
-                            status="86Box: SF2 geladen. SYNTHGM.SBK fehlt neben ROM.";
-                        else
-                            status="86Box: ROM bereit. SYNTHGM.SBK neben ROM oder SF2 laden.";
-                        chip->SelectBrowserBank(static_cast<uint16_t>(state_.bank));
-                        for(int c=0;c<16;++c)
-                            chip->ProgramChange(static_cast<uint8_t>(c),
-                                                static_cast<uint8_t>(state_.program));
-                        synth_=std::move(chip);
-                    }
-                } catch(const std::exception& e) {
-                    assetError_="ROM-Ladefehler: "+std::string(e.what());
-                    status=assetError_;
-                    synth_.reset();
-                }
+        // A host may have a live audio callback while it reconfigures state.
+        // Never hold the render mutex over ROM/SoundFont filesystem I/O.
+        if(!active) {
+            std::unique_ptr<Synth> retired;
+            {
+                std::lock_guard<std::mutex> lock(engineMutex_);
+                hostActive_=false;
+                ++assetGeneration_;
+                sf2Loaded_=false;
+                gmLoaded_=false;
+                synth_.swap(retired);
             }
-            sendTextMessage(("125A_SF2_STATUS:"+status).c_str());
-            sendTextMessage(("125A_HW_INFO:"+HardwareDescriptor()).c_str());
-        } else {
-            hostActive_=false;
-            ++assetGeneration_;
-            sf2Loaded_=false;
-            gmLoaded_=false;
-            synth_.reset();
+            return AudioEffect::setActive(active);
         }
+        AssetState::Data model;
+        uint32_t sampleRate=44100;
+        uint64_t epoch=0;
+        {
+            std::lock_guard<std::mutex> lock(engineMutex_);
+            if(!capacity_)return kResultFalse;
+            ResolveAssets();
+            model=state_;
+            sampleRate=rate_;
+            epoch=assetGeneration_;
+        }
+        std::unique_ptr<Synth> prepared;
+        bool loadedGm=false,loadedSf2=false;
+        std::string status,error;
+        if(model.romPath.empty()) {
+            status="Original-Wave-ROM erforderlich: ROM LADEN. Bis dahin kein Audio.";
+        } else {
+            try {
+                prepared=std::make_unique<Synth>(sampleRate);
+                prepared->Core().SetDriver(Awe32::Driver::Win95);
+                if(!prepared->Core().UseBox86Chip(model.romPath,error) ||
+                   prepared->Core().ChipVariant()!=Emu8000Core::Chip::Box86) {
+                    error="ROM-Ladefehler: "+(error.empty() ?
+                        std::string("86Box-EMU8000 konnte nicht starten"):error);
+                    prepared.reset();
+                } else {
+                    prepared->Core().PowerOnInit();
+                    const auto banks=RomGmBank::LoadBanks(
+                        *prepared,model.romPath,model.sf2Path);
+                    loadedGm=banks.gm;
+                    loadedSf2=banks.sf2;
+                    if(!model.sf2Path.empty()&&!loadedSf2)
+                        status="SF2-Ladefehler: "+banks.sf2Error;
+                    else if(loadedGm&&loadedSf2)
+                        status="86Box: originale GM-ROM-Bank und SF2 geladen.";
+                    else if(loadedGm)
+                        status="86Box: originale 1MGM-Bank (SYNTHGM.SBK) geladen.";
+                    else if(loadedSf2)
+                        status="86Box: SF2 geladen. SYNTHGM.SBK fehlt neben ROM.";
+                    else status="86Box: ROM bereit. SYNTHGM.SBK neben ROM oder SF2 laden.";
+                }
+            } catch(const std::exception& e) {
+                error="ROM-Ladefehler: "+std::string(e.what());
+                prepared.reset();
+            }
+            if(!error.empty())status=error;
+        }
+        std::string hardware;
+        {
+            std::lock_guard<std::mutex> lock(engineMutex_);
+            if(epoch!=assetGeneration_||rate_!=sampleRate)return kResultFalse;
+            if(prepared)ApplyLiveParameters(*prepared);
+            hostActive_=true;
+            synth_.swap(prepared);
+            ++assetGeneration_;
+            sf2Configured_=!state_.sf2Path.empty();
+            sf2Loaded_=bool(synth_)&&loadedSf2;
+            gmLoaded_=bool(synth_)&&loadedGm;
+            assetError_=error;
+            hardware=HardwareDescriptor();
+        }
+        sendTextMessage(("125A_SF2_STATUS:"+status).c_str());
+        sendTextMessage(("125A_HW_INFO:"+hardware).c_str());
         return AudioEffect::setActive(active);
     }
     // Binary connection message, not the SDK's 255-char text-message path.
@@ -487,20 +497,10 @@ public:
     tresult PLUGIN_API process(ProcessData& data) override {
         if(data.numSamples<0 || uint32_t(data.numSamples)>capacity_)
             return kInvalidArgument;
-        std::unique_lock<std::mutex> lock(engineMutex_,std::try_to_lock);
-        if(!lock.owns_lock()) {
-            // P117-03 remains an open architecture issue: do not pretend this
-            // fallback preserves realtime notes/automation on a contention.
-            if(data.numOutputs>0 && data.outputs &&
-               data.outputs[0].channelBuffers32 &&
-               data.symbolicSampleSize==kSample32) {
-                for(int c=0;c<data.outputs[0].numChannels;++c)
-                    if(auto* out=data.outputs[0].channelBuffers32[c])
-                        std::fill_n(out,data.numSamples,0.f);
-                data.outputs[0].silenceFlags=3u;
-            }
-            return kResultOk;
-        }
+        // P118-03: process may briefly serialize with a host-side atomic
+        // engine swap, but MUST NOT discard NoteOff/MIDI/automation. All
+        // long-running asset/stream operations run outside this mutex.
+        std::unique_lock<std::mutex> lock(engineMutex_);
         // P118: VST3 parameter points carry their own sampleOffset.
         // Keep one cursor per parameter queue and merge them with MIDI events.
         // No allocation or sorting on the audio thread. The number of known
