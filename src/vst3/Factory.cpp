@@ -21,6 +21,7 @@
 #include "vstgui/plugin-bindings/vst3editor.h"
 #include <algorithm>
 #include <cmath>
+#include <charconv>
 #include <cstdio>
 #include <cstdint>
 #include <cstdlib>
@@ -194,6 +195,14 @@ public:
             return kResultOk;
         }
         if(msg && FIDStringsEqual(msg->getMessageID(),"125A_ROM_LOAD")) {
+            int64 requestID=0;
+            if(!msg->getAttributes() ||
+               msg->getAttributes()->getInt("RequestID",requestID)!=kResultOk ||
+               requestID<=0)return kInvalidArgument;
+            const auto romAck=[&](const char* outcome) {
+                sendTextMessage((std::string("125A_ROM_ACK:")+outcome+":"+
+                                 std::to_string(requestID)).c_str());
+            };
             const void* bytes=nullptr;
             uint32 length=0;
             if(!msg->getAttributes() ||
@@ -248,7 +257,7 @@ public:
             } catch(const std::exception& e) {error=e.what();}
             if(!error.empty()) {
                 sendTextMessage(("125A_SF2_STATUS:ROM-Ladefehler: "+error).c_str());
-                sendTextMessage("125A_ROM_ACK:ERROR");
+                romAck("ERROR");
                 return kResultOk;
             }
             std::string info;
@@ -275,7 +284,7 @@ public:
             }
             if(stale) {
                 sendTextMessage("125A_SF2_STATUS:ROM-Ladevorgang durch neueren Zustand ersetzt.");
-                sendTextMessage("125A_ROM_ACK:ERROR");
+                romAck("ERROR");
                 return kResultOk;
             }
             sendTextMessage(("125A_HW_INFO:"+info).c_str());
@@ -286,11 +295,19 @@ public:
                      "ROM geladen. SYNTHGM.SBK neben ROM ablegen.")) :
                 "ROM validiert. Wird bei Aktivierung geladen.";
             sendTextMessage(("125A_SF2_STATUS:"+status).c_str());
-            sendTextMessage("125A_ROM_ACK:OK");
+            romAck("OK");
             return kResultOk;
         }
         if(!msg || !FIDStringsEqual(msg->getMessageID(),"125A_SF2_LOAD"))
             return AudioEffect::notify(msg);
+        int64 requestID=0;
+        if(!msg->getAttributes() ||
+           msg->getAttributes()->getInt("RequestID",requestID)!=kResultOk ||
+           requestID<=0)return kInvalidArgument;
+        const auto sf2Ack=[&](const char* outcome) {
+            sendTextMessage((std::string("125A_SF2_ACK:")+outcome+":"+
+                             std::to_string(requestID)).c_str());
+        };
         const void* bytes=nullptr;
         uint32 bytesCount=0;
         if(!msg->getAttributes() ||
@@ -335,7 +352,7 @@ public:
             } catch(const std::exception& e) {error=e.what();}
             if(!error.empty()) {
                 sendTextMessage(("125A_SF2_STATUS:SF2-Ladefehler: "+error).c_str());
-                sendTextMessage("125A_SF2_ACK:ERROR");
+                sf2Ack("ERROR");
                 return kResultOk;
             }
             replacement->SelectBrowserBank(static_cast<uint16_t>(model.bank));
@@ -363,7 +380,7 @@ public:
         }
         if(stale) {
             sendTextMessage("125A_SF2_STATUS:SF2-Ladevorgang durch neueren Zustand ersetzt.");
-            sendTextMessage("125A_SF2_ACK:ERROR");
+            sf2Ack("ERROR");
             return kResultOk;
         }
         std::string sysInfo;
@@ -377,7 +394,7 @@ public:
             (active ?
                 "125A_SF2_STATUS:86Box-EMU8000: ROM und SF2 geladen." :
                 "125A_SF2_STATUS:SF2 gewaehlt - Laden bei Aktivierung."));
-        sendTextMessage("125A_SF2_ACK:OK");
+        sf2Ack("OK");
         return kResultOk;
     }
     uint32 PLUGIN_API getLatencySamples() override {
@@ -769,16 +786,37 @@ public:
         return kResultTrue;
     }
     tresult receiveText(const char8* msg) override {
-        constexpr char ack[]="125A_SF2_ACK:";
-        if(msg && std::strncmp(msg,ack,sizeof(ack)-1)==0) {
+        // P119: ACKs are correlated to their original request and ignored
+        // after a newer host project recall. Thread synchronization covers
+        // the pending IDs; the owning UI thread applies only matched replies.
+        const auto parseAck=[](const char* raw,const char* prefix)
+            -> std::pair<int64,std::string> {
+            const size_t len=std::strlen(prefix);
+            if(!raw||std::strncmp(raw,prefix,len)!=0)return {0,{}};
+            const char* result=raw+len;
+            const char* colon=std::strchr(result,':');
+            if(!colon)return {0,{}};
+            const std::string status(result,colon);
+            if(status!="OK"&&status!="ERROR")return {0,{}};
+            int64 id=0;
+            const char* number=colon+1;
+            const auto parsed=std::from_chars(number,
+                number+std::strlen(number),id);
+            if(parsed.ec!=std::errc{} || *number=='\0' ||
+               parsed.ptr!=number+std::strlen(number) || id<=0)
+                return {0,{}};
+            return {id,status};
+        };
+        if(msg && std::strncmp(msg,"125A_SF2_ACK:",13)==0) {
+            const auto [id,status]=parseAck(msg,"125A_SF2_ACK:");
             std::lock_guard<std::mutex> lock(sf2StatusMutex_);
-            sf2PendingAck_=msg+sizeof(ack)-1;
+            if(id>0&&id==sf2PendingRequestID_)sf2PendingAck_=status;
             return kResultOk;
         }
-        constexpr char romAck[]="125A_ROM_ACK:";
-        if(msg && std::strncmp(msg,romAck,sizeof(romAck)-1)==0) {
+        if(msg && std::strncmp(msg,"125A_ROM_ACK:",13)==0) {
+            const auto [id,status]=parseAck(msg,"125A_ROM_ACK:");
             std::lock_guard<std::mutex> lock(sf2StatusMutex_);
-            romPendingAck_=msg+sizeof(romAck)-1;
+            if(id>0&&id==romPendingRequestID_)romPendingAck_=status;
             return kResultOk;
         }
         constexpr char hwInfoPrefix[]="125A_HW_INFO:";
@@ -814,6 +852,8 @@ public:
             std::lock_guard<std::mutex> lock(sf2StatusMutex_);
             ack.swap(sf2PendingAck_);
             romAck.swap(romPendingAck_);
+            if(!ack.empty())sf2PendingRequestID_=0;
+            if(!romAck.empty())romPendingRequestID_=0;
             latencyChange=latencyChangePending_;
             latencyChangePending_=false;
         }
@@ -859,7 +899,15 @@ public:
         }
         sf2PendingPath_=path;
         sf2PendingCatalog_=std::move(candidate);
+        int64 requestID=0;
+        {
+            std::lock_guard<std::mutex> guard(sf2StatusMutex_);
+            requestID=++nextRequestID_;
+            sf2PendingRequestID_=requestID;
+            sf2PendingAck_.clear();
+        }
         msg->setMessageID("125A_SF2_LOAD");
+        msg->getAttributes()->setInt("RequestID",requestID);
         msg->getAttributes()->setBinary("Path",path.data(),
                                          static_cast<uint32>(path.size()));
         const auto result=sendMessage(msg);
@@ -867,6 +915,7 @@ public:
         if(result!=kResultOk) {
             sf2PendingPath_.clear();
             std::lock_guard<std::mutex> lock(sf2StatusMutex_);
+            sf2PendingRequestID_=0;
             sf2AudioStatus_="SF2-Ladefehler: Prozessor nicht erreichbar.";
             return false;
         }
@@ -881,7 +930,15 @@ public:
             return false;
         }
         romPendingPath_=path;
+        int64 requestID=0;
+        {
+            std::lock_guard<std::mutex> guard(sf2StatusMutex_);
+            requestID=++nextRequestID_;
+            romPendingRequestID_=requestID;
+            romPendingAck_.clear();
+        }
         msg->setMessageID("125A_ROM_LOAD");
+        msg->getAttributes()->setInt("RequestID",requestID);
         msg->getAttributes()->setBinary("Path",path.data(),
                                          static_cast<uint32>(path.size()));
         const auto result=sendMessage(msg);
@@ -889,6 +946,7 @@ public:
         if(result!=kResultOk) {
             romPendingPath_.clear();
             std::lock_guard<std::mutex> lock(sf2StatusMutex_);
+            romPendingRequestID_=0;
             sf2AudioStatus_="ROM-Ladefehler: Audioprozessor nicht erreichbar.";
             return false;
         }
@@ -1007,6 +1065,18 @@ public:
         if(setParamNormalized(kVolumeID,
             static_cast<double>(model.masterVolume)/MasterOutput::kScale)!=kResultOk)
             return kResultFalse;
+        // A delayed ACK for the previously loaded bank may arrive later:
+        // it must not roll this freshly restored project back.
+        {
+            std::lock_guard<std::mutex> guard(sf2StatusMutex_);
+            ++nextRequestID_;
+            romPendingRequestID_=sf2PendingRequestID_=0;
+            sf2PendingAck_.clear();
+            romPendingAck_.clear();
+        }
+        romPendingPath_.clear();
+        sf2PendingPath_.clear();
+        sf2PendingCatalog_=PresetCatalog{};
         ReloadPresetCatalogs(&model); // no sound samples loaded
         return kResultOk;
     }
@@ -1022,6 +1092,8 @@ private:
     PresetCatalog sf2PendingCatalog_{};
     uint64_t sfCatalogRevision_=0;
     std::string sf2PendingAck_;
+    int64 nextRequestID_=0;
+    int64 romPendingRequestID_=0,sf2PendingRequestID_=0;
     mutable std::mutex sf2StatusMutex_;
     std::string sf2AudioStatus_="SF2-Audiostatus noch nicht vom Prozessor bestaetigt.";
     std::string hardwareInfo_;
