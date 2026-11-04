@@ -769,12 +769,7 @@ private:
     std::string hardwareInfo_;
     void ReloadPresetCatalogs(const AssetState::Data* model) {
         AssetConfig::Paths paths;
-        if(model&&model->pathsSpecified) {
-            paths.sf2=model->sf2Path;
-            paths.ibk=model->ibkPath;
-        } else if(!AssetConfig::Load(paths)) {
-            paths={};
-        }
+        if(!AssetConfig::ResolveController(model,paths))paths={};
         // Clear stale entries when a project points at a new/missing file.
         sfCatalog_=PresetCatalog{};
         fmCatalog_=PresetCatalog{};
