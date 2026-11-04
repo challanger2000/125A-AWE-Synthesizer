@@ -34,28 +34,34 @@ namespace
 
     struct Chunk { size_t offset = 0; uint32_t size = 0; bool found = false; };
 
-    // Walks the RIFF tree and collects all leaf chunks by name.
-    void WalkChunks(const std::vector<uint8_t>& buf, size_t pos, size_t end,
-                    std::map<std::string, Chunk>& out)
+    // Parse RIFF strictly. Never publish a chunk whose declared size would
+    // read beyond its parent. Bounded recursion also prevents hostile nesting
+    // from exhausting the stack. SF1/SF2 valid containers use shallow LISTs.
+    bool WalkChunks(const std::vector<uint8_t>& buf, size_t pos, size_t end,
+                    std::map<std::string, Chunk>& out, unsigned depth = 0)
     {
-        while (pos + 8 <= end)
+        if (depth > 16 || end > buf.size() || pos > end) return false;
+        while (pos < end)
         {
+            if (end - pos < 8) return false;
             const std::string id(reinterpret_cast<const char*>(&buf[pos]), 4);
             const uint32_t size = RdU32(&buf[pos + 4]);
             const size_t data = pos + 8;
-            if (data > end) break;
-
-            if (id == "LIST" && data + 4 <= end)
+            if (size > end - data) return false; // exact containing LIST/RIFF
+            const size_t next = data + size;
+            if ((size & 1u) && next == end) return false; // missing pad byte
+            if (id == "LIST")
             {
-                WalkChunks(buf, data + 4, std::min(data + size, end), out);
+                if (size < 4 || !WalkChunks(buf, data + 4, next, out, depth + 1))
+                    return false;
             }
             else if (!out.count(id))
             {
-                Chunk c; c.offset = data; c.size = size; c.found = true;
-                out[id] = c;
+                out.emplace(id, Chunk{data, size, true});
             }
-            pos = data + size + (size & 1);
+            pos = next + (size & 1u);
         }
+        return pos == end;
     }
 
     // -------------------------------------------------------------------
@@ -577,15 +583,24 @@ Bank Load(const std::string& path)
                          path.c_str(), unmapped);
         buf.swap(riff);
     }
-    if (buf.size() < 12 || std::memcmp(buf.data(), "RIFF", 4) != 0)
+    if (buf.size() < 12 || std::memcmp(buf.data(), "RIFF", 4) != 0 ||
+        std::memcmp(buf.data() + 8, "sfbk", 4) != 0)
     {
-        bank.errorMessage = _("Missing RIFF header");
+        bank.errorMessage = _("Missing SoundFont RIFF/sfbk header");
         return bank;
     }
-
+    const uint64_t declaredEnd = uint64_t{8} + RdU32(&buf[4]);
+    if (declaredEnd < 12 || declaredEnd > buf.size())
+    {
+        bank.errorMessage = _("Truncated SoundFont RIFF");
+        return bank;
+    }
     std::map<std::string, Chunk> c;
-    const size_t riffEnd = std::min<size_t>(buf.size(), 8 + RdU32(&buf[4]));
-    WalkChunks(buf, 12, riffEnd, c);
+    if (!WalkChunks(buf, 12, static_cast<size_t>(declaredEnd), c))
+    {
+        bank.errorMessage = _("Invalid SoundFont chunk bounds");
+        return bank;
+    }
 
     auto need = [&](const char* id) -> const Chunk*
     {
@@ -611,6 +626,16 @@ Bank Load(const std::string& path)
     // ---- sample headers ----
     const Chunk* shdr = need("shdr");
     if (!shdr) { bank.errorMessage = _("Missing chunk shdr"); return bank; }
+    const uint32_t sampleRecordBytes = bank.version == Version::Sf1 ? 16u : 46u;
+    if (shdr->size % sampleRecordBytes != 0 ||
+        shdr->size < sampleRecordBytes)
+    {
+        bank.errorMessage = _("Invalid SoundFont sample headers"); return bank;
+    }
+    if (const Chunk* snam = need("snam"))
+        if (snam->size % 20u != 0) {
+            bank.errorMessage = _("Invalid SoundFont sample names"); return bank;
+        }
 
     if (bank.version == Version::Sf1)
     {
@@ -695,6 +720,47 @@ Bank Load(const std::string& path)
     if (!pbag || !pgen || !inst || !ibag || !igen || !phdr)
     {
         bank.errorMessage = _("One of the chunks phdr/pbag/pgen/inst/ibag/igen is missing");
+        return bank;
+    }
+    const auto validRecords = [](const Chunk* ch, uint32_t bytes, uint32_t minCount) {
+        return ch->size % bytes == 0u && ch->size / bytes >= minCount;
+    };
+    if (!validRecords(pbag,4,1) || !validRecords(ibag,4,1) ||
+        !validRecords(pgen,4,0) || !validRecords(igen,4,0) ||
+        !validRecords(inst,22,1) || !validRecords(phdr,38,1))
+    {
+        bank.errorMessage = _("Invalid SoundFont table record size");
+        return bank;
+    }
+    // Check every table reference and sentinel before readZones() indexes
+    // any bag. SF1 and SF2 share the same 4-byte bag structure.
+    const auto validBags = [&](const Chunk* bag, const Chunk* gen) {
+        const uint32_t nBags=bag->size/4, nGen=gen->size/4;
+        uint32_t prior=0;
+        for(uint32_t i=0;i<nBags;++i) {
+            const uint32_t current=RdU16(&buf[bag->offset+size_t(i)*4]);
+            if(current<prior || current>nGen)return false;
+            prior=current;
+        }
+        return true;
+    };
+    const auto validIndexes = [&](const Chunk* records, uint32_t bytes,
+                                  uint32_t indexOffset, uint32_t bagCount) {
+        const uint32_t n=records->size/bytes;
+        uint32_t previous=0;
+        for(uint32_t i=0;i<n;++i) {
+            const uint32_t index=RdU16(&buf[records->offset+size_t(i)*bytes+indexOffset]);
+            // Entries including final EOP/EOI must refer to real bag positions.
+            if(index<previous || index>=bagCount)return false;
+            previous=index;
+        }
+        return true;
+    };
+    if (!validBags(pbag,pgen) || !validBags(ibag,igen) ||
+        !validIndexes(inst,22,20,ibag->size/4) ||
+        !validIndexes(phdr,38,24,pbag->size/4))
+    {
+        bank.errorMessage = _("Invalid SoundFont bag/generator references");
         return bank;
     }
 
