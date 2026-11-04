@@ -934,6 +934,16 @@ public:
             static_cast<uint32_t>(midiChannel),static_cast<uint32_t>(index));
         return kResultTrue;
     }
+    tresult PLUGIN_API getUnitByBus(
+        MediaType type,BusDirection dir,int32 busIndex,
+        int32 channel,UnitID& unitId) override {
+        if(type!=kEvent||dir!=kInput||busIndex!=0||
+           channel<0||channel>=MidiProgramRouting::kChannels)
+            return kResultFalse;
+        unitId=static_cast<UnitID>(
+            MidiProgramRouting::Unit(static_cast<unsigned>(channel)));
+        return kResultTrue;
+    }
     tresult receiveText(const char8* msg) override {
         // P119: ACKs are correlated to their original request and ignored
         // after a newer host project recall. Thread synchronization covers
@@ -1160,6 +1170,43 @@ public:
             programs->appendString(label);
         }
         parameters.addParameter(programs);
+        // Standard VST3 multitimbral MIDI Program Change contract:
+        // 16 event-channel Units, each referencing a stable ProgramList and
+        // an automatable, discrete kIsProgramChange parameter. The historic
+        // GUI-wide Program parameter ID 1000 is preserved independently.
+        addUnit(new Unit(STR16("125A AWE Synthesizer"),
+            kRootUnitId,kNoParentUnitId,kNoProgramListId));
+        for(unsigned ch=0;ch<16;++ch) {
+            char channelLabel[64]{};
+            std::snprintf(channelLabel,sizeof(channelLabel),
+                "MIDI Channel %u",ch+1);
+            String128 unitName{};
+            UString(unitName,128).fromAscii(channelLabel);
+            const auto unitId=static_cast<UnitID>(MidiProgramRouting::Unit(ch));
+            const auto listId=static_cast<ProgramListID>(
+                MidiProgramRouting::ProgramList(ch));
+            addUnit(new Unit(unitName,unitId,kRootUnitId,listId));
+            auto* list=new ProgramList(STR16("MIDI Programs"),listId,unitId);
+            for(int programIndex=0;programIndex<128;++programIndex) {
+                char programLabel[8]{};
+                std::snprintf(programLabel,sizeof(programLabel),
+                    "%03d",programIndex);
+                String128 title{};
+                UString(title,128).fromAscii(programLabel);
+                list->addProgram(title);
+            }
+            addProgramList(list);
+            char controlLabel[80]{};
+            std::snprintf(controlLabel,sizeof(controlLabel),
+                "MIDI CH%02u Program Change",ch+1);
+            String128 title{};
+            UString(title,128).fromAscii(controlLabel);
+            parameters.addParameter(new RangeParameter(
+                title,MidiProgramRouting::ParamID(ch),nullptr,
+                0.,127.,0.,127,
+                ParameterInfo::kCanAutomate|ParameterInfo::kIsProgramChange,
+                unitId));
+        }
         // Stable discrete ID; GUI will display only banks from actual SF2 phdr.
         auto* banks=new RangeParameter(STR16("SF2 Bank"),kBankID,nullptr,
             0.,double(AssetState::kMaxBank),0.,
@@ -1241,6 +1288,13 @@ public:
         if(setParamNormalized(kVolumeID,
             static_cast<double>(model.masterVolume)/MasterOutput::kScale)!=kResultOk)
             return kResultFalse;
+        for(unsigned ch=0;ch<16;++ch) {
+            const auto program=(model.channelProgramMask&(1u<<ch))
+                ?model.channelPrograms[ch]:model.program;
+            if(setParamNormalized(MidiProgramRouting::ParamID(ch),
+                static_cast<double>(program)/127.)!=kResultOk)
+                return kResultFalse;
+        }
         // A delayed ACK for the previously loaded bank may arrive later:
         // it must not roll this freshly restored project back.
         {
