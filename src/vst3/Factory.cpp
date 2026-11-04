@@ -5,6 +5,7 @@
 #include "pluginterfaces/base/ibstream.h"
 #include "pluginterfaces/vst/ivstevents.h"
 #include "pluginterfaces/vst/ivstparameterchanges.h"
+#include "pluginterfaces/vst/ivstmidicontrollers.h"
 #include "Synth.h"
 #include "AssetState.h"
 #include "AssetConfig.h"
@@ -12,6 +13,7 @@
 #include "PresetBrowserView.h"
 #include "Sf2LoadPolicy.h"
 #include "RomGmBank.h"
+#include "MidiControlMapping.h"
 #include "public.sdk/source/vst/vstparameters.h"
 #include "public.sdk/source/main/moduleinit.h"
 #include "pluginterfaces/base/ustring.h"
@@ -534,10 +536,27 @@ private:
         }
     }
 };
-class Controller final : public EditControllerEx1, public VSTGUI::VST3EditorDelegate {
+class Controller final : public EditControllerEx1, public IMidiMapping,
+                         public VSTGUI::VST3EditorDelegate {
 public:
     static FUnknown* createInstance(void*) {
         return static_cast<IEditController*>(new Controller);
+    }
+    // VST3 sends MIDI CC and pitchbend through mapped parameter queues.
+    tresult PLUGIN_API queryInterface(const TUID iid, void** obj) override {
+        QUERY_INTERFACE(iid,obj,IMidiMapping::iid,IMidiMapping)
+        return EditControllerEx1::queryInterface(iid,obj);
+    }
+    uint32 PLUGIN_API addRef() override {return EditControllerEx1::addRef();}
+    uint32 PLUGIN_API release() override {return EditControllerEx1::release();}
+    tresult PLUGIN_API getMidiControllerAssignment(
+        int32 busIndex,int16 midiChannel,CtrlNumber number,ParamID& id) override {
+        if(busIndex!=0||midiChannel<0||midiChannel>=16)return kResultFalse;
+        const int index=MidiControlMapping::Index(number);
+        if(index<0)return kResultFalse;
+        id=MidiControlMapping::ParamID(
+            static_cast<uint32_t>(midiChannel),static_cast<uint32_t>(index));
+        return kResultTrue;
     }
     tresult receiveText(const char8* msg) override {
         constexpr char ack[]="125A_SF2_ACK:";
@@ -691,6 +710,20 @@ public:
         parameters.addParameter(banks);
         parameters.addParameter(new RangeParameter(STR16("Master Volume"),
             kVolumeID,STR16("%"),0.,100.,100.,0));
+        // Stable hidden host parameters for 16 MIDI channels. Distinct IDs
+        // prevent MIDI sustain or pitch bend on one channel changing another.
+        for(uint32_t ch=0;ch<MidiControlMapping::kChannels;++ch)
+            for(size_t i=0;i<MidiControlMapping::kControls.size();++i) {
+                const auto& spec=MidiControlMapping::kControls[i];
+                char label[128]{};
+                std::snprintf(label,sizeof(label),"MIDI CH%02u %s",ch+1,spec.name);
+                String128 title{};
+                UString(title,128).fromAscii(label);
+                parameters.addParameter(new RangeParameter(title,
+                    MidiControlMapping::ParamID(ch,static_cast<uint32_t>(i)),
+                    nullptr,0.,1.,MidiControlMapping::InitialNormalized(spec),0,
+                    ParameterInfo::kCanAutomate|ParameterInfo::kIsHidden));
+            }
         constexpr const char16* labels[kGuiCount]={
             STR16("Amp Attack"),STR16("Amp Decay"),STR16("Amp Sustain Reduction"),
             STR16("Amp Release"),STR16("Filter Attack"),STR16("Filter Decay"),
