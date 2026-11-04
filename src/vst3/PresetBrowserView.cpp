@@ -107,6 +107,7 @@ public:
         if(dragging_) {dragging_=false;endEdit();}
         return kMouseEventHandled;
     }
+    CLASS_METHODS_VIRTUAL(HardwareKnob,CControl)
 private:
     bool dragging_=false;
     CCoord lastX_=0.,lastY_=0.;
