@@ -302,6 +302,13 @@ void PresetBrowserView::ChangeParameter(Steinberg::Vst::ParamID tag,double norm)
 void PresetBrowserView::Select(uint16_t bank,uint8_t program) {
     if(bank!=bank_)ChangeParameter(kBank,double(bank)/16383.);
     ChangeParameter(kProgram,double(program)/127.);
+    // Reflect the clicked instrument immediately. The following idle
+    // compares bank/program back with the controller: an unaccepted host
+    // edit is not silently painted as a successful selection.
+    bank_=bank;
+    program_=program;
+    programLabel_->setText(PresetBrowserModel::CurrentLabel(
+        0,sf_,fm_,bank_,program_).c_str());
 }
 void PresetBrowserView::RebuildBanks() {
     filterBanks_=PresetBrowserModel::Banks(0,sf_,fm_);
