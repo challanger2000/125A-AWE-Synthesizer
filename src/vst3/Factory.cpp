@@ -22,6 +22,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <exception>
 #include <filesystem>
 #if defined(_WIN32)
 #ifndef NOMINMAX
@@ -131,6 +132,71 @@ public:
             sendTextMessage(("125A_SF2_STATUS:"+sf2Status).c_str());
         } else {synth_.reset();}
         return AudioEffect::setActive(active);
+    }
+    // Binary connection message, not the SDK's 255-char text-message path.
+    // Load on the host's connection thread, then swap the chip under a short
+    // render try-lock. Failed loads retain the previous working SoundFont.
+    tresult PLUGIN_API notify(IMessage* msg) override {
+        if(!msg || !FIDStringsEqual(msg->getMessageID(),"125A_SF2_LOAD"))
+            return AudioEffect::notify(msg);
+        const void* bytes=nullptr;
+        uint32 bytesCount=0;
+        if(!msg->getAttributes() ||
+           msg->getAttributes()->getBinary("Path",bytes,bytesCount)!=kResultOk ||
+           !bytes || bytesCount==0 || bytesCount>AssetState::kMaxPath)
+            return kInvalidArgument;
+        const std::string path(static_cast<const char*>(bytes),bytesCount);
+        if(!AssetState::validPath(path))return kInvalidArgument;
+        uint32_t sampleRate=44100;
+        AssetState::Data model;
+        bool active=false;
+        {
+            std::lock_guard<std::mutex> lock(engineMutex_);
+            sampleRate=rate_;
+            model=state_;
+            active=bool(synth_);
+        }
+        std::string error;
+        std::unique_ptr<Synth> replacement;
+        if(active) {
+            try {
+                replacement=std::make_unique<Synth>(sampleRate);
+                replacement->Core().SetDriver(Awe32::Driver::Win95);
+                if(!model.romPath.empty() &&
+                   !replacement->Core().UseBox86Chip(model.romPath,error))
+                    error="Wave ROM: "+error;
+                else {
+                    replacement->Core().PowerOnInit();
+                    for(int i=0;i<kGuiCount;++i)
+                        replacement->SetGuiControl(
+                            i,float(model.controls[i])/AssetState::kControlScale);
+                    if(!replacement->LoadBank(path,error))
+                        error="SF2: "+error;
+                }
+            } catch(const std::exception& e) {error=e.what();}
+            if(!error.empty()) {
+                sendTextMessage(("125A_SF2_STATUS:SF2-Ladefehler: "+error).c_str());
+                sendTextMessage("125A_SF2_ACK:ERROR");
+                return kResultOk;
+            }
+            replacement->SelectBrowserBank(static_cast<uint16_t>(model.bank));
+            for(int c=0;c<16;++c)
+                replacement->ProgramChange(static_cast<uint8_t>(c),
+                                            static_cast<uint8_t>(model.program));
+        }
+        {
+            std::lock_guard<std::mutex> lock(engineMutex_);
+            if(replacement)synth_.swap(replacement);
+            state_.sf2Path=path;
+            state_.pathsSpecified=true;
+            sf2Configured_=true;
+            sf2Loaded_=active;
+        }
+        sendTextMessage(active ?
+            "125A_SF2_STATUS:SF2 geladen - SoundFont aktiv." :
+            "125A_SF2_STATUS:SF2 gewaehlt - Laden bei Aktivierung.");
+        sendTextMessage("125A_SF2_ACK:OK");
+        return kResultOk;
     }
     uint32 PLUGIN_API getLatencySamples() override {
         std::lock_guard<std::mutex> lock(engineMutex_);
