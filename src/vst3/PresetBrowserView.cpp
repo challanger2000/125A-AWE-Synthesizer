@@ -34,21 +34,20 @@ public:
             c->setFillColor(fill);c->drawRect(r,kDrawFilled);
             c->setFrameColor(edge);c->drawRect(r,kDrawStroked);
         };
-        surface({11,7,1029,57},CColor(35,43,52),CColor(110,122,134));
-        surface({12,67,1028,136},CColor(16,22,29),CColor(77,92,106));
-        surface({12,145,1028,209},CColor(24,31,39),CColor(78,94,107));
-        surface({13,221,630,359},CColor(24,31,38),CColor(82,96,108));
-        surface({13,366,630,529},CColor(24,31,38),CColor(82,96,108));
-        surface({13,535,630,646},CColor(24,31,38),CColor(82,96,108));
-        surface({643,222,1028,646},CColor(18,24,30),CColor(82,96,108));
-        surface({12,650,1028,679},CColor(14,20,26),CColor(83,96,108));
-        c->setFrameColor(CColor(51,62,72,255));
-        c->drawLine({17,61},{1025,61});
-        c->drawLine({17,141},{1025,141});
-        c->drawLine({17,214},{1025,214});
-        c->setFrameColor(CColor(114,126,138,255));
-        c->drawLine({20,222},{622,222});
-        c->drawLine({20,359},{622,359});
+        const CColor edge(105,89,62), black(15,18,22), dark(24,28,34);
+        // P117 layout is functional, deliberately without final image assets.
+        // Rectangles are the exact future faceplate artwork boundaries.
+        surface({12,8,1188,70},dark,edge);     // branding and card identity
+        surface({14,78,880,188},black,edge);   // hardware LCD
+        surface({891,78,1184,188},dark,edge);  // sample file actions
+        surface({14,198,781,267},dark,edge);  // bank + preset direct selection
+        surface({14,277,781,421},dark,edge);  // four AMP controls
+        surface({14,429,781,588},dark,edge);  // six filter controls
+        surface({14,596,781,746},dark,edge);  // master + sends
+        surface({792,198,1185,746},dark,edge); // always-available browser
+        surface({14,752,1185,778},black,edge); // actual state/errors
+        c->setFrameColor(CColor(155,121,69,255));
+        c->drawLine({26,72},{1174,72});
     }
 };
 // A stylized EMU8000 chip package; pin count is decorative, not a claim
@@ -192,79 +191,99 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
       sf2CurrentPath_(std::move(sf2CurrentPath)),
       sf2CatalogRevision_(std::move(sf2CatalogRevision)) {
     setBackgroundColor(kBack);
-    addView(new HardwareFaceplate({0,0,1040,680}));
-    addView(new MasterLogoView({18,11,150,51},exactLogoPath));
-    MakeLabel({170,12,746,50},"125A  AWE SYNTHESIZER",false);
-    addView(new ChipPackage({793,13,1021,51}));
-    MakeLabel({830,14,1006,34},"EMU8000",false);
-    MakeLabel({830,33,1006,49},"32 VOICES  /  44.1 kHz",true);
+    addView(new HardwareFaceplate({0,0,1200,780}));
+    // Functional first pass: gold letterform is native VSTGUI text.
+    // In the artwork phase these labels become the approved custom brand.
+    auto* brand=MakeLabel({30,14,206,65},"125A",false);
+    brand->setFontColor(CColor(218,179,103,255));
+    auto* title=MakeLabel({224,17,780,62},"AWE SYNTHESIZER",false);
+    title->setFontColor(CColor(218,179,103,255));
+    MakeLabel({988,18,1170,40},"EMU8000",false);
+    MakeLabel({945,41,1173,61},"32 VOICES  /  44.1 kHz",true);
 
-    MakeLabel({25,80,149,123},"SOUNDFONT",true);
-    fileLabel_=MakeLabel({152,78,658,103},"",false);
-    hardwareInfoLabel_=MakeLabel({154,102,660,132},"EMU8000: Hardwarestatus wird ermittelt...",true);
+    // Genuine live status text: no permanently illuminated fake ROM LEDs.
+    auto* lcd=MakeLabel({30,87,752,112},"EMU8000   /   SOUNDFONT ENGINE",true);
+    lcd->setFontColor(CColor(221,174,94,255));
+    programLabel_=MakeLabel({30,115,849,152},"NO PRESET",false);
+    programLabel_->setFontColor(CColor(239,202,114,255));
+    hardwareInfoLabel_=MakeLabel({30,151,849,180},"ROM: ERFORDERLICH",true);
+    hardwareInfoLabel_->setFontColor(CColor(205,164,94,255));
     hardwareInfoLabel_->setTextTruncateMode(CTextLabel::kTruncateTail);
-    loadRom_=MakeButton({677,83,826,122},kLoadRom,"ROM LADEN");
-    loadSf2_=MakeButton({836,83,1010,122},kLoadSf2,"SF2 LADEN");
-    MakeLabel({25,156,143,193},"INSTRUMENT",true);
-    previous_=MakeButton({152,159,198,195},kPrevious,"<");
-    programLabel_=MakeLabel({212,157,752,199},"",false);
-    next_=MakeButton({768,159,813,195},kNext,">");
-    toggle_=MakeButton({835,159,1008,195},kToggle,"BROWSER");
-    toggle_->setStyle(CTextButton::kOnOffStyle);
-    toggle_->setValue(1.f);
 
-    MakeLabel({27,232,500,254},"AMP ENVELOPE",true);
-    AddKnob(0,87,257,"ATTACK");
-    AddKnob(1,227,257,"DECAY");
-    AddKnob(2,367,257,"SUSTAIN -");
-    AddKnob(3,507,257,"RELEASE");
-    MakeLabel({27,368,583,392},"FILTER ENVELOPE + TONE",true);
-    AddKnob(4,41,392,"ATTACK");
-    AddKnob(5,137,392,"DECAY");
-    AddKnob(6,233,392,"SUSTAIN -");
-    AddKnob(7,329,392,"RELEASE");
-    AddKnob(8,425,392,"CUTOFF -");
-    AddKnob(9,521,392,"RESONANCE +");
-    // P116: Master volume lives next to the existing effect sends, not
-    // among the 12 SF2 enhancement overlays. 100% is original output.
-    MakeLabel({27,548,115,571},"MASTER",true);
-    masterVolume_=new HardwareKnob({124,536,182,594},this,kMasterVolume);
+    MakeLabel({904,84,1165,103},"SOUNDFONT",true);
+    fileLabel_=MakeLabel({905,104,1167,129},"",false);
+    fileLabel_->setTextTruncateMode(CTextLabel::kTruncateTail);
+    loadRom_=MakeButton({906,139,1033,174},kLoadRom,"ROM LADEN");
+    loadSf2_=MakeButton({1042,139,1174,174},kLoadSf2,"SF2 LADEN");
+
+    // Distinct BANK and PRESET combos. Only actual program entries are listed.
+    MakeLabel({27,213,81,246},"BANK",true);
+    activeBankMenu_=new COptionMenu({85,211,235,252},this,kActiveBank);
+    activeBankMenu_->setBackColor(kBezel);
+    activeBankMenu_->setFontColor(kPaper);
+    activeBankMenu_->setFrameColor(kStroke);
+    addView(activeBankMenu_);
+    previous_=MakeButton({247,212,294,253},kPrevious,"<");
+    programMenu_=new COptionMenu({303,211,685,252},this,kDirectPreset);
+    programMenu_->setBackColor(kBezel);
+    programMenu_->setFontColor(kPaper);
+    programMenu_->setFrameColor(kStroke);
+    addView(programMenu_);
+    next_=MakeButton({696,212,744,253},kNext,">");
+
+    MakeLabel({29,282,543,303},"AMP ENVELOPE",true);
+    AddKnob(0,84,312,"ATTACK");
+    AddKnob(1,260,312,"DECAY");
+    AddKnob(2,436,312,"SUSTAIN -");
+    AddKnob(3,612,312,"RELEASE");
+
+    MakeLabel({29,434,603,455},"FILTER ENVELOPE + TONE",true);
+    AddKnob(4,50,464,"ATTACK");
+    AddKnob(5,171,464,"DECAY");
+    AddKnob(6,292,464,"SUSTAIN -");
+    AddKnob(7,413,464,"RELEASE");
+    AddKnob(8,534,464,"CUTOFF -");
+    AddKnob(9,655,464,"RESONANCE +");
+
+    MakeLabel({29,602,599,621},"MASTER / EFFECT SENDS",true);
+    masterVolume_=new HardwareKnob({115,626,177,688},this,kMasterVolume);
     masterVolume_->setValue(1.f);
     addView(masterVolume_);
-    auto* masterTitle=MakeLabel({104,597,206,617},"VOLUME",true);
+    auto* masterTitle=MakeLabel({94,694,197,711},"VOLUME",true);
     masterTitle->setHoriAlign(kCenterText);
-    masterVolumeValue_=MakeLabel({104,618,206,638},"100%",false);
+    masterVolumeValue_=MakeLabel({94,713,197,735},"100%",false);
     masterVolumeValue_->setHoriAlign(kCenterText);
-    AddKnob(10,274,536,"HALL +");
-    AddKnob(11,424,536,"CHORUS +");
-    reset_=MakeButton({503,550,615,578},kReset,"RESET");
-    MakeLabel({511,601,628,619},"FX: 0% ORIGINAL",true);
-    MakeLabel({511,621,628,640},"AB NEUER NOTE",true);
+    AddKnob(10,352,626,"HALL +");
+    AddKnob(11,559,626,"CHORUS +");
+    reset_=MakeButton({664,603,762,637},kReset,"RESET");
 
-    MakeLabel({658,231,990,257},"SOUND BROWSER",true);
-    bankCaption_=MakeLabel({656,266,715,293},"BANK",true);
-    bankMenu_=new COptionMenu({724,261,1008,298},this,kBankFilter);
+    MakeLabel({807,207,1027,239},"SOUND BROWSER",false);
+    toggle_=MakeButton({1020,205,1170,241},kToggle,"BROWSER");
+    toggle_->setStyle(CTextButton::kOnOffStyle);
+    toggle_->setValue(1.f);
+    bankCaption_=MakeLabel({809,261,870,289},"BANK",true);
+    bankMenu_=new COptionMenu({875,254,1167,291},this,kBankFilter);
     bankMenu_->setBackColor(kBezel);
     bankMenu_->setFontColor(kPaper);
     bankMenu_->setFrameColor(kStroke);
     addView(bankMenu_);
-    searchCaption_=MakeLabel({656,306,716,335},"SUCHE",true);
-    search_=new CTextEdit({724,304,1008,339},this,kFilter,"");
+    searchCaption_=MakeLabel({809,308,873,336},"SUCHE",true);
+    search_=new CTextEdit({875,302,1167,341},this,kFilter,"");
     search_->setPlaceholderString("Instrument suchen...");
     search_->setImmediateTextChange(true);
     search_->setBackColor(kBezel);
     search_->setFontColor(kPaper);
     search_->setFrameColor(kStroke);
     addView(search_);
-    table_=new CDataBrowser({654,346,1015,650},this,
+    table_=new CDataBrowser({805,349,1173,732},this,
              CScrollView::kVerticalScrollbar|
              CScrollView::kAutoHideScrollbars);
     table_->setBackgroundColor(kRaised);
     table_->setWantsFocus(true);
     addView(table_);
-    empty_=MakeLabel({669,359,1009,410},"",true);
+    empty_=MakeLabel({818,363,1162,414},"",true);
 
-    hint_=MakeLabel({27,653,1010,678},
+    hint_=MakeLabel({27,753,1169,776},
         "SF2-Audiostatus noch nicht vom Prozessor bestaetigt.",true);
     hint_->setTextTruncateMode(CTextLabel::kTruncateTail);
     SetExpanded(true);
