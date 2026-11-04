@@ -68,6 +68,24 @@ public:
         else std::snprintf(prefix,sizeof(prefix),"%03u  ",program);
         return std::string(prefix)+(p?p->name:"Nicht in der Bank vorhanden");
     }
+    // P117 direct bank/program selector: only actual catalog entries, no
+    // assumed GM-contiguous presets in the user's sparse SF2. Pure logic
+    // is unit tested independently of VSTGUI or the host.
+    static std::vector<uint8_t> Programs(const std::vector<PresetEntry>& entries,
+                                         uint16_t bank) {
+        std::vector<uint8_t> out;
+        for(const auto& e:entries)if(e.bank==bank)out.push_back(e.program);
+        std::sort(out.begin(),out.end());
+        out.erase(std::unique(out.begin(),out.end()),out.end());
+        return out;
+    }
+    static uint8_t ChooseExistingProgram(const std::vector<PresetEntry>& entries,
+                                         uint16_t bank,uint8_t current) {
+        const auto programs=Programs(entries,bank);
+        if(programs.empty())return current; // caller must not emit a host edit
+        return std::binary_search(programs.begin(),programs.end(),current)
+            ? current : programs.front();
+    }
     // PREV/NEXT navigates actual entries rather than nonexistent SF2 slots.
     // Search/filter does not alter normal instrument navigation.
     static int Neighbor(int engine,const PresetCatalog& sf,
