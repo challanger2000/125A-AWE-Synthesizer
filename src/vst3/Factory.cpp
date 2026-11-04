@@ -340,8 +340,23 @@ public:
     }
     tresult PLUGIN_API getState(IBStream* stream) override {
         if(!stream)return kInvalidArgument;
-        std::lock_guard<std::mutex> lock(engineMutex_);
-        ResolveAssets();
+        // P118: never keep the realtime engine mutex across host-supplied
+        // IBStream::write() or a filesystem configuration lookup.
+        AssetState::Data snapshot;
+        {
+            std::lock_guard<std::mutex> lock(engineMutex_);
+            snapshot=state_;
+        }
+        if(!snapshot.pathsSpecified) {
+            AssetConfig::Paths configured;
+            if(AssetConfig::Load(configured)) {
+                snapshot.romPath=std::move(configured.rom);
+                snapshot.sf2Path=std::move(configured.sf2);
+                snapshot.ibkPath=std::move(configured.ibk);
+                snapshot.drumIbkPath=std::move(configured.drumIbk);
+                snapshot.pathsSpecified=true;
+            }
+        }
         const auto send=[&](const void* buffer,size_t n) {
             int32 written=0;
             return n<=AssetState::kMaxPath &&
@@ -349,7 +364,7 @@ public:
                               &written)==kResultOk &&
                 written==static_cast<int32>(n);
         };
-        return AssetState::Write(send,state_) ? kResultOk:kResultFalse;
+        return AssetState::Write(send,snapshot) ? kResultOk:kResultFalse;
     }
     tresult PLUGIN_API setState(IBStream* stream) override {
         if(!stream)return kInvalidArgument;
