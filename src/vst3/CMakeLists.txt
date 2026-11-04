@@ -1,4 +1,15 @@
-# AWE-only plugin: no OPL3/CQM bank downloads or resources.
+# The separate native regression tests still exercise historical OPL3 IBK
+# parsing. Fetch their independently verified fixtures at configure time,
+# but NEVER ship IBKs or FM engines as AWE VST3 resources.
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+execute_process(
+  COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/fetch_ibk_resources.py"
+          "${CMAKE_CURRENT_SOURCE_DIR}/resource"
+  RESULT_VARIABLE IBK_IMPORT_RESULT
+)
+if(NOT IBK_IMPORT_RESULT EQUAL 0)
+  message(FATAL_ERROR "Historic IBK test fixtures unavailable")
+endif()
 set(target 125A_AWE_Synthesizer)
 smtg_add_vst3plugin(125A_AWE_Synthesizer
   Factory.cpp PresetBrowserView.cpp PresetBrowserView.h PresetBrowserModel.h PresetCatalog.h MasterLogoView.cpp MasterLogoView.h LogoGeometry.h Sf2LoadPolicy.h AssetState.h AssetConfig.h

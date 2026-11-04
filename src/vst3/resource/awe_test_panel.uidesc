@@ -3,8 +3,8 @@
   <!-- P106: Single AWE/EMU8000 instrument. Host IDs 1000/1002 stay stable;
        1100..1111 are 0=unchanged SoundFont non-destructive overlays. -->
   <colors><color name="Panel" rgba="#181e26ff"/></colors>
-  <template name="view" class="CViewContainer" origin="0, 0" size="1040, 720" minSize="1040, 720" maxSize="1040, 720" background-color="Panel" transparent="false">
-    <view class="CViewContainer" custom-view-name="AwePresetBrowser" origin="0, 0" size="1040, 720" transparent="false"/>
+  <template name="view" class="CViewContainer" origin="0, 0" size="1040, 680" minSize="1040, 680" maxSize="1040, 680" background-color="Panel" transparent="false">
+    <view class="CViewContainer" custom-view-name="AwePresetBrowser" origin="0, 0" size="1040, 680" transparent="false"/>
   </template>
   <control-tags>
     <control-tag name="Program" tag="1000"/>

@@ -8,7 +8,7 @@ uidesc=ET.parse(root/"src/vst3/resource/awe_test_panel.uidesc").getroot()
 assert uidesc.tag=="vstgui-ui-description"
 templates=uidesc.findall("template")
 assert len(templates)==1
-assert templates[0].attrib["size"]=="1040, 720"
+assert templates[0].attrib["size"]=="1040, 680"
 tags={it.attrib["name"]:int(it.attrib["tag"])
       for it in uidesc.findall("./control-tags/control-tag")}
 assert tags=={"Program":1000,"SF2Bank":1002},tags

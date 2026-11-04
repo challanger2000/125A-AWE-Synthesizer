@@ -58,7 +58,7 @@ private:
     uint16_t bank_=0;
     uint8_t program_=0;
     int bankFilter_=-1;
-    bool expanded_=true,syncing_=false;
+    bool expanded_=true,syncing_=false,selectingRowFromMouse_=false;
     std::string searchText_;
     std::vector<uint16_t> filterBanks_;
     std::vector<PresetBrowserModel::Row> rows_;

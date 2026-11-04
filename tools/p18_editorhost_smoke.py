@@ -147,7 +147,7 @@ def client_size(hwnd):
 
 def screen_pos(hwnd, x, y):
     sz = client_size(hwnd)
-    pt = POINT(round(x*sz[0]/1040), round(y*sz[1]/720))
+    pt = POINT(round(x*sz[0]/1040), round(y*sz[1]/680))
     if not u.ClientToScreen(hwnd, ctypes.byref(pt)):
         raise RuntimeError("ClientToScreen failed")
     return pt.x, pt.y
@@ -155,7 +155,7 @@ def screen_pos(hwnd, x, y):
 def snap(hwnd, filename):
     w,h = client_size(hwnd)
     x,y = screen_pos(hwnd, 0, 0)
-    if w < 1020 or h < 700:
+    if w < 1020 or h < 660:
         raise RuntimeError(f"Editor window wrong dimensions {w}x{h}")
     src = u.GetDC(None)
     mem = gdi.CreateCompatibleDC(src)
@@ -191,7 +191,7 @@ def different(before,after,region):
     if (w,h)!=(w2,h2):
         raise RuntimeError("Editor size changed unexpectedly")
     x0,y0,x1,y1 = region
-    scale_x,scale_y = w/1040,h/720
+    scale_x,scale_y = w/1040,h/680
     x0,x1 = round(x0*scale_x),round(x1*scale_x)
     y0,y1 = round(y0*scale_y),round(y1*scale_y)
     changed = 0
@@ -206,7 +206,7 @@ def red_logo_pixels(frame):
     w,h,raw=frame
     count=0
     # Logo view occupies header x18..150 / y8..53. Pixel array is BGRA.
-    for y in range(round(8*h/720),round(54*h/720)):
+    for y in range(round(8*h/680),round(54*h/680)):
         for x in range(round(17*w/1040),round(151*w/1040)):
             i=(y*w+x)*4
             blue,green,red=raw[i],raw[i+1],raw[i+2]
@@ -328,7 +328,7 @@ def main():
             time.sleep(1.0)
             first=snap(hwnd,args.output/"01_initial.bmp")
             w,h,_=first
-            check(w>=1020 and h>=700,
+            check(w>=1020 and h>=660,
                   f"real hardware editor dimensions {w}x{h}",results)
             distinct=len(set(first[2][0::384]))
             check(distinct>3,"editor painted nonflat hardware faceplate",results)
@@ -346,7 +346,7 @@ def main():
             moved=snap(hwnd,args.output/"04_knob_dragged.bmp")
             check(different(reopened,moved,(85,262,175,365))>15,
                   "amp attack knob responds to physical mouse drag",results)
-            click(hwnd,88,645)
+            click(hwnd,550,564)
             reset=snap(hwnd,args.output/"05_reset_original.bmp")
             check(different(moved,reset,(85,262,175,365))>15,
                   "reset restores 0-percent original SoundFont value",results)
@@ -364,7 +364,7 @@ def main():
             key(0x1B)
             time.sleep(.65)
             after_cancel=snap(hwnd,args.output/"09_sf2_dialog_cancelled.bmp")
-            check(different(selected,after_cancel,(10,10,1027,210))<20,
+            check(different(selected,after_cancel,(211,156,755,199))<20,
                   "native SF2 chooser cancels without mutating current preset",results)
             u.PostMessageW(hwnd,0x0010,0,0)
             proc.wait(timeout=10)

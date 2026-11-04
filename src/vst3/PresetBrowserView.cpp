@@ -39,9 +39,9 @@ public:
         surface({12,145,1028,209},CColor(24,31,39),CColor(78,94,107));
         surface({13,221,630,359},CColor(24,31,38),CColor(82,96,108));
         surface({13,366,630,529},CColor(24,31,38),CColor(82,96,108));
-        surface({13,535,630,660},CColor(24,31,38),CColor(82,96,108));
-        surface({643,222,1028,660},CColor(18,24,30),CColor(82,96,108));
-        surface({12,670,1028,710},CColor(14,20,26),CColor(83,96,108));
+        surface({13,535,630,646},CColor(24,31,38),CColor(82,96,108));
+        surface({643,222,1028,646},CColor(18,24,30),CColor(82,96,108));
+        surface({12,650,1028,679},CColor(14,20,26),CColor(83,96,108));
         c->setFrameColor(CColor(51,62,72,255));
         c->drawLine({17,61},{1025,61});
         c->drawLine({17,141},{1025,141});
@@ -163,7 +163,7 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
       sf2CurrentPath_(std::move(sf2CurrentPath)),
       sf2CatalogRevision_(std::move(sf2CatalogRevision)) {
     setBackgroundColor(kBack);
-    addView(new HardwareFaceplate({0,0,1040,720}));
+    addView(new HardwareFaceplate({0,0,1040,680}));
     addView(new MasterLogoView({18,11,150,51},exactLogoPath));
     MakeLabel({170,12,997,50},"125A  AWE SYNTHESIZER    |    EMU8000 HARDWARE",false);
 
@@ -191,10 +191,11 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     AddKnob(8,425,392,"CUTOFF -");
     AddKnob(9,521,392,"RESONANCE +");
     MakeLabel({27,548,488,571},"EFFECT SENDS",true);
-    AddKnob(10,222,548,"HALL +");
-    AddKnob(11,431,548,"CHORUS +");
-    reset_=MakeButton({24,633,151,654},kReset,"RESET");
-    MakeLabel({163,633,621,659},"0% = Original-SoundFont   |   Regler wirken auf neue Noten",true);
+    AddKnob(10,222,536,"HALL +");
+    AddKnob(11,431,536,"CHORUS +");
+    reset_=MakeButton({503,550,615,578},kReset,"RESET");
+    MakeLabel({26,601,200,619},"0% = ORIGINAL",true);
+    MakeLabel({26,621,211,640},"WIRKT AB NEUER NOTE",true);
 
     MakeLabel({658,231,990,257},"SOUND BROWSER",true);
     bankCaption_=MakeLabel({656,266,715,293},"BANK",true);
@@ -219,7 +220,7 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     addView(table_);
     empty_=MakeLabel({669,359,1009,410},"",true);
 
-    hint_=MakeLabel({27,679,1010,706},
+    hint_=MakeLabel({27,653,1010,678},
         "SF2-Audiostatus noch nicht vom Prozessor bestaetigt.",true);
     hint_->setTextTruncateMode(CTextLabel::kTruncateTail);
     SetExpanded(true);
@@ -433,11 +434,20 @@ void PresetBrowserView::dbDrawCell(CDrawContext* ctx,const CRect& r,
 }
 CMouseEventResult PresetBrowserView::dbOnMouseDown(const CPoint&,
     const CButtonState&,int32_t row,int32_t,CDataBrowser* browser) {
-    if(row>=0&&size_t(row)<rows_.size())browser->setSelectedRow(row,true);
+    if(row>=0&&size_t(row)<rows_.size()) {
+        const auto entry=rows_[size_t(row)];
+        selectingRowFromMouse_=true;
+        browser->setSelectedRow(row,true);
+        selectingRowFromMouse_=false;
+        // A CDataBrowser mouse click can highlight without firing the
+        // deferred selection-change callback. Commit the actual VST3 host
+        // bank + program now; keyboard selection uses dbSelectionChanged.
+        Select(entry.bank,entry.program);
+    }
     return kMouseDownEventHandledButDontNeedMovedOrUpEvents;
 }
 void PresetBrowserView::dbSelectionChanged(CDataBrowser* browser) {
-    if(syncing_||!browser)return;
+    if(syncing_||selectingRowFromMouse_||!browser)return;
     const int row=browser->getSelectedRow();
     if(row<0||size_t(row)>=rows_.size())return;
     const auto entry=rows_[size_t(row)];
