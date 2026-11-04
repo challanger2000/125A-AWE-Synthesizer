@@ -1,17 +1,20 @@
-name: P117 - Functional GUI layout and direct preset selection
+name: P117 - GM ROM SBK host recall regression
 on:
   push:
-    branches: [develop/p117-vstgui-layout]
+    branches: [develop/p117-synthgm-recall-fix]
     paths:
       - '.github/workflows/p117-functional-layout-vst3.yml'
       - 'CMakeLists.txt'
       - 'src/vst3/**'
       - 'src/engine/**'
       - 'tests/asset_state.cpp'
+      - 'src/vst3/AssetConfig.h'
       - 'tests/p14_vstgui_contract.py'
+      - '.github/workflows/p117-functional-layout-vst3.yml'
       - 'tools/p18_editorhost_smoke.py'
       - 'tests/p116_master_volume.cpp'
       - 'tests/p117_direct_preset_selection.cpp'
+      - 'tests/p117_synthgm_catalog.cpp'
   workflow_dispatch:
 permissions:
   contents: read
@@ -64,7 +67,7 @@ jobs:
       - name: Package P117 functional 13-knob VST3 and direct preset selectors
         uses: actions/upload-artifact@v4
         with:
-          name: 125A-P117-Functional-Layout-Windows-x64-VST3
+          name: 125A-P117-SYNTHGM-Recall-Windows-x64-VST3
           path: build-p117/VST3/Release/
           if-no-files-found: error
           retention-days: 7
