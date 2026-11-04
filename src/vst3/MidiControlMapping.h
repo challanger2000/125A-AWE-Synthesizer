@@ -3,6 +3,7 @@
 // to the MIDI events the EMU8000 Synth already understands.
 // This is pure metadata: no SDK dependency, allocation, or audio processing.
 #include <array>
+#include <cstddef>
 #include <cstdint>
 namespace AWE125::MidiControlMapping {
 inline constexpr uint32_t kBase = 2000;
@@ -33,7 +34,7 @@ inline constexpr std::array<Control,17> kControls{{
     {129,"Pitch Bend",64}
 }};
 constexpr int Index(int number) noexcept {
-    for(size_t i=0;i<kControls.size();++i)
+    for(std::size_t i=0;i<kControls.size();++i)
         if(kControls[i].number==number)return static_cast<int>(i);
     return -1;
 }
