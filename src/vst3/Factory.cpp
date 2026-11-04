@@ -1193,6 +1193,34 @@ private:
     std::string sf2AudioStatus_="SF2-Audiostatus noch nicht vom Prozessor bestaetigt.";
     std::string hardwareInfo_;
     bool latencyChangePending_=false;
+    bool hostDirtyPending_=false;
+    uint64_t hostDirtySeq_=0,hostLatencySeq_=0;
+    WinUiDispatch hostDispatch_{};
+    static bool HostSignalThunk(void* self) {
+        return static_cast<Controller*>(self)->DeliverHostSignals();
+    }
+    bool DeliverHostSignals() {
+        bool dirty=false,latency=false;
+        uint64_t dirtySeq=0,latencySeq=0;
+        {
+            std::lock_guard<std::mutex> guard(sf2StatusMutex_);
+            dirty=hostDirtyPending_;
+            latency=latencyChangePending_;
+            dirtySeq=hostDirtySeq_;
+            latencySeq=hostLatencySeq_;
+        }
+        bool dirtyOk=!dirty,latencyOk=!latency;
+        // Called exclusively by the persistent Win32 UI message window.
+        if(dirty)dirtyOk=setDirty(true)==kResultOk;
+        if(latency) {
+            if(auto* handler=getComponentHandler())
+                latencyOk=handler->restartComponent(kLatencyChanged)==kResultOk;
+        }
+        std::lock_guard<std::mutex> guard(sf2StatusMutex_);
+        if(dirtyOk&&dirtySeq==hostDirtySeq_)hostDirtyPending_=false;
+        if(latencyOk&&latencySeq==hostLatencySeq_)latencyChangePending_=false;
+        return hostDirtyPending_||latencyChangePending_;
+    }
     void ReloadPresetCatalogs(const AssetState::Data* model) {
         AssetConfig::Paths paths;
         if(!AssetConfig::ResolveController(model,paths))paths={};
