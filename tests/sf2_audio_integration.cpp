@@ -33,7 +33,8 @@ void list(Bytes& b, const char* listType, const Bytes& contents) {
     p.insert(p.end(), contents.begin(), contents.end());
     chunk(b, "LIST", p);
 }
-Bytes makeBank(size_t sampleWords,bool multipleBanks=false,int loopMode=1,size_t tailWords=16) {
+Bytes makeBank(size_t sampleWords,bool multipleBanks=false,int loopMode=1,
+               size_t tailWords=16,bool fastAttack=false) {
     Bytes info, ifil, inam, sdta, pdta, smpl;
     u16(ifil,2);u16(ifil,1);
     chunk(info,"ifil",ifil);
@@ -91,9 +92,14 @@ Bytes makeBank(size_t sampleWords,bool multipleBanks=false,int loopMode=1,size_t
         name20(inst,"125A Wave C");u16(inst,2);
     }
     name20(inst,"EOI");u16(inst,multipleBanks?3:1);
-    u16(ibag,0);u16(ibag,0);u16(ibag,2);u16(ibag,0);
+    u16(ibag,0);u16(ibag,0);u16(ibag,fastAttack?3:2);u16(ibag,0);
     if(multipleBanks) {
         u16(ibag,5);u16(ibag,0);u16(ibag,7);u16(ibag,0);
+    }
+    if (fastAttack) {
+        // P110: reproduce the real SF2 program 7 attack time of -11959
+        // without copying any private samples. Old rate 128 -> low 7 bits 0.
+        u16(igen,34);u16(igen,static_cast<unsigned>(-11959 & 0xFFFF));
     }
     u16(igen,54);u16(igen,loopMode); // SF2 sampleModes: 1=continuous, 3=until release
     u16(igen,53);u16(igen,0); // Sample 0
@@ -167,13 +173,15 @@ int main() {
     const fs::path rom=directory/"125A_synthetic_sf2_audio.raw";
     const fs::path mode1=directory/"125A_p91_sf2_mode1.sf2";
     const fs::path mode3=directory/"125A_p91_sf2_mode3.sf2";
+    const fs::path fast=directory/"125A_p110_sf2_fast_attack.sf2";
     struct Cleanup {
-        fs::path a,b,c,d,e,f,g,h;
-        ~Cleanup(){std::error_code ec;for(const auto& p:{a,b,c,d,e,f,g,h})fs::remove(p,ec);}
-    } cleanup{sf,huge,rom,large,multi,d4size,mode1,mode3};
+        fs::path a,b,c,d,e,f,g,h,i;
+        ~Cleanup(){std::error_code ec;for(const auto& p:{a,b,c,d,e,f,g,h,i})fs::remove(p,ec);}
+    } cleanup{sf,huge,rom,large,multi,d4size,mode1,mode3,fast};
     if (!writeFile(sf,makeBank(2048)) ||
         !writeFile(mode1,makeBank(2048,false,1,64)) ||
         !writeFile(mode3,makeBank(2048,false,3,64)) ||
+        !writeFile(fast,makeBank(2048,false,1,16,true)) ||
         !writeFile(multi,makeBank(2048,true)) ||
         !writeFile(huge,makeBank(300000)) ||
         !writeFile(large,makeBank(4'300'000)) ||
@@ -301,6 +309,44 @@ int main() {
         ok &= check(bank5!=bank128,"actual EMU8000 audio changes for bank 5 -> drums 128");
         ok &= check(midiOverride==bank0,
                     "MIDI CC0 explicitly overrides the browser-selected SF2 bank");
+    }
+    {
+        // P110: The exact real-bank fast attack (-11959 timecents) must
+        // produce audio while the key is HELD, not only after NoteOff.
+        // This exercises the actual 86Box register-level PCM renderer,
+        // unlike a purely static table or synthetic VST3 parameter check.
+        Synth synth(44100);
+        synth.Core().SetDriver(Awe32::Driver::Win95);
+        synth.Core().SetChipRamKb(512);
+        error.clear();
+        const bool coreOk=synth.Core().UseBox86Chip(rom.string(),error);
+        ok &= check(coreOk && synth.Core().ChipVariant()==Emu8000Core::Chip::Box86,
+                    "P110 ROM-backed 86Box core for fast attack test");
+        if (coreOk) {
+            synth.Core().PowerOnInit();
+            error.clear();
+            const bool bankOk=synth.LoadBank(fast.string(),error);
+            ok &= check(bankOk,"P110 fast-attack synthetic SF2 loads");
+            if (bankOk) {
+                const auto regions=synth.BankAt(0).Select(0,0,69,100);
+                ok &= check(regions.size()==1,
+                    "P110 fast-attack instrument zone selected");
+                if (regions.size()==1) {
+                    const auto vp=SoundFont::MakeVoiceParams(synth.BankAt(0),
+                        regions[0],69,100,Emu8000::kDramOffset+16,0,
+                        Awe32::Driver::Win95);
+                    ok &= check((vp.atkhldv & 0x7F)==0x7F,
+                        "P110 SF2 fast attack is encoded as legal 7-bit rate");
+                }
+                synth.ProgramChange(0,0);
+                synth.NoteOn(0,69,100);
+                std::vector<int16_t> pcm(44100*2,0);
+                synth.RenderBlock(pcm.data(),44100);
+                ok &= check(std::any_of(pcm.begin()+2048,pcm.end(),
+                    [](int16_t v){return std::abs(int(v))>32;}),
+                    "P110 held note (no NoteOff) produces actual 86Box audio");
+            }
+        }
     }
     {
         Synth synth(48000);

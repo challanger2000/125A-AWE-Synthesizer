@@ -123,6 +123,19 @@ int main() {
                 "SF2 absent volume AND modulation sustain -> full 127");
             ok &= Check(full.envvol==0x8000,
                 "SF2 preset -3986 delay offset over implicit -12000 starts immediately");
+            // P110: actual bank program 7 combines attack -7973 and -3986
+            // into -11959 timecents. Never emit 128 into a 7-bit register:
+            // 128 becomes attack 0 (infinite silence until release).
+            ok &= Check((full.atkhldv & 0x7F)==0x7F,
+                "P110 SF2 fast attack -11959 stays 0x7F, not wrapped to zero");
+            Region fastLimit=sound[0];
+            fastLimit.gen.Set(Gen::AttackVolEnv,-12000);
+            fastLimit.gen.Set(Gen::AttackModEnv,-12000);
+            const auto fastest=MakeVoiceParams(bass,fastLimit,60,100,
+                0x200010,0,Awe32::Driver::Win95);
+            ok &= Check((fastest.atkhldv & 0x7F)==0x7F &&
+                        (fastest.atkhld & 0x7F)==0x7F,
+                "P110 SF2 minimum timecents never overflow volume/mod attack");
             ok &= Check(full.ifatn!=0xFF00,
                 "SF2 preset cutoff offset over default is converted to chip register");
             Region adjusted=sound[0];

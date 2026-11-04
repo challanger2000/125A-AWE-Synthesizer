@@ -104,7 +104,11 @@ namespace
     int AttackRateFromSf2Timecents(int timecents)
     {
         if (timecents <= -600)
-            return std::min(128, (37 - timecents) / 75 + 8);
+            // P110: Attack is a seven-bit hardware register (0..127).
+            // The old 128 maximum wrapped to 0 when encoded in ATKHLDV,
+            // leaving 35/77 real-world SF2 presets silent until NoteOff.
+            // Saturation at 127 retains the fastest legal attack instead.
+            return std::min(127, (37 - timecents) / 75 + 8);
         if (timecents >= 4300) return 1;
         const int quotient = (timecents + 500) / 150;
         const int mantissa = ((~quotient) & 7) | 8;
