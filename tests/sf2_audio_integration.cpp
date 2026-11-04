@@ -131,7 +131,7 @@ Bytes makeBank(size_t sampleWords,bool multipleBanks=false,int loopMode=1,
         }
     }
     name20(shdr,"EOS");
-    for (int n=0;n<6;++n)u32(shdr,0);
+    for (int n=0;n<5;++n)u32(shdr,0);
     shdr.push_back(0);shdr.push_back(0);u16(shdr,0);u16(shdr,1);
 
     chunk(pdta,"phdr",phdr);
