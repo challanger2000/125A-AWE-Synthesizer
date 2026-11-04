@@ -692,12 +692,11 @@ public:
                 synth_->RenderBlock(scratch_.data()+2*size_t(position),
                                     static_cast<uint32_t>(end-position));
                 for(int32 i=position;i<end;++i) {
-                    if(masterCurveActive) {
-                        const auto target=static_cast<uint32_t>(std::lround(
-                            masterCurve.valueAt(i)*MasterOutput::kScale));
-                        volumeGain_.setTarget(target);
-                    }
-                    const float gain=volumeGain_.next();
+                    // Host automation is already a continuous curve.
+                    // Manual/discrete changes retain the 64-frame dezipper.
+                    const float gain=masterCurveActive
+                        ?volumeGain_.nextAutomated(masterCurve.valueAt(i))
+                        :volumeGain_.next();
                     const float l=(scratch_[size_t(i)*2]/32768.f)*gain;
                     const float r=(scratch_[size_t(i)*2+1]/32768.f)*gain;
                     if(right){left[i]=l;right[i]=r;}
