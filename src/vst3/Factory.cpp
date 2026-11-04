@@ -100,22 +100,28 @@ public:
             std::clamp(setup.sampleRate,8000.0,384000.0)));
         capacity_=static_cast<uint32_t>(std::max(setup.maxSamplesPerBlock,1));
         scratch_.assign(size_t{capacity_}*2,0);
-        synth_.reset();
-        ++assetGeneration_;
+        {
+            std::lock_guard<std::mutex> lock(engineMutex_);
+            engines_.Publish({});
+            activeRomReady_=false;
+            reportedLatency_=0;
+            hardwareStatus_="RAM --  |  ROM: ERFORDERLICH  |  CORE: INAKTIV";
+            ++assetGeneration_;
+        }
         return kResultOk;
     }
     tresult PLUGIN_API setActive(TBool active) override {
-        // A host may have a live audio callback while it reconfigures state.
-        // Never hold the render mutex over ROM/SoundFont filesystem I/O.
+        // P119: the audio callback owns the running synth. Control threads
+        // prepare and publish a new engine; they never mutate an active one.
         if(!active) {
-            std::unique_ptr<Synth> retired;
             {
                 std::lock_guard<std::mutex> lock(engineMutex_);
                 hostActive_=false;
                 ++assetGeneration_;
-                sf2Loaded_=false;
-                gmLoaded_=false;
-                synth_.swap(retired);
+                engines_.Publish({});
+                activeRomReady_=false;
+                reportedLatency_=0;
+                hardwareStatus_="RAM --  |  ROM: ERFORDERLICH  |  CORE: INAKTIV";
             }
             return AudioEffect::setActive(active);
         }
@@ -133,9 +139,9 @@ public:
         std::unique_ptr<Synth> prepared;
         bool loadedGm=false,loadedSf2=false;
         std::string status,error;
-        if(model.romPath.empty()) {
+        if(model.romPath.empty())
             status="Original-Wave-ROM erforderlich: ROM LADEN. Bis dahin kein Audio.";
-        } else {
+        else {
             try {
                 prepared=std::make_unique<Synth>(sampleRate);
                 prepared->Core().SetDriver(Awe32::Driver::Win95);
@@ -148,8 +154,7 @@ public:
                     prepared->Core().PowerOnInit();
                     const auto banks=RomGmBank::LoadBanks(
                         *prepared,model.romPath,model.sf2Path);
-                    loadedGm=banks.gm;
-                    loadedSf2=banks.sf2;
+                    loadedGm=banks.gm;loadedSf2=banks.sf2;
                     if(!model.sf2Path.empty()&&!loadedSf2)
                         status="SF2-Ladefehler: "+banks.sf2Error;
                     else if(loadedGm&&loadedSf2)
@@ -166,19 +171,22 @@ public:
             }
             if(!error.empty())status=error;
         }
+        const auto info=DescribePrepared(prepared.get());
+        const uint32_t latency=prepared?prepared->Core().ChipLatencyFrames():0u;
         std::string hardware;
         {
             std::lock_guard<std::mutex> lock(engineMutex_);
             if(epoch!=assetGeneration_||rate_!=sampleRate)return kResultFalse;
-            if(prepared)ApplyLiveParameters(*prepared);
             hostActive_=true;
-            synth_.swap(prepared);
+            const bool valid=bool(prepared);
+            engines_.Publish(Pack(std::move(prepared),loadedGm,loadedSf2,
+                                  !state_.sf2Path.empty()));
+            activeRomReady_=valid;
+            reportedLatency_=latency;
+            hardwareStatus_=info;
             ++assetGeneration_;
-            sf2Configured_=!state_.sf2Path.empty();
-            sf2Loaded_=bool(synth_)&&loadedSf2;
-            gmLoaded_=bool(synth_)&&loadedGm;
             assetError_=error;
-            hardware=HardwareDescriptor();
+            hardware=hardwareStatus_;
         }
         sendTextMessage(("125A_SF2_STATUS:"+status).c_str());
         sendTextMessage(("125A_HW_INFO:"+hardware).c_str());
