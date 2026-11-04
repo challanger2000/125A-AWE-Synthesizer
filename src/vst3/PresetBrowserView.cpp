@@ -341,10 +341,47 @@ void PresetBrowserView::Select(uint16_t bank,uint8_t program) {
     // Reflect the clicked instrument immediately. The following idle
     // compares bank/program back with the controller: an unaccepted host
     // edit is not silently painted as a successful selection.
+    const bool changedBank=(bank_!=bank);
     bank_=bank;
     program_=program;
     programLabel_->setText(PresetBrowserModel::CurrentLabel(
         0,sf_,fm_,bank_,program_).c_str());
+    if(changedBank)RebuildActiveMenus();
+    else SyncActiveMenuSelection();
+}
+void PresetBrowserView::RebuildActiveMenus() {
+    // These menus are neither search-filtered nor limited to 0..127 GM.
+    // They expose exactly the active bank's known SoundFont entries.
+    if(!activeBankMenu_ || !programMenu_)return;
+    activeBanks_=PresetBrowserModel::Banks(0,sf_,fm_);
+    activeBankMenu_->removeAllEntry();
+    if(activeBanks_.empty())activeBankMenu_->addEntry("Keine Bank geladen");
+    else for(const auto bank:activeBanks_)
+        activeBankMenu_->addEntry(BankLabel(bank).c_str());
+
+    activePrograms_=PresetBrowserModel::Programs(sf_.Entries(),bank_);
+    programMenu_->removeAllEntry();
+    if(activePrograms_.empty())programMenu_->addEntry("Keine Presets in der Bank");
+    else for(const auto id:activePrograms_) {
+        const auto* p=sf_.Find(bank_,id);
+        char label[8]{};
+        std::snprintf(label,sizeof(label),"%03d",id);
+        const auto name=std::string(label)+"  "+(p?p->name:"?");
+        programMenu_->addEntry(name.c_str());
+    }
+    SyncActiveMenuSelection();
+}
+void PresetBrowserView::SyncActiveMenuSelection() {
+    if(activeBankMenu_) {
+        const auto bank=std::find(activeBanks_.begin(),activeBanks_.end(),bank_);
+        activeBankMenu_->setValue(bank==activeBanks_.end()?0.f:
+            static_cast<float>(bank-activeBanks_.begin()));
+    }
+    if(programMenu_) {
+        const auto current=std::find(activePrograms_.begin(),activePrograms_.end(),program_);
+        programMenu_->setValue(current==activePrograms_.end()?0.f:
+            static_cast<float>(current-activePrograms_.begin()));
+    }
 }
 void PresetBrowserView::RebuildBanks() {
     filterBanks_=PresetBrowserModel::Banks(0,sf_,fm_);
@@ -430,10 +467,13 @@ void PresetBrowserView::Sync(bool force) {
     SyncSf2Status();
     SyncHardwareInfo();
     if(!force&&bank==bank_&&program==program_)return;
+    const bool bankChanged=force||bank!=bank_;
     bank_=bank;program_=program;
     programLabel_->setText(PresetBrowserModel::CurrentLabel(
         0,sf_,fm_,bank_,program_).c_str());
     if(force)RebuildBanks();
+    if(bankChanged)RebuildActiveMenus();
+    else SyncActiveMenuSelection();
     RebuildRows();
 }
 void PresetBrowserView::SyncSf2Status() {
@@ -490,7 +530,27 @@ void PresetBrowserView::valueChanged(CControl* control) {
                         std::clamp(double(control->getValue()),0.,1.));
         return;
     }
-    if(tag==kLoadRom) {
+    if(tag==kActiveBank) {
+        const auto idx=static_cast<int>(std::lround(activeBankMenu_->getValue()));
+        if(idx>=0&&size_t(idx)<activeBanks_.size()) {
+            const uint16_t candidate=activeBanks_[size_t(idx)];
+            const auto available=PresetBrowserModel::Programs(sf_.Entries(),candidate);
+            if(!available.empty()) {
+                const auto next=PresetBrowserModel::ChooseExistingProgram(
+                    sf_.Entries(),candidate,program_);
+                Select(candidate,next);
+                RebuildRows(); // changed host bank may alter browser selection
+            }
+        }
+        return;
+    } else if(tag==kDirectPreset) {
+        const auto idx=static_cast<int>(std::lround(programMenu_->getValue()));
+        if(idx>=0&&size_t(idx)<activePrograms_.size()) {
+            Select(bank_,activePrograms_[size_t(idx)]);
+            RebuildRows();
+        }
+        return;
+    } else if(tag==kLoadRom) {
         if(control->getValue()>0.5f)ChooseRom();
     } else if(tag==kLoadSf2) {
         if(control->getValue()>0.5f)ChooseSf2();
