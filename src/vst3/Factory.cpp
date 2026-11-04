@@ -96,6 +96,7 @@ public:
         capacity_=static_cast<uint32_t>(std::max(setup.maxSamplesPerBlock,1));
         scratch_.assign(size_t{capacity_}*2,0);
         synth_.reset();
+        ++assetGeneration_;
         return kResultOk;
     }
     tresult PLUGIN_API setActive(TBool active) override {
@@ -103,6 +104,7 @@ public:
         if(active) {
             if(!capacity_)return kResultFalse;
             hostActive_=true;
+            ++assetGeneration_;
             synth_.reset();
             assetError_.clear();
             ResolveAssets();
@@ -160,6 +162,7 @@ public:
             sendTextMessage(("125A_HW_INFO:"+HardwareDescriptor()).c_str());
         } else {
             hostActive_=false;
+            ++assetGeneration_;
             sf2Loaded_=false;
             gmLoaded_=false;
             synth_.reset();
@@ -368,7 +371,8 @@ public:
     }
     tresult PLUGIN_API setState(IBStream* stream) override {
         if(!stream)return kInvalidArgument;
-        std::lock_guard<std::mutex> lock(engineMutex_);
+        // P118-04: read an entire candidate without an audio mutex and
+        // prepare any new ROM/SF2 engine BEFORE publishing saved paths.
         const auto receive=[&](void* buffer,size_t n) {
             int32 received=0;
             return n<=AssetState::kMaxPath &&
@@ -377,16 +381,75 @@ public:
         };
         AssetState::Data candidate;
         if(!AssetState::Read(receive,candidate))return kResultFalse;
-        candidate.engine=0; // legacy FM projects migrate to EMU8000.
-        state_=std::move(candidate);
-        volumeGain_.restore(state_.masterVolume); // no unexpected fade on project restore
-        if(synth_)for(int i=0;i<kGuiCount;++i)
-            synth_->SetGuiControl(i,float(state_.controls[i])/AssetState::kControlScale);
-        if(synth_)synth_->SelectBrowserBank(static_cast<uint16_t>(state_.bank));
-        if(synth_)for(int c=0;c<16;++c)
-            synth_->ProgramChange(static_cast<uint8_t>(c),
-                static_cast<uint8_t>(state_.program));
-        // File replacement while active is deferred until reactivation.
+        candidate.engine=0; // Old FM projects migrate to EMU8000.
+        if(!candidate.pathsSpecified) {
+            AssetConfig::Paths configured;
+            if(AssetConfig::Load(configured)) {
+                candidate.romPath=std::move(configured.rom);
+                candidate.sf2Path=std::move(configured.sf2);
+                candidate.ibkPath=std::move(configured.ibk);
+                candidate.drumIbkPath=std::move(configured.drumIbk);
+                candidate.pathsSpecified=true;
+            }
+        }
+        uint32_t sampleRate=44100;
+        bool active=false;
+        uint64_t epoch=0;
+        {
+            std::lock_guard<std::mutex> lock(engineMutex_);
+            sampleRate=rate_;
+            active=hostActive_;
+            epoch=assetGeneration_;
+        }
+        std::unique_ptr<Synth> prepared;
+        bool loadedSf2=false,loadedGm=false;
+        if(active && !candidate.romPath.empty()) {
+            try {
+                prepared=std::make_unique<Synth>(sampleRate);
+                prepared->Core().SetDriver(Awe32::Driver::Win95);
+                std::string error;
+                if(!prepared->Core().UseBox86Chip(candidate.romPath,error) ||
+                   prepared->Core().ChipVariant()!=Emu8000Core::Chip::Box86)
+                    return kResultFalse; // old playing assets remain coherent
+                prepared->Core().PowerOnInit();
+                const auto banks=RomGmBank::LoadBanks(
+                    *prepared,candidate.romPath,candidate.sf2Path);
+                loadedSf2=banks.sf2;
+                loadedGm=banks.gm;
+                if(!candidate.sf2Path.empty()&&!loadedSf2)
+                    return kResultFalse;
+                for(int i=0;i<kGuiCount;++i)
+                    prepared->SetGuiControl(
+                        i,float(candidate.controls[i])/AssetState::kControlScale);
+                prepared->SelectBrowserBank(static_cast<uint16_t>(candidate.bank));
+                for(int ch=0;ch<16;++ch)
+                    prepared->ProgramChange(static_cast<uint8_t>(ch),
+                        static_cast<uint8_t>(candidate.program));
+            } catch(const std::exception&) {return kResultFalse;}
+        }
+        std::string info,status;
+        {
+            std::lock_guard<std::mutex> lock(engineMutex_);
+            // A setActive, setupProcessing or another asset commit during
+            // preparation invalidates the candidate, never overwrite newer.
+            if(epoch!=assetGeneration_||active!=hostActive_||rate_!=sampleRate)
+                return kResultFalse;
+            if(active)synth_.swap(prepared);
+            state_=std::move(candidate);
+            volumeGain_.restore(state_.masterVolume);
+            sf2Configured_=!state_.sf2Path.empty();
+            sf2Loaded_=active&&loadedSf2;
+            gmLoaded_=active&&loadedGm;
+            ++assetGeneration_;
+            info=HardwareDescriptor();
+            status=active
+                ?(synth_
+                    ?(gmLoaded_?"ROM + original GM loaded.":"Wave-ROM loaded.")
+                    :"Original-Wave-ROM erforderlich: ROM LADEN. Bis dahin kein Audio.")
+                :"Project assets restored; ready on activation.";
+        }
+        sendTextMessage(("125A_HW_INFO:"+info).c_str());
+        sendTextMessage(("125A_SF2_STATUS:"+status).c_str());
         return kResultOk;
     }
     tresult PLUGIN_API process(ProcessData& data) override {
@@ -586,6 +649,7 @@ private:
     bool hostActive_=false; // may be true while no ROM / no core exists
     bool sf2Configured_=false,sf2Loaded_=false; // written outside process()
     bool gmLoaded_=false; // only true for validated ROM-backed 1MGM bank
+    uint64_t assetGeneration_=0; // invalidates stale prepared reloads
     // Report the currently running chip, not merely paths in assets.cfg.
     // Call under engineMutex_ from non-realtime code only.
     std::string HardwareDescriptor() const {
