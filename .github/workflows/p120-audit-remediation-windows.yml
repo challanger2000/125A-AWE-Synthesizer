@@ -17,6 +17,7 @@ on:
       - 'tests/p117_synthgm_catalog.cpp'
       - 'tests/p118_soundfont_parser_bounds.cpp'
       - 'tests/p119_midi_live_state.cpp'
+      - 'tests/p119_realtime_engine_exchange.cpp'
       - 'tests/p120_engine_retirement.cpp'
       - 'tests/p120_midi_automation.cpp'
       - 'tests/p120_win_ui_reentrancy.cpp'
