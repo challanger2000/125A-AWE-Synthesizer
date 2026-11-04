@@ -15,11 +15,14 @@
 #include "RomGmBank.h"
 #include "MidiControlMapping.h"
 #include "MidiLiveState.h"
+#include "RealtimeEngineExchange.h"
 #include "public.sdk/source/vst/vstparameters.h"
 #include "public.sdk/source/main/moduleinit.h"
 #include "pluginterfaces/base/ustring.h"
 #include "vstgui/plugin-bindings/vst3editor.h"
 #include <algorithm>
+#include <array>
+#include <atomic>
 #include <cmath>
 #include <charconv>
 #include <cstdio>
@@ -697,44 +700,63 @@ private:
         ParamValue value=0.;
     };
     std::array<ParameterCursor,1024> paramCursors_{};
-    std::unique_ptr<Synth> synth_;
+    struct Engine {
+        std::unique_ptr<Synth> synth;
+        bool sf2Configured=false,sf2Loaded=false,gmLoaded=false;
+        uint64_t revision=0;
+    };
+    RealtimeEngineExchange<Engine> engines_;
+    Engine* lastRtEngine_=nullptr;  // comparison only; never dereferenced
+    uint64_t nextRevision_=0;
     std::vector<int16_t> scratch_;
     MasterOutput::Gain volumeGain_{};
     uint32_t rate_=44100,capacity_=0;
-    AssetState::Data state_{};
+    AssetState::Data state_{};  // non-RT asset-path domain only
     std::string assetError_;
-    mutable std::mutex engineMutex_; // never block realtime rendering
-    bool hostActive_=false; // may be true while no ROM / no core exists
-    bool sf2Configured_=false,sf2Loaded_=false; // written outside process()
-    bool gmLoaded_=false; // only true for validated ROM-backed 1MGM bank
-    uint64_t assetGeneration_=0; // invalidates stale prepared reloads
-    MidiLiveState liveMidi_{}; // owned/updated under engineMutex_, survives asset swaps
-    // Apply parameter state as late as possible when a prepared SF2 or ROM
-    // replaces the engine. Audio/automation may have changed while loading.
-    // Caller holds engineMutex_; this method performs no file I/O.
-    void ApplyLiveParameters(Synth& target) const noexcept {
+    mutable std::mutex engineMutex_; // control threads only, never audio process
+    bool hostActive_=false;
+    bool activeRomReady_=false;
+    uint32_t reportedLatency_=0;
+    std::string hardwareStatus_="RAM --  |  ROM: ERFORDERLICH  |  CORE: INAKTIV";
+    uint64_t assetGeneration_=0;
+    MidiLiveState liveMidi_{}; // exclusively audio-thread owned
+    // Real-time parameters are single-word atomics; getState/load paths never
+    // touch a mutable synth or wait for a reader to release a mutex.
+    std::atomic<uint32_t> rtProgram_{0},rtBank_{0};
+    std::atomic<uint32_t> rtMaster_{MasterOutput::kDefault};
+    std::array<std::atomic<uint32_t>,kGuiCount> rtControls_{};
+    std::atomic<uint64_t> gainRestoreEpoch_{0};
+    std::atomic<uint32_t> gainRestoreValue_{MasterOutput::kDefault};
+    uint64_t lastGainRestoreEpoch_=0;
+    std::unique_ptr<Engine> Pack(std::unique_ptr<Synth> synth,
+                                 bool gm,bool sf2,bool configured) {
+        if(!synth)return {};
+        auto e=std::make_unique<Engine>();
+        e->synth=std::move(synth);
+        e->gmLoaded=gm;e->sf2Loaded=sf2;e->sf2Configured=configured;
+        e->revision=++nextRevision_;
+        return e;
+    }
+    void ApplyRtParameters(Synth& target) noexcept {
         for(int i=0;i<kGuiCount;++i)
             target.SetGuiControl(i,
-                float(state_.controls[i])/AssetState::kControlScale);
-        target.SelectBrowserBank(static_cast<uint16_t>(state_.bank));
+                float(rtControls_[i].load(std::memory_order_relaxed))/
+                      AssetState::kControlScale);
+        target.SelectBrowserBank(static_cast<uint16_t>(
+            rtBank_.load(std::memory_order_relaxed)));
         for(int ch=0;ch<16;++ch)
             target.ProgramChange(static_cast<uint8_t>(ch),
-                static_cast<uint8_t>(state_.program));
-        liveMidi_.Replay(target); // restore pedals, bend, expression and RPN
+                static_cast<uint8_t>(rtProgram_.load(std::memory_order_relaxed)));
+        liveMidi_.Replay(target);
     }
-    // Report the currently running chip, not merely paths in assets.cfg.
-    // Call under engineMutex_ from non-realtime code only.
-    std::string HardwareDescriptor() const {
-        if(!synth_)return "RAM --  |  ROM: ERFORDERLICH  |  CORE: INAKTIV";
-        const auto& core=synth_->Core();
-        const bool box=core.ChipVariant()==Emu8000Core::Chip::Box86;
-        if(!box)
-            return state_.romPath.empty()
-                ? "RAM --  |  ROM: NICHT GELADEN  |  CORE: INTERN"
-                : "RAM --  |  ROM: LADEFEHLER  |  CORE: INTERN";
+    static std::string DescribePrepared(const Synth* synth) {
+        if(!synth)return "RAM --  |  ROM: ERFORDERLICH  |  CORE: INAKTIV";
+        const auto& core=synth->Core();
+        if(core.ChipVariant()!=Emu8000Core::Chip::Box86)
+            return "RAM --  |  ROM: LADEFEHLER  |  CORE: INTERN";
         size_t usedWords=0;
-        for(size_t i=0;i<synth_->BankCount();++i)
-            usedWords+=synth_->BankAt(i).sampleData.size();
+        for(size_t i=0;i<synth->BankCount();++i)
+            usedWords+=synth->BankAt(i).sampleData.size();
         const double usedMiB=usedWords*2.0/1048576.0;
         const double totalMiB=core.ChipRamWords()*2.0/1048576.0;
         std::ostringstream info;
@@ -743,6 +765,10 @@ private:
             <<"   |   ROM: GELADEN   |   CORE: 86BOX";
         return info.str();
     }
+    std::string HardwareDescriptor() const {
+        return hardwareStatus_; // cached on control thread before publication
+    }
+
     void ResolveAssets() {
         AssetConfig::Paths configured;
         if(!state_.pathsSpecified) {
