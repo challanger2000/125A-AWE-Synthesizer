@@ -83,6 +83,14 @@ target_include_directories(awe32_p119_engine_exchange_test PRIVATE src/vst3)
 target_compile_features(awe32_p119_engine_exchange_test PRIVATE cxx_std_23)
 add_test(NAME 125A_p119_engine_exchange COMMAND awe32_p119_engine_exchange_test)
 
+# P119: hidden Win32 UI message queue works without an open VSTGUI editor.
+if(WIN32)
+  add_executable(awe32_p119_ui_dispatch_test tests/p119_win_ui_dispatch.cpp)
+  target_include_directories(awe32_p119_ui_dispatch_test PRIVATE src/vst3)
+  target_compile_features(awe32_p119_ui_dispatch_test PRIVATE cxx_std_23)
+  add_test(NAME 125A_p119_ui_dispatch COMMAND awe32_p119_ui_dispatch_test)
+endif()
+
 # Independent executable proves the exact 125A master SVG is usable as vector
 # paths without linking a Windows GUI or loading any copyrighted ROM.
 add_executable(awe32_p19_master_logo_test tests/p19_logo_geometry.cpp)
