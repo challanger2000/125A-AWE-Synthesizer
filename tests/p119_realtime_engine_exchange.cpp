@@ -22,6 +22,7 @@ int main() {
         slot.Publish(std::move(initial));
         std::atomic<bool> readerStarted{false};
         std::atomic<bool> readerDone{false};
+        std::atomic<bool> allowReaderExit{false};
         std::thread reader([&] {
             auto view=slot.Read();
             readerStarted.store(true,std::memory_order_release);
@@ -29,7 +30,8 @@ int main() {
                 if(!view||view->id!=1)std::terminate();
                 if(k%4000==0)std::this_thread::yield();
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(80));
+            while(!allowReaderExit.load(std::memory_order_acquire))
+                std::this_thread::yield(); // first guard remains pinned
             readerDone.store(true,std::memory_order_release);
         });
         while(!readerStarted.load(std::memory_order_acquire))
@@ -47,6 +49,12 @@ int main() {
             ok&=check(current&&current->id==2,
                 "new audio callback obtains committed replacement without lock");
         }
+        // Overlap a second read guard with the first and let it finish.
+        // Its completion MUST NOT reclaim the object still held by reader 1.
+        std::this_thread::sleep_for(std::chrono::milliseconds(25));
+        ok&=check(destroyed.load()==0 && !readerDone.load(),
+            "second guard completion does not free engine still held by first");
+        allowReaderExit.store(true,std::memory_order_release);
         reader.join();
         slot.Collect();
         ok&=check(destroyed.load()==1&&slot.RetiredCountForTest()==0,
