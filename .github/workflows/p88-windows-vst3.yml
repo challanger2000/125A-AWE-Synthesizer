@@ -33,6 +33,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Native CTest regression failed" }
           python -m unittest discover -s tests -p test_p89_register_comparison.py -v
           if ($LASTEXITCODE -ne 0) { throw "P89 register regression failed" }
+      # Fix the SDK-generated trailing commas BEFORE exporting either ZIP.
+      - name: Normalize and validate VST3 JSON before packaging
+        shell: pwsh
+        run: |
+          $info = "build-vst3/VST3/Release/125A_AWE_Synthesizer.vst3/Contents/Resources/moduleinfo.json"
+          python tools/normalize_vst3_metadata.py $info
+          if ($LASTEXITCODE -ne 0) { throw "moduleinfo normalization failed" }
+          python -c "import json,sys; info=json.load(open(sys.argv[1], encoding='utf-8')); assert info['Name']; print('VST3 moduleinfo valid JSON')" $info
+          if ($LASTEXITCODE -ne 0) { throw "invalid bundled VST3 moduleinfo.json" }
       - name: Export real Windows x64 125A VST3 development bundle
         uses: actions/upload-artifact@v4
         with:
@@ -67,9 +76,6 @@ jobs:
           path: build-vst3/audio-probe/
           if-no-files-found: error
           retention-days: 7
-      - name: Normalize moduleinfo to strict JSON
-        shell: pwsh
-        run: python tools/normalize_vst3_metadata.py build-vst3/VST3/Release/125A_AWE_Synthesizer.vst3/Contents/Resources/moduleinfo.json
       - name: Build Steinberg reference EditorHost (real VST3 GUI)
         shell: pwsh
         run: cmake --build build-vst3 --config Release --target editorhost --parallel 2
