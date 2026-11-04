@@ -1,7 +1,7 @@
 #include "pluginterfaces/base/ipluginbase.h"
 #include "pluginterfaces/vst/ivsteditcontroller.h"
 #include "pluginterfaces/vst/ivstunits.h"
-#include "pluginterfaces/vst/ivsttypes.h"
+#include "pluginterfaces/vst/vsttypes.h"
 #include <windows.h>
 #include <cmath>
 #include <cstring>
