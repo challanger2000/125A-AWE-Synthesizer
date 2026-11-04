@@ -68,7 +68,12 @@ assert 'PresetBrowserModel::Filter(0,sf_,fm_' in b
 assert 'PresetBrowserModel::Neighbor(0,sf_,fm_' in b
 assert 'toggle_->setStyle(CTextButton::kOnOffStyle)' in b
 assert 'if(control->getValue()>0.5f)' in b
-assert 'kVersion = 8u' in state and 'kControlCount = 12' in state
+assert 'kVersion = 9u' in state and 'kControlCount = 12' in state
+assert 'kVolumeID=MasterOutput::kParamID' in f
+assert 'state_.masterVolume' in f and 'volumeGain_.setTarget(' in f
+assert 'masterVolume_' in h and 'masterVolumeValue_' in h
+assert 'new HardwareKnob({124,536,182,594},this,kMasterVolume)' in b
+assert 'controller_->getParamNormalized(kMasterVolume)' in b
 assert 'm_guiControls[11]' in syn
 assert 'MasterLogoView({18,11,150,51},exactLogoPath)' in b
 assert (root/"src/vst3/resource/125A_Logo_Master_FINAL.svg").is_file()
@@ -81,4 +86,4 @@ assert "ChangeParameter(kBankParam,double(bank)/16383.)" in b
 assert "controller_->getParamNormalized(kBankParam)*16383." in b
 assert "this,kBankFilter" in b and "tag==kBankFilter" in b
 assert "this,kBank)" not in b and "getParamNormalized(kBank)" not in b
-print("P106 STATIC PASS: AWE-only VST3, SF2 picker IPC, browser, 12 knobs, V8 recall")
+print("P106 STATIC PASS: AWE-only VST3, SF2 picker IPC, browser, 12 overlay knobs, master volume, V9 recall")
