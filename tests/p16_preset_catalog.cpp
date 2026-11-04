@@ -80,7 +80,7 @@ int main(int argc,char** argv) {
                     merged.Find(0,0)->name=="Piano Factory"&&
                     merged.Find(16383,0)&&
                     merged.Find(16383,0)->name=="ROM: Piano Factory"&&
-                    merged.Find(16383,4)&&
+                    merged.Find(2,4)&&
                     merged.Find(16382,0)&&merged.Find(16382,0)->drums&&
                     merged.Find(128,0)&&
                     merged.Find(128,0)->name=="Room Drum Kit",
