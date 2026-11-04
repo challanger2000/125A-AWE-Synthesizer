@@ -20,6 +20,9 @@ on:
       - 'src/engine/CMakeLists.txt'
       - 'src/engine/SoundFont.cpp'
   workflow_dispatch:
+concurrency:
+  group: p119-vst3-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
