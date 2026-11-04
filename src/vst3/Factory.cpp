@@ -46,6 +46,7 @@ inline constexpr ParamID kProgramID=1000;
 inline constexpr ParamID kGuiFirstID=1100;
 inline constexpr int kGuiCount=AssetState::kControlCount;
 inline constexpr ParamID kBankID=1002; // SF2 bank, fixed normalized range 0..16383
+inline constexpr ParamID kVolumeID=MasterOutput::kParamID; // post-chip stereo master volume
 // Persistence data contract is in AssetState.h.
 // Factory banks are packaged *inside* the Windows VST3 by CMake. The path
 // is resolved on activation, never from the realtime audio callback.
@@ -361,6 +362,7 @@ public:
         if(!AssetState::Read(receive,candidate))return kResultFalse;
         candidate.engine=0; // legacy FM projects migrate to EMU8000.
         state_=std::move(candidate);
+        volumeGain_.restore(state_.masterVolume); // no unexpected fade on project restore
         if(synth_)for(int i=0;i<kGuiCount;++i)
             synth_->SetGuiControl(i,float(state_.controls[i])/AssetState::kControlScale);
         if(synth_)synth_->SelectBrowserBank(static_cast<uint16_t>(state_.bank));
@@ -407,6 +409,10 @@ public:
                             state_.bank=bank;
                             if(synth_)synth_->SelectBrowserBank(static_cast<uint16_t>(bank));
                         }
+                    } else if(q->getParameterId()==kVolumeID) {
+                        state_.masterVolume=static_cast<uint32_t>(std::lround(
+                            std::clamp(val,0.,1.)*MasterOutput::kScale));
+                        volumeGain_.setTarget(state_.masterVolume);
                     } else if(q->getParameterId()>=kGuiFirstID &&
                               q->getParameterId()<kGuiFirstID+kGuiCount) {
                         const int index=int(q->getParameterId()-kGuiFirstID);
@@ -440,8 +446,9 @@ public:
             synth_->RenderBlock(scratch_.data()+size_t{2}*from,
                                 static_cast<uint32_t>(to-from));
             for(int32 i=from;i<to;++i) {
-                const float left=scratch_[size_t{2}*i]/32768.f;
-                const float right=scratch_[size_t{2}*i+1]/32768.f;
+                const float gain=volumeGain_.next();
+                const float left=(scratch_[size_t{2}*i]/32768.f)*gain;
+                const float right=(scratch_[size_t{2}*i+1]/32768.f)*gain;
                 if(r) {l[i]=left;r[i]=right;}
                 else l[i]=(left+right)*0.5f;
             }
@@ -478,6 +485,7 @@ public:
 private:
     std::unique_ptr<Synth> synth_;
     std::vector<int16_t> scratch_;
+    MasterOutput::Gain volumeGain_{};
     uint32_t rate_=44100,capacity_=0;
     AssetState::Data state_{};
     std::string assetError_;
@@ -681,6 +689,8 @@ public:
             0.,double(AssetState::kMaxBank),0.,
             static_cast<int32>(AssetState::kMaxBank));
         parameters.addParameter(banks);
+        parameters.addParameter(new RangeParameter(STR16("Master Volume"),
+            kVolumeID,STR16("%"),0.,100.,100.,0));
         constexpr const char16* labels[kGuiCount]={
             STR16("Amp Attack"),STR16("Amp Decay"),STR16("Amp Sustain Reduction"),
             STR16("Amp Release"),STR16("Filter Attack"),STR16("Filter Decay"),
@@ -735,6 +745,9 @@ public:
                 return kResultFalse;
         if(setParamNormalized(kBankID,
             static_cast<double>(model.bank)/AssetState::kMaxBank)!=kResultOk)
+            return kResultFalse;
+        if(setParamNormalized(kVolumeID,
+            static_cast<double>(model.masterVolume)/MasterOutput::kScale)!=kResultOk)
             return kResultFalse;
         ReloadPresetCatalogs(&model); // no sound samples loaded
         return kResultOk;
