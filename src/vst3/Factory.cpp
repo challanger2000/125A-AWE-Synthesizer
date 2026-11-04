@@ -219,10 +219,6 @@ public:
                 }
             }
         }
-        // Hosts may flush                    }
-                }
-            }
-        }
         // Hosts may flush controls with numOutputs=0, numChannels=0 or a
         // null buffer. Such calls are valid: no audio work is required.
         if(data.numOutputs<1||!data.outputs ||
@@ -345,11 +341,15 @@ public:
             0.,double(AssetState::kMaxBank),0.,
             static_cast<int32>(AssetState::kMaxBank));
         parameters.addParameter(banks);
-        auto* engine=new StringListParameter(STR16("Hardware"),kEngineID);
-        engine->appendString(STR16("EMU8000 AWE32/64"));
-        engine->appendString(STR16("Yamaha OPL3"));
-        engine->appendString(STR16("Creative CQM"));
-        parameters.addParameter(engine);
+        constexpr const char16* labels[kGuiCount]={
+            STR16("Amp Attack"),STR16("Amp Decay"),STR16("Amp Sustain Reduction"),
+            STR16("Amp Release"),STR16("Filter Attack"),STR16("Filter Decay"),
+            STR16("Filter Sustain Reduction"),STR16("Filter Release"),
+            STR16("Filter Cutoff Reduction"),STR16("Filter Resonance Boost"),
+            STR16("Reverb Send Boost"),STR16("Chorus Send Boost")};
+        for(int i=0;i<kGuiCount;++i)
+            parameters.addParameter(new RangeParameter(labels[i],kGuiFirstID+i,
+                STR16("%"),0.,100.,0.,100));
         ReloadPresetCatalogs(nullptr); // UI thread; indexed metadata only
         return kResultOk;
     }
@@ -357,9 +357,12 @@ public:
         const VSTGUI::UIAttributes&,const VSTGUI::IUIDescription*,
         VSTGUI::VST3Editor*) override {
         if(name&&std::strcmp(name,"AwePresetBrowser")==0)
-            return new PresetBrowserView({0,0,860,612},this,sfCatalog_,fmCatalog_,
+            return new PresetBrowserView({0,0,1040,720},this,sfCatalog_,fmCatalog_,
                 FactoryBank(L"125A_Logo_Master_FINAL.svg"),
-                [this]() {return Sf2AudioStatus();});
+                [this]() {return Sf2AudioStatus();},
+                [this](const std::string& path) {return RequestSf2Load(path);},
+                [this]() {return CurrentSf2Path();},
+                [this]() {return CatalogRevision();});
         return nullptr;
     }
     IPlugView* PLUGIN_API createView(FIDString name) override {
@@ -382,9 +385,10 @@ public:
         if(!AssetState::Read(read,model))return kResultFalse;
         if(setParamNormalized(kProgramID,static_cast<double>(model.program)/127.)!=kResultOk)
             return kResultFalse;
-        // VST3 StringListParameter has three discrete entries: index / (3-1).
-        if(setParamNormalized(kEngineID,static_cast<double>(model.engine)/2.)!=kResultOk)
-            return kResultFalse;
+        for(int i=0;i<kGuiCount;++i)
+            if(setParamNormalized(kGuiFirstID+i,
+                double(model.controls[i])/AssetState::kControlScale)!=kResultOk)
+                return kResultFalse;
         if(setParamNormalized(kBankID,
             static_cast<double>(model.bank)/AssetState::kMaxBank)!=kResultOk)
             return kResultFalse;
@@ -410,10 +414,11 @@ private:
         // Clear stale entries when a project points at a new/missing file.
         sfCatalog_=PresetCatalog{};
         fmCatalog_=PresetCatalog{};
+        sf2Path_=paths.sf2;
         std::string error;
         if(!paths.sf2.empty())sfCatalog_.LoadSoundFont(paths.sf2,error);
         const auto melodic=paths.ibk.empty()?FactoryBank(L"MAUIFM.IBK"):paths.ibk;
-        if(!melodic.empty())fmCatalog_.LoadFmIbk(melodic,error);
+        // Legacy FM preset data is no longer loaded into this AWE-only plugin.
     }
 };
 }
