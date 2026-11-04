@@ -1,0 +1,69 @@
+name: P113 - SF2 output rail measurements (Windows x64)
+on:
+  push:
+    branches: [test/p113-sf2-output-rail-diagnostic]
+    paths:
+      - '.github/workflows/p113-rail-diagnostic.yml'
+      - 'tools/p113*'
+      - 'src/engine/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  p113-native:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure standalone native 86Box engine (no Steinberg SDK)
+        shell: pwsh
+        run: cmake -S . -B build-p113 -G "Visual Studio 17 2022" -A x64 -D125A_BUILD_VST3=OFF -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_OPL3_PROBES=OFF
+      - name: Build P113 real-chip diagnostic
+        shell: pwsh
+        run: |
+          cmake --build build-p113 --config Release --target awe32_p113_sf2_output_rail_diagnostic --parallel 2
+          if ($LASTEXITCODE -ne 0) { throw "P113 C++ build failed" }
+      - name: Run positive and negative rail counting selftest
+        shell: pwsh
+        run: |
+          ctest --test-dir build-p113 -C Release -R "^125A_p113_rail_meter_selftest$" --output-on-failure
+          if ($LASTEXITCODE -ne 0) { throw "P113 meter selftest failed" }
+      - name: Package P113 user-only 16-bit rail auditor
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem build-p113 -Filter awe32_p113_sf2_output_rail_diagnostic.exe -Recurse |
+            Where-Object { $_.FullName -match 'Release' } |
+            Select-Object -First 1 -ExpandProperty FullName
+          if (-not $exe) { throw "P113 executable missing" }
+          New-Item -ItemType Directory -Force build-p113/p113-audit | Out-Null
+          Copy-Item $exe build-p113/p113-audit/
+          Copy-Item tools/p113-start-audit.ps1 build-p113/p113-audit/
+          Copy-Item tools/p113-start-audit.cmd build-p113/p113-audit/
+          @'
+          # 125A P113 - SF2 audio rail measurement
+
+          Double-click p113-start-audit.cmd in this folder on Windows.
+          Select the same original awe32.raw, SYNTHGM.SBK, Synth 512 Bank.sf2
+          used for the successful P112 all-preset audio test.
+
+          This test covers the 9 full-scale/near-full-scale SF2 programs
+          (2,4,7,33,45,54,56,58,61) and 2 controls (0,69).
+          Note 48, velocities 64,100,127. 1 s held + 0.5 s release.
+
+          Output: 125A-P113-Pegel-Diagnose.csv
+          Upload ONLY that CSV to ChatGPT. The ROM/SBK/SF2 and any audio are
+          neither copied into the ZIP nor uploaded from your machine.
+
+          Exact +32767/-32768 sample hits and consecutive rail-hit frames
+          are measured using the existing unmodified native 86Box EMU8000.
+          A full-scale hit is NOT sufficient proof of audible clipping.
+          This diagnostic makes NO gain, timbre or release changes.
+          Build success does NOT mean private presets have been measured.
+          '@ | Set-Content build-p113/p113-audit/START-HERE.md -Encoding utf8
+      - name: Upload standalone P113 Windows diagnostic
+        uses: actions/upload-artifact@v4
+        with:
+          name: 125A-P113-SF2-Pegel-und-Clipping-Diagnose-Windows-x64
+          path: build-p113/p113-audit/
+          if-no-files-found: error
+          retention-days: 7
