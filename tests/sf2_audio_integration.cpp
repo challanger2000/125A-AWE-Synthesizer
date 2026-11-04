@@ -311,6 +311,22 @@ int main() {
                     "MIDI CC0 explicitly overrides the browser-selected SF2 bank");
     }
     {
+        // P111: GM ROM mirror routes its melodic and percussion programs
+        // to independent high banks, leaving normal MIDI bank 0 untouched.
+        Synth synthetic(44100);
+        std::string mapError;
+        ok &= check(synthetic.LoadBank(multi.string(),mapError,true,16383,16382),
+                    "P111 generated ROM-only bank descriptor accepted");
+        if(synthetic.BankCount()==1) {
+            const auto& gm=synthetic.BankAt(0);
+            ok &= check(gm.FindPreset(16383,0)!=nullptr &&
+                        gm.FindPreset(16382,0)!=nullptr &&
+                        gm.FindPreset(0,0)==nullptr &&
+                        gm.FindPreset(128,0)==nullptr,
+                        "P111 bank 0 and standard drum kit remapped separately");
+        }
+    }
+    {
         // P110: The exact real-bank fast attack (-11959 timecents) must
         // produce audio while the key is HELD, not only after NoteOff.
         // This exercises the actual 86Box register-level PCM renderer,

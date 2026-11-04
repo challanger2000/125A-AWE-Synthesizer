@@ -69,6 +69,26 @@ int main(int argc,char** argv) {
         catalog.Find(128,0)&&catalog.Find(128,0)->name=="Room Drum Kit"&&
         catalog.Find(128,0)->drums,
         "exact SF2 phdr names, MIDI bank/program and drum-bank metadata");
+    // P111: the original 1MGM metadata gets two reserved ROM browser banks,
+    // without hiding a user's SF2 bank 0 and bank 128 presets.
+    {
+        AWE125::PresetCatalog merged;
+        ok &= check(merged.LoadSoundFont(sf.string(),error) &&
+                    merged.AppendRomGm(sf.string(),error),
+                    "P111 virtual ROM browser metadata appends to existing SF2");
+        ok &= check(merged.Find(0,0)&&
+                    merged.Find(0,0)->name=="Piano Factory"&&
+                    merged.Find(16383,0)&&
+                    merged.Find(16383,0)->name=="ROM: Piano Factory"&&
+                    merged.Find(16383,4)&&
+                    merged.Find(16382,0)&&merged.Find(16382,0)->drums&&
+                    merged.Find(128,0)&&
+                    merged.Find(128,0)->name=="Room Drum Kit",
+                    "P111 GM mirror has original names and separate drums; SF2 unchanged");
+        ok &= check(AWE125::PresetBrowserModel::CurrentLabel(
+                    0,merged,merged,16383,0).find("ROM: Piano Factory")!=std::string::npos,
+                    "P111 GUI resolves ROM-specific bank/program");
+    }
     // P17 model regression uses actual SF2 phdr names, not a GM lookup.
     AWE125::PresetCatalog fmCatalog;
     const auto names=AWE125::PresetBrowserModel::Filter(0,catalog,fmCatalog,-1,"rEtRo");

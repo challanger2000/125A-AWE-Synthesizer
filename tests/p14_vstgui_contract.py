@@ -27,7 +27,11 @@ assert "opl_->" not in f and "cqm_->" not in f
 assert "new PresetBrowserView({0,0,1040,680},this,sfCatalog_,fmCatalog_," in f
 assert 'new VSTGUI::VST3Editor(this,"view","awe_test_panel.uidesc")' in f
 assert 'sendTextMessage(("125A_SF2_STATUS:"+status).c_str())' in f
-assert 'AllowEmuNoteOn(sf2Configured_,sf2Loaded_,' in f
+assert 'AllowEmuNoteOn(sf2Configured_||gmLoaded_,' in f
+assert 'sf2Loaded_||gmLoaded_,' in f
+assert 'RomGmBank::LoadBanks(' in f
+assert 'RomGmBank::AdjacentFile(romPath_)' in f
+assert 'sendTextMessage("125A_ROM_ACK:OK")' in f
 assert 'synth_->Core().ChipVariant()==Emu8000Core::Chip::Box86))' in f
 assert 'Original-Wave-ROM erforderlich: ROM LADEN' in f
 assert 'hostActive_=true;' in f and 'hostActive_=false;' in f
