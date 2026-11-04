@@ -111,7 +111,7 @@ def make_sf2(path):
         end=(i+1)*sample_words
         shdr+=(name(title)+u32(start)+u32(end)+u32(start+16)+
                u32(end-16)+u32(44100)+bytes((69,0))+u16(0)+u16(1))
-    shdr+=name("EOS")+u32(0)*6+b"\0\0"+u16(0)+u16(1)
+    shdr+=name("EOS")+u32(0)*5+b"\0\0"+u16(0)+u16(1)
     pdta=b"".join((
         chunk("phdr",phdrdata),chunk("pbag",pbag),
         chunk("pmod",bytes(10)),chunk("pgen",pgen),
