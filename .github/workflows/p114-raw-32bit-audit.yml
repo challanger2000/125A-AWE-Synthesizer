@@ -1,0 +1,76 @@
+name: P114 - original EMU8000 pre-int16 32bit rail audit
+on:
+  push:
+    branches: [test/p114-raw-32bit-output-audit]
+    paths:
+      - '.github/workflows/p114-raw-32bit-audit.yml'
+      - 'tools/p114*'
+      - 'src/engine/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  p114-native:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure native 86Box core (no Steinberg SDK)
+        shell: pwsh
+        run: |
+          cmake -S . -B build-p114 -G "Visual Studio 17 2022" -A x64 -D125A_BUILD_VST3=OFF -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_OPL3_PROBES=OFF
+          if ($LASTEXITCODE -ne 0) { throw "Configure P114 failed" }
+      - name: Compile Windows x64 P114 auditor
+        shell: pwsh
+        run: |
+          cmake --build build-p114 --config Release --target awe32_p114_raw_32bit_audit --parallel 2
+          if ($LASTEXITCODE -ne 0) { throw "P114 native compile failed" }
+      - name: Run P114 raw + P113-compatible PCM counter tests
+        shell: pwsh
+        run: |
+          ctest --test-dir build-p114 -C Release -R "^125A_p114_raw_tap_selftest$" --output-on-failure
+          if ($LASTEXITCODE -ne 0) { throw "P114 meter self-test failed" }
+      - name: Package local-only P114 test for user
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem build-p114 -Filter awe32_p114_raw_32bit_audit.exe -Recurse |
+            Where-Object { $_.FullName -match 'Release' } |
+            Select-Object -First 1 -ExpandProperty FullName
+          if (-not $exe) { throw "P114 executable not produced" }
+          New-Item -ItemType Directory -Force build-p114/p114-audit | Out-Null
+          Copy-Item $exe build-p114/p114-audit/
+          Copy-Item tools/p114-start-audit.ps1 build-p114/p114-audit/
+          Copy-Item tools/p114-start-audit.cmd build-p114/p114-audit/
+          @'
+          # 125A P114 – Rohpegel und 16-Bit-Ausgabe
+
+          ZIP entpacken und p114-start-audit.cmd doppelt anklicken.
+          Genau wie bei P113 awe32.raw, SYNTHGM.SBK und
+          Synth 512 Bank.sf2 auswaehlen. Keine Installation noetig.
+
+          Test: Originale 11 P113-Presets (9 auffaellige + 2 Kontrollen),
+          MIDI-Note 48, Velocity 64/100/127, 1 s Note-On und 0,5 s Release.
+
+          Meldet den tatsaechlichen int32-Ausgang des 86Box-Synthesizers
+          VOR der unveraenderten Begrenzung nach int16. Unterscheidet:
+          RAW_EXCEEDS_INT16 / RAIL_WITHOUT_RAW_EXCESS / NO_RAIL.
+          Fuer Programm 0 bei Velocity 100 und Programm 2 bei Velocity 127
+          wird ein A/B-Vergleich des kompletten PCM-Signals mit
+          ein- und ausgeschalteter Messung ausgefuehrt.
+
+          Ergebnis: 125A-P114-Rohpegel-Diagnose.csv
+          Bitte NUR DIE CSV hier im Chat hochladen. ROM/SBK/SF2 und Audio
+          bleiben auf deinem Rechner; der Test veraendert keine Sounds.
+
+          WICHTIG: Eine Ueberschreitung der 16-Bit-Grenze beweist eine
+          softwareseitige Begrenzung, aber nicht, dass diese von einer
+          historischen AWE32/AWE64 abweicht. Ein Vergleich mit echter
+          Hardware ist damit noch nicht ersetzt.
+          '@ | Set-Content build-p114/p114-audit/START-HERE.md -Encoding UTF8
+      - name: Publish P114 standalone Windows zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: 125A-P114-32bit-Rohpegel-Audit-Windows-x64
+          path: build-p114/p114-audit/
+          if-no-files-found: error
+          retention-days: 7
