@@ -69,8 +69,13 @@ jobs:
             Select-Object -First 1 -ExpandProperty FullName
           $plugin = (Resolve-Path "build-p119/VST3/Release/125A_AWE_Synthesizer.vst3").Path
           if (-not $editor) { throw "P119 EditorHost missing" }
-          python tools/p18_editorhost_smoke.py --editorhost "$editor" --plugin "$plugin" --output build-p119/p119-gui
-          if ($LASTEXITCODE -ne 0) { throw "P119 GUI smoke failed" }
+          # P119 shutdown audit: repeat real Win32 GUI creation, interaction,
+          # editor close and plugin teardown to detect intermittent failures.
+          for ($attempt=1; $attempt -le 3; $attempt++) {
+            Write-Host "P119 complete EditorHost smoke iteration $attempt/3"
+            python tools/p18_editorhost_smoke.py --editorhost "$editor" --plugin "$plugin" --output "build-p119/p119-gui/run-$attempt"
+            if ($LASTEXITCODE -ne 0) { throw "P119 EditorHost iteration $attempt failed" }
+          }
       - name: Package P119 functional 13-knob VST3 and direct preset selectors
         uses: actions/upload-artifact@v4
         with:
