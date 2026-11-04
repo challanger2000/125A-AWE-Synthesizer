@@ -91,6 +91,26 @@ if(WIN32)
   add_test(NAME 125A_p119_ui_dispatch COMMAND awe32_p119_ui_dispatch_test)
 endif()
 
+# P120: independent reproductions of Codex P119 audit failures.
+# A thousand retirements MUST clear automatically, with a bounded queue and
+# no destruction on the audio thread.
+add_executable(awe32_p120_engine_retirement_test tests/p120_engine_retirement.cpp)
+target_include_directories(awe32_p120_engine_retirement_test PRIVATE src/vst3)
+target_compile_features(awe32_p120_engine_retirement_test PRIVATE cxx_std_23)
+add_test(NAME 125A_p120_engine_retirement COMMAND awe32_p120_engine_retirement_test)
+
+add_executable(awe32_p120_midi_automation_test tests/p120_midi_automation.cpp)
+target_include_directories(awe32_p120_midi_automation_test PRIVATE src/vst3)
+target_compile_features(awe32_p120_midi_automation_test PRIVATE cxx_std_23)
+add_test(NAME 125A_p120_midi_automation COMMAND awe32_p120_midi_automation_test)
+
+if(WIN32)
+  add_executable(awe32_p120_ui_reentrancy_test tests/p120_win_ui_reentrancy.cpp)
+  target_include_directories(awe32_p120_ui_reentrancy_test PRIVATE src/vst3)
+  target_compile_features(awe32_p120_ui_reentrancy_test PRIVATE cxx_std_23)
+  add_test(NAME 125A_p120_ui_reentrancy COMMAND awe32_p120_ui_reentrancy_test)
+endif()
+
 # Independent executable proves the exact 125A master SVG is usable as vector
 # paths without linking a Windows GUI or loading any copyrighted ROM.
 add_executable(awe32_p19_master_logo_test tests/p19_logo_geometry.cpp)
