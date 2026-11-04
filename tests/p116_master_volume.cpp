@@ -1,6 +1,8 @@
 #include "MasterOutput.h"
 #include <cmath>
 #include <iostream>
+#include <vector>
+#include <utility>
 using AWE125::MasterOutput::Gain;
 static bool expect(bool test,const char* name) {
     std::cout<<(test?"PASS: ":"FAIL: ")<<name<<"\n";
@@ -46,6 +48,35 @@ int main() {
                    "mute state is recalled without unmuted frame");
     pass &= expect(Gain::fromStored(99999)==1.f,
                    "stored gain cannot exceed unity");
+    // P119: same linear automation encoded as a single endpoint or as 64
+    // dense points must produce identical PCM gain curves, not step timing.
+    {
+        struct Points {std::vector<std::pair<int32_t,double>> values;};
+        Points sparse{{{63,0.}}};
+        Points dense;
+        for(int i=0;i<64;++i)
+            dense.values.emplace_back(i,1.-double(i+1)/64.);
+        const auto reader=+[](void* ctx,int32_t idx,int32_t& off,double& val)->bool {
+            const auto& points=static_cast<Points*>(ctx)->values;
+            if(idx<0||size_t(idx)>=points.size())return false;
+            off=points[size_t(idx)].first;val=points[size_t(idx)].second;
+            return true;
+        };
+        AWE125::MasterOutput::Curve a,b;
+        a.reset(&sparse,reader,1,1.);
+        b.reset(&dense,reader,64,1.);
+        Gain ga,gb;
+        bool equal=true;
+        for(int i=0;i<64;++i) {
+            const auto va=a.valueAt(i),vb=b.valueAt(i);
+            if(std::abs(va-vb)>1e-12)equal=false;
+            ga.setTarget(static_cast<uint32_t>(std::lround(va*10000.)));
+            gb.setTarget(static_cast<uint32_t>(std::lround(vb*10000.)));
+            if(std::abs(ga.next()-gb.next())>1e-6f)equal=false;
+        }
+        pass &= expect(equal,
+            "P119 sparse endpoint and dense linear VST3 queues produce identical 64-frame PCM master envelope");
+    }
     std::cout<<(pass?"P116_MASTER_VOLUME_PASS":"P116_MASTER_VOLUME_FAIL")<<"\n";
     return pass?0:1;
 }
