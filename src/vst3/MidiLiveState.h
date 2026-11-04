@@ -36,6 +36,18 @@ public:
             ch.rangeTouched=true;
         }
     }
+    // P120 bank precedence: a later explicit GUI or project-recall bank
+    // supersedes older CC0/CC32 values. Do not replay the older CC0,
+    // because Synth::ControlChange(0) disables browserBankActive.
+    // A subsequent MIDI CC0 will mark its own channel touched again and win.
+    void BrowserBankSelected() noexcept {
+        constexpr auto msb=static_cast<std::size_t>(MidiControlMapping::Index(0));
+        constexpr auto lsb=static_cast<std::size_t>(MidiControlMapping::Index(32));
+        for(auto& ch:channels_) {
+            ch.touched[msb]=false;
+            ch.touched[lsb]=false;
+        }
+    }
     const Channel& Get(unsigned channel) const noexcept {return channels_[channel];}
     // Replaying only changed controls preserves the Synth's hardware defaults
     // and, crucially, doesn't accidentally override SelectBrowserBank via CC0=0.
