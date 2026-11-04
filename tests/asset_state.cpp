@@ -34,19 +34,29 @@ int main() {
     d.drumIbkPath="C:\\FM\\Creative drums.ibk";
     d.controls[0]=7500;
     d.controls[8]=2500;
+    d.masterVolume=4300; // 43%, preserved separately from SF2 overlays
     const auto blob=encode(d);
     AssetState::Data out;
     ok &= ck(!blob.empty()&&decode(blob,out)&&out.program==104&&
              out.engine==2&&out.bank==128&&out.pathsSpecified&&out.romPath==d.romPath&&
              out.sf2Path==d.sf2Path&&out.ibkPath==d.ibkPath&&
-             out.drumIbkPath==d.drumIbkPath&&out.controls==d.controls,
-             "V8 legacy-compatible state and 12 GUI controls round trip");
+             out.drumIbkPath==d.drumIbkPath&&out.controls==d.controls&&
+             out.masterVolume==4300,
+             "V9 state round-trip with 43% master volume and 12 GUI controls");
+    // V9 only appends one uint32 volume word. V8 projects restore to unity.
+    Bytes v8(blob.begin(),blob.end()-4);
+    v8[4]=8;
+    ok &= ck(decode(v8,out)&&out.masterVolume==MasterOutput::kDefault&&
+             out.controls==d.controls&&out.bank==128,
+             "legacy V8 restores unity master without altering SF2 overlays");
     // V8 appends exactly 12 uint32 overlay parameters to V7, never to old saves.
-    Bytes v7(blob.begin(),blob.end()-4*AssetState::kControlCount);
+    Bytes v7(v8.begin(),v8.end()-4*AssetState::kControlCount);
     v7[4]=7;
     ok &= ck(decode(v7,out)&&out.bank==128&&
              std::all_of(out.controls.begin(),out.controls.end(),[](uint32_t v){return v==0;}),
              "legacy V7 restore preserves bank and neutral overlay");
+    ok &= ck(out.masterVolume==MasterOutput::kDefault,
+             "legacy V7 project defaults master volume to 100%");
     // V7 appended one uint32 SF2-bank word to the unchanged V6 bytes.
     Bytes v6(v7.begin(),v7.end()-4);
     v6[4]=6;
@@ -91,7 +101,7 @@ int main() {
         if(decode(partial,target)||target.program!=3||
            target.sf2Path!=d.sf2Path)allRejected=false;
     }
-    ok &= ck(allRejected,"all truncated V8 states rejected atomically");
+    ok &= ck(allRejected,"all truncated V9 states rejected atomically");
     auto corrupt=blob;
     corrupt[4]=90;
     out=d;out.program=7;
@@ -99,23 +109,38 @@ int main() {
              "unknown format version rejected atomically");
     corrupt=blob;
     // Hardware word precedes the IBK strings, bank and V8 control values.
-    const size_t engineOffset=corrupt.size()-4*AssetState::kControlCount-4-4-d.drumIbkPath.size()-4-d.ibkPath.size()-4;
+    const size_t engineOffset=corrupt.size()-4-4*AssetState::kControlCount-4-4-d.drumIbkPath.size()-4-d.ibkPath.size()-4;
     corrupt[engineOffset]=3;
     ok &= ck(!decode(corrupt,out)&&out.program==7,
              "out-of-range hardware mode rejected atomically");
     corrupt=blob;
     // V7 bank word precedes V8's 12 control words.
-    const size_t bankOffset=corrupt.size()-4*AssetState::kControlCount-4;
+    const size_t bankOffset=corrupt.size()-4-4*AssetState::kControlCount-4;
     corrupt[bankOffset]=0x00;
     corrupt[bankOffset+1]=0x40; // exact little-endian bank 16384
     out=d;out.program=7;
     ok &= ck(!decode(corrupt,out)&&out.program==7&&out.bank==128,
              "invalid SF2 bank 16384 rejected without state mutation");
     corrupt=blob;
-    corrupt[corrupt.size()-4]=0xFF;corrupt[corrupt.size()-3]=0xFF;
+    corrupt[corrupt.size()-8]=0xFF;corrupt[corrupt.size()-7]=0xFF;
     out=d;out.program=7;
     ok &= ck(!decode(corrupt,out)&&out.program==7,
-             "invalid V8 control range rejected atomically");
+             "invalid V8 overlay control range rejected atomically");
+    corrupt=blob;
+    corrupt[corrupt.size()-4]=0xFF;
+    corrupt[corrupt.size()-3]=0xFF;
+    out=d;out.program=7;
+    ok &= ck(!decode(corrupt,out)&&out.program==7,
+             "invalid V9 master volume rejected atomically");
+    AssetState::Data maxVolume=d;maxVolume.masterVolume=10000;
+    ok &= ck(decode(encode(maxVolume),out)&&out.masterVolume==10000,
+             "master 100% is exactly saved and restored");
+    maxVolume.masterVolume=0;
+    ok &= ck(decode(encode(maxVolume),out)&&out.masterVolume==0,
+             "master 0% mute is exactly saved and restored");
+    maxVolume.masterVolume=10001;
+    ok &= ck(encode(maxVolume).empty(),
+             "out-of-range master volume cannot be serialized");
     AssetState::Data boundary=d;boundary.bank=AssetState::kMaxBank;
     ok &= ck(decode(encode(boundary),out)&&out.bank==AssetState::kMaxBank,
              "maximum SF2 bank 16383 round-trips");
@@ -128,7 +153,8 @@ int main() {
     corrupt=blob;corrupt[16]=255;corrupt[17]=255;
     ok &= ck(!decode(corrupt,out),"oversize ROM path rejected");
     AssetState::Data blank;blank.program=11;
-    ok &= ck(decode(encode(blank),out)&&!out.pathsSpecified,
+    ok &= ck(decode(encode(blank),out)&&!out.pathsSpecified&&
+             out.masterVolume==10000,
              "unresolved paths flag preserved for initial configuration");
     d.drumIbkPath=std::string(4097,'x');
     ok &= ck(encode(d).empty(),"oversize drum IBK path rejected on save");
