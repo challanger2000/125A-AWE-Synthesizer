@@ -7,6 +7,7 @@ on:
       - 'tools/p98_*'
       - 'tools/p99_*'
       - 'tools/p102_*'
+      - 'tools/p103_*'
       - 'src/engine/CMakeLists.txt'
       - 'src/engine/snd_emu8k.c'
       - '.github/workflows/p97-physical-awe64-audio.yml'
@@ -93,6 +94,15 @@ jobs:
             --events "$RUNNER_TEMP/p97/events.tsv" \
             --p97-report p97-evidence/P97-AWE64-Gold-versus-125A-264s.json \
             --out p97-evidence/P102-Amp-Mod-Envelope-Phases.json
+      - name: P103 compare physical vs native SF2 attenuation step slopes
+        run: |
+          "$RUNNER_TEMP/p97/venv/bin/python" -m py_compile tools/p103_attenuation_steps.py
+          "$RUNNER_TEMP/p97/venv/bin/python" tools/p103_attenuation_steps.py \
+            --reference "$RUNNER_TEMP/p97/CT4390.flac" \
+            --native "$RUNNER_TEMP/p97/native-264s.wav" \
+            --events "$RUNNER_TEMP/p97/events.tsv" \
+            --p97-report p97-evidence/P97-AWE64-Gold-versus-125A-264s.json \
+            --out p97-evidence/P103-SF2-Attenuation-Steps.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
