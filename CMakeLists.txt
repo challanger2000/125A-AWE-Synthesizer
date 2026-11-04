@@ -49,6 +49,13 @@ target_include_directories(awe32_p116_master_volume_test PRIVATE src/vst3)
 target_compile_features(awe32_p116_master_volume_test PRIVATE cxx_std_23)
 add_test(NAME 125A_p116_master_volume COMMAND awe32_p116_master_volume_test)
 
+# P117: direct bank/preset menus must never invent missing SoundFont programs.
+add_executable(awe32_p117_direct_presets_test tests/p117_direct_preset_selection.cpp)
+target_include_directories(awe32_p117_direct_presets_test PRIVATE src/vst3
+  src/opl3 ../upstream/AWE32Emu/AWE32Emu/src)
+target_compile_features(awe32_p117_direct_presets_test PRIVATE cxx_std_23)
+add_test(NAME 125A_p117_direct_presets COMMAND awe32_p117_direct_presets_test)
+
 # Independent executable proves the exact 125A master SVG is usable as vector
 # paths without linking a Windows GUI or loading any copyrighted ROM.
 add_executable(awe32_p19_master_logo_test tests/p19_logo_geometry.cpp)
