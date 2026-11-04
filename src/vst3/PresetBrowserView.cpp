@@ -4,104 +4,237 @@
 #include "vstgui/lib/cdrawcontext.h"
 #include "vstgui/lib/cfont.h"
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <string>
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <commdlg.h>
+#endif
 
 namespace AWE125 {
 using namespace VSTGUI;
 namespace {
-constexpr CColor kBack(22,27,34,255),kRaised(40,50,62,255),
-                 kPaper(225,230,235,255),kMuted(151,168,184,255),
-                 kSel(50,84,102,255),kGrid(55,68,80,255),
-                 kBezel(12,16,22,255),kStroke(83,99,111,255);
+constexpr CColor kBack(22,27,34,255), kRaised(42,52,63,255),
+                 kPaper(226,230,233,255), kMuted(151,168,184,255),
+                 kSel(51,86,103,255), kGrid(56,68,80,255),
+                 kBezel(11,16,22,255), kStroke(85,100,113,255),
+                 kOrange(220,151,87,255);
+constexpr Steinberg::Vst::ParamID kProgram=1000,kBank=1002;
 class HardwareFaceplate final : public CView {
 public:
     explicit HardwareFaceplate(const CRect& r):CView(r) {setMouseEnabled(false);}
     void draw(CDrawContext* c) override {
         const auto surface=[&](CRect r,CColor fill,CColor edge) {
-            c->setFillColor(fill);
-            c->drawRect(r,kDrawFilled);
-            c->setFrameColor(edge);
-            c->drawRect(r,kDrawStroked);
+            c->setFillColor(fill);c->drawRect(r,kDrawFilled);
+            c->setFrameColor(edge);c->drawRect(r,kDrawStroked);
         };
-        // Dark, anodized metal enclosure: three functional surfaces.
-        surface({11,7,849,55},CColor(34,42,51),CColor(104,117,128));
-        surface({13,146,838,199},CColor(13,19,25),CColor(66,80,94));
-        surface({16,276,832,570},CColor(19,25,31),CColor(78,94,106));
-        // Fine brushed-metal separators, no imitation rack screws.
-        c->setFrameColor(CColor(75,91,102));
-        c->drawLine({18,55},{841,55});
-        c->drawLine({17,201},{840,201});
-        c->drawLine({17,269},{840,269});
-        c->setFrameColor(CColor(38,50,58));
-        c->drawLine({17,55.8},{841,55.8});
-        c->drawLine({17,269.8},{840,269.8});
+        surface({11,7,1029,57},CColor(35,43,52),CColor(110,122,134));
+        surface({12,67,1028,136},CColor(16,22,29),CColor(77,92,106));
+        surface({12,145,1028,209},CColor(24,31,39),CColor(78,94,107));
+        surface({13,221,630,351},CColor(24,31,38),CColor(82,96,108));
+        surface({13,359,630,529},CColor(24,31,38),CColor(82,96,108));
+        surface({13,538,630,660},CColor(24,31,38),CColor(82,96,108));
+        surface({643,222,1028,660},CColor(18,24,30),CColor(82,96,108));
+        surface({12,670,1028,710},CColor(14,20,26),CColor(83,96,108));
+        c->setFrameColor(CColor(51,62,72,255));
+        c->drawLine({17,61},{1025,61});
+        c->drawLine({17,141},{1025,141});
+        c->drawLine({17,214},{1025,214});
+        c->setFrameColor(CColor(114,126,138,255));
+        c->drawLine({20,222},{622,222});
+        c->drawLine({20,359},{622,359});
     }
 };
-constexpr Steinberg::Vst::ParamID kProgram=1000,kEngine=1001,kBank=1002;
-std::string BankLabel(uint16_t bank) {
-    if(bank==128)return "Bank 128 - Drumkits";
-    return "Bank "+std::to_string(bank);
+// Mouse-driven, modern hardware-like knob. Uses native VSTGUI controls,
+// never paints values that differ from the host's normalized parameters.
+class HardwareKnob final : public CControl {
+public:
+    HardwareKnob(const CRect& r,IControlListener* listener,int tag)
+        :CControl(r,listener,tag,nullptr) {setMin(0.f);setMax(1.f);}
+    void draw(CDrawContext* ctx) override {
+        const CRect outer=getViewSize();
+        CRect inner=outer;inner.inset(4,4);
+        CRect core=inner;core.inset(5,5);
+        ctx->setFillColor(kBezel);
+        ctx->drawEllipse(outer,kDrawFilled);
+        ctx->setFrameColor(CColor(87,101,113,255));
+        ctx->setLineWidth(2);
+        ctx->drawEllipse(outer,kDrawStroked);
+        ctx->setFillColor(CColor(58,70,81,255));
+        ctx->drawEllipse(inner,kDrawFilled);
+        ctx->setFrameColor(CColor(126,136,145,255));
+        ctx->drawEllipse(inner,kDrawStroked);
+        ctx->setFillColor(CColor(32,42,51,255));
+        ctx->drawEllipse(core,kDrawFilled);
+        ctx->setFrameColor(CColor(16,22,28,255));
+        ctx->drawEllipse(core,kDrawStroked);
+        const double cx=(outer.left+outer.right)*.5;
+        const double cy=(outer.top+outer.bottom)*.5;
+        const double angle=(135.0+270.0*getValue())*3.141592653589793/180.;
+        const double dx=std::cos(angle),dy=std::sin(angle);
+        const double rad=(outer.getWidth()-9)*.5;
+        ctx->setLineWidth(3);
+        ctx->setFrameColor(getValue()>0.0001f?kOrange:kMuted);
+        ctx->drawLine({cx+dx*8,cy+dy*8},{cx+dx*rad,cy+dy*rad});
+        ctx->setLineWidth(1);
+        setDirty(false);
+    }
+    CMouseEventResult onMouseDown(CPoint& where,const CButtonState& buttons) override {
+        if(!(buttons&kLButton))return kMouseEventNotHandled;
+        lastX_=where.x;lastY_=where.y;dragging_=true;
+        beginEdit();
+        return kMouseEventHandled;
+    }
+    CMouseEventResult onMouseMoved(CPoint& where,const CButtonState&) override {
+        if(!dragging_)return kMouseEventNotHandled;
+        const double delta=(lastY_-where.y)+.25*(where.x-lastX_);
+        lastX_=where.x;lastY_=where.y;
+        const auto next=std::clamp(float(getValue()+delta/170.),0.f,1.f);
+        if(next!=getValue()) {setValue(next);valueChanged();invalid();}
+        return kMouseEventHandled;
+    }
+    CMouseEventResult onMouseUp(CPoint&,const CButtonState&) override {
+        if(dragging_) {dragging_=false;endEdit();}
+        return kMouseEventHandled;
+    }
+    CMouseEventResult onMouseCancel() override {
+        if(dragging_) {dragging_=false;endEdit();}
+        return kMouseEventHandled;
+    }
+private:
+    bool dragging_=false;
+    CCoord lastX_=0.,lastY_=0.;
+};
+std::string BankLabel(uint16_t id) {
+    return id==128 ? "Bank 128 - Drumkits" : "Bank "+std::to_string(id);
 }
+std::string DisplayName(const std::string& path) {
+    if(path.empty())return "Noch keine SoundFont ausgewaehlt";
+    const auto i=path.find_last_of("/\\");
+    return i==std::string::npos?path:path.substr(i+1);
 }
+bool NativeChooseSoundFont(std::string& chosen) {
+#if defined(_WIN32)
+    wchar_t file[32768]{};
+    OPENFILENAMEW ofn{};
+    ofn.lStructSize=sizeof(ofn);
+    ofn.hwndOwner=GetForegroundWindow();
+    ofn.lpstrFile=file;
+    ofn.nMaxFile=32768;
+    ofn.lpstrFilter=L"SoundFont 2 (*.sf2)\0*.sf2\0Alle Dateien (*.*)\0*.*\0\0";
+    ofn.nFilterIndex=1;
+    ofn.lpstrDefExt=L"sf2";
+    ofn.Flags=OFN_EXPLORER|OFN_FILEMUSTEXIST|OFN_PATHMUSTEXIST;
+    if(!GetOpenFileNameW(&ofn))return false;
+    const int n=WideCharToMultiByte(CP_UTF8,WC_ERR_INVALID_CHARS,
+                                     file,-1,nullptr,0,nullptr,nullptr);
+    if(n<=1||n>4097)return false;
+    std::string path(static_cast<size_t>(n),'\0');
+    if(WideCharToMultiByte(CP_UTF8,WC_ERR_INVALID_CHARS,
+                           file,-1,path.data(),n,nullptr,nullptr)!=n)return false;
+    path.pop_back();
+    chosen=std::move(path);
+    return true;
+#else
+    (void)chosen;
+    return false;
+#endif
+}
+} // namespace
 
 PresetBrowserView::PresetBrowserView(const CRect& rect,
     Steinberg::Vst::EditController* controller,
-    const PresetCatalog& sf,const PresetCatalog& fm,
+    const PresetCatalog& sf,const PresetCatalog& legacyFm,
     const std::string& exactLogoPath,
-    std::function<std::string()> sf2StatusProvider)
-    : CViewContainer(rect),controller_(controller),sf_(sf),fm_(fm),
-      sf2StatusProvider_(std::move(sf2StatusProvider)) {
+    std::function<std::string()> sf2StatusProvider,
+    std::function<bool(const std::string&)> sf2LoadRequest,
+    std::function<std::string()> sf2CurrentPath,
+    std::function<uint64_t()> sf2CatalogRevision)
+    : CViewContainer(rect),controller_(controller),sf_(sf),fm_(legacyFm),
+      sf2StatusProvider_(std::move(sf2StatusProvider)),
+      sf2LoadRequest_(std::move(sf2LoadRequest)),
+      sf2CurrentPath_(std::move(sf2CurrentPath)),
+      sf2CatalogRevision_(std::move(sf2CatalogRevision)) {
     setBackgroundColor(kBack);
-    addView(new HardwareFaceplate({0,0,860,612}));
-    addView(new MasterLogoView({18,11,150,50},exactLogoPath));
-    title_=MakeLabel({167,15,827,49},"AWE SYNTHESIZER   /   SOUND BLASTER SERIES");
-    MakeLabel({24,62,155,91},"HARDWARE",true);
-    hardware_=new COptionMenu({176,61,565,95},this,kHardware);
-    for(int i=0;i<3;++i)hardware_->addEntry(PresetBrowserModel::HardwareName(i));
-    hardware_->setBackColor(kBezel);
-    hardware_->setFontColor(kPaper);
-    hardware_->setFrameColor(kStroke);
-    addView(hardware_);
-    info_=MakeLabel({24,107,822,139},"",true);
-    MakeLabel({24,156,156,187},"INSTRUMENT",true);
-    previous_=MakeButton({176,155,225,190},kPrevious,"<");
-    programLabel_=MakeLabel({239,154,733,193},"000",false);
-    next_=MakeButton({744,155,793,190},kNext,">");
-    toggle_=MakeButton({654,61,819,96},kToggle,"BROWSER");
-    // CTextButton::kKickStyle invokes valueChanged TWICE per click: ON,
-    // then OFF. Persistent browser visibility MUST use kOnOffStyle.
+    addView(new HardwareFaceplate({0,0,1040,720}));
+    addView(new MasterLogoView({18,11,150,51},exactLogoPath));
+    MakeLabel({170,12,997,50},"125A  AWE SYNTHESIZER    |    EMU8000 HARDWARE",false);
+
+    MakeLabel({25,80,149,123},"SOUNDFONT",true);
+    fileLabel_=MakeLabel({152,79,816,124},"",false);
+    loadSf2_=MakeButton({836,83,1010,122},kLoadSf2,"SF2 LADEN");
+    MakeLabel({25,156,143,193},"INSTRUMENT",true);
+    previous_=MakeButton({152,159,198,195},kPrevious,"<");
+    programLabel_=MakeLabel({212,157,752,199},"",false);
+    next_=MakeButton({768,159,813,195},kNext,">");
+    toggle_=MakeButton({835,159,1008,195},kToggle,"BROWSER");
     toggle_->setStyle(CTextButton::kOnOffStyle);
     toggle_->setValue(1.f);
-    bankCaption_=MakeLabel({24,226,150,256},"BANK",true);
-    bankMenu_=new COptionMenu({145,225,443,260},this,kBank);
+
+    MakeLabel({27,232,500,254},"AMP ENVELOPE",true);
+    AddKnob(0,87,263,"ATTACK");
+    AddKnob(1,227,263,"DECAY");
+    AddKnob(2,367,263,"SUSTAIN -");
+    AddKnob(3,507,263,"RELEASE");
+    MakeLabel({27,368,583,392},"FILTER ENVELOPE + TONE",true);
+    AddKnob(4,41,401,"ATTACK");
+    AddKnob(5,137,401,"DECAY");
+    AddKnob(6,233,401,"SUSTAIN -");
+    AddKnob(7,329,401,"RELEASE");
+    AddKnob(8,425,401,"CUTOFF -");
+    AddKnob(9,521,401,"RESONANCE +");
+    MakeLabel({27,548,488,571},"EFFECT SENDS",true);
+    AddKnob(10,222,572,"HALL +");
+    AddKnob(11,431,572,"CHORUS +");
+    reset_=MakeButton({24,633,151,654},kReset,"RESET");
+    MakeLabel({163,633,621,659},"0% = Original-SoundFont   |   Regler wirken auf neue Noten",true);
+
+    MakeLabel({658,231,990,257},"SOUND BROWSER",true);
+    bankCaption_=MakeLabel({656,266,715,293},"BANK",true);
+    bankMenu_=new COptionMenu({724,261,1008,298},this,kBank);
     bankMenu_->setBackColor(kBezel);
     bankMenu_->setFontColor(kPaper);
     bankMenu_->setFrameColor(kStroke);
     addView(bankMenu_);
-    searchCaption_=MakeLabel({464,226,530,256},"SUCHE",true);
-    search_=new CTextEdit({532,225,821,260},this,kFilter,"");
+    searchCaption_=MakeLabel({656,306,716,335},"SUCHE",true);
+    search_=new CTextEdit({724,304,1008,339},this,kFilter,"");
     search_->setPlaceholderString("Instrument suchen...");
     search_->setImmediateTextChange(true);
     search_->setBackColor(kBezel);
     search_->setFontColor(kPaper);
     search_->setFrameColor(kStroke);
     addView(search_);
-    table_=new CDataBrowser({24,282,821,566},this,
-                             CScrollView::kVerticalScrollbar|
-                             CScrollView::kAutoHideScrollbars);
+    table_=new CDataBrowser({654,346,1015,650},this,
+             CScrollView::kVerticalScrollbar|
+             CScrollView::kAutoHideScrollbars);
     table_->setBackgroundColor(kRaised);
     table_->setWantsFocus(true);
     addView(table_);
-    empty_=MakeLabel({35,293,786,335},"",true);
-    hint_=MakeLabel({24,571,822,601},
-                    "SF2-Audiostatus noch nicht vom Prozessor bestaetigt.",
-                    true);
+    empty_=MakeLabel({669,359,1009,410},"",true);
+
+    hint_=MakeLabel({27,679,1010,706},
+        "SF2-Audiostatus noch nicht vom Prozessor bestaetigt.",true);
     hint_->setTextTruncateMode(CTextLabel::kTruncateTail);
     SetExpanded(true);
     setWantsIdle(true);
     Sync(true);
+}
+void PresetBrowserView::AddKnob(int index,int x,int y,const char* title) {
+    auto* ctrl=new HardwareKnob({CCoord(x),CCoord(y),CCoord(x+58),CCoord(y+58)},
+                                this,kGuiFirst+index);
+    controls_[size_t(index)]=ctrl;
+    addView(ctrl);
+    auto* lab=MakeLabel({CCoord(x-20),CCoord(y+61),CCoord(x+82),CCoord(y+81)},title,true);
+    lab->setHoriAlign(kCenterText);
+    auto* val=MakeLabel({CCoord(x-20),CCoord(y+82),CCoord(x+82),CCoord(y+101)},"0%",false);
+    val->setHoriAlign(kCenterText);
+    values_[size_t(index)]=val;
 }
 CTextLabel* PresetBrowserView::MakeLabel(const CRect& r,const char* s,bool secondary) {
     auto* label=new CTextLabel(r,s);
@@ -119,14 +252,13 @@ CTextButton* PresetBrowserView::MakeButton(const CRect& r,int tag,const char* s)
     button->setTextColor(kPaper);
     button->setTextColorHighlighted(kPaper);
     button->setFrameColor(kStroke);
-    button->setFrameColorHighlighted(CColor(116,154,171));
+    button->setFrameColorHighlighted(CColor(132,155,172));
     button->setRoundRadius(4.);
     auto* base=CGradient::create(0.,1.,CColor(66,79,92),CColor(33,44,56));
-    auto* active=CGradient::create(0.,1.,CColor(85,119,138),CColor(51,77,93));
+    auto* pressed=CGradient::create(0.,1.,CColor(89,113,132),CColor(55,75,91));
     button->setGradient(base);
-    button->setGradientHighlighted(active);
-    base->forget();
-    active->forget();
+    button->setGradientHighlighted(pressed);
+    base->forget();pressed->forget();
     addView(button);
     return button;
 }
@@ -137,17 +269,13 @@ void PresetBrowserView::ChangeParameter(Steinberg::Vst::ParamID tag,double norm)
     controller_->setParamNormalized(tag,norm);
     controller_->performEdit(tag,norm);
     controller_->endEdit(tag);
-    // Rebuild on the next UI idle, not while CDataBrowser is dispatching
-    // a selected-row mouse event. Avoids reentrant layout invalidation.
 }
 void PresetBrowserView::Select(uint16_t bank,uint8_t program) {
-    // Both parameters are written in one UI gesture. Their original host
-    // IDs and normalized ranges remain unchanged. No I/O or sample loading.
-    if(engine_==0&&bank!=bank_)ChangeParameter(kBank,double(bank)/16383.);
+    if(bank!=bank_)ChangeParameter(kBank,double(bank)/16383.);
     ChangeParameter(kProgram,double(program)/127.);
 }
 void PresetBrowserView::RebuildBanks() {
-    filterBanks_=PresetBrowserModel::Banks(engine_,sf_,fm_);
+    filterBanks_=PresetBrowserModel::Banks(0,sf_,fm_);
     bankMenu_->removeAllEntry();
     bankMenu_->addEntry("Alle Baenke");
     bool exists=false;
@@ -156,25 +284,25 @@ void PresetBrowserView::RebuildBanks() {
         if(int(id)==bankFilter_)exists=true;
     }
     if(!exists)bankFilter_=-1;
-    int index=0;
+    int selected=0;
     for(size_t i=0;i<filterBanks_.size();++i)
-        if(int(filterBanks_[i])==bankFilter_)index=static_cast<int>(i+1);
-    bankMenu_->setValue(static_cast<float>(index));
+        if(int(filterBanks_[i])==bankFilter_)selected=static_cast<int>(i+1);
+    bankMenu_->setValue(static_cast<float>(selected));
 }
 void PresetBrowserView::RebuildRows() {
-    rows_=PresetBrowserModel::Filter(engine_,sf_,fm_,bankFilter_,searchText_);
+    rows_=PresetBrowserModel::Filter(0,sf_,fm_,bankFilter_,searchText_);
     table_->recalculateLayout();
     if(rows_.empty()) {
-        empty_->setText(engine_==0&&sf_.Entries().empty()?
-              "Keine SF2-Presets geladen. SoundFont in assets.cfg konfigurieren.":
-              "Keine Treffer. Suche oder Bankfilter aendern.");
+        empty_->setText(sf_.Entries().empty()?
+            "Keine SF2 geladen. Oben auf SF2 LADEN klicken.":
+            "Keine Treffer. Suche oder Bankfilter aendern.");
         empty_->setVisible(expanded_);
     } else empty_->setVisible(false);
-    // Selection highlight follows the same VST3 parameters as the DAW.
     int selected=-1;
     for(size_t i=0;i<rows_.size();++i)
-        if(rows_[i].program==program_&&
-           rows_[i].bank==(engine_==0?bank_:0)) {selected=int(i);break;}
+        if(rows_[i].program==program_&&rows_[i].bank==bank_) {
+            selected=int(i);break;
+        }
     syncing_=true;
     if(selected>=0)table_->setSelectedRow(selected,true);
     else table_->unselectAll();
@@ -182,39 +310,56 @@ void PresetBrowserView::RebuildRows() {
 }
 void PresetBrowserView::Sync(bool force) {
     if(!controller_)return;
-    const int engine=std::clamp(int(std::lround(
-        controller_->getParamNormalized(kEngine)*2.)),0,2);
+    if(sf2CatalogRevision_) {
+        const auto revision=sf2CatalogRevision_();
+        if(revision!=lastCatalogRevision_) {
+            lastCatalogRevision_=revision;
+            force=true;
+            bankFilter_=-1;
+            searchText_.clear();
+            search_->setText("");
+        }
+    }
+    if(sf2CurrentPath_) {
+        const auto path=sf2CurrentPath_();
+        if(force||path!=lastPath_) {
+            lastPath_=path;
+            fileLabel_->setText(DisplayName(path).c_str());
+        }
+    }
     const auto bank=static_cast<uint16_t>(std::clamp(int(std::lround(
         controller_->getParamNormalized(kBank)*16383.)),0,16383));
     const auto program=static_cast<uint8_t>(std::clamp(int(std::lround(
         controller_->getParamNormalized(kProgram)*127.)),0,127));
-    // SF2 load information arrives from processor via VST3 connection and
-    // can change without any parameter automation. Poll on UI idle only.
+    for(int i=0;i<kGuiCount;++i) {
+        const auto value=static_cast<float>(std::clamp(
+            controller_->getParamNormalized(kGuiFirst+i),0.,1.));
+        auto* knob=controls_[size_t(i)];
+        if(!knob->isEditing() && std::abs(knob->getValue()-value)>.0005f) {
+            knob->setValue(value);knob->invalid();
+        }
+        char label[16]{};
+        std::snprintf(label,sizeof(label),"%d%%",int(std::lround(value*100.)));
+        values_[size_t(i)]->setText(label);
+    }
     SyncSf2Status();
-    if(!force&&engine==engine_&&bank==bank_&&program==program_)return;
-    const bool newEngine=engine!=engine_;
-    engine_=engine;
-    bank_=bank;
-    program_=program;
-    hardware_->setValue(static_cast<float>(engine));
-    info_->setText(PresetBrowserModel::HardwareDescription(engine_));
+    if(!force&&bank==bank_&&program==program_)return;
+    bank_=bank;program_=program;
     programLabel_->setText(PresetBrowserModel::CurrentLabel(
-        engine_,sf_,fm_,bank_,program_).c_str());
-    if(newEngine||force)RebuildBanks();
+        0,sf_,fm_,bank_,program_).c_str());
+    if(force)RebuildBanks();
     RebuildRows();
 }
 void PresetBrowserView::SyncSf2Status() {
     if(!hint_||!sf2StatusProvider_)return;
-    std::string value=sf2StatusProvider_();
-    if(value.empty())value="SF2-Audiostatus nicht verfuegbar.";
-    if(engine_!=0)value="Instrument waehlen  |  PREV/NEXT: Programme der aktiven Bank";
-    if(value==lastStatus_)return;
-    lastStatus_=value;
-    hint_->setText(value.c_str());
-    const bool error=value.find("SF2-Ladefehler:")!=std::string::npos;
-    hint_->setFontColor(error?CColor(255,136,123,255):kMuted);
+    std::string text=sf2StatusProvider_();
+    if(text.empty())text="SF2-Status noch nicht verfuegbar.";
+    if(text==lastStatus_)return;
+    lastStatus_=text;
+    hint_->setText(text.c_str());
+    const bool err=text.find("Fehler")!=std::string::npos;
+    hint_->setFontColor(err?CColor(255,143,122,255):kMuted);
 }
-void PresetBrowserView::onIdle() { Sync(); }
 void PresetBrowserView::SetExpanded(bool value) {
     expanded_=value;
     bankCaption_->setVisible(value);
@@ -222,25 +367,36 @@ void PresetBrowserView::SetExpanded(bool value) {
     searchCaption_->setVisible(value);
     search_->setVisible(value);
     table_->setVisible(value);
-    // A load error must remain visible even when the preset table is closed.
-    hint_->setVisible(true);
     empty_->setVisible(value&&rows_.empty());
+    hint_->setVisible(true);
     toggle_->setTitle(value?"BROWSER SCHLIESSEN":"BROWSER OEFFNEN");
 }
-void PresetBrowserView::valueChanged(CControl* c) {
-    if(!c||syncing_)return;
-    const int tag=c->getTag();
-    if(tag==kHardware) {
-        ChangeParameter(kEngine,std::clamp(int(std::lround(c->getValue())),0,2)/2.);
+void PresetBrowserView::ChooseSf2() {
+    std::string path;
+    if(NativeChooseSoundFont(path)&&sf2LoadRequest_)
+        sf2LoadRequest_(path);
+}
+void PresetBrowserView::valueChanged(CControl* control) {
+    if(!control||syncing_)return;
+    const int tag=control->getTag();
+    if(tag>=kGuiFirst && tag<kGuiFirst+kGuiCount) {
+        const int idx=tag-kGuiFirst;
+        ChangeParameter(static_cast<Steinberg::Vst::ParamID>(tag),
+                        std::clamp(double(control->getValue()),0.,1.));
+        return;
+    }
+    if(tag==kLoadSf2) {
+        if(control->getValue()>0.5f)ChooseSf2();
+    } else if(tag==kReset) {
+        if(control->getValue()>0.5f)
+            for(int i=0;i<kGuiCount;++i)ChangeParameter(kGuiFirst+i,0.);
     } else if(tag==kPrevious||tag==kNext) {
-        // Ignore the second, kKickStyle reset-to-zero callback, otherwise
-        // one user click advances TWO programs.
-        if(c->getValue()>0.5f) {
-            const int target=PresetBrowserModel::Neighbor(engine_,sf_,fm_,
+        if(control->getValue()>0.5f) {
+            const int target=PresetBrowserModel::Neighbor(0,sf_,fm_,
                 bank_,program_,tag==kNext?1:-1);
-            if(target>=0)Select(engine_==0?bank_:0,static_cast<uint8_t>(target));
+            if(target>=0)Select(bank_,static_cast<uint8_t>(target));
         }
-    } else if(tag==kToggle)SetExpanded(c->getValue()>0.5f);
+    } else if(tag==kToggle)SetExpanded(control->getValue()>0.5f);
     else if(tag==kFilter) {
         searchText_=search_->getText().data();
         RebuildRows();
@@ -251,29 +407,26 @@ void PresetBrowserView::valueChanged(CControl* c) {
         RebuildRows();
     }
 }
+void PresetBrowserView::onIdle() {Sync();}
 int32_t PresetBrowserView::dbGetNumRows(CDataBrowser*) {
     return static_cast<int32_t>(rows_.size());
 }
 int32_t PresetBrowserView::dbGetNumColumns(CDataBrowser*) {return 1;}
-CCoord PresetBrowserView::dbGetRowHeight(CDataBrowser*) {return 29.;}
-CCoord PresetBrowserView::dbGetCurrentColumnWidth(int32_t,CDataBrowser*) {
-    return 740.;
-}
-void PresetBrowserView::dbDrawCell(CDrawContext* ctx,const CRect& r,int32_t row,
-                                 int32_t,int32_t flags,CDataBrowser*) {
+CCoord PresetBrowserView::dbGetRowHeight(CDataBrowser*) {return 27.;}
+CCoord PresetBrowserView::dbGetCurrentColumnWidth(int32_t,CDataBrowser*) {return 315.;}
+void PresetBrowserView::dbDrawCell(CDrawContext* ctx,const CRect& r,
+                                  int32_t row,int32_t,int32_t flags,CDataBrowser*) {
     if(row<0||size_t(row)>=rows_.size())return;
     ctx->setFillColor((flags&IDataBrowserDelegate::kRowSelected)?kSel:kRaised);
     ctx->drawRect(r,kDrawFilled);
-    ctx->setFont(kNormalFont);
+    ctx->setFont(kNormalFontSmall);
     ctx->setFontColor(kPaper);
     const auto& p=rows_[size_t(row)];
     char id[24]{};
     std::snprintf(id,sizeof(id),"%03u:%03u  ",p.bank,p.program);
-    const auto label=std::string(id)+p.name;
-    CRect inset=r;
-    inset.left+=12;
-    inset.right-=8;
-    ctx->drawString(label.c_str(),inset,kLeftText);
+    const auto text=std::string(id)+p.name;
+    CRect inset=r;inset.left+=9;inset.right-=5;
+    ctx->drawString(text.c_str(),inset,kLeftText);
     ctx->setFrameColor(kGrid);
     ctx->drawLine({r.left,r.bottom-1},{r.right,r.bottom-1});
 }
@@ -286,7 +439,6 @@ void PresetBrowserView::dbSelectionChanged(CDataBrowser* browser) {
     if(syncing_||!browser)return;
     const int row=browser->getSelectedRow();
     if(row<0||size_t(row)>=rows_.size())return;
-    // Snapshot before host parameter callbacks possibly rebuild the table.
     const auto entry=rows_[size_t(row)];
     Select(entry.bank,entry.program);
 }
