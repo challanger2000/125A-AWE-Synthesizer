@@ -9,6 +9,7 @@ on:
       - 'src/engine/**'
       - 'tests/asset_state.cpp'
       - 'tests/p14_vstgui_contract.py'
+      - 'tools/p18_editorhost_smoke.py'
       - 'tests/p116_master_volume.cpp'
       - 'tests/p117_direct_preset_selection.cpp'
   workflow_dispatch:
