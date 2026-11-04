@@ -39,6 +39,7 @@
 #endif
 #include <windows.h>
 #endif
+#include "WinUiDispatch.h"
 #include <memory>
 #include <mutex>
 #include <string>
@@ -877,24 +878,54 @@ public:
         };
         if(msg && std::strncmp(msg,"125A_SF2_ACK:",13)==0) {
             const auto [id,status]=parseAck(msg,"125A_SF2_ACK:");
-            std::lock_guard<std::mutex> lock(sf2StatusMutex_);
-            if(id>0&&id==sf2PendingRequestID_)sf2PendingAck_=status;
+            bool post=false;
+            {
+                std::lock_guard<std::mutex> lock(sf2StatusMutex_);
+                if(id>0&&id==sf2PendingRequestID_) {
+                    sf2PendingAck_=status;
+                    if(status=="OK") {
+                        hostDirtyPending_=true;
+                        ++hostDirtySeq_;
+                        post=true;
+                    }
+                }
+            }
+            if(post)hostDispatch_.Post();
             return kResultOk;
         }
         if(msg && std::strncmp(msg,"125A_ROM_ACK:",13)==0) {
             const auto [id,status]=parseAck(msg,"125A_ROM_ACK:");
-            std::lock_guard<std::mutex> lock(sf2StatusMutex_);
-            if(id>0&&id==romPendingRequestID_)romPendingAck_=status;
+            bool post=false;
+            {
+                std::lock_guard<std::mutex> lock(sf2StatusMutex_);
+                if(id>0&&id==romPendingRequestID_) {
+                    romPendingAck_=status;
+                    if(status=="OK") {
+                        hostDirtyPending_=true;
+                        ++hostDirtySeq_;
+                        post=true;
+                    }
+                }
+            }
+            if(post)hostDispatch_.Post();
             return kResultOk;
         }
         constexpr char hwInfoPrefix[]="125A_HW_INFO:";
         if(msg&&std::strncmp(msg,hwInfoPrefix,sizeof(hwInfoPrefix)-1)==0) {
-            std::lock_guard<std::mutex> lock(sf2StatusMutex_);
-            const bool wasReady=hardwareInfo_.find("ROM: GELADEN")!=std::string::npos;
-            const std::string newInfo=msg+sizeof(hwInfoPrefix)-1;
-            const bool nowReady=newInfo.find("ROM: GELADEN")!=std::string::npos;
-            if(wasReady!=nowReady)latencyChangePending_=true;
-            hardwareInfo_=newInfo;
+            bool post=false;
+            {
+                std::lock_guard<std::mutex> lock(sf2StatusMutex_);
+                const bool wasReady=hardwareInfo_.find("ROM: GELADEN")!=std::string::npos;
+                const std::string newInfo=msg+sizeof(hwInfoPrefix)-1;
+                const bool nowReady=newInfo.find("ROM: GELADEN")!=std::string::npos;
+                if(wasReady!=nowReady) {
+                    latencyChangePending_=true;
+                    ++hostLatencySeq_;
+                    post=true;
+                }
+                hardwareInfo_=newInfo;
+            }
+            if(post)hostDispatch_.Post();
             return kResultOk;
         }
         constexpr char prefix[]="125A_SF2_STATUS:";
@@ -915,15 +946,12 @@ public:
     }
     uint64_t CatalogRevision() {
         std::string ack,romAck;
-        bool latencyChange=false;
         {
             std::lock_guard<std::mutex> lock(sf2StatusMutex_);
             ack.swap(sf2PendingAck_);
             romAck.swap(romPendingAck_);
             if(!ack.empty())sf2PendingRequestID_=0;
             if(!romAck.empty())romPendingRequestID_=0;
-            latencyChange=latencyChangePending_;
-            latencyChangePending_=false;
         }
         if(ack=="OK" && !sf2PendingPath_.empty()) {
             sfCatalog_=std::move(sf2PendingCatalog_);
@@ -939,13 +967,8 @@ public:
             AppendGmCatalog();
             ++sfCatalogRevision_;
         } else if(!romAck.empty()) romPendingPath_.clear();
-        // This callback is invoked by the editor UI thread, not from an
-        // audio callback or the connection-message delivery thread.
-        if((ack=="OK"||romAck=="OK"))setDirty(true);
-        if(latencyChange) {
-            if(auto* handler=getComponentHandler())
-                handler->restartComponent(kLatencyChanged);
-        }
+        // Host notifications run through a persistent UI message-only window
+        // even when the PresetBrowser editor has already been closed.
         return sfCatalogRevision_;
     }
     std::string CurrentSf2Path() const {return sf2Path_;}
@@ -1040,6 +1063,10 @@ public:
     tresult PLUGIN_API initialize(FUnknown* ctx) override {
         const auto r=EditControllerEx1::initialize(ctx);
         if(r!=kResultOk)return r;
+#if defined(_WIN32)
+        hostDispatch_.Start(this,&Controller::HostSignalThunk,
+            reinterpret_cast<HINSTANCE>(Steinberg::getPlatformModuleHandle()));
+#endif
         // COptionMenu displays and selects real steps only when the parameter
         // supplies readable values. The former generic numeric parameter
         // displayed normalized 0.000..1.000, not program numbers.
