@@ -23,6 +23,8 @@
 #include <cstring>
 #include <exception>
 #include <filesystem>
+#include <iomanip>
+#include <sstream>
 #if defined(_WIN32)
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -137,6 +139,15 @@ public:
     // Load on the host's connection thread, then swap the chip under a short
     // render try-lock. Failed loads retain the previous working SoundFont.
     tresult PLUGIN_API notify(IMessage* msg) override {
+        if(msg && FIDStringsEqual(msg->getMessageID(),"125A_HW_INFO_REQUEST")) {
+            std::string snapshot;
+            {
+                std::lock_guard<std::mutex> lock(engineMutex_);
+                snapshot=HardwareDescriptor();
+            }
+            sendTextMessage(("125A_HW_INFO:"+snapshot).c_str());
+            return kResultOk;
+        }
         if(!msg || !FIDStringsEqual(msg->getMessageID(),"125A_SF2_LOAD"))
             return AudioEffect::notify(msg);
         const void* bytes=nullptr;
@@ -357,18 +368,23 @@ private:
     // Report the currently running chip, not merely paths in assets.cfg.
     // Call under engineMutex_ from non-realtime code only.
     std::string HardwareDescriptor() const {
-        constexpr const char* prefix="EMU8000 | 32 STIMMEN | 44,1 kHz | ";
-        if(!synth_)return std::string(prefix)+"RAM bis 28 MiB | ROM inaktiv";
+        if(!synth_)return "RAM --  |  ROM: INAKTIV  |  CORE: INAKTIV";
         const auto& core=synth_->Core();
-        const bool physicalRam=core.ChipVariant()==Emu8000Core::Chip::Box86;
-        const bool romLoaded=physicalRam||core.RomSize()>0;
-        const auto words=physicalRam?core.ChipRamWords():size_t{0};
-        const std::string ram=physicalRam
-            ? "RAM "+std::to_string(words/(512*1024))+" MiB"
-            : "RAM bis 28 MiB";
-        const std::string rom=romLoaded?"ROM 1 MiB: GELADEN"
-            : (state_.romPath.empty()?"ROM: NICHT GELADEN":"ROM: LADEFEHLER");
-        return std::string(prefix)+ram+" | "+rom;
+        const bool box=core.ChipVariant()==Emu8000Core::Chip::Box86;
+        if(!box)
+            return state_.romPath.empty()
+                ? "RAM --  |  ROM: NICHT GELADEN  |  CORE: INTERN"
+                : "RAM --  |  ROM: LADEFEHLER  |  CORE: INTERN";
+        size_t usedWords=0;
+        for(size_t i=0;i<synth_->BankCount();++i)
+            usedWords+=synth_->BankAt(i).sampleData.size();
+        const double usedMiB=usedWords*2.0/1048576.0;
+        const double totalMiB=core.ChipRamWords()*2.0/1048576.0;
+        std::ostringstream info;
+        info<<std::fixed<<std::setprecision(1)
+            <<"SAMPLE-RAM "<<usedMiB<<"/"<<totalMiB<<" MiB"
+            <<"   |   ROM: GELADEN   |   CORE: 86BOX";
+        return info.str();
     }
     void ResolveAssets() {
         AssetConfig::Paths configured;
@@ -463,6 +479,13 @@ public:
         }
         return true;
     }
+    void RequestHardwareInfo() {
+        if(auto* message=allocateMessage()) {
+            message->setMessageID("125A_HW_INFO_REQUEST");
+            sendMessage(message);
+            message->release();
+        }
+    }
     std::string HardwareInfo() const {
         std::lock_guard<std::mutex> lock(sf2StatusMutex_);
         return hardwareInfo_;
@@ -507,7 +530,8 @@ public:
     VSTGUI::CView* createCustomView(VSTGUI::UTF8StringPtr name,
         const VSTGUI::UIAttributes&,const VSTGUI::IUIDescription*,
         VSTGUI::VST3Editor*) override {
-        if(name&&std::strcmp(name,"AwePresetBrowser")==0)
+        if(name&&std::strcmp(name,"AwePresetBrowser")==0) {
+            RequestHardwareInfo();
             return new PresetBrowserView({0,0,1040,680},this,sfCatalog_,fmCatalog_,
                 FactoryBank(L"125A_Logo_Master_FINAL.svg"),
                 [this]() {return Sf2AudioStatus();},
@@ -515,6 +539,7 @@ public:
                 [this](const std::string& path) {return RequestSf2Load(path);},
                 [this]() {return CurrentSf2Path();},
                 [this]() {return CatalogRevision();});
+        }
         return nullptr;
     }
     IPlugView* PLUGIN_API createView(FIDString name) override {
