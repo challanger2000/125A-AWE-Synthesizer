@@ -14,6 +14,7 @@
 #include "Sf2LoadPolicy.h"
 #include "RomGmBank.h"
 #include "MidiControlMapping.h"
+#include "MidiProgramRouting.h"
 #include "MidiLiveState.h"
 #include "RealtimeEngineExchange.h"
 #include "public.sdk/source/vst/vstparameters.h"
@@ -431,6 +432,11 @@ public:
         snapshot.program=rtProgram_.load(std::memory_order_acquire);
         snapshot.bank=rtBank_.load(std::memory_order_acquire);
         snapshot.masterVolume=rtMaster_.load(std::memory_order_acquire);
+        snapshot.channelProgramMask=
+            rtChannelProgramMask_.load(std::memory_order_acquire);
+        for(int ch=0;ch<16;++ch)
+            snapshot.channelPrograms[ch]=rtChannelPrograms_[ch].load(
+                std::memory_order_acquire);
         for(int i=0;i<kGuiCount;++i)
             snapshot.controls[i]=rtControls_[i].load(std::memory_order_acquire);
         if(!snapshot.pathsSpecified) {
@@ -522,6 +528,13 @@ public:
             rtProgram_.store(candidate.program,std::memory_order_release);
             rtBank_.store(candidate.bank,std::memory_order_release);
             rtMaster_.store(candidate.masterVolume,std::memory_order_release);
+            rtChannelProgramMask_.store(
+                candidate.channelProgramMask,std::memory_order_release);
+            for(int ch=0;ch<16;++ch)
+                rtChannelPrograms_[ch].store(
+                    candidate.channelPrograms[ch],std::memory_order_release);
+            // A recalled browser bank supersedes any older touched CC0.
+            browserSelectionEpoch_.fetch_add(1,std::memory_order_acq_rel);
             for(int i=0;i<kGuiCount;++i)
                 rtControls_[i].store(candidate.controls[i],std::memory_order_release);
             gainRestoreValue_.store(candidate.masterVolume,std::memory_order_release);
@@ -559,6 +572,12 @@ public:
         if(restore!=lastGainRestoreEpoch_) {
             volumeGain_.restore(gainRestoreValue_.load(std::memory_order_acquire));
             lastGainRestoreEpoch_=restore;
+        }
+        const uint64_t bankEpoch=
+            browserSelectionEpoch_.load(std::memory_order_acquire);
+        if(bankEpoch!=lastBrowserSelectionEpoch_) {
+            liveMidi_.BrowserBankSelected();
+            lastBrowserSelectionEpoch_=bankEpoch;
         }
         const uint64_t revision=entry?entry->revision:0;
         if(revision!=lastRtRevision_) {
@@ -631,6 +650,9 @@ public:
                 const auto program=static_cast<uint32_t>(std::clamp(
                     int(std::lround(val*127.)),0,127));
                 rtProgram_.store(program,std::memory_order_release);
+                rtChannelProgramMask_.store(0,std::memory_order_release);
+                for(int ch=0;ch<16;++ch)
+                    rtChannelPrograms_[ch].store(program,std::memory_order_release);
                 if(synth_)for(int ch=0;ch<16;++ch)
                     synth_->ProgramChange(static_cast<uint8_t>(ch),
                         static_cast<uint8_t>(program));
@@ -639,9 +661,18 @@ public:
                     int(std::lround(val*AssetState::kMaxBank)),0,
                     int(AssetState::kMaxBank)));
                 if(bank!=rtBank_.load(std::memory_order_relaxed)) {
+                    // A later browser selection invalidates earlier CC0/32.
+                    liveMidi_.BrowserBankSelected();
                     rtBank_.store(bank,std::memory_order_release);
                     if(synth_)synth_->SelectBrowserBank(static_cast<uint16_t>(bank));
                 }
+            } else if(const int ch=MidiProgramRouting::Channel(id);ch>=0) {
+                const auto program=static_cast<uint32_t>(
+                    std::clamp(int(std::lround(val*127.)),0,127));
+                rtChannelPrograms_[ch].store(program,std::memory_order_release);
+                rtChannelProgramMask_.fetch_or(1u<<ch,std::memory_order_acq_rel);
+                if(synth_)synth_->ProgramChange(static_cast<uint8_t>(ch),
+                                                static_cast<uint8_t>(program));
             } else if(id==kVolumeID) {
                 const auto gain=static_cast<uint32_t>(std::lround(
                     val*MasterOutput::kScale));
@@ -808,6 +839,10 @@ private:
     // touch a mutable synth or wait for a reader to release a mutex.
     std::atomic<uint32_t> rtProgram_{0},rtBank_{0};
     std::atomic<uint32_t> rtMaster_{MasterOutput::kDefault};
+    std::array<std::atomic<uint32_t>,16> rtChannelPrograms_{};
+    std::atomic<uint32_t> rtChannelProgramMask_{0};
+    std::atomic<uint64_t> browserSelectionEpoch_{0};
+    uint64_t lastBrowserSelectionEpoch_=0; // audio thread only
     std::array<std::atomic<uint32_t>,kGuiCount> rtControls_{};
     std::atomic<uint64_t> gainRestoreEpoch_{0};
     std::atomic<uint32_t> gainRestoreValue_{MasterOutput::kDefault};
@@ -828,9 +863,13 @@ private:
                       AssetState::kControlScale);
         target.SelectBrowserBank(static_cast<uint16_t>(
             rtBank_.load(std::memory_order_relaxed)));
+        const uint32_t mask=rtChannelProgramMask_.load(std::memory_order_relaxed);
         for(int ch=0;ch<16;++ch)
             target.ProgramChange(static_cast<uint8_t>(ch),
-                static_cast<uint8_t>(rtProgram_.load(std::memory_order_relaxed)));
+                static_cast<uint8_t>(
+                    (mask&(1u<<ch))
+                        ?rtChannelPrograms_[ch].load(std::memory_order_relaxed)
+                        :rtProgram_.load(std::memory_order_relaxed)));
         liveMidi_.Replay(target);
     }
     static std::string DescribePrepared(Synth* synth) {
