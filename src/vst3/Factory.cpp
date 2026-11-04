@@ -747,7 +747,7 @@ public:
                     e.noteOn.pitch>=0&&e.noteOn.pitch<=127&&
                     std::isfinite(e.noteOn.velocity)) {
                     for(int k=0;k<kGuiCount;++k)if(overlayEnabled[k]) {
-                        const auto value=overlayCurves[k].valueAt(pos);
+                        const auto value=overlayCurves[k].valueAt(position);
                         rtControls_[k].store(static_cast<uint32_t>(std::lround(
                             value*AssetState::kControlScale)),
                             std::memory_order_relaxed);
