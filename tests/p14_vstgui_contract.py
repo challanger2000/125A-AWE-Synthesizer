@@ -50,7 +50,7 @@ assert 'GetOpenFileNameW(&ofn)' in b
 assert 'getBinary("Path",bytes,bytesCount)' in f
 assert 'sf2Ack("OK")' in f
 assert '"125A_HW_INFO:"' in f and 'HardwareDescriptor()' in f
-assert 'core.ChipVariant()==Emu8000Core::Chip::Box86' in f
+assert 'core.ChipVariant()!=Emu8000Core::Chip::Box86' in f
 assert 'CORE: INAKTIV' in f and 'ROM: ERFORDERLICH' in f
 assert 'core.ChipRamWords()' in f and 'BankAt(i).sampleData.size()' in f
 assert 'hardwareInfoProvider_' in h and 'hardwareInfoLabel_' in h
