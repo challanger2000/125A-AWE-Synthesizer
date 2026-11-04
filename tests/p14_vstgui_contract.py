@@ -29,6 +29,13 @@ assert 'new VSTGUI::VST3Editor(this,"view","awe_test_panel.uidesc")' in f
 assert 'sendTextMessage(("125A_SF2_STATUS:"+sf2Status).c_str())' in f
 assert 'AllowEmuNoteOn(sf2Configured_,sf2Loaded_)' in f
 assert 'msg->setMessageID("125A_SF2_LOAD")' in f
+assert 'msg->setMessageID("125A_ROM_LOAD")' in f
+assert 'FIDStringsEqual(msg->getMessageID(),"125A_ROM_LOAD")' in f
+assert 'sendTextMessage("125A_ROM_ACK:OK")' in f
+assert 'romLoadRequest_' in h and 'kLoadRom=3108' in h
+assert 'MakeButton({677,83,826,122},kLoadRom,"ROM LADEN")' in b
+assert 'NativeChooseFile(path,true)' in b and 'NativeChooseFile(path,false)' in b
+assert 'GetOpenFileNameW(&ofn)' in b
 assert 'getBinary("Path",bytes,bytesCount)' in f
 assert 'sendTextMessage("125A_SF2_ACK:OK")' in f
 assert '"125A_HW_INFO:"' in f and 'HardwareDescriptor()' in f
@@ -41,7 +48,7 @@ assert 'SyncHardwareInfo();' in b
 assert 'sfCatalog_=std::move(sf2PendingCatalog_)' in f
 assert 'std::try_to_lock' in f
 assert 'GetOpenFileNameW(&ofn)' in b
-assert 'NativeChooseSoundFont(path)' in b
+assert 'NativeChooseFile(path,false)' in b
 assert 'AddKnob(0,' in b and 'AddKnob(11,' in b
 assert 'if(tag>=kGuiFirst && tag<kGuiFirst+kGuiCount)' in b
 assert 'std::array<VSTGUI::CControl*,kGuiCount>' in h

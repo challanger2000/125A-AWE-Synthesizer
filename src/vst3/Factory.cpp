@@ -148,6 +148,71 @@ public:
             sendTextMessage(("125A_HW_INFO:"+snapshot).c_str());
             return kResultOk;
         }
+        if(msg && FIDStringsEqual(msg->getMessageID(),"125A_ROM_LOAD")) {
+            const void* bytes=nullptr;
+            uint32 length=0;
+            if(!msg->getAttributes() ||
+               msg->getAttributes()->getBinary("Path",bytes,length)!=kResultOk ||
+               !bytes || !length || length>AssetState::kMaxPath)
+                return kInvalidArgument;
+            const std::string path(static_cast<const char*>(bytes),length);
+            if(!AssetState::validPath(path))return kInvalidArgument;
+            AssetState::Data model;
+            uint32_t sampleRate=44100;
+            bool active=false;
+            {
+                std::lock_guard<std::mutex> lock(engineMutex_);
+                model=state_;
+                sampleRate=rate_;
+                active=bool(synth_);
+            }
+            std::string error;
+            std::unique_ptr<Synth> prepared;
+            try {
+                // A chip with the new ROM is fully initialized off the audio
+                // thread. A bad image NEVER replaces the previous good chip.
+                prepared=std::make_unique<Synth>(sampleRate);
+                prepared->Core().SetDriver(Awe32::Driver::Win95);
+                if(!prepared->Core().UseBox86Chip(path,error)) {
+                    if(error.empty())error="ungueltige EMU8000-Wave-ROM";
+                } else {
+                    prepared->Core().PowerOnInit();
+                    for(int i=0;i<kGuiCount;++i)
+                        prepared->SetGuiControl(
+                            i,float(model.controls[i])/AssetState::kControlScale);
+                    if(active&&!model.sf2Path.empty() &&
+                       !prepared->LoadBank(model.sf2Path,error))
+                        error="SF2 kann mit dieser ROM nicht geladen werden: "+error;
+                    if(error.empty()) {
+                        prepared->SelectBrowserBank(static_cast<uint16_t>(model.bank));
+                        for(int c=0;c<16;++c)
+                            prepared->ProgramChange(static_cast<uint8_t>(c),
+                                                     static_cast<uint8_t>(model.program));
+                    }
+                }
+            } catch(const std::exception& e) {error=e.what();}
+            if(!error.empty()) {
+                sendTextMessage(("125A_SF2_STATUS:ROM-Ladefehler: "+error).c_str());
+                sendTextMessage("125A_ROM_ACK:ERROR");
+                return kResultOk;
+            }
+            std::string info;
+            {
+                std::lock_guard<std::mutex> lock(engineMutex_);
+                if(active) synth_.swap(prepared);
+                state_.romPath=path;
+                state_.pathsSpecified=true;
+                sf2Configured_=!model.sf2Path.empty();
+                sf2Loaded_=active&&sf2Configured_;
+                info=HardwareDescriptor();
+            }
+            sendTextMessage(("125A_HW_INFO:"+info).c_str());
+            sendTextMessage(active ?
+                "125A_SF2_STATUS:ROM geladen. EMU8000-Kern aktiv." :
+                "125A_SF2_STATUS:ROM validiert. Wird bei Aktivierung geladen.");
+            sendTextMessage("125A_ROM_ACK:OK");
+            return kResultOk;
+        }
         if(!msg || !FIDStringsEqual(msg->getMessageID(),"125A_SF2_LOAD"))
             return AudioEffect::notify(msg);
         const void* bytes=nullptr;
@@ -479,6 +544,28 @@ public:
         }
         return true;
     }
+    bool RequestRomLoad(const std::string& path) {
+        if(!AssetState::validPath(path)||path.empty())return false;
+        auto* msg=allocateMessage();
+        if(!msg) {
+            std::lock_guard<std::mutex> lock(sf2StatusMutex_);
+            sf2AudioStatus_="ROM-Ladefehler: Kein VST3-Nachrichtenkanal.";
+            return false;
+        }
+        msg->setMessageID("125A_ROM_LOAD");
+        msg->getAttributes()->setBinary("Path",path.data(),
+                                         static_cast<uint32>(path.size()));
+        const auto result=sendMessage(msg);
+        msg->release();
+        if(result!=kResultOk) {
+            std::lock_guard<std::mutex> lock(sf2StatusMutex_);
+            sf2AudioStatus_="ROM-Ladefehler: Audioprozessor nicht erreichbar.";
+            return false;
+        }
+        // Asynchronous acknowledgement from the processor tells the user
+        // whether ROM validation and the chip swap REALLY succeeded.
+        return true;
+    }
     void RequestHardwareInfo() {
         if(auto* message=allocateMessage()) {
             message->setMessageID("125A_HW_INFO_REQUEST");
@@ -536,6 +623,7 @@ public:
                 FactoryBank(L"125A_Logo_Master_FINAL.svg"),
                 [this]() {return Sf2AudioStatus();},
                 [this]() {return HardwareInfo();},
+                [this](const std::string& path) {return RequestRomLoad(path);},
                 [this](const std::string& path) {return RequestSf2Load(path);},
                 [this]() {return CurrentSf2Path();},
                 [this]() {return CatalogRevision();});

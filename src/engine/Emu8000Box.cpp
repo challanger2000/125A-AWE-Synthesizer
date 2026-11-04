@@ -29,6 +29,7 @@ void     Emu8000Box::FlushBlock()      {}
 
 
 #include <cstdio>
+#include <filesystem>
 #include <cstdlib>
 #include <cstdarg>
 #include <cstring>
@@ -148,7 +149,12 @@ bool Emu8000Box::Init(const std::string& romPath, uint16_t basePort, int ramKb, 
     }
 
     // ROM I/O is exclusively non-realtime and instance-local.
-    FILE* f = std::fopen(romPath.c_str(), "rb");
+    FILE* f = nullptr;
+#ifdef _WIN32
+    f = _wfopen(std::filesystem::u8path(romPath).c_str(), L"rb");
+#else
+    f = std::fopen(romPath.c_str(), "rb");
+#endif
     if (!f)
     {
         err = StrFormat(_("cannot open wave ROM '%s'"), romPath.c_str());

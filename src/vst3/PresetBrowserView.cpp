@@ -140,7 +140,7 @@ std::string DisplayName(const std::string& path) {
     const auto i=path.find_last_of("/\\");
     return i==std::string::npos?path:path.substr(i+1);
 }
-bool NativeChooseSoundFont(std::string& chosen) {
+bool NativeChooseFile(std::string& chosen,bool forRom) {
 #if defined(_WIN32)
     wchar_t file[32768]{};
     OPENFILENAMEW ofn{};
@@ -148,9 +148,11 @@ bool NativeChooseSoundFont(std::string& chosen) {
     ofn.hwndOwner=GetForegroundWindow();
     ofn.lpstrFile=file;
     ofn.nMaxFile=32768;
-    ofn.lpstrFilter=L"SoundFont 2 (*.sf2)\0*.sf2\0Alle Dateien (*.*)\0*.*\0\0";
+    ofn.lpstrFilter=forRom
+        ? L"EMU8000 Wave-ROM (*.raw;*.rom;*.bin)\0*.raw;*.rom;*.bin\0Alle Dateien (*.*)\0*.*\0\0"
+        : L"SoundFont 2 (*.sf2)\0*.sf2\0Alle Dateien (*.*)\0*.*\0\0";
     ofn.nFilterIndex=1;
-    ofn.lpstrDefExt=L"sf2";
+    ofn.lpstrDefExt=forRom?L"raw":L"sf2";
     ofn.Flags=OFN_EXPLORER|OFN_FILEMUSTEXIST|OFN_PATHMUSTEXIST;
     if(!GetOpenFileNameW(&ofn))return false;
     const int n=WideCharToMultiByte(CP_UTF8,WC_ERR_INVALID_CHARS,
@@ -164,6 +166,7 @@ bool NativeChooseSoundFont(std::string& chosen) {
     return true;
 #else
     (void)chosen;
+    (void)forRom;
     return false;
 #endif
 }
@@ -175,12 +178,14 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     const std::string& exactLogoPath,
     std::function<std::string()> sf2StatusProvider,
     std::function<std::string()> hardwareInfoProvider,
+    std::function<bool(const std::string&)> romLoadRequest,
     std::function<bool(const std::string&)> sf2LoadRequest,
     std::function<std::string()> sf2CurrentPath,
     std::function<uint64_t()> sf2CatalogRevision)
     : CViewContainer(rect),controller_(controller),sf_(sf),fm_(legacyFm),
       sf2StatusProvider_(std::move(sf2StatusProvider)),
       hardwareInfoProvider_(std::move(hardwareInfoProvider)),
+      romLoadRequest_(std::move(romLoadRequest)),
       sf2LoadRequest_(std::move(sf2LoadRequest)),
       sf2CurrentPath_(std::move(sf2CurrentPath)),
       sf2CatalogRevision_(std::move(sf2CatalogRevision)) {
@@ -193,9 +198,10 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     MakeLabel({830,33,1006,49},"32 VOICES  /  44.1 kHz",true);
 
     MakeLabel({25,80,149,123},"SOUNDFONT",true);
-    fileLabel_=MakeLabel({152,78,816,103},"",false);
-    hardwareInfoLabel_=MakeLabel({154,102,816,132},"EMU8000: Hardwarestatus wird ermittelt...",true);
+    fileLabel_=MakeLabel({152,78,658,103},"",false);
+    hardwareInfoLabel_=MakeLabel({154,102,660,132},"EMU8000: Hardwarestatus wird ermittelt...",true);
     hardwareInfoLabel_->setTextTruncateMode(CTextLabel::kTruncateTail);
+    loadRom_=MakeButton({677,83,826,122},kLoadRom,"ROM LADEN");
     loadSf2_=MakeButton({836,83,1010,122},kLoadSf2,"SF2 LADEN");
     MakeLabel({25,156,143,193},"INSTRUMENT",true);
     previous_=MakeButton({152,159,198,195},kPrevious,"<");
@@ -419,8 +425,13 @@ void PresetBrowserView::SetExpanded(bool value) {
 }
 void PresetBrowserView::ChooseSf2() {
     std::string path;
-    if(NativeChooseSoundFont(path)&&sf2LoadRequest_)
+    if(NativeChooseFile(path,false)&&sf2LoadRequest_)
         sf2LoadRequest_(path);
+}
+void PresetBrowserView::ChooseRom() {
+    std::string path;
+    if(NativeChooseFile(path,true)&&romLoadRequest_)
+        romLoadRequest_(path);
 }
 void PresetBrowserView::valueChanged(CControl* control) {
     if(!control||syncing_)return;
@@ -431,7 +442,9 @@ void PresetBrowserView::valueChanged(CControl* control) {
                         std::clamp(double(control->getValue()),0.,1.));
         return;
     }
-    if(tag==kLoadSf2) {
+    if(tag==kLoadRom) {
+        if(control->getValue()>0.5f)ChooseRom();
+    } else if(tag==kLoadSf2) {
         if(control->getValue()>0.5f)ChooseSf2();
     } else if(tag==kReset) {
         if(control->getValue()>0.5f)

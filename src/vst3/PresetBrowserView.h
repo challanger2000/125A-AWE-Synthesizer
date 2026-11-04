@@ -27,6 +27,7 @@ public:
                       const std::string& exactLogoPath,
                       std::function<std::string()> sf2StatusProvider,
                       std::function<std::string()> hardwareInfoProvider,
+                      std::function<bool(const std::string&)> romLoadRequest,
                       std::function<bool(const std::string&)> sf2LoadRequest,
                       std::function<std::string()> sf2CurrentPath,
                       std::function<uint64_t()> sf2CatalogRevision);
@@ -45,13 +46,15 @@ protected:
     ~PresetBrowserView() noexcept override = default;
 private:
     static constexpr int kPrevious=3101,kNext=3102,kToggle=3103,
-                         kFilter=3104,kBankFilter=3105,kLoadSf2=3106,kReset=3107;
+                         kFilter=3104,kBankFilter=3105,kLoadSf2=3106,kReset=3107,
+                         kLoadRom=3108;
     static constexpr int kGuiFirst=1100,kGuiCount=12;
     Steinberg::Vst::EditController* controller_;
     const PresetCatalog& sf_;
     const PresetCatalog& fm_; // legacy catalog only; never user-selectable
     std::function<std::string()> sf2StatusProvider_;
     std::function<std::string()> hardwareInfoProvider_;
+    std::function<bool(const std::string&)> romLoadRequest_;
     std::function<bool(const std::string&)> sf2LoadRequest_;
     std::function<std::string()> sf2CurrentPath_;
     std::function<uint64_t()> sf2CatalogRevision_;
@@ -69,7 +72,7 @@ private:
     VSTGUI::COptionMenu* bankMenu_=nullptr;
     VSTGUI::CTextEdit* search_=nullptr;
     VSTGUI::CTextButton *previous_=nullptr,*next_=nullptr,*toggle_=nullptr,
-                         *loadSf2_=nullptr,*reset_=nullptr;
+                         *loadSf2_=nullptr,*loadRom_=nullptr,*reset_=nullptr;
     VSTGUI::CTextLabel *programLabel_=nullptr,*fileLabel_=nullptr,
                        *hardwareInfoLabel_=nullptr,
                        *empty_=nullptr,*bankCaption_=nullptr,
@@ -88,5 +91,6 @@ private:
     void Select(uint16_t bank,uint8_t program);
     void ChangeParameter(Steinberg::Vst::ParamID,double normalized);
     void ChooseSf2();
+    void ChooseRom();
 };
 } // namespace AWE125

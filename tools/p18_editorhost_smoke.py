@@ -359,7 +359,14 @@ def main():
             selected=snap(hwnd,args.output/"08_bank128_selected.bmp")
             check(different(searched,selected,(214,157,753,198))>8,
                   "bank 128 sound selection updates instrument label",results)
-            # Canceling the Windows file chooser is safe, without changing bank.
+            # Cancel ROM chooser: do not mutate the running bank or UI.
+            click(hwnd,751,103)
+            key(0x1B)
+            time.sleep(.45)
+            after_rom_cancel=snap(hwnd,args.output/"09_rom_dialog_cancelled.bmp")
+            check(different(selected,after_rom_cancel,(211,156,755,199))<20,
+                  "native ROM chooser cancels without changing selected preset",results)
+            # Canceling the Windows SF2 chooser must be equally harmless.
             click(hwnd,915,103)
             key(0x1B)
             time.sleep(.65)
