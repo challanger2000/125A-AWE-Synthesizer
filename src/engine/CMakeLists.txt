@@ -100,3 +100,15 @@ add_executable(awe32_p97_midi_renderer "../../tools/p97_midi_renderer.cpp")
 target_include_directories(awe32_p97_midi_renderer PRIVATE "." "include" "../../upstream/AWE32Emu/AWE32Emu/src" "../../upstream/AWE32Emu/AWE32Emu/src/86box/include")
 target_link_libraries(awe32_p97_midi_renderer PRIVATE awe32_chip_safety)
 set_target_properties(awe32_p97_midi_renderer PROPERTIES CXX_STANDARD 23)
+
+
+# P113: stand-alone clipping/rail diagnostics. Test-only; the DSP path stays untouched.
+add_executable(awe32_p113_sf2_output_rail_diagnostic
+    "../../tools/p113_sf2_output_rail_diagnostic.cpp")
+target_include_directories(awe32_p113_sf2_output_rail_diagnostic PRIVATE
+    "." "../../src/vst3" "../../upstream/AWE32Emu/AWE32Emu/src")
+target_link_libraries(awe32_p113_sf2_output_rail_diagnostic PRIVATE awe32_chip_safety)
+set_target_properties(awe32_p113_sf2_output_rail_diagnostic
+    PROPERTIES CXX_STANDARD 23)
+add_test(NAME 125A_p113_rail_meter_selftest
+    COMMAND awe32_p113_sf2_output_rail_diagnostic --selftest)
