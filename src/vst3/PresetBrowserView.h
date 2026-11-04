@@ -48,7 +48,7 @@ protected:
 private:
     static constexpr int kPrevious=3101,kNext=3102,kToggle=3103,
                          kFilter=3104,kBankFilter=3105,kLoadSf2=3106,kReset=3107,
-                         kLoadRom=3108;
+                         kLoadRom=3108,kActiveBank=3109,kDirectPreset=3110;
     static constexpr int kGuiFirst=1100,kGuiCount=12;
     static constexpr int kMasterVolume=static_cast<int>(MasterOutput::kParamID);
     Steinberg::Vst::EditController* controller_;
@@ -68,12 +68,16 @@ private:
     bool expanded_=true,syncing_=false,selectingRowFromMouse_=false;
     std::string searchText_;
     std::vector<uint16_t> filterBanks_;
+    std::vector<uint16_t> activeBanks_;
+    std::vector<uint8_t> activePrograms_;
     std::vector<PresetBrowserModel::Row> rows_;
     VSTGUI::CControl* masterVolume_=nullptr;
     VSTGUI::CTextLabel* masterVolumeValue_=nullptr;
     std::array<VSTGUI::CControl*,kGuiCount> controls_{};
     std::array<VSTGUI::CTextLabel*,kGuiCount> values_{};
     VSTGUI::COptionMenu* bankMenu_=nullptr;
+    VSTGUI::COptionMenu* activeBankMenu_=nullptr;
+    VSTGUI::COptionMenu* programMenu_=nullptr;
     VSTGUI::CTextEdit* search_=nullptr;
     VSTGUI::CTextButton *previous_=nullptr,*next_=nullptr,*toggle_=nullptr,
                          *loadSf2_=nullptr,*loadRom_=nullptr,*reset_=nullptr;
@@ -87,6 +91,8 @@ private:
     VSTGUI::CTextButton* MakeButton(const VSTGUI::CRect&,int,const char*);
     void AddKnob(int index,int x,int y,const char* title);
     void RebuildBanks();
+    void RebuildActiveMenus();
+    void SyncActiveMenuSelection();
     void RebuildRows();
     void Sync(bool force=false);
     void SyncSf2Status();
