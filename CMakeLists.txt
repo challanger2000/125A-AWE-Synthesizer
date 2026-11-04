@@ -56,6 +56,14 @@ target_include_directories(awe32_p117_direct_presets_test PRIVATE src/vst3
 target_compile_features(awe32_p117_direct_presets_test PRIVATE cxx_std_23)
 add_test(NAME 125A_p117_direct_presets COMMAND awe32_p117_direct_presets_test)
 
+# P117: synthetic SoundFont 1.0 metadata must enumerate the original GM
+# bank and drumkit in both direct menus; this fixture contains no ROM data.
+add_executable(awe32_p117_synthgm_catalog_test tests/p117_synthgm_catalog.cpp)
+target_include_directories(awe32_p117_synthgm_catalog_test PRIVATE src/vst3 src/opl3
+  ../upstream/AWE32Emu/AWE32Emu/src)
+target_compile_features(awe32_p117_synthgm_catalog_test PRIVATE cxx_std_23)
+add_test(NAME 125A_p117_synthgm_catalog COMMAND awe32_p117_synthgm_catalog_test)
+
 # Independent executable proves the exact 125A master SVG is usable as vector
 # paths without linking a Windows GUI or loading any copyrighted ROM.
 add_executable(awe32_p19_master_logo_test tests/p19_logo_geometry.cpp)
