@@ -273,22 +273,22 @@ public:
             }
             std::string info;
             bool stale=false;
+            const auto preparedInfo=DescribePrepared(prepared.get());
+            const uint32_t latency=prepared?prepared->Core().ChipLatencyFrames():0u;
             {
                 std::lock_guard<std::mutex> lock(engineMutex_);
                 stale=(epoch!=assetGeneration_||active!=hostActive_||
                        sampleRate!=rate_);
                 if(!stale) {
                     if(active) {
-                        ApplyLiveParameters(*prepared);
-                        synth_.swap(prepared);
+                        engines_.Publish(Pack(std::move(prepared),loadedGm,loadedSf2,
+                                              !state_.sf2Path.empty()));
+                        activeRomReady_=true;
+                        reportedLatency_=latency;
+                        hardwareStatus_=preparedInfo;
                     }
                     state_.romPath=path;
                     state_.pathsSpecified=true;
-                    sf2Configured_=!state_.sf2Path.empty();
-                    sf2Loaded_=active&&loadedSf2&&
-                        bool(synth_)&&synth_->Core().ChipVariant()==Emu8000Core::Chip::Box86;
-                    gmLoaded_=active&&loadedGm&&
-                        bool(synth_)&&synth_->Core().ChipVariant()==Emu8000Core::Chip::Box86;
                     ++assetGeneration_;
                     info=HardwareDescriptor();
                 }
@@ -337,7 +337,7 @@ public:
             model=state_;
             active=hostActive_;
             epoch=assetGeneration_;
-            romReady=synth_ && synth_->Core().ChipVariant()==Emu8000Core::Chip::Box86;
+            romReady=activeRomReady_;
         }
         std::string error;
         std::unique_ptr<Synth> replacement;
@@ -372,20 +372,23 @@ public:
                                             static_cast<uint8_t>(model.program));
         }
         bool stale=false;
+        const auto preparedInfo=replacement?DescribePrepared(replacement.get()):
+            std::string{};
+        const uint32_t latency=replacement?
+            replacement->Core().ChipLatencyFrames():0u;
         {
             std::lock_guard<std::mutex> lock(engineMutex_);
             stale=(epoch!=assetGeneration_||active!=hostActive_||
                    sampleRate!=rate_);
             if(!stale) {
                 if(replacement) {
-                    ApplyLiveParameters(*replacement);
-                    synth_.swap(replacement);
+                    engines_.Publish(Pack(std::move(replacement),loadedGm,true,true));
+                    activeRomReady_=true;
+                    reportedLatency_=latency;
+                    hardwareStatus_=preparedInfo;
                 }
                 state_.sf2Path=path;
                 state_.pathsSpecified=true;
-                sf2Configured_=true;
-                sf2Loaded_=active&&romReady;
-                gmLoaded_=active&&romReady&&loadedGm;
                 ++assetGeneration_;
             }
         }
@@ -410,7 +413,7 @@ public:
     }
     uint32 PLUGIN_API getLatencySamples() override {
         std::lock_guard<std::mutex> lock(engineMutex_);
-        return synth_?synth_->Core().ChipLatencyFrames():0;
+        return reportedLatency_;
     }
     tresult PLUGIN_API getState(IBStream* stream) override {
         if(!stream)return kInvalidArgument;
