@@ -188,6 +188,8 @@ public:
                 active=hostActive_;
             }
             std::string error;
+            std::string sf2Error;
+            bool loadedSf2=false;
             std::unique_ptr<Synth> prepared;
             try {
                 // A chip with the new ROM is fully initialized off the audio
@@ -201,9 +203,14 @@ public:
                     for(int i=0;i<kGuiCount;++i)
                         prepared->SetGuiControl(
                             i,float(model.controls[i])/AssetState::kControlScale);
-                    if(active&&!model.sf2Path.empty() &&
-                       !prepared->LoadBank(model.sf2Path,error))
-                        error="SF2 kann mit dieser ROM nicht geladen werden: "+error;
+                    if(active&&!model.sf2Path.empty()) {
+                        if(prepared->LoadBank(model.sf2Path,sf2Error))
+                            loadedSf2=true;
+                        else if(sf2Error.empty())
+                            sf2Error="SF2 nicht ladbar";
+                    }
+                    // A valid ROM is accepted even if an old/invalid SF2
+                    // cannot be loaded; a valid bank can then be selected.
                     if(error.empty()) {
                         prepared->SelectBrowserBank(static_cast<uint16_t>(model.bank));
                         for(int c=0;c<16;++c)
@@ -224,14 +231,18 @@ public:
                 state_.romPath=path;
                 state_.pathsSpecified=true;
                 sf2Configured_=!model.sf2Path.empty();
-                sf2Loaded_=active&&sf2Configured_&&
+                sf2Loaded_=active&&loadedSf2&&
                     bool(synth_)&&synth_->Core().ChipVariant()==Emu8000Core::Chip::Box86;
                 info=HardwareDescriptor();
             }
             sendTextMessage(("125A_HW_INFO:"+info).c_str());
-            sendTextMessage(active ?
-                "125A_SF2_STATUS:ROM geladen. EMU8000-Kern aktiv." :
-                "125A_SF2_STATUS:ROM validiert. Wird bei Aktivierung geladen.");
+            const std::string status=active ?
+                (sf2Error.empty() ?
+                    "ROM geladen. 86Box-EMU8000-Kern aktiv." :
+                    ("ROM geladen. SF2-Ladefehler: "+sf2Error+
+                     ". Mit SF2 LADEN neue Bank auswaehlen.")) :
+                "ROM validiert. Wird bei Aktivierung geladen.";
+            sendTextMessage(("125A_SF2_STATUS:"+status).c_str());
             sendTextMessage("125A_ROM_ACK:OK");
             return kResultOk;
         }
