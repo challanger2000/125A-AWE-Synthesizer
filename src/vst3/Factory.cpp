@@ -194,11 +194,13 @@ public:
             AssetState::Data model;
             uint32_t sampleRate=44100;
             bool active=false;
+            uint64_t epoch=0;
             {
                 std::lock_guard<std::mutex> lock(engineMutex_);
                 model=state_;
                 sampleRate=rate_;
                 active=hostActive_;
+                epoch=assetGeneration_;
             }
             std::string error;
             std::string sf2Error;
@@ -239,17 +241,31 @@ public:
                 return kResultOk;
             }
             std::string info;
+            bool stale=false;
             {
                 std::lock_guard<std::mutex> lock(engineMutex_);
-                if(active) synth_.swap(prepared);
-                state_.romPath=path;
-                state_.pathsSpecified=true;
-                sf2Configured_=!model.sf2Path.empty();
-                sf2Loaded_=active&&loadedSf2&&
-                    bool(synth_)&&synth_->Core().ChipVariant()==Emu8000Core::Chip::Box86;
-                gmLoaded_=active&&loadedGm&&
-                    bool(synth_)&&synth_->Core().ChipVariant()==Emu8000Core::Chip::Box86;
-                info=HardwareDescriptor();
+                stale=(epoch!=assetGeneration_||active!=hostActive_||
+                       sampleRate!=rate_);
+                if(!stale) {
+                    if(active) {
+                        ApplyLiveParameters(*prepared);
+                        synth_.swap(prepared);
+                    }
+                    state_.romPath=path;
+                    state_.pathsSpecified=true;
+                    sf2Configured_=!state_.sf2Path.empty();
+                    sf2Loaded_=active&&loadedSf2&&
+                        bool(synth_)&&synth_->Core().ChipVariant()==Emu8000Core::Chip::Box86;
+                    gmLoaded_=active&&loadedGm&&
+                        bool(synth_)&&synth_->Core().ChipVariant()==Emu8000Core::Chip::Box86;
+                    ++assetGeneration_;
+                    info=HardwareDescriptor();
+                }
+            }
+            if(stale) {
+                sendTextMessage("125A_SF2_STATUS:ROM-Ladevorgang durch neueren Zustand ersetzt.");
+                sendTextMessage("125A_ROM_ACK:ERROR");
+                return kResultOk;
             }
             sendTextMessage(("125A_HW_INFO:"+info).c_str());
             const std::string status=active ?
@@ -275,11 +291,13 @@ public:
         uint32_t sampleRate=44100;
         AssetState::Data model;
         bool active=false,romReady=false;
+        uint64_t epoch=0;
         {
             std::lock_guard<std::mutex> lock(engineMutex_);
             sampleRate=rate_;
             model=state_;
             active=hostActive_;
+            epoch=assetGeneration_;
             romReady=synth_ && synth_->Core().ChipVariant()==Emu8000Core::Chip::Box86;
         }
         std::string error;
@@ -314,14 +332,28 @@ public:
                 replacement->ProgramChange(static_cast<uint8_t>(c),
                                             static_cast<uint8_t>(model.program));
         }
+        bool stale=false;
         {
             std::lock_guard<std::mutex> lock(engineMutex_);
-            if(replacement)synth_.swap(replacement);
-            state_.sf2Path=path;
-            state_.pathsSpecified=true;
-            sf2Configured_=true;
-            sf2Loaded_=active&&romReady;
-            gmLoaded_=active&&romReady&&loadedGm;
+            stale=(epoch!=assetGeneration_||active!=hostActive_||
+                   sampleRate!=rate_);
+            if(!stale) {
+                if(replacement) {
+                    ApplyLiveParameters(*replacement);
+                    synth_.swap(replacement);
+                }
+                state_.sf2Path=path;
+                state_.pathsSpecified=true;
+                sf2Configured_=true;
+                sf2Loaded_=active&&romReady;
+                gmLoaded_=active&&romReady&&loadedGm;
+                ++assetGeneration_;
+            }
+        }
+        if(stale) {
+            sendTextMessage("125A_SF2_STATUS:SF2-Ladevorgang durch neueren Zustand ersetzt.");
+            sendTextMessage("125A_SF2_ACK:ERROR");
+            return kResultOk;
         }
         std::string sysInfo;
         {
@@ -650,6 +682,18 @@ private:
     bool sf2Configured_=false,sf2Loaded_=false; // written outside process()
     bool gmLoaded_=false; // only true for validated ROM-backed 1MGM bank
     uint64_t assetGeneration_=0; // invalidates stale prepared reloads
+    // Apply parameter state as late as possible when a prepared SF2 or ROM
+    // replaces the engine. Audio/automation may have changed while loading.
+    // Caller holds engineMutex_; this method performs no file I/O.
+    void ApplyLiveParameters(Synth& target) const noexcept {
+        for(int i=0;i<kGuiCount;++i)
+            target.SetGuiControl(i,
+                float(state_.controls[i])/AssetState::kControlScale);
+        target.SelectBrowserBank(static_cast<uint16_t>(state_.bank));
+        for(int ch=0;ch<16;++ch)
+            target.ProgramChange(static_cast<uint8_t>(ch),
+                static_cast<uint8_t>(state_.program));
+    }
     // Report the currently running chip, not merely paths in assets.cfg.
     // Call under engineMutex_ from non-realtime code only.
     std::string HardwareDescriptor() const {
