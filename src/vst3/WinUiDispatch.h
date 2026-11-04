@@ -8,6 +8,7 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <atomic>
 #include <mutex>
 
 namespace AWE125 {
@@ -19,7 +20,7 @@ public:
     WinUiDispatch& operator=(const WinUiDispatch&)=delete;
     ~WinUiDispatch(){Stop();}
     bool Start(void* ctx,Handler callback,HINSTANCE module) {
-        if(hwnd_||!callback||!module)return false;
+        if(hwnd_.load(std::memory_order_acquire)||!callback||!module)return false;
         context_=ctx;handler_=callback;module_=module;
         {
             std::lock_guard<std::mutex> guard(classMutex_);
@@ -34,34 +35,36 @@ public:
             }
             ++classRefs_;
         }
-        hwnd_=CreateWindowExW(0,kClassName,L"",0,0,0,0,0,
+        const HWND created=CreateWindowExW(0,kClassName,L"",0,0,0,0,0,
                               HWND_MESSAGE,nullptr,module_,this);
-        if(!hwnd_){
+        if(!created){
             ReleaseClass();
             return false;
         }
+        hwnd_.store(created,std::memory_order_release);
         return true;
     }
     void Post() const noexcept {
-        if(hwnd_)PostMessageW(hwnd_,kNotify,0,0);
+        if(const HWND h=hwnd_.load(std::memory_order_acquire))
+            PostMessageW(h,kNotify,0,0);
     }
-    bool Active() const noexcept {return hwnd_!=nullptr;}
+    bool Active() const noexcept {return hwnd_.load(std::memory_order_acquire)!=nullptr;}
 private:
     static constexpr UINT kNotify=WM_APP+0x5A;
     static constexpr UINT_PTR kTimer=1;
     static inline constexpr wchar_t kClassName[]=L"125A_AWE_VST3_HostDispatch_P119";
     static inline std::mutex classMutex_{};
     static inline unsigned classRefs_=0;
-    HWND hwnd_=nullptr;
+    std::atomic<HWND> hwnd_{nullptr};
     HINSTANCE module_=nullptr;
     void* context_=nullptr;
     Handler handler_=nullptr;
     void Stop() {
-        if(hwnd_) {
-            KillTimer(hwnd_,kTimer);
-            SetWindowLongPtrW(hwnd_,GWLP_USERDATA,0);
-            DestroyWindow(hwnd_); // controller is created/destroyed on UI thread
-            hwnd_=nullptr;
+        const HWND h=hwnd_.exchange(nullptr,std::memory_order_acq_rel);
+        if(h) {
+            KillTimer(h,kTimer);
+            SetWindowLongPtrW(h,GWLP_USERDATA,0);
+            DestroyWindow(h); // controller created/destroyed on UI thread
             ReleaseClass();
         }
     }
