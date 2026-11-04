@@ -34,6 +34,13 @@ target_link_libraries(awe32_engine_safety_test PRIVATE awe32_chip_safety)
 set_target_properties(awe32_engine_safety_test PROPERTIES CXX_STANDARD 23)
 add_test(NAME 125A_engine_safety COMMAND awe32_engine_safety_test)
 
+# P118: malformed SF2 negative fixtures exercise the actual production parser.
+add_executable(awe32_p118_parser_bounds_test "${PROJECT_SOURCE_DIR}/tests/p118_soundfont_parser_bounds.cpp")
+target_include_directories(awe32_p118_parser_bounds_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${UPSTREAM_SRC}")
+target_link_libraries(awe32_p118_parser_bounds_test PRIVATE awe32_chip_safety)
+set_target_properties(awe32_p118_parser_bounds_test PROPERTIES CXX_STANDARD 23)
+add_test(NAME 125A_p118_parser_bounds COMMAND awe32_p118_parser_bounds_test)
+
 add_executable(awe32_sf2_selection_test "${PROJECT_SOURCE_DIR}/tests/sf2_selection.cpp")
 target_include_directories(awe32_sf2_selection_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${UPSTREAM_SRC}")
 target_link_libraries(awe32_sf2_selection_test PRIVATE awe32_chip_safety)
