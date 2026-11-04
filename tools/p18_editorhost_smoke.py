@@ -472,7 +472,8 @@ def main():
                   "native SF2 chooser cancels without mutating current preset",results)
             u.PostMessageW(hwnd,0x0010,0,0)
             proc.wait(timeout=10)
-            check(proc.returncode==0,"EditorHost closes normally",results)
+            check(proc.returncode==0,
+                  f"EditorHost closes normally (exit code {proc.returncode})",results)
         finally:
             if proc.poll() is None:
                 proc.terminate()
