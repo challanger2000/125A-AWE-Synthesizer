@@ -79,13 +79,49 @@ def phdr(name, bank, program):
     return name.encode("ascii")[:20].ljust(20, b"\0") + struct.pack("<HHHIII", program, bank, 0, 0, 0, 0)
 
 def make_sf2(path):
-    ph = b"".join([
-        phdr("125A PIANO", 0, 0), phdr("RETRO LEAD", 2, 4),
-        phdr("ROOM DRUM KIT", 128, 0), phdr("EOP", 0, 0),
-    ])
-    pdta = b"pdta" + chunk("phdr", ph)
-    body = b"sfbk" + chunk("LIST", pdta)
-    path.write_bytes(b"RIFF" + struct.pack("<I", len(body)) + body)
+    # A tiny, genuinely playable and redistributable SF2 with three banks:
+    # synthetic sine-family samples only, no Creative copyrighted assets.
+    import math
+    def u16(n): return struct.pack("<H",n&65535)
+    def u32(n): return struct.pack("<I",n)
+    def name(s): return s.encode("ascii")[:20].ljust(20,b"\0")
+    def listchunk(kind,children): return chunk("LIST",kind.encode("ascii")+children)
+    info=chunk("ifil",u16(2)+u16(1))+chunk("INAM",b"125A P106 GUI fixture\0")
+    sample_words=2048
+    periods=(64,37,83)
+    pcm=b"".join(u16(round(math.sin(2*math.pi*(n%k)/k)*11000))
+                 for k in periods for n in range(sample_words))
+    pcm+=b"\0"*(46*2)
+    sdta=chunk("smpl",pcm)
+    phdrdata=b""
+    for display,bank,program,index in (
+        ("125A PIANO",0,0,0),("RETRO LEAD",2,4,1),
+        ("ROOM DRUM KIT",128,0,2)):
+        phdrdata+=name(display)+u16(program)+u16(bank)+u16(index)+u32(0)*3
+    phdrdata+=name("EOP")+u16(0)+u16(0)+u16(3)+u32(0)*3
+    pbag=b"".join(u16(i)+u16(0) for i in range(4))
+    pgen=b"".join(u16(41)+u16(i) for i in range(3))
+    instdata=b"".join(name(v)+u16(i) for i,v in enumerate(
+        ("125A Wave","125A Wave B","125A Wave C","EOI")))
+    ibag=b"".join(u16(i*2)+u16(0) for i in range(4))
+    igen=b"".join(u16(54)+u16(1)+u16(53)+u16(i) for i in range(3))
+    shdr=b""
+    for i,title in enumerate(("125A Wave","125A Wave B","125A Wave C")):
+        start=i*sample_words
+        end=(i+1)*sample_words
+        shdr+=(name(title)+u32(start)+u32(end)+u32(start+16)+
+               u32(end-16)+u32(44100)+bytes((69,0))+u16(0)+u16(1))
+    shdr+=name("EOS")+u32(0)*6+b"\0\0"+u16(0)+u16(1)
+    pdta=b"".join((
+        chunk("phdr",phdrdata),chunk("pbag",pbag),
+        chunk("pmod",bytes(10)),chunk("pgen",pgen),
+        chunk("inst",instdata),chunk("ibag",ibag),
+        chunk("imod",bytes(10)),chunk("igen",igen),chunk("shdr",shdr)
+    ))
+    body=(b"sfbk"+listchunk("INFO",info)+listchunk("sdta",sdta)+
+          listchunk("pdta",pdta))
+    path.write_bytes(b"RIFF"+u32(len(body))+body)
+
 
 def get_editor(pid):
     found = []
