@@ -139,6 +139,76 @@ def get_editor(pid):
     u.EnumWindows(callback, 0)
     return found[0] if found else None
 
+# The Github hosted Windows desktop can start at only 1024x768. A 1200x780
+# plugin view is then clipped by EditorHost before any VSTGUI screenshot
+# or mouse test. Enumerate supported display modes and temporarily switch
+# to a real larger mode; never mark a cropped screen as a GUI PASS.
+class DEVMODEW(ctypes.Structure):
+    _fields_=[
+        ("dmDeviceName",wintypes.WCHAR*32),
+        ("dmSpecVersion",wintypes.WORD),
+        ("dmDriverVersion",wintypes.WORD),
+        ("dmSize",wintypes.WORD),
+        ("dmDriverExtra",wintypes.WORD),
+        ("dmFields",wintypes.DWORD),
+        ("dmPositionX",wintypes.LONG),
+        ("dmPositionY",wintypes.LONG),
+        ("dmDisplayOrientation",wintypes.DWORD),
+        ("dmDisplayFixedOutput",wintypes.DWORD),
+        ("dmColor",wintypes.SHORT),
+        ("dmDuplex",wintypes.SHORT),
+        ("dmYResolution",wintypes.SHORT),
+        ("dmTTOption",wintypes.SHORT),
+        ("dmCollate",wintypes.SHORT),
+        ("dmFormName",wintypes.WCHAR*32),
+        ("dmLogPixels",wintypes.WORD),
+        ("dmBitsPerPel",wintypes.DWORD),
+        ("dmPelsWidth",wintypes.DWORD),
+        ("dmPelsHeight",wintypes.DWORD),
+        ("dmDisplayFlags",wintypes.DWORD),
+        ("dmDisplayFrequency",wintypes.DWORD),
+        ("dmICMMethod",wintypes.DWORD),
+        ("dmICMIntent",wintypes.DWORD),
+        ("dmMediaType",wintypes.DWORD),
+        ("dmDitherType",wintypes.DWORD),
+        ("dmReserved1",wintypes.DWORD),
+        ("dmReserved2",wintypes.DWORD),
+        ("dmPanningWidth",wintypes.DWORD),
+        ("dmPanningHeight",wintypes.DWORD),
+    ]
+
+u.EnumDisplaySettingsW.restype=wintypes.BOOL
+u.EnumDisplaySettingsW.argtypes=[wintypes.LPCWSTR,wintypes.DWORD,ctypes.POINTER(DEVMODEW)]
+u.ChangeDisplaySettingsW.restype=wintypes.LONG
+u.ChangeDisplaySettingsW.argtypes=[ctypes.POINTER(DEVMODEW),wintypes.DWORD]
+u.GetSystemMetrics.restype=ctypes.c_int
+u.GetSystemMetrics.argtypes=[ctypes.c_int]
+
+def ensure_full_desktop():
+    before=(u.GetSystemMetrics(0),u.GetSystemMetrics(1))
+    print(f"P117 desktop before resolution change: {before}",flush=True)
+    if before[0]>=1400 and before[1]>=900:return before
+    supported=[]
+    for index in range(1000):
+        mode=DEVMODEW()
+        mode.dmSize=ctypes.sizeof(DEVMODEW)
+        if not u.EnumDisplaySettingsW(None,index,ctypes.byref(mode)):break
+        if mode.dmPelsWidth>=1400 and mode.dmPelsHeight>=900:
+            supported.append((mode.dmPelsWidth,mode.dmPelsHeight,mode.dmDisplayFrequency,mode))
+    supported.sort(key=lambda x:(abs(x[0]-1600)+abs(x[1]-900),x[0]*x[1]))
+    for width,height,hz,mode in supported:
+        mode.dmFields=0x00080000|0x00100000 # DM_PELSWIDTH | DM_PELSHEIGHT
+        status=u.ChangeDisplaySettingsW(ctypes.byref(mode),0)
+        after=(u.GetSystemMetrics(0),u.GetSystemMetrics(1))
+        print(f"P117 desktop try {width}x{height} @ {hz}Hz: code={status}, got={after}",flush=True)
+        if status==0 and after[0]>=1400 and after[1]>=900:
+            time.sleep(.5)
+            return after
+    raise RuntimeError(
+        f"P117 GUI test BLOCKED: CI desktop {before} cannot fit 1200x780 window; "
+        f"no supported 1400x900 display mode. Available qualifying modes: {len(supported)}. "
+        "Do not approve a cropped editor image.")
+
 def client_size(hwnd):
     r = RECT()
     if not u.GetClientRect(hwnd, ctypes.byref(r)):
@@ -303,6 +373,7 @@ def main():
     if not args.editorhost.is_file() or not args.plugin.is_dir():
         raise RuntimeError("EditorHost executable / VST3 bundle not found")
     results=[]
+    ensure_full_desktop()
     with tempfile.TemporaryDirectory(prefix="125a_p18_") as temp:
         root=Path(temp)
         sf2=root/"ui_fixture.sf2"
