@@ -1154,8 +1154,11 @@ public:
         const auto r=EditControllerEx1::initialize(ctx);
         if(r!=kResultOk)return r;
 #if defined(_WIN32)
-        hostDispatch_.Start(this,&Controller::HostSignalThunk,
-            reinterpret_cast<HINSTANCE>(Steinberg::getPlatformModuleHandle()));
+        if(!hostDispatch_.Start(this,&Controller::HostSignalThunk,
+            reinterpret_cast<HINSTANCE>(Steinberg::getPlatformModuleHandle()),
+            +[](void* owner){static_cast<Controller*>(owner)->addRef();},
+            +[](void* owner){static_cast<Controller*>(owner)->release();}))
+            return kResultFalse; // never silently lose host notifications
 #endif
         // COptionMenu displays and selects real steps only when the parameter
         // supplies readable values. The former generic numeric parameter
@@ -1303,6 +1306,8 @@ public:
             romPendingRequestID_=sf2PendingRequestID_=0;
             sf2PendingAck_.clear();
             romPendingAck_.clear();
+            hostDirtyPending_=false; // old ACK predates this new project
+            ++hostDirtySeq_;
         }
         romPendingPath_.clear();
         sf2PendingPath_.clear();
@@ -1335,6 +1340,10 @@ private:
         return static_cast<Controller*>(self)->DeliverHostSignals();
     }
     bool DeliverHostSignals() {
+        // A host may synchronously drop its last controller reference inside
+        // restartComponent(); this method itself must own a reference until
+        // it has finished inspecting the pending state.
+        addRef();
         bool dirty=false,latency=false;
         uint64_t dirtySeq=0,latencySeq=0;
         {
@@ -1346,15 +1355,24 @@ private:
         }
         bool dirtyOk=!dirty,latencyOk=!latency;
         // Called exclusively by the persistent Win32 UI message window.
-        if(dirty)dirtyOk=setDirty(true)==kResultOk;
+        // IComponentHandler2/setDirty is optional: absent support must not
+        // run an endless 250 ms UI timer. A later handler re-connection can
+        // initiate a fresh notification for future edits.
+        if(dirty)
+            dirtyOk=!componentHandler2||setDirty(true)==kResultOk;
         if(latency) {
             if(auto* handler=getComponentHandler())
                 latencyOk=handler->restartComponent(kLatencyChanged)==kResultOk;
         }
-        std::lock_guard<std::mutex> guard(sf2StatusMutex_);
-        if(dirtyOk&&dirtySeq==hostDirtySeq_)hostDirtyPending_=false;
-        if(latencyOk&&latencySeq==hostLatencySeq_)latencyChangePending_=false;
-        return hostDirtyPending_||latencyChangePending_;
+        bool retry=false;
+        {
+            std::lock_guard<std::mutex> guard(sf2StatusMutex_);
+            if(dirtyOk&&dirtySeq==hostDirtySeq_)hostDirtyPending_=false;
+            if(latencyOk&&latencySeq==hostLatencySeq_)latencyChangePending_=false;
+            retry=hostDirtyPending_||latencyChangePending_;
+        }
+        release(); // possibly destroys this; do not access members afterward
+        return retry;
     }
     void ReloadPresetCatalogs(const AssetState::Data* model) {
         AssetConfig::Paths paths;
