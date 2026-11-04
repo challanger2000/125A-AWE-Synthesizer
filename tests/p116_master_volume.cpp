@@ -70,12 +70,17 @@ int main() {
         for(int i=0;i<64;++i) {
             const auto va=a.valueAt(i),vb=b.valueAt(i);
             if(std::abs(va-vb)>1e-12)equal=false;
-            ga.setTarget(static_cast<uint32_t>(std::lround(va*10000.)));
-            gb.setTarget(static_cast<uint32_t>(std::lround(vb*10000.)));
-            if(std::abs(ga.next()-gb.next())>1e-6f)equal=false;
+            const float aa=ga.nextAutomated(va);
+            const float bb=gb.nextAutomated(vb);
+            const float expected=static_cast<float>(1.-double(i+1)/64.);
+            if(std::abs(aa-bb)>1e-6f ||
+               std::abs(aa-expected)>1e-6f)equal=false;
         }
+        pass &= expect(ga.current()==0.f && gb.current()==0.f &&
+                       ga.next()==0.f && gb.next()==0.f,
+                       "P120 host 64-frame master fade ends at zero, no 63-frame tail");
         pass &= expect(equal,
-            "P119 sparse endpoint and dense linear VST3 queues produce identical 64-frame PCM master envelope");
+            "P120 sparse/dense curves match the ideal PCM gain at EVERY frame and end at exactly zero");
     }
     std::cout<<(pass?"P116_MASTER_VOLUME_PASS":"P116_MASTER_VOLUME_FAIL")<<"\n";
     return pass?0:1;
