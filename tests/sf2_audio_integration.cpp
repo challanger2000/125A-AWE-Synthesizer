@@ -201,9 +201,9 @@ int main() {
         ok &= check(std::all_of(silent.begin(),silent.end(),
                     [](int16_t x){return x==0;}),
                     "failed SF2 produces silence instead of playing a fake patch");
-        ok &= check(AWE125::AllowEmuNoteOn(false,false) &&
+        ok &= check(!AWE125::AllowEmuNoteOn(false,false) &&
                     AWE125::AllowEmuNoteOn(true,true),
-                    "unconfigured demo fallback and successfully loaded SF2 remain usable");
+                    "AWE-only plugin is silent until a valid SF2 actually loads");
     }
     constexpr size_t reserve=16;
     constexpr size_t copiedWords=2048+46;
