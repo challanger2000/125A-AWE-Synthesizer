@@ -1141,7 +1141,8 @@ public:
                 UString(title,128).fromAscii(label);
                 parameters.addParameter(new RangeParameter(title,
                     MidiControlMapping::ParamID(ch,static_cast<uint32_t>(i)),
-                    nullptr,0.,1.,MidiControlMapping::InitialNormalized(spec),0,
+                    nullptr,0.,1.,MidiControlMapping::InitialNormalized(spec),
+                    spec.number==129?0:127, // CC values are discrete; pitch bend is continuous
                     ParameterInfo::kCanAutomate));
             }
         constexpr const char16* labels[kGuiCount]={
