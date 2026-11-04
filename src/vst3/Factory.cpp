@@ -424,6 +424,14 @@ public:
             std::lock_guard<std::mutex> lock(engineMutex_);
             snapshot=state_;
         }
+        // The audio callback publishes numeric host parameters atomically.
+        // This snapshot has the same V1-V9 binary layout, without reading
+        // mutable audio-thread memory on a control thread.
+        snapshot.program=rtProgram_.load(std::memory_order_acquire);
+        snapshot.bank=rtBank_.load(std::memory_order_acquire);
+        snapshot.masterVolume=rtMaster_.load(std::memory_order_acquire);
+        for(int i=0;i<kGuiCount;++i)
+            snapshot.controls[i]=rtControls_[i].load(std::memory_order_acquire);
         if(!snapshot.pathsSpecified) {
             AssetConfig::Paths configured;
             if(AssetConfig::Load(configured)) {
@@ -502,26 +510,35 @@ public:
             } catch(const std::exception&) {return kResultFalse;}
         }
         std::string info,status;
+        const auto preparedInfo=DescribePrepared(prepared.get());
+        const uint32_t latency=prepared?prepared->Core().ChipLatencyFrames():0u;
         {
             std::lock_guard<std::mutex> lock(engineMutex_);
-            // A setActive, setupProcessing or another asset commit during
-            // preparation invalidates the candidate, never overwrite newer.
             if(epoch!=assetGeneration_||active!=hostActive_||rate_!=sampleRate)
                 return kResultFalse;
+            // Publish control values before the new engine is visible to the
+            // audio callback; that callback restores MIDI state itself.
+            rtProgram_.store(candidate.program,std::memory_order_release);
+            rtBank_.store(candidate.bank,std::memory_order_release);
+            rtMaster_.store(candidate.masterVolume,std::memory_order_release);
+            for(int i=0;i<kGuiCount;++i)
+                rtControls_[i].store(candidate.controls[i],std::memory_order_release);
+            gainRestoreValue_.store(candidate.masterVolume,std::memory_order_release);
+            gainRestoreEpoch_.fetch_add(1,std::memory_order_acq_rel);
             if(active) {
-                if(prepared)liveMidi_.Replay(*prepared);
-                synth_.swap(prepared);
+                const bool valid=bool(prepared);
+                engines_.Publish(Pack(std::move(prepared),loadedGm,loadedSf2,
+                                      !candidate.sf2Path.empty()));
+                activeRomReady_=valid;
+                reportedLatency_=latency;
+                hardwareStatus_=preparedInfo;
             }
             state_=std::move(candidate);
-            volumeGain_.restore(state_.masterVolume);
-            sf2Configured_=!state_.sf2Path.empty();
-            sf2Loaded_=active&&loadedSf2;
-            gmLoaded_=active&&loadedGm;
             ++assetGeneration_;
             info=HardwareDescriptor();
             status=active
-                ?(synth_
-                    ?(gmLoaded_?"ROM + original GM loaded.":"Wave-ROM loaded.")
+                ?(activeRomReady_
+                    ?(loadedGm?"ROM + original GM loaded.":"Wave-ROM loaded.")
                     :"Original-Wave-ROM erforderlich: ROM LADEN. Bis dahin kein Audio.")
                 :"Project assets restored; ready on activation.";
         }
