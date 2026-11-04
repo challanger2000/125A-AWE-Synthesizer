@@ -1,0 +1,75 @@
+name: P116 - Master Volume Windows VST3 verification
+on:
+  push:
+    branches: [develop/p116-master-volume]
+    paths:
+      - '.github/workflows/p116-master-volume-vst3.yml'
+      - 'CMakeLists.txt'
+      - 'src/vst3/**'
+      - 'src/engine/**'
+      - 'tests/asset_state.cpp'
+      - 'tests/p116_master_volume.cpp'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  p116-vst3:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch verified Steinberg SDK 3.8.1 and submodules
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch v3.8.1_build_84 --recurse-submodules https://github.com/steinbergmedia/vst3sdk.git external/vst3sdk
+          $hash = (git -C external/vst3sdk rev-parse HEAD).Trim()
+          if ($hash -ne "3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96") { throw "Unexpected Steinberg SDK: $hash" }
+      - name: Configure full Windows 2022 x64 VST3 and EditorHost
+        shell: pwsh
+        run: |
+          cmake -S . -B build-p116 -G "Visual Studio 17 2022" -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_EDITORHOST_TEST=ON
+          if ($LASTEXITCODE -ne 0) { throw "P116 configure failed" }
+      - name: Build real VST3 and native regression targets
+        shell: pwsh
+        run: |
+          cmake --build build-p116 --config Release --parallel 2
+          if ($LASTEXITCODE -ne 0) { throw "P116 native/SDK build failed" }
+      - name: Test state migration, master-gain smoothing and existing regressions
+        shell: pwsh
+        run: |
+          ctest --test-dir build-p116 -C Release --output-on-failure
+          if ($LASTEXITCODE -ne 0) { throw "P116 CTest failures" }
+      - name: Normalize and validate VST3 metadata JSON
+        shell: pwsh
+        run: |
+          $info = "build-p116/VST3/Release/125A_AWE_Synthesizer.vst3/Contents/Resources/moduleinfo.json"
+          python tools/normalize_vst3_metadata.py $info
+          if ($LASTEXITCODE -ne 0) { throw "P116 metadata normalization failed" }
+          python -c "import json,sys; j=json.load(open(sys.argv[1],encoding='utf8')); assert j['Name']; print('P116 VST3 moduleinfo JSON valid')" $info
+          if ($LASTEXITCODE -ne 0) { throw "P116 invalid moduleinfo" }
+      - name: EditorHost full Win32 GUI smoke
+        shell: pwsh
+        timeout-minutes: 4
+        run: |
+          $editor = Get-ChildItem build-p116 -Filter editorhost.exe -Recurse |
+            Where-Object { $_.FullName -match 'Release' } |
+            Select-Object -First 1 -ExpandProperty FullName
+          $plugin = (Resolve-Path "build-p116/VST3/Release/125A_AWE_Synthesizer.vst3").Path
+          if (-not $editor) { throw "P116 EditorHost missing" }
+          python tools/p18_editorhost_smoke.py --editorhost "$editor" --plugin "$plugin" --output build-p116/p116-gui
+          if ($LASTEXITCODE -ne 0) { throw "P116 GUI smoke failed" }
+      - name: Package P116 Windows VST3 with new master volume
+        uses: actions/upload-artifact@v4
+        with:
+          name: 125A-P116-Master-Volume-Windows-x64-VST3
+          path: build-p116/VST3/Release/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Package actual P116 GUI screenshot evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 125A-P116-EditorHost-GUI-Smoke
+          path: build-p116/p116-gui/
+          if-no-files-found: warn
+          retention-days: 7
