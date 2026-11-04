@@ -94,6 +94,7 @@ private:
     void RebuildActiveMenus();
     void SyncActiveMenuSelection();
     void RebuildRows();
+    void SyncBrowserSelection();
     void Sync(bool force=false);
     void SyncSf2Status();
     void SyncHardwareInfo();
