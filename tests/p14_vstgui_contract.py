@@ -33,8 +33,8 @@ assert 'getBinary("Path",bytes,bytesCount)' in f
 assert 'sendTextMessage("125A_SF2_ACK:OK")' in f
 assert '"125A_HW_INFO:"' in f and 'HardwareDescriptor()' in f
 assert 'core.ChipVariant()==Emu8000Core::Chip::Box86' in f
-assert 'core.RomSize()>0' in f
-assert 'core.ChipRamWords()' in f
+assert 'CORE: INTERN' in f and 'ROM: NICHT GELADEN' in f
+assert 'core.ChipRamWords()' in f and 'BankAt(i).sampleData.size()' in f
 assert 'hardwareInfoProvider_' in h and 'hardwareInfoLabel_' in h
 assert 'addView(new ChipPackage(' in b and '32 VOICES  /  44.1 kHz' in b
 assert 'SyncHardwareInfo();' in b
