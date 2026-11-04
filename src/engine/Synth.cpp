@@ -268,6 +268,20 @@ bool Synth::LoadBank(const std::string& path, std::string& error, bool samplesIn
     return true;
 }
 
+// Control IDs 0..11: amp ADSR, mod-envelope ADSR, cutoff, resonance,
+// reverb send and chorus send. The 0 position is strictly transparent to the
+// original hardware-calibrated SF2 register conversion.
+void Synth::SetGuiControl(int index, float normalized) noexcept
+{
+    if(index>=0 && index<kGuiControlCount && std::isfinite(normalized))
+        m_guiControls[static_cast<size_t>(index)] = std::clamp(normalized,0.f,1.f);
+}
+float Synth::GuiControl(int index) const noexcept
+{
+    return (index>=0 && index<kGuiControlCount)
+        ? m_guiControls[static_cast<size_t>(index)] : 0.f;
+}
+
 // ---------------------------------------------------------------------------
 // Voice management
 // ---------------------------------------------------------------------------
@@ -894,9 +908,56 @@ void Synth::StartLayers(size_t bankIndex, std::span<const SoundFont::Region> reg
     const SoundFont::Bank& b = *m_banks[bankIndex].bank;
     std::array<SoundFont::VoiceParams, kMaxRegionsPerNote> vps{};
     for (size_t j = 0; j < regions.size(); ++j)
-        vps[j] = SoundFont::MakeVoiceParams(
+    {
+        auto& v = vps[j];
+        v = SoundFont::MakeVoiceParams(
             b, regions[j], note, velocity, m_banks[bankIndex].dramBase, kRomPoolBase,
             m_core.DriverVariant());
+        // User-editable, deliberately non-destructive performance overlay.
+        // All zero = exact existing SF2-to-register behaviour. No bank edits.
+        auto timeRate = [](float value) -> uint16_t {
+            return static_cast<uint16_t>(std::clamp(127-
+                int(std::lround(value*120.f)),1,127));
+        };
+        auto replaceLow = [](uint16_t registerValue,uint16_t low) -> uint16_t {
+            return static_cast<uint16_t>((registerValue&0xFF00u)|(low&0x7Fu));
+        };
+        auto replaceHigh = [](uint16_t registerValue,int high) -> uint16_t {
+            return static_cast<uint16_t>((registerValue&0x00FFu)|
+                (static_cast<unsigned>(std::clamp(high,0,127))<<8));
+        };
+        if(m_guiControls[0]>0.f) v.atkhldv=replaceLow(v.atkhldv,timeRate(m_guiControls[0]));
+        if(m_guiControls[1]>0.f) v.dcysusv=replaceLow(v.dcysusv,timeRate(m_guiControls[1]));
+        if(m_guiControls[2]>0.f) v.dcysusv=replaceHigh(v.dcysusv,
+            127-int(std::lround(m_guiControls[2]*127.f)));
+        if(m_guiControls[3]>0.f) v.releaseRate=static_cast<uint8_t>(timeRate(m_guiControls[3]));
+        if(m_guiControls[4]>0.f) v.atkhld=replaceLow(v.atkhld,timeRate(m_guiControls[4]));
+        if(m_guiControls[5]>0.f) v.dcysus=replaceLow(v.dcysus,timeRate(m_guiControls[5]));
+        if(m_guiControls[6]>0.f) v.dcysus=replaceHigh(v.dcysus,
+            127-int(std::lround(m_guiControls[6]*127.f)));
+        if(m_guiControls[7]>0.f) v.releaseModRate=static_cast<uint8_t>(timeRate(m_guiControls[7]));
+        if(m_guiControls[8]>0.f) {
+            const int cutoff=(v.ifatn>>8)&0xFF;
+            v.ifatn=static_cast<uint16_t>((std::max(0,cutoff-int(std::lround(
+                m_guiControls[8]*255.f)))<<8)|(v.ifatn&0xFF));
+        }
+        if(m_guiControls[9]>0.f) {
+            const int q=static_cast<int>((v.ccca>>28)&0xF);
+            const auto improved=static_cast<uint32_t>(std::min(15,
+                q+int(std::lround(m_guiControls[9]*15.f))));
+            v.ccca=(v.ccca&0x0FFFFFFFu)|(improved<<28);
+        }
+        if(m_guiControls[10]>0.f)
+            v.reverbSend=static_cast<uint8_t>(std::min(255,int(v.reverbSend)+
+                int(std::lround(m_guiControls[10]*255.f))));
+        if(m_guiControls[11]>0.f) {
+            const auto current=static_cast<int>((v.csl>>Emu8000::kChorusShift)&0xFF);
+            const auto boosted=static_cast<uint32_t>(std::min(255,current+
+                int(std::lround(m_guiControls[11]*255.f))));
+            v.csl=(v.csl&Emu8000::kLoopAddressMask)|
+                (boosted<<Emu8000::kChorusShift);
+        }
+    }
 
     if (Awe32::IsDosLike(m_core.DriverVariant()))
     {

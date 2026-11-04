@@ -27,6 +27,11 @@ class Synth
 {
 public:
     explicit Synth(uint32_t sampleRate);
+    // VST3 UI modifiers, applied only at NoteOn. 0 = original SF2 register.
+    static constexpr int kGuiControlCount = 12;
+    void SetGuiControl(int index, float normalized) noexcept;
+    float GuiControl(int index) const noexcept;
+
 
     // Wave ROM = a raw dump, 16-bit little-endian samples.
     bool LoadWaveRom(const std::string& path, std::string& error);
@@ -205,6 +210,7 @@ private:
 
     Emu8000Core m_core;
     std::vector<LoadedBank> m_banks;
+    std::array<float,kGuiControlCount> m_guiControls{};
     // A fixed per-instance scratch area for selecting SF2/SBK layers at NoteOn.
     std::array<SoundFont::Region, kMaxRegionsPerNote> m_regionScratch{};
     uint64_t m_regionOverflowCount = 0;

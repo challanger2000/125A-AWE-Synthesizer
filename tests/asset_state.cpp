@@ -32,15 +32,23 @@ int main() {
     d.sf2Path="D:\\Sounds\\Synth 512 Bank.sf2";
     d.ibkPath="C:\\FM\\Creative melodic.ibk";
     d.drumIbkPath="C:\\FM\\Creative drums.ibk";
+    d.controls[0]=7500;
+    d.controls[8]=2500;
     const auto blob=encode(d);
     AssetState::Data out;
     ok &= ck(!blob.empty()&&decode(blob,out)&&out.program==104&&
              out.engine==2&&out.bank==128&&out.pathsSpecified&&out.romPath==d.romPath&&
              out.sf2Path==d.sf2Path&&out.ibkPath==d.ibkPath&&
-             out.drumIbkPath==d.drumIbkPath,
-             "V7 CQM mode, SF2 bank 128 and both FM paths round trip");
-    // V7 appends exactly one uint32 SF2-bank word to the unchanged V6 bytes.
-    Bytes v6(blob.begin(),blob.end()-4);
+             out.drumIbkPath==d.drumIbkPath&&out.controls==d.controls,
+             "V8 legacy-compatible state and 12 GUI controls round trip");
+    // V8 appends exactly 12 uint32 overlay parameters to V7, never to old saves.
+    Bytes v7(blob.begin(),blob.end()-4*AssetState::kControlCount);
+    v7[4]=7;
+    ok &= ck(decode(v7,out)&&out.bank==128&&
+             std::all_of(out.controls.begin(),out.controls.end(),[](uint32_t v){return v==0;}),
+             "legacy V7 restore preserves bank and neutral overlay");
+    // V7 appended one uint32 SF2-bank word to the unchanged V6 bytes.
+    Bytes v6(v7.begin(),v7.end()-4);
     v6[4]=6;
     ok &= ck(decode(v6,out)&&out.engine==2&&out.bank==0&&
              out.program==104&&out.sf2Path==d.sf2Path,
@@ -83,25 +91,31 @@ int main() {
         if(decode(partial,target)||target.program!=3||
            target.sf2Path!=d.sf2Path)allRejected=false;
     }
-    ok &= ck(allRejected,"all truncated V7 states rejected atomically");
+    ok &= ck(allRejected,"all truncated V8 states rejected atomically");
     auto corrupt=blob;
     corrupt[4]=90;
     out=d;out.program=7;
     ok &= ck(!decode(corrupt,out)&&out.program==7,
              "unknown format version rejected atomically");
     corrupt=blob;
-    // Hardware word is positioned before the final IBK string record.
-    const size_t engineOffset=corrupt.size()-4-d.drumIbkPath.size()-4-d.ibkPath.size()-4;
+    // Hardware word precedes the IBK strings, bank and V8 control values.
+    const size_t engineOffset=corrupt.size()-4*AssetState::kControlCount-4-4-d.drumIbkPath.size()-4-d.ibkPath.size()-4;
     corrupt[engineOffset]=3;
     ok &= ck(!decode(corrupt,out)&&out.program==7,
              "out-of-range hardware mode rejected atomically");
     corrupt=blob;
-    // Last V7 word encodes bank and must be validated atomically.
-    corrupt[corrupt.size()-4]=0x00;
-    corrupt[corrupt.size()-3]=0x40; // exact little-endian bank 16384
+    // V7 bank word precedes V8's 12 control words.
+    const size_t bankOffset=corrupt.size()-4*AssetState::kControlCount-4;
+    corrupt[bankOffset]=0x00;
+    corrupt[bankOffset+1]=0x40; // exact little-endian bank 16384
     out=d;out.program=7;
     ok &= ck(!decode(corrupt,out)&&out.program==7&&out.bank==128,
              "invalid SF2 bank 16384 rejected without state mutation");
+    corrupt=blob;
+    corrupt[corrupt.size()-4]=0xFF;corrupt[corrupt.size()-3]=0xFF;
+    out=d;out.program=7;
+    ok &= ck(!decode(corrupt,out)&&out.program==7,
+             "invalid V8 control range rejected atomically");
     AssetState::Data boundary=d;boundary.bank=AssetState::kMaxBank;
     ok &= ck(decode(encode(boundary),out)&&out.bank==AssetState::kMaxBank,
              "maximum SF2 bank 16383 round-trips");
