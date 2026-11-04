@@ -27,11 +27,11 @@ assert "opl_->" not in f and "cqm_->" not in f
 assert "new PresetBrowserView({0,0,1200,780},this,sfCatalog_,fmCatalog_," in f
 assert 'new VSTGUI::VST3Editor(this,"view","awe_test_panel.uidesc")' in f
 assert 'sendTextMessage(("125A_SF2_STATUS:"+status).c_str())' in f
-assert 'AllowEmuNoteOn(sf2Configured_||gmLoaded_,' in f
-assert 'sf2Loaded_||gmLoaded_,' in f
+assert 'AllowEmuNoteOn(entry&&(entry->sf2Configured||entry->gmLoaded),' in f
+assert 'entry&&(entry->sf2Loaded||entry->gmLoaded),' in f
 assert 'RomGmBank::LoadBanks(' in f
 assert 'RomGmBank::AdjacentFile(romPath_)' in f
-assert 'sendTextMessage("125A_ROM_ACK:OK")' in f
+assert 'romAck("OK")' in f
 assert 'synth_->Core().ChipVariant()==Emu8000Core::Chip::Box86))' in f
 assert 'Original-Wave-ROM erforderlich: ROM LADEN' in f
 assert 'hostActive_=true;' in f and 'hostActive_=false;' in f
@@ -42,13 +42,13 @@ assert 'return sf2Configured && sf2Loaded && romBacked86BoxActive;' in (root/'sr
 assert 'msg->setMessageID("125A_SF2_LOAD")' in f
 assert 'msg->setMessageID("125A_ROM_LOAD")' in f
 assert 'FIDStringsEqual(msg->getMessageID(),"125A_ROM_LOAD")' in f
-assert 'sendTextMessage("125A_ROM_ACK:OK")' in f
+assert 'romAck("OK")' in f
 assert 'romLoadRequest_' in h and 'kLoadRom=3108' in h
 assert 'MakeButton({906,139,1033,174},kLoadRom,"ROM LADEN")' in b
 assert 'NativeChooseFile(path,true)' in b and 'NativeChooseFile(path,false)' in b
 assert 'GetOpenFileNameW(&ofn)' in b
 assert 'getBinary("Path",bytes,bytesCount)' in f
-assert 'sendTextMessage("125A_SF2_ACK:OK")' in f
+assert 'sf2Ack("OK")' in f
 assert '"125A_HW_INFO:"' in f and 'HardwareDescriptor()' in f
 assert 'core.ChipVariant()==Emu8000Core::Chip::Box86' in f
 assert 'CORE: INAKTIV' in f and 'ROM: ERFORDERLICH' in f
@@ -58,11 +58,14 @@ assert 'addView(new HardwareFaceplate({0,0,1200,780}))' in b and '32 VOICES  /  
 assert 'SyncHardwareInfo();' in b
 assert 'sfCatalog_=std::move(sf2PendingCatalog_)' in f
 assert 'std::try_to_lock' not in f
-assert 'std::unique_lock<std::mutex> lock(engineMutex_)' in f
+assert 'auto engineRead=engines_.Read()' in f
+assert 'std::unique_lock<std::mutex> lock(engineMutex_)' not in f
+assert 'RealtimeEngineExchange<Engine> engines_' in f
 assert 'getMidiControllerAssignment(' in f and 'IMidiMapping' in f
 assert 'MidiControlMapping::Decode(id)' in f
 assert 'sampleOffset' in f and 'ParameterCursor' in f
-assert 'assetGeneration_' in f and 'ApplyLiveParameters(*replacement)' in f
+assert 'assetGeneration_' in f and 'ApplyRtParameters(*synth_)' in f
+assert 'engines_.Publish(Pack(' in f
 assert 'GetOpenFileNameW(&ofn)' in b
 assert 'NativeChooseFile(path,false)' in b
 assert 'AddKnob(0,' in b and 'AddKnob(11,' in b
@@ -75,7 +78,7 @@ assert 'toggle_->setStyle(CTextButton::kOnOffStyle)' in b
 assert 'if(control->getValue()>0.5f)' in b
 assert 'kVersion = 9u' in state and 'kControlCount = 12' in state
 assert 'kVolumeID=MasterOutput::kParamID' in f
-assert 'state_.masterVolume' in f and 'volumeGain_.setTarget(' in f
+assert 'rtMaster_' in f and 'volumeGain_.setTarget(' in f
 assert 'masterVolume_' in h and 'masterVolumeValue_' in h
 assert 'new HardwareKnob({115,626,177,688},this,kMasterVolume)' in b
 assert 'controller_->getParamNormalized(kMasterVolume)' in b
