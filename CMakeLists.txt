@@ -70,6 +70,12 @@ target_include_directories(awe32_p118_midi_mapping_test PRIVATE src/vst3)
 target_compile_features(awe32_p118_midi_mapping_test PRIVATE cxx_std_23)
 add_test(NAME 125A_p118_midi_mapping COMMAND awe32_p118_midi_mapping_test)
 
+# P119: ensure live per-channel MIDI state survives asset/ROM swaps.
+add_executable(awe32_p119_midi_live_state_test tests/p119_midi_live_state.cpp)
+target_include_directories(awe32_p119_midi_live_state_test PRIVATE src/vst3)
+target_compile_features(awe32_p119_midi_live_state_test PRIVATE cxx_std_23)
+add_test(NAME 125A_p119_midi_live_state COMMAND awe32_p119_midi_live_state_test)
+
 # Independent executable proves the exact 125A master SVG is usable as vector
 # paths without linking a Windows GUI or loading any copyrighted ROM.
 add_executable(awe32_p19_master_logo_test tests/p19_logo_geometry.cpp)
