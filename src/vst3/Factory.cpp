@@ -76,7 +76,7 @@ public:
         const auto r=AudioEffect::initialize(ctx);
         if(r!=kResultOk)return r;
         addAudioOutput(STR16("Stereo"),SpeakerArr::kStereo);
-        addEventInput(STR16("MIDI"),1);
+        addEventInput(STR16("MIDI"),16);
         return kResultOk;
     }
     tresult PLUGIN_API canProcessSampleSize(int32 type) override {
