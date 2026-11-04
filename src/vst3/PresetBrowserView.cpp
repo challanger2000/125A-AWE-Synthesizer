@@ -225,12 +225,21 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     AddKnob(7,329,392,"RELEASE");
     AddKnob(8,425,392,"CUTOFF -");
     AddKnob(9,521,392,"RESONANCE +");
-    MakeLabel({27,548,488,571},"EFFECT SENDS",true);
-    AddKnob(10,222,536,"HALL +");
-    AddKnob(11,431,536,"CHORUS +");
+    // P116: Master volume lives next to the existing effect sends, not
+    // among the 12 SF2 enhancement overlays. 100% is original output.
+    MakeLabel({27,548,115,571},"MASTER",true);
+    masterVolume_=new HardwareKnob({124,536,182,594},this,kMasterVolume);
+    masterVolume_->setValue(1.f);
+    addView(masterVolume_);
+    auto* masterTitle=MakeLabel({104,597,206,617},"VOLUME",true);
+    masterTitle->setHoriAlign(kCenterText);
+    masterVolumeValue_=MakeLabel({104,618,206,638},"100%",false);
+    masterVolumeValue_->setHoriAlign(kCenterText);
+    AddKnob(10,274,536,"HALL +");
+    AddKnob(11,424,536,"CHORUS +");
     reset_=MakeButton({503,550,615,578},kReset,"RESET");
-    MakeLabel({26,601,200,619},"0% = ORIGINAL",true);
-    MakeLabel({26,621,211,640},"WIRKT AB NEUER NOTE",true);
+    MakeLabel({511,601,628,619},"FX: 0% ORIGINAL",true);
+    MakeLabel({511,621,628,640},"AB NEUER NOTE",true);
 
     MakeLabel({658,231,990,257},"SOUND BROWSER",true);
     bankCaption_=MakeLabel({656,266,715,293},"BANK",true);
@@ -386,6 +395,19 @@ void PresetBrowserView::Sync(bool force) {
         std::snprintf(label,sizeof(label),"%d%%",int(std::lround(value*100.)));
         values_[size_t(i)]->setText(label);
     }
+    const auto master=static_cast<float>(std::clamp(
+        controller_->getParamNormalized(kMasterVolume),0.,1.));
+    if(masterVolume_ && !masterVolume_->isEditing() &&
+       std::abs(masterVolume_->getValue()-master)>.0005f) {
+        masterVolume_->setValue(master);
+        masterVolume_->invalid();
+    }
+    if(masterVolumeValue_) {
+        char volumeLabel[16]{};
+        std::snprintf(volumeLabel,sizeof(volumeLabel),"%d%%",
+                      int(std::lround(master*100.)));
+        masterVolumeValue_->setText(volumeLabel);
+    }
     SyncSf2Status();
     SyncHardwareInfo();
     if(!force&&bank==bank_&&program==program_)return;
@@ -438,6 +460,11 @@ void PresetBrowserView::ChooseRom() {
 void PresetBrowserView::valueChanged(CControl* control) {
     if(!control||syncing_)return;
     const int tag=control->getTag();
+    if(tag==kMasterVolume) {
+        ChangeParameter(static_cast<Steinberg::Vst::ParamID>(tag),
+                        std::clamp(double(control->getValue()),0.,1.));
+        return;
+    }
     if(tag>=kGuiFirst && tag<kGuiFirst+kGuiCount) {
         const int idx=tag-kGuiFirst;
         ChangeParameter(static_cast<Steinberg::Vst::ParamID>(tag),
