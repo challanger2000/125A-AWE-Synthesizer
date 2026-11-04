@@ -6,63 +6,76 @@
 #include "vstgui/lib/controls/ctextedit.h"
 #include "vstgui/lib/controls/cbuttons.h"
 #include "vstgui/lib/controls/ctextlabel.h"
+#include "vstgui/lib/controls/ccontrol.h"
 #include "public.sdk/source/vst/vsteditcontroller.h"
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <string>
 #include <vector>
 
 namespace AWE125 {
-// Actual Windows VSTGUI browser, owned by VST3Editor; all operations UI-only.
-// The sound engine and audio-thread code remain completely independent.
+// Single-hardware AWE editor. Browser remains tied to host bank/program IDs;
+// UI overlays use 1100..1111 and leave SF2 values unchanged at zero.
 class PresetBrowserView final : public VSTGUI::CViewContainer,
                                 public VSTGUI::DataBrowserDelegateAdapter,
                                 public VSTGUI::IControlListener {
 public:
     PresetBrowserView(const VSTGUI::CRect& rect,
                       Steinberg::Vst::EditController* controller,
-                      const PresetCatalog& sf,const PresetCatalog& fm,
+                      const PresetCatalog& sf, const PresetCatalog& legacyFm,
                       const std::string& exactLogoPath,
-                      std::function<std::string()> sf2StatusProvider);
+                      std::function<std::string()> sf2StatusProvider,
+                      std::function<bool(const std::string&)> sf2LoadRequest,
+                      std::function<std::string()> sf2CurrentPath,
+                      std::function<uint64_t()> sf2CatalogRevision);
     void onIdle() override;
-    void valueChanged(VSTGUI::CControl* c) override;
+    void valueChanged(VSTGUI::CControl*) override;
     int32_t dbGetNumRows(VSTGUI::CDataBrowser*) override;
     int32_t dbGetNumColumns(VSTGUI::CDataBrowser*) override;
     VSTGUI::CCoord dbGetRowHeight(VSTGUI::CDataBrowser*) override;
     VSTGUI::CCoord dbGetCurrentColumnWidth(int32_t,VSTGUI::CDataBrowser*) override;
-    void dbDrawCell(VSTGUI::CDrawContext*,const VSTGUI::CRect&,int32_t,int32_t,
-                    int32_t,VSTGUI::CDataBrowser*) override;
+    void dbDrawCell(VSTGUI::CDrawContext*,const VSTGUI::CRect&,
+                    int32_t,int32_t,int32_t,VSTGUI::CDataBrowser*) override;
     VSTGUI::CMouseEventResult dbOnMouseDown(const VSTGUI::CPoint&,
-        const VSTGUI::CButtonState&,int32_t,int32_t,VSTGUI::CDataBrowser*) override;
+                    const VSTGUI::CButtonState&,int32_t,int32_t,VSTGUI::CDataBrowser*) override;
     void dbSelectionChanged(VSTGUI::CDataBrowser*) override;
 protected:
     ~PresetBrowserView() noexcept override = default;
 private:
-    static constexpr int kHardware=3100,kPrevious=3101,kNext=3102,
-        kToggle=3103,kFilter=3104,kBank=3105;
+    static constexpr int kPrevious=3101,kNext=3102,kToggle=3103,
+                         kFilter=3104,kBank=3105,kLoadSf2=3106,kReset=3107;
+    static constexpr int kGuiFirst=1100,kGuiCount=12;
     Steinberg::Vst::EditController* controller_;
     const PresetCatalog& sf_;
-    const PresetCatalog& fm_;
+    const PresetCatalog& fm_; // legacy catalog only; never user-selectable
     std::function<std::string()> sf2StatusProvider_;
-    std::string lastStatus_;
-    int engine_=-1;
+    std::function<bool(const std::string&)> sf2LoadRequest_;
+    std::function<std::string()> sf2CurrentPath_;
+    std::function<uint64_t()> sf2CatalogRevision_;
+    uint64_t lastCatalogRevision_=0;
+    std::string lastStatus_,lastPath_;
     uint16_t bank_=0;
     uint8_t program_=0;
     int bankFilter_=-1;
-    bool expanded_=true, syncing_=false;
+    bool expanded_=true,syncing_=false;
     std::string searchText_;
     std::vector<uint16_t> filterBanks_;
     std::vector<PresetBrowserModel::Row> rows_;
-    VSTGUI::COptionMenu *hardware_=nullptr,*bankMenu_=nullptr;
+    std::array<VSTGUI::CControl*,kGuiCount> controls_{};
+    std::array<VSTGUI::CTextLabel*,kGuiCount> values_{};
+    VSTGUI::COptionMenu* bankMenu_=nullptr;
     VSTGUI::CTextEdit* search_=nullptr;
-    VSTGUI::CTextButton *previous_=nullptr,*next_=nullptr,*toggle_=nullptr;
-    VSTGUI::CTextLabel *programLabel_=nullptr,*info_=nullptr,*empty_=nullptr,
-                       *bankCaption_=nullptr,*searchCaption_=nullptr,
-                       *title_=nullptr,*hint_=nullptr;
+    VSTGUI::CTextButton *previous_=nullptr,*next_=nullptr,*toggle_=nullptr,
+                         *loadSf2_=nullptr,*reset_=nullptr;
+    VSTGUI::CTextLabel *programLabel_=nullptr,*fileLabel_=nullptr,
+                       *empty_=nullptr,*bankCaption_=nullptr,
+                       *searchCaption_=nullptr,*hint_=nullptr;
     VSTGUI::CDataBrowser* table_=nullptr;
     VSTGUI::CTextLabel* MakeLabel(const VSTGUI::CRect&,const char*,
-                                  bool secondary=false);
+                                 bool secondary=false);
     VSTGUI::CTextButton* MakeButton(const VSTGUI::CRect&,int,const char*);
+    void AddKnob(int index,int x,int y,const char* title);
     void RebuildBanks();
     void RebuildRows();
     void Sync(bool force=false);
@@ -70,5 +83,6 @@ private:
     void SetExpanded(bool);
     void Select(uint16_t bank,uint8_t program);
     void ChangeParameter(Steinberg::Vst::ParamID,double normalized);
+    void ChooseSf2();
 };
 } // namespace AWE125

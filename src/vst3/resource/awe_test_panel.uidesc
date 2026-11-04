@@ -1,16 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <vstgui-ui-description version="1">
-  <!-- P17: real native VSTGUI browser. All controls created in PresetBrowserView;
-       controller delegates bind to VST3 parameter IDs 1000/1001/1002. -->
-  <colors>
-    <color name="Panel" rgba="#1d222aff"/>
-  </colors>
-  <template name="view" class="CViewContainer" origin="0, 0" size="860, 612" minSize="860, 612" maxSize="860, 612" background-color="Panel" transparent="false">
-    <view class="CViewContainer" custom-view-name="AwePresetBrowser" origin="0, 0" size="860, 612" transparent="false"/>
+  <!-- P106: Single AWE/EMU8000 instrument. Host IDs 1000/1002 stay stable;
+       1100..1111 are 0=unchanged SoundFont non-destructive overlays. -->
+  <colors><color name="Panel" rgba="#181e26ff"/></colors>
+  <template name="view" class="CViewContainer" origin="0, 0" size="1040, 720" minSize="1040, 720" maxSize="1040, 720" background-color="Panel" transparent="false">
+    <view class="CViewContainer" custom-view-name="AwePresetBrowser" origin="0, 0" size="1040, 720" transparent="false"/>
   </template>
   <control-tags>
     <control-tag name="Program" tag="1000"/>
-    <control-tag name="Hardware" tag="1001"/>
     <control-tag name="SF2Bank" tag="1002"/>
   </control-tags>
 </vstgui-ui-description>
