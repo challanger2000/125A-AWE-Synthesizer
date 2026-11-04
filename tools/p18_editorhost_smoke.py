@@ -297,6 +297,14 @@ def click(hwnd,x,y):
     u.mouse_event(0x0004,0,0,0,None)
     time.sleep(.65)
 
+def ctrl_click(hwnd,x,y):
+    u.keybd_event(0x11,0,0,None)
+    try:
+        click(hwnd,x,y)
+    finally:
+        u.keybd_event(0x11,0,2,None)
+    time.sleep(.35)
+
 def key(v):
     u.keybd_event(v,0,0,None)
     time.sleep(.05)
@@ -417,10 +425,28 @@ def main():
             moved=snap(hwnd,args.output/"04_knob_dragged.bmp")
             check(different(reopened,moved,(72,310,175,413))>15,
                   "amp attack knob responds to physical mouse drag",results)
+            ctrl_click(hwnd,112,339)
+            ctrl_restored=snap(hwnd,args.output/"04_ctrl_click_original.bmp")
+            check(different(moved,ctrl_restored,(72,310,175,413))>15,
+                  "Ctrl-click resets SF2 overlay from changed value",results)
+            check(different(reopened,ctrl_restored,(72,310,175,413))<15,
+                  "Ctrl-click restores exact 0 percent original SoundFont overlay",results)
+            drag(hwnd,112,345,112,319)
+            moved_again=snap(hwnd,args.output/"04_knob_dragged_again.bmp")
             click(hwnd,709,618)
             reset=snap(hwnd,args.output/"05_reset_original.bmp")
-            check(different(moved,reset,(72,310,175,413))>15,
+            check(different(moved_again,reset,(72,310,175,413))>15,
                   "reset restores 0-percent original SoundFont value",results)
+            drag(hwnd,146,660,146,708)
+            master_down=snap(hwnd,args.output/"06_master_dragged.bmp")
+            check(different(reset,master_down,(112,623,180,734))>15,
+                  "master-volume responds to physical mouse drag",results)
+            ctrl_click(hwnd,146,654)
+            master_reset=snap(hwnd,args.output/"06_master_ctrl_unity.bmp")
+            check(different(master_down,master_reset,(112,623,180,734))>15,
+                  "Ctrl-click resets master from reduced gain",results)
+            check(different(reset,master_reset,(112,623,180,734))<15,
+                  "Ctrl-click restores 100 percent master unity",results)
             click(hwnd,998,326)
             text_input("DRUM")
             searched=snap(hwnd,args.output/"07_search_drum.bmp")
