@@ -111,7 +111,7 @@ def client_size(hwnd):
 
 def screen_pos(hwnd, x, y):
     sz = client_size(hwnd)
-    pt = POINT(round(x*sz[0]/860), round(y*sz[1]/612))
+    pt = POINT(round(x*sz[0]/1040), round(y*sz[1]/720))
     if not u.ClientToScreen(hwnd, ctypes.byref(pt)):
         raise RuntimeError("ClientToScreen failed")
     return pt.x, pt.y
@@ -119,7 +119,7 @@ def screen_pos(hwnd, x, y):
 def snap(hwnd, filename):
     w,h = client_size(hwnd)
     x,y = screen_pos(hwnd, 0, 0)
-    if w < 700 or h < 500:
+    if w < 1020 or h < 700:
         raise RuntimeError(f"Editor window wrong dimensions {w}x{h}")
     src = u.GetDC(None)
     mem = gdi.CreateCompatibleDC(src)
@@ -155,7 +155,7 @@ def different(before,after,region):
     if (w,h)!=(w2,h2):
         raise RuntimeError("Editor size changed unexpectedly")
     x0,y0,x1,y1 = region
-    scale_x,scale_y = w/860,h/612
+    scale_x,scale_y = w/1040,h/720
     x0,x1 = round(x0*scale_x),round(x1*scale_x)
     y0,y1 = round(y0*scale_y),round(y1*scale_y)
     changed = 0
@@ -170,8 +170,8 @@ def red_logo_pixels(frame):
     w,h,raw=frame
     count=0
     # Logo view occupies header x18..150 / y8..53. Pixel array is BGRA.
-    for y in range(round(8*h/612),round(54*h/612)):
-        for x in range(round(17*w/860),round(151*w/860)):
+    for y in range(round(8*h/720),round(54*h/720)):
+        for x in range(round(17*w/1040),round(151*w/1040)):
             i=(y*w+x)*4
             blue,green,red=raw[i],raw[i+1],raw[i+2]
             if red>=125 and red>=green*2 and red>=blue*1.6:
@@ -241,6 +241,22 @@ def check(condition, label, results):
     print(("PASS: " if condition else "FAIL: ")+label, flush=True)
     if not condition: raise AssertionError(label)
 
+def drag(hwnd,x0,y0,x1,y1):
+    sx,sy=screen_pos(hwnd,x0,y0)
+    ex,ey=screen_pos(hwnd,x1,y1)
+    u.SetForegroundWindow(hwnd)
+    if not u.SetCursorPos(sx,sy):
+        raise RuntimeError("P18 cannot position pointer")
+    time.sleep(.15)
+    u.mouse_event(0x0002,0,0,0,None)
+    for step in range(1,9):
+        px=round(sx+(ex-sx)*step/8)
+        py=round(sy+(ey-sy)*step/8)
+        u.SetCursorPos(px,py)
+        time.sleep(.06)
+    u.mouse_event(0x0004,0,0,0,None)
+    time.sleep(.45)
+
 def main():
     p=argparse.ArgumentParser()
     p.add_argument("--editorhost",type=Path,required=True)
@@ -272,52 +288,51 @@ def main():
                 hwnd=get_editor(proc.pid)
                 if hwnd:break
                 time.sleep(.2)
-            check(hwnd is not None,"real VST3 editor window opened",results)
+            check(hwnd is not None,"real AWE-only VST3 window opened",results)
             time.sleep(1.0)
             first=snap(hwnd,args.output/"01_initial.bmp")
             w,h,_=first
-            check(w>=850 and h>=600,f"editor content dimensions {w}x{h}",results)
-            # Never equate all-black frames to a successful render.
-            distinct = len(set(first[2][0::384]))
-            check(distinct>3,"EditorHost screen produced non-flat pixels",results)
+            check(w>=1020 and h>=700,
+                  f"real hardware editor dimensions {w}x{h}",results)
+            distinct=len(set(first[2][0::384]))
+            check(distinct>3,"editor painted nonflat hardware faceplate",results)
             check(red_logo_pixels(first)>15,
-                  "original 125A master red A vector actually painted in editor",
-                  results)
-            click(hwnd,730,79)  # hide in-editor browser
+                  "authentic 125A red-vector logo painted",results)
+            click(hwnd,917,178)
             closed=snap(hwnd,args.output/"02_browser_closed.bmp")
-            check(different(first,closed,(24,230,825,561))>35,
-                  "BROWSER button hides the real table and controls",results)
-            click(hwnd,730,79)  # reveal browser
-            opened=snap(hwnd,args.output/"03_browser_reopened.bmp")
-            check(different(closed,opened,(24,230,825,561))>35,
-                  "BROWSER button restores scrollable preset table",results)
-            # Switch hardware through the VSTGUI COptionMenu, not simulated
-            # calls to a C++ browser model.
-            choose_menu(hwnd,340,80,last=True,
-                        debug=args.output/"04a_hardware_native_menu.bmp")
-            cqm=snap(hwnd,args.output/"04_creative_cqm.bmp")
-            check(different(opened,cqm,(22,102,823,140))>8,
-                  "GUI hardware selection updates Creative CQM description",results)
-            click(hwnd,767,172)  # NEXT (real host-bound Program ID 1000)
-            next_s=snap(hwnd,args.output/"05_cqm_next.bmp")
-            check(different(cqm,next_s,(240,149,740,196))>8,
-                  "NEXT refreshes visible original IBK instrument name",results)
-            choose_menu(hwnd,340,80,last=False)
-            sf=snap(hwnd,args.output/"06_emu8000.bmp")
-            check(different(cqm,sf,(22,102,823,140))>8,
-                  "GUI hardware selection returns to SF2/EMU8000",results)
-            click(hwnd,578,242)
+            check(different(first,closed,(650,285,1015,652))>35,
+                  "browser toggle hides preset table and filter",results)
+            click(hwnd,917,178)
+            reopened=snap(hwnd,args.output/"03_browser_reopened.bmp")
+            check(different(closed,reopened,(650,285,1015,652))>35,
+                  "browser toggle reopens searchable preset list",results)
+            drag(hwnd,116,286,116,251)
+            moved=snap(hwnd,args.output/"04_knob_dragged.bmp")
+            check(different(reopened,moved,(85,262,175,365))>15,
+                  "amp attack knob responds to physical mouse drag",results)
+            click(hwnd,88,645)
+            reset=snap(hwnd,args.output/"05_reset_original.bmp")
+            check(different(moved,reset,(85,262,175,365))>15,
+                  "reset restores 0-percent original SoundFont value",results)
+            click(hwnd,796,323)
             text_input("DRUM")
             searched=snap(hwnd,args.output/"07_search_drum.bmp")
-            check(different(sf,searched,(23,280,824,560))>10,
-                  "keyboard search filters actual SF2 instrument rows",results)
-            click(hwnd,82,306)  # filtered first drum row
-            picked=snap(hwnd,args.output/"08_bank128_selected.bmp")
-            check(different(searched,picked,(238,151,737,195))>8,
-                  "selecting filtered drum row changes bank+program label",results)
-            u.PostMessageW(hwnd,0x0010,0,0) # WM_CLOSE
+            check(different(reset,searched,(654,346,1013,650))>10,
+                  "preset search filters SF2 bank 128 rows",results)
+            click(hwnd,723,359)
+            selected=snap(hwnd,args.output/"08_bank128_selected.bmp")
+            check(different(searched,selected,(214,157,753,198))>8,
+                  "bank 128 sound selection updates instrument label",results)
+            # Canceling the Windows file chooser is safe, without changing bank.
+            click(hwnd,915,103)
+            key(0x1B)
+            time.sleep(.65)
+            after_cancel=snap(hwnd,args.output/"09_sf2_dialog_cancelled.bmp")
+            check(different(selected,after_cancel,(10,10,1027,210))<20,
+                  "native SF2 chooser cancels without mutating current preset",results)
+            u.PostMessageW(hwnd,0x0010,0,0)
             proc.wait(timeout=10)
-            check(proc.returncode==0,"EditorHost closes without crash",results)
+            check(proc.returncode==0,"EditorHost closes normally",results)
         finally:
             if proc.poll() is None:
                 proc.terminate()
@@ -326,7 +341,7 @@ def main():
             (args.output/"result.json").write_text(
                 json.dumps({"results":results,"passed":all(x["pass"] for x in results)},
                            indent=2),encoding="utf-8")
-    print("P18 WIN32 EDITORHOST GUI SMOKE PASS",flush=True)
+    print("P106 WIN32 AWE-ONLY EDITORHOST GUI SMOKE PASS",flush=True)
 
 if __name__=="__main__":
     try:main()

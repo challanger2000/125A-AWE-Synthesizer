@@ -1,78 +1,53 @@
 #!/usr/bin/env python3
-"""P14 VSTGUI source/resource contract. Static only, not a DAW editor test."""
+"""P106 AWE-only VSTGUI static contract; actual Win32 GUI tested separately."""
 from pathlib import Path
-import sys
 from xml.etree import ElementTree as ET
-
-root = Path(sys.argv[1]).resolve()
-gui = root / "src/vst3/resource/awe_test_panel.uidesc"
-doc = ET.parse(gui).getroot()
-assert doc.tag == "vstgui-ui-description"
-templates = doc.findall("template")
-assert len(templates) == 1 and templates[0].attrib.get("name") == "view"
-tags = {item.attrib["name"]: int(item.attrib["tag"])
-        for item in doc.findall("./control-tags/control-tag")}
-assert tags == {"Hardware": 1001, "Program": 1000, "SF2Bank": 1002}, tags
-custom = [node for node in doc.findall(".//view")
-          if node.attrib.get("custom-view-name") == "AwePresetBrowser"]
-assert len(custom) == 1, "P17 actual custom browser must replace P14 popup"
-assert templates[0].attrib["size"] == "860, 612"
-assert not any(node.attrib.get("control-tag") == "Program"
-               for node in doc.findall(".//view")), "old 128-row popup forbidden"
-factory = (root / "src/vst3/Factory.cpp").read_text(encoding="utf-8")
-cmake = (root / "CMakeLists.txt").read_text(encoding="utf-8")
-target = (root / "src/vst3/CMakeLists.txt").read_text(encoding="utf-8")
-browser = (root / "src/vst3/PresetBrowserView.cpp").read_text(encoding="utf-8")
-assert 'new VSTGUI::VST3Editor(this,"view","awe_test_panel.uidesc")' in factory
-assert 'editor->setDelegate(this)' in factory
-assert 'new PresetBrowserView({0,0,860,612},this,sfCatalog_,fmCatalog_,' in factory
-# Preset names in phdr do NOT prove sound samples were successfully loaded:
-# the UI must receive the processor's actual load result, not display fake
-# FM-/SF2-sounding sine substitution after a failed request.
-assert 'sendTextMessage(("125A_SF2_STATUS:"+sf2Status).c_str())' in factory
-assert 'receiveText(const char8* msg) override' in factory
-assert 'AllowEmuNoteOn(sf2Configured_,sf2Loaded_)' in factory
-assert 'assetError_="SF2-Ladefehler: "' in factory
-assert 'Sf2AudioStatus();' in factory
-assert 'SyncSf2Status();' in browser
-assert 'hint_->setVisible(true);' in browser
-assert 'FactoryBank(L"125A_Logo_Master_FINAL.svg")' in factory
-assert 'new MasterLogoView({18,11,150,50},exactLogoPath)' in browser
-assert 'kPathFilledEvenOdd' in (root / "src/vst3/MasterLogoView.cpp").read_text(encoding="utf-8")
-assert (root / "src/vst3/resource/125A_Logo_Master_FINAL.svg").is_file()
-assert "resource/125A_Logo_Master_FINAL.svg" in target
-assert "static_cast<double>(model.engine)/2." in factory, "mode 1 should restore as normalized 0.5"
-assert "kProgramID=1000" in factory and "kEngineID=1001" in factory
-# Critical regression: generic numeric parameter displays normalized decimal
-# steps in VSTGUI. Program needs an actual 128-step StringListParameter.
-assert 'new StringListParameter(STR16("Program"),kProgramID)' in factory
-assert 'for(int index=0;index<128;++index)' in factory
-assert '"%03d"' in factory and 'programs->appendString(label);' in factory
-assert 'parameters.addParameter(programs);' in factory
-assert 'parameters.addParameter(STR16("Program")' not in factory
-
-assert 'kBank=1002' in browser and 'kProgram=1000' in browser and 'kEngine=1001' in browser
-assert 'getParamNormalized(kBank)' in browser
-assert 'dbOnMouseDown' in browser and 'search_->setImmediateTextChange(true)' in browser
-assert 'HardwareDescription(engine_)' in browser
-assert 'PresetBrowserModel::Filter(' in browser
-assert 'PresetBrowserModel::Neighbor(' in browser
-# Actual Win32 EditorHost test exposed double callback on CTextButton::kKickStyle:
-# one click produced valueChanged(ON) and valueChanged(OFF).
-assert 'toggle_->setStyle(CTextButton::kOnOffStyle)' in browser
-assert 'SetExpanded(c->getValue()>0.5f)' in browser
-assert 'if(c->getValue()>0.5f)' in browser, "PREV/NEXT must ignore kick reset callback"
-assert 'FactoryBank(L"MAUIFM.IBK")' in factory
-assert 'FactoryBank(L"DRUM.IBK")' in factory
-assert 'state_.ibkPath.empty()' in factory and 'state_.drumIbkPath.empty()' in factory
-assert "resource/MAUIFM.IBK resource/DRUM.IBK resource/IBK_License.txt" in target
-assert "tools/fetch_ibk_resources.py" in target
-assert "SMTG_ENABLE_VSTGUI_SUPPORT ON" in cmake
-assert "vstgui_support" in target
-# The SDK VSTGUI module initializer needs a Windows moduleHandle definition.
-# P14 initial CI failed LNK2019 when dllmain.cpp was absent.
-assert '"${CMAKE_SOURCE_DIR}/external/vst3sdk/public.sdk/source/main/dllmain.cpp"' in target
-assert "${SDK_ROOT}/public.sdk/source/main/dllmain.cpp" not in target, "undefined SDK_ROOT would silently resolve to /public.sdk"
-assert "resource/awe_test_panel.uidesc" in target
-print("P17 STATIC PASS: custom browser, 3 stable IDs, search, bank, parameter routing")
-print("NOT RUN: physical Studio One editor interaction, bitmap visual oracle")
+import sys
+root=Path(sys.argv[1]).resolve()
+uidesc=ET.parse(root/"src/vst3/resource/awe_test_panel.uidesc").getroot()
+assert uidesc.tag=="vstgui-ui-description"
+templates=uidesc.findall("template")
+assert len(templates)==1
+assert templates[0].attrib["size"]=="1040, 720"
+tags={it.attrib["name"]:int(it.attrib["tag"])
+      for it in uidesc.findall("./control-tags/control-tag")}
+assert tags=={"Program":1000,"SF2Bank":1002},tags
+custom=uidesc.findall(".//view")
+assert sum(v.attrib.get("custom-view-name")=="AwePresetBrowser" for v in custom)==1
+f=(root/"src/vst3/Factory.cpp").read_text(encoding="utf-8")
+b=(root/"src/vst3/PresetBrowserView.cpp").read_text(encoding="utf-8")
+h=(root/"src/vst3/PresetBrowserView.h").read_text(encoding="utf-8")
+state=(root/"src/vst3/AssetState.h").read_text(encoding="utf-8")
+syn=(root/"src/engine/Synth.cpp").read_text(encoding="utf-8")
+cmake=(root/"src/vst3/CMakeLists.txt").read_text(encoding="utf-8")
+assert 'kGuiFirstID=1100' in f
+assert 'new RangeParameter(labels[i],kGuiFirstID+i' in f
+assert "kEngineID" not in f and 'STR16("Hardware")' not in f
+assert "opl_->" not in f and "cqm_->" not in f
+assert "new PresetBrowserView({0,0,1040,720},this,sfCatalog_,fmCatalog_," in f
+assert 'new VSTGUI::VST3Editor(this,"view","awe_test_panel.uidesc")' in f
+assert 'sendTextMessage(("125A_SF2_STATUS:"+sf2Status).c_str())' in f
+assert 'AllowEmuNoteOn(sf2Configured_,sf2Loaded_)' in f
+assert 'msg->setMessageID("125A_SF2_LOAD")' in f
+assert 'getBinary("Path",bytes,bytesCount)' in f
+assert 'sendTextMessage("125A_SF2_ACK:OK")' in f
+assert 'sfCatalog_=std::move(sf2PendingCatalog_)' in f
+assert 'std::try_to_lock' in f
+assert 'GetOpenFileNameW(&ofn)' in b
+assert 'NativeChooseSoundFont(path)' in b
+assert 'AddKnob(0,' in b and 'AddKnob(11,' in b
+assert 'if(tag>=kGuiFirst && tag<kGuiFirst+kGuiCount)' in b
+assert 'std::array<VSTGUI::CControl*,kGuiCount>' in h
+assert "kHardware" not in h and "hardware_" not in h
+assert 'PresetBrowserModel::Filter(0,sf_,fm_' in b
+assert 'PresetBrowserModel::Neighbor(0,sf_,fm_' in b
+assert 'toggle_->setStyle(CTextButton::kOnOffStyle)' in b
+assert 'if(control->getValue()>0.5f)' in b
+assert 'kVersion = 8u' in state and 'kControlCount = 12' in state
+assert 'm_guiControls[11]' in syn
+assert 'MasterLogoView({18,11,150,51},exactLogoPath)' in b
+assert (root/"src/vst3/resource/125A_Logo_Master_FINAL.svg").is_file()
+assert 'resource/125A_Logo_Master_FINAL.svg' in cmake
+assert 'resource/MAUIFM.IBK' not in cmake
+assert 'target_link_libraries(125A_AWE_Synthesizer PRIVATE comdlg32)' in cmake
+print("P106 STATIC PASS: AWE-only VST3, SF2 picker IPC, browser, 12 knobs, V8 recall")

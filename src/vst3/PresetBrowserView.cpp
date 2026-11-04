@@ -37,9 +37,9 @@ public:
         surface({11,7,1029,57},CColor(35,43,52),CColor(110,122,134));
         surface({12,67,1028,136},CColor(16,22,29),CColor(77,92,106));
         surface({12,145,1028,209},CColor(24,31,39),CColor(78,94,107));
-        surface({13,221,630,351},CColor(24,31,38),CColor(82,96,108));
-        surface({13,359,630,529},CColor(24,31,38),CColor(82,96,108));
-        surface({13,538,630,660},CColor(24,31,38),CColor(82,96,108));
+        surface({13,221,630,359},CColor(24,31,38),CColor(82,96,108));
+        surface({13,366,630,529},CColor(24,31,38),CColor(82,96,108));
+        surface({13,535,630,660},CColor(24,31,38),CColor(82,96,108));
         surface({643,222,1028,660},CColor(18,24,30),CColor(82,96,108));
         surface({12,670,1028,710},CColor(14,20,26),CColor(83,96,108));
         c->setFrameColor(CColor(51,62,72,255));
@@ -178,20 +178,20 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     toggle_->setValue(1.f);
 
     MakeLabel({27,232,500,254},"AMP ENVELOPE",true);
-    AddKnob(0,87,263,"ATTACK");
-    AddKnob(1,227,263,"DECAY");
-    AddKnob(2,367,263,"SUSTAIN -");
-    AddKnob(3,507,263,"RELEASE");
+    AddKnob(0,87,257,"ATTACK");
+    AddKnob(1,227,257,"DECAY");
+    AddKnob(2,367,257,"SUSTAIN -");
+    AddKnob(3,507,257,"RELEASE");
     MakeLabel({27,368,583,392},"FILTER ENVELOPE + TONE",true);
-    AddKnob(4,41,401,"ATTACK");
-    AddKnob(5,137,401,"DECAY");
-    AddKnob(6,233,401,"SUSTAIN -");
-    AddKnob(7,329,401,"RELEASE");
-    AddKnob(8,425,401,"CUTOFF -");
-    AddKnob(9,521,401,"RESONANCE +");
+    AddKnob(4,41,392,"ATTACK");
+    AddKnob(5,137,392,"DECAY");
+    AddKnob(6,233,392,"SUSTAIN -");
+    AddKnob(7,329,392,"RELEASE");
+    AddKnob(8,425,392,"CUTOFF -");
+    AddKnob(9,521,392,"RESONANCE +");
     MakeLabel({27,548,488,571},"EFFECT SENDS",true);
-    AddKnob(10,222,572,"HALL +");
-    AddKnob(11,431,572,"CHORUS +");
+    AddKnob(10,222,548,"HALL +");
+    AddKnob(11,431,548,"CHORUS +");
     reset_=MakeButton({24,633,151,654},kReset,"RESET");
     MakeLabel({163,633,621,659},"0% = Original-SoundFont   |   Regler wirken auf neue Noten",true);
 
