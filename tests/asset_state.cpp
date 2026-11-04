@@ -35,7 +35,11 @@ int main() {
     d.controls[0]=7500;
     d.controls[8]=2500;
     d.masterVolume=4300; // 43%, preserved separately from SF2 overlays
-    const auto blob=encode(d);
+    // Keep the original 9-bytecode fixture coverage: V10 must still read
+    // every historic V1-V9 state without altering its old binary layout.
+    const auto v10=encode(d);
+    Bytes blob(v10.begin(),v10.end()-4u*17u);
+    blob[4]=9;
     AssetState::Data out;
     ok &= ck(!blob.empty()&&decode(blob,out)&&out.program==104&&
              out.engine==2&&out.bank==128&&out.pathsSpecified&&out.romPath==d.romPath&&
@@ -43,6 +47,38 @@ int main() {
              out.drumIbkPath==d.drumIbkPath&&out.controls==d.controls&&
              out.masterVolume==4300,
              "V9 state round-trip with 43% master volume and 12 GUI controls");
+    // V10: all 16 MIDI channels round-trip with independent programs,
+    // while V9 and older default the channel values to the global program.
+    AssetState::Data multitimbral=d;
+    multitimbral.channelProgramMask=0xffffu;
+    for(uint32_t channel=0;channel<16;++channel)
+        multitimbral.channelPrograms[channel]=(channel*7u)%128u;
+    auto v10Multi=encode(multitimbral);
+    AssetState::Data v10Restored;
+    ok &= ck(decode(v10Multi,v10Restored)&&
+             v10Restored.channelProgramMask==0xffffu&&
+             v10Restored.channelPrograms==multitimbral.channelPrograms &&
+             v10Restored.program==d.program,
+             "P120 V10 saves and recalls 16 independent MIDI channel programs");
+    ok &= ck(decode(blob,v10Restored)&&
+             v10Restored.channelProgramMask==0u &&
+             std::all_of(v10Restored.channelPrograms.begin(),
+                         v10Restored.channelPrograms.end(),
+                         [&](uint32_t p){return p==d.program;}),
+             "P120 V9 migration preserves global Program on all 16 channels");
+    bool allV10TruncationsRejected=true;
+    for(size_t count=0;count<v10Multi.size();++count) {
+        Bytes truncated(v10Multi.begin(),v10Multi.begin()+count);
+        AssetState::Data previous=multitimbral;previous.program=32;
+        if(decode(truncated,previous)||previous.program!=32)
+            allV10TruncationsRejected=false;
+    }
+    ok &= ck(allV10TruncationsRejected,
+             "P120 every truncated V10 state rejected without partial commit");
+    v10Multi[v10Multi.size()-4]=128; // invalid channel-16 program
+    AssetState::Data unchanged=multitimbral;unchanged.program=17;
+    ok &= ck(!decode(v10Multi,unchanged)&&unchanged.program==17,
+             "P120 corrupt channel program rejected without mutating recall");
     // V9 only appends one uint32 volume word. V8 projects restore to unity.
     Bytes v8(blob.begin(),blob.end()-4);
     v8[4]=8;
