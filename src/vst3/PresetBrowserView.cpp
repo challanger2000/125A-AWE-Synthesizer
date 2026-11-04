@@ -25,7 +25,7 @@ constexpr CColor kBack(22,27,34,255), kRaised(42,52,63,255),
                  kSel(51,86,103,255), kGrid(56,68,80,255),
                  kBezel(11,16,22,255), kStroke(85,100,113,255),
                  kOrange(220,151,87,255);
-constexpr Steinberg::Vst::ParamID kProgram=1000,kBank=1002;
+constexpr Steinberg::Vst::ParamID kProgram=1000,kBankParam=1002;
 class HardwareFaceplate final : public CView {
 public:
     explicit HardwareFaceplate(const CRect& r):CView(r) {setMouseEnabled(false);}
@@ -226,7 +226,7 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
 
     MakeLabel({658,231,990,257},"SOUND BROWSER",true);
     bankCaption_=MakeLabel({656,266,715,293},"BANK",true);
-    bankMenu_=new COptionMenu({724,261,1008,298},this,kBank);
+    bankMenu_=new COptionMenu({724,261,1008,298},this,kBankFilter);
     bankMenu_->setBackColor(kBezel);
     bankMenu_->setFontColor(kPaper);
     bankMenu_->setFrameColor(kStroke);
@@ -300,7 +300,7 @@ void PresetBrowserView::ChangeParameter(Steinberg::Vst::ParamID tag,double norm)
     controller_->endEdit(tag);
 }
 void PresetBrowserView::Select(uint16_t bank,uint8_t program) {
-    if(bank!=bank_)ChangeParameter(kBank,double(bank)/16383.);
+    if(bank!=bank_)ChangeParameter(kBankParam,double(bank)/16383.);
     ChangeParameter(kProgram,double(program)/127.);
     // Reflect the clicked instrument immediately. The following idle
     // compares bank/program back with the controller: an unaccepted host
@@ -364,7 +364,7 @@ void PresetBrowserView::Sync(bool force) {
         }
     }
     const auto bank=static_cast<uint16_t>(std::clamp(int(std::lround(
-        controller_->getParamNormalized(kBank)*16383.)),0,16383));
+        controller_->getParamNormalized(kBankParam)*16383.)),0,16383));
     const auto program=static_cast<uint8_t>(std::clamp(int(std::lround(
         controller_->getParamNormalized(kProgram)*127.)),0,127));
     for(int i=0;i<kGuiCount;++i) {
@@ -446,7 +446,7 @@ void PresetBrowserView::valueChanged(CControl* control) {
     else if(tag==kFilter) {
         searchText_=search_->getText().data();
         RebuildRows();
-    } else if(tag==kBank) {
+    } else if(tag==kBankFilter) {
         const int index=int(std::lround(bankMenu_->getValue()));
         bankFilter_=(index>=1&&size_t(index-1)<filterBanks_.size())?
                     filterBanks_[size_t(index-1)]:-1;

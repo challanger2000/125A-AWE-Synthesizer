@@ -57,4 +57,10 @@ assert (root/"src/vst3/resource/125A_Logo_Master_FINAL.svg").is_file()
 assert 'resource/125A_Logo_Master_FINAL.svg' in cmake
 assert 'resource/MAUIFM.IBK' not in cmake
 assert 'target_link_libraries(125A_AWE_Synthesizer PRIVATE comdlg32)' in cmake
+assert "kFilter=3104,kBankFilter=3105" in h
+assert "kProgram=1000,kBankParam=1002" in b
+assert "ChangeParameter(kBankParam,double(bank)/16383.)" in b
+assert "controller_->getParamNormalized(kBankParam)*16383." in b
+assert "this,kBankFilter" in b and "tag==kBankFilter" in b
+assert "this,kBank)" not in b and "getParamNormalized(kBank)" not in b
 print("P106 STATIC PASS: AWE-only VST3, SF2 picker IPC, browser, 12 knobs, V8 recall")

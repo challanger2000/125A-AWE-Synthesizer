@@ -45,7 +45,7 @@ protected:
     ~PresetBrowserView() noexcept override = default;
 private:
     static constexpr int kPrevious=3101,kNext=3102,kToggle=3103,
-                         kFilter=3104,kBank=3105,kLoadSf2=3106,kReset=3107;
+                         kFilter=3104,kBankFilter=3105,kLoadSf2=3106,kReset=3107;
     static constexpr int kGuiFirst=1100,kGuiCount=12;
     Steinberg::Vst::EditController* controller_;
     const PresetCatalog& sf_;
