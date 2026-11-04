@@ -21,6 +21,8 @@ on:
       - 'tests/p120_engine_retirement.cpp'
       - 'tests/p120_midi_automation.cpp'
       - 'tests/p120_win_ui_reentrancy.cpp'
+      - 'tests/p120_vst3_program_host.cpp'
+      - 'tests/p119_realtime_engine_exchange.cpp'
       - 'src/engine/CMakeLists.txt'
       - 'src/engine/SoundFont.cpp'
   workflow_dispatch:
