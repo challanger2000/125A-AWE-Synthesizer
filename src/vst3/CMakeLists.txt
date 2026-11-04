@@ -31,4 +31,16 @@ smtg_target_configure_version_file(125A_AWE_Synthesizer)
 
 if(WIN32)
   target_link_libraries(125A_AWE_Synthesizer PRIVATE comdlg32)
+  # P120: query the actual built DLL and VST3 IUnitInfo; do not infer
+  # program-change support from source substrings or Validator PASS alone.
+  add_executable(awe32_p120_program_host_test
+      "${PROJECT_SOURCE_DIR}/tests/p120_vst3_program_host.cpp")
+  target_include_directories(awe32_p120_program_host_test PRIVATE
+      "${PROJECT_SOURCE_DIR}/external/vst3sdk")
+  target_link_libraries(awe32_p120_program_host_test PRIVATE sdk)
+  target_compile_features(awe32_p120_program_host_test PRIVATE cxx_std_23)
+  add_dependencies(awe32_p120_program_host_test 125A_AWE_Synthesizer)
+  add_test(NAME 125A_p120_program_host
+      COMMAND awe32_p120_program_host_test
+              "$<TARGET_FILE:125A_AWE_Synthesizer>")
 endif()
