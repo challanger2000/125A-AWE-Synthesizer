@@ -31,6 +31,13 @@ assert 'AllowEmuNoteOn(sf2Configured_,sf2Loaded_)' in f
 assert 'msg->setMessageID("125A_SF2_LOAD")' in f
 assert 'getBinary("Path",bytes,bytesCount)' in f
 assert 'sendTextMessage("125A_SF2_ACK:OK")' in f
+assert '"125A_HW_INFO:"' in f and 'HardwareDescriptor()' in f
+assert 'core.ChipVariant()==Emu8000Core::Chip::Box86' in f
+assert 'core.RomSize()>0' in f
+assert 'core.ChipRamWords()' in f
+assert 'hardwareInfoProvider_' in h and 'hardwareInfoLabel_' in h
+assert 'addView(new ChipPackage(' in b and '32 VOICES  /  44.1 kHz' in b
+assert 'SyncHardwareInfo();' in b
 assert 'sfCatalog_=std::move(sf2PendingCatalog_)' in f
 assert 'std::try_to_lock' in f
 assert 'GetOpenFileNameW(&ofn)' in b

@@ -129,6 +129,7 @@ public:
             // passes the actual processor loading outcome to the GUI, not
             // just the SF2 phdr names the controller happened to parse.
             sendTextMessage(("125A_SF2_STATUS:"+sf2Status).c_str());
+            sendTextMessage(("125A_HW_INFO:"+HardwareDescriptor()).c_str());
         } else {synth_.reset();}
         return AudioEffect::setActive(active);
     }
@@ -191,6 +192,12 @@ public:
             sf2Configured_=true;
             sf2Loaded_=active;
         }
+        std::string sysInfo;
+        {
+            std::lock_guard<std::mutex> lock(engineMutex_);
+            sysInfo=HardwareDescriptor();
+        }
+        sendTextMessage(("125A_HW_INFO:"+sysInfo).c_str());
         sendTextMessage(active ?
             "125A_SF2_STATUS:SF2 geladen - SoundFont aktiv." :
             "125A_SF2_STATUS:SF2 gewaehlt - Laden bei Aktivierung.");
@@ -347,6 +354,22 @@ private:
     std::string assetError_;
     mutable std::mutex engineMutex_; // never block realtime rendering
     bool sf2Configured_=false,sf2Loaded_=false; // written outside process()
+    // Report the currently running chip, not merely paths in assets.cfg.
+    // Call under engineMutex_ from non-realtime code only.
+    std::string HardwareDescriptor() const {
+        constexpr const char* prefix="EMU8000 | 32 STIMMEN | 44,1 kHz | ";
+        if(!synth_)return std::string(prefix)+"RAM bis 28 MiB | ROM inaktiv";
+        const auto& core=synth_->Core();
+        const bool physicalRam=core.ChipVariant()==Emu8000Core::Chip::Box86;
+        const bool romLoaded=physicalRam||core.RomSize()>0;
+        const auto words=physicalRam?core.ChipRamWords():size_t{0};
+        const std::string ram=physicalRam
+            ? "RAM "+std::to_string(words/(512*1024))+" MiB"
+            : "RAM bis 28 MiB";
+        const std::string rom=romLoaded?"ROM 1 MiB: GELADEN"
+            : (state_.romPath.empty()?"ROM: NICHT GELADEN":"ROM: LADEFEHLER");
+        return std::string(prefix)+ram+" | "+rom;
+    }
     void ResolveAssets() {
         AssetConfig::Paths configured;
         if(!state_.pathsSpecified) {
@@ -377,6 +400,12 @@ public:
         if(msg && std::strncmp(msg,ack,sizeof(ack)-1)==0) {
             std::lock_guard<std::mutex> lock(sf2StatusMutex_);
             sf2PendingAck_=msg+sizeof(ack)-1;
+            return kResultOk;
+        }
+        constexpr char hwInfoPrefix[]="125A_HW_INFO:";
+        if(msg&&std::strncmp(msg,hwInfoPrefix,sizeof(hwInfoPrefix)-1)==0) {
+            std::lock_guard<std::mutex> lock(sf2StatusMutex_);
+            hardwareInfo_=msg+sizeof(hwInfoPrefix)-1;
             return kResultOk;
         }
         constexpr char prefix[]="125A_SF2_STATUS:";
@@ -434,6 +463,10 @@ public:
         }
         return true;
     }
+    std::string HardwareInfo() const {
+        std::lock_guard<std::mutex> lock(sf2StatusMutex_);
+        return hardwareInfo_;
+    }
     std::string Sf2AudioStatus() const {
         std::lock_guard<std::mutex> guard(sf2StatusMutex_);
         return sf2AudioStatus_;
@@ -478,6 +511,7 @@ public:
             return new PresetBrowserView({0,0,1040,680},this,sfCatalog_,fmCatalog_,
                 FactoryBank(L"125A_Logo_Master_FINAL.svg"),
                 [this]() {return Sf2AudioStatus();},
+                [this]() {return HardwareInfo();},
                 [this](const std::string& path) {return RequestSf2Load(path);},
                 [this]() {return CurrentSf2Path();},
                 [this]() {return CatalogRevision();});
@@ -526,6 +560,7 @@ private:
     std::string sf2PendingAck_;
     mutable std::mutex sf2StatusMutex_;
     std::string sf2AudioStatus_="SF2-Audiostatus noch nicht vom Prozessor bestaetigt.";
+    std::string hardwareInfo_;
     void ReloadPresetCatalogs(const AssetState::Data* model) {
         AssetConfig::Paths paths;
         if(model&&model->pathsSpecified) {

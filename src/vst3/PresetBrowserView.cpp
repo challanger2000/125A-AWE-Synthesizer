@@ -51,6 +51,26 @@ public:
         c->drawLine({20,359},{622,359});
     }
 };
+// A stylized EMU8000 chip package; pin count is decorative, not a claim
+// about the actual silicon package. Live RAM/ROM status appears below.
+class ChipPackage final : public CView {
+public:
+    explicit ChipPackage(const CRect& r):CView(r) {setMouseEnabled(false);}
+    void draw(CDrawContext* c) override {
+        c->setFillColor(CColor(10,14,19,255));
+        c->drawRect({798,13,1016,51},kDrawFilled);
+        c->setFrameColor(CColor(101,115,125,255));
+        c->drawRect({798,13,1016,51},kDrawStroked);
+        c->setFrameColor(CColor(169,179,186,255));
+        for(int i=0;i<7;++i) {
+            const CCoord y=17.5+i*4.6;
+            c->drawLine({793,y},{798,y});
+            c->drawLine({1016,y},{1021,y});
+        }
+        c->setFillColor(CColor(95,104,111,255));
+        c->drawEllipse({803,19,808,24},kDrawFilled);
+    }
+};
 // Mouse-driven, modern hardware-like knob. Uses native VSTGUI controls,
 // never paints values that differ from the host's normalized parameters.
 class HardwareKnob final : public CControl {
@@ -154,21 +174,28 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     const PresetCatalog& sf,const PresetCatalog& legacyFm,
     const std::string& exactLogoPath,
     std::function<std::string()> sf2StatusProvider,
+    std::function<std::string()> hardwareInfoProvider,
     std::function<bool(const std::string&)> sf2LoadRequest,
     std::function<std::string()> sf2CurrentPath,
     std::function<uint64_t()> sf2CatalogRevision)
     : CViewContainer(rect),controller_(controller),sf_(sf),fm_(legacyFm),
       sf2StatusProvider_(std::move(sf2StatusProvider)),
+      hardwareInfoProvider_(std::move(hardwareInfoProvider)),
       sf2LoadRequest_(std::move(sf2LoadRequest)),
       sf2CurrentPath_(std::move(sf2CurrentPath)),
       sf2CatalogRevision_(std::move(sf2CatalogRevision)) {
     setBackgroundColor(kBack);
     addView(new HardwareFaceplate({0,0,1040,680}));
     addView(new MasterLogoView({18,11,150,51},exactLogoPath));
-    MakeLabel({170,12,997,50},"125A  AWE SYNTHESIZER    |    EMU8000 HARDWARE",false);
+    MakeLabel({170,12,746,50},"125A  AWE SYNTHESIZER",false);
+    addView(new ChipPackage({793,13,1021,51}));
+    MakeLabel({830,14,1006,34},"EMU8000",false);
+    MakeLabel({830,33,1006,49},"32 VOICES  /  44.1 kHz",true);
 
     MakeLabel({25,80,149,123},"SOUNDFONT",true);
-    fileLabel_=MakeLabel({152,79,816,124},"",false);
+    fileLabel_=MakeLabel({152,78,816,103},"",false);
+    hardwareInfoLabel_=MakeLabel({154,102,816,132},"EMU8000: Hardwarestatus wird ermittelt...",true);
+    hardwareInfoLabel_->setTextTruncateMode(CTextLabel::kTruncateTail);
     loadSf2_=MakeButton({836,83,1010,122},kLoadSf2,"SF2 LADEN");
     MakeLabel({25,156,143,193},"INSTRUMENT",true);
     previous_=MakeButton({152,159,198,195},kPrevious,"<");
@@ -345,6 +372,7 @@ void PresetBrowserView::Sync(bool force) {
         values_[size_t(i)]->setText(label);
     }
     SyncSf2Status();
+    SyncHardwareInfo();
     if(!force&&bank==bank_&&program==program_)return;
     bank_=bank;program_=program;
     programLabel_->setText(PresetBrowserModel::CurrentLabel(
@@ -361,6 +389,15 @@ void PresetBrowserView::SyncSf2Status() {
     hint_->setText(text.c_str());
     const bool err=text.find("Fehler")!=std::string::npos;
     hint_->setFontColor(err?CColor(255,143,122,255):kMuted);
+}
+void PresetBrowserView::SyncHardwareInfo() {
+    if(!hardwareInfoLabel_||!hardwareInfoProvider_)return;
+    const std::string state=hardwareInfoProvider_();
+    if(state==lastHardwareInfo_)return;
+    lastHardwareInfo_=state;
+    hardwareInfoLabel_->setText(state.empty()
+        ? "32 STIMMEN | 44,1 kHz | RAM/ROM: nicht ermittelt"
+        : state.c_str());
 }
 void PresetBrowserView::SetExpanded(bool value) {
     expanded_=value;

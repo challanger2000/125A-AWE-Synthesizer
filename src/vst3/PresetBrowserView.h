@@ -26,6 +26,7 @@ public:
                       const PresetCatalog& sf, const PresetCatalog& legacyFm,
                       const std::string& exactLogoPath,
                       std::function<std::string()> sf2StatusProvider,
+                      std::function<std::string()> hardwareInfoProvider,
                       std::function<bool(const std::string&)> sf2LoadRequest,
                       std::function<std::string()> sf2CurrentPath,
                       std::function<uint64_t()> sf2CatalogRevision);
@@ -50,11 +51,12 @@ private:
     const PresetCatalog& sf_;
     const PresetCatalog& fm_; // legacy catalog only; never user-selectable
     std::function<std::string()> sf2StatusProvider_;
+    std::function<std::string()> hardwareInfoProvider_;
     std::function<bool(const std::string&)> sf2LoadRequest_;
     std::function<std::string()> sf2CurrentPath_;
     std::function<uint64_t()> sf2CatalogRevision_;
     uint64_t lastCatalogRevision_=0;
-    std::string lastStatus_,lastPath_;
+    std::string lastStatus_,lastPath_,lastHardwareInfo_;
     uint16_t bank_=0;
     uint8_t program_=0;
     int bankFilter_=-1;
@@ -69,6 +71,7 @@ private:
     VSTGUI::CTextButton *previous_=nullptr,*next_=nullptr,*toggle_=nullptr,
                          *loadSf2_=nullptr,*reset_=nullptr;
     VSTGUI::CTextLabel *programLabel_=nullptr,*fileLabel_=nullptr,
+                       *hardwareInfoLabel_=nullptr,
                        *empty_=nullptr,*bankCaption_=nullptr,
                        *searchCaption_=nullptr,*hint_=nullptr;
     VSTGUI::CDataBrowser* table_=nullptr;
@@ -80,6 +83,7 @@ private:
     void RebuildRows();
     void Sync(bool force=false);
     void SyncSf2Status();
+    void SyncHardwareInfo();
     void SetExpanded(bool);
     void Select(uint16_t bank,uint8_t program);
     void ChangeParameter(Steinberg::Vst::ParamID,double normalized);
