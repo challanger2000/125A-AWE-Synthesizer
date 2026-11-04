@@ -2,6 +2,8 @@
 #include <cstdint>
 #include <cstddef>
 #include <array>
+#include <algorithm>
+#include <initializer_list>
 #include <vector>
 #include <string>
 #include "Emu8000Regs.h"
@@ -100,6 +102,10 @@ public:
         int64_t overshootSum=0;
         void RecordFrame(int32_t left,int32_t right) noexcept {
             bool over=false;
+            if(frames==0) {
+                minRaw=std::min<int64_t>(left,right);
+                maxRaw=std::max<int64_t>(left,right);
+            }
             for(int32_t value : {left,right}) {
                 minRaw=std::min<int64_t>(minRaw,value);
                 maxRaw=std::max<int64_t>(maxRaw,value);
