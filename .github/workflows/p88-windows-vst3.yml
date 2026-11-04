@@ -102,6 +102,39 @@ jobs:
           path: build-vst3/p109-audit/
           if-no-files-found: error
           retention-days: 7
+      - name: Package P112 actual GM ROM and SF2 all-preset audio checker
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem build-vst3 -Filter awe32_p112_all_presets_audio_audit.exe -Recurse |
+            Where-Object { $_.FullName -match 'Release' } |
+            Select-Object -First 1 -ExpandProperty FullName
+          if (-not $exe) { throw "P112 audit executable missing" }
+          New-Item -ItemType Directory -Force build-vst3/p112-audit | Out-Null
+          Copy-Item $exe build-vst3/p112-audit/
+          Copy-Item tools/p112-start-audit.ps1 build-vst3/p112-audit/
+          Copy-Item tools/p112-start-audit.cmd build-vst3/p112-audit/
+          @'
+          P112: UMFASSENDER SF2 + GM-ROM PRESET AUDIO-CHECK
+          Entpacken und p112-start-audit.cmd doppelt anklicken.
+          Der Dateidialog fragt nach deiner awe32.raw, SYNTHGM.SBK und SF2.
+          Alle 77 SF2-Presets (falls diese Bank geladen ist), die 128 GM-ROM-
+          Instrumente und 8 exemplarische GM-Drum-Noten werden getestet.
+          Pro Test 1 Sekunde NoteOn + 0.5 Sekunden NoteOff bei Velocity 100.
+          REALES 86Box-EMU8000 + originale Wellen-ROM; kein Fallback.
+          Quelle, Bank, Programm, Note und gemessene PCM-Pegel erscheinen in
+          125A-P112-Alle-Presets.csv. Nur CSV hier in ChatGPT hochladen.
+          ROM/SBK/SF2 und Audio werden weder versendet noch weitergegeben.
+          Der Test misst jeweils eine passende Note pro Preset (Drums 8),
+          NICHT alle Tastatur-Zonen oder Anschlagsstaerken.
+          Die Pruefung faellt bei fehlender ROM oder Bank sauber ab.
+          '@ | Set-Content build-vst3/p112-audit/START-HERE.txt -Encoding UTF8
+      - name: Upload P112 complete real 86Box ROM GM and SF2 checker
+        uses: actions/upload-artifact@v4
+        with:
+          name: 125A-P112-SF2-und-GMROM-Alle-Presets-Windows-x64
+          path: build-vst3/p112-audit/
+          if-no-files-found: error
+          retention-days: 7
       - name: Build Steinberg reference EditorHost (real VST3 GUI)
         shell: pwsh
         run: cmake --build build-vst3 --config Release --target editorhost --parallel 2

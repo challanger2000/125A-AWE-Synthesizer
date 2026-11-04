@@ -81,6 +81,12 @@ target_include_directories(awe32_p109_sf2_preset_audit PRIVATE "." "../../src/vs
 target_link_libraries(awe32_p109_sf2_preset_audit PRIVATE awe32_chip_safety)
 set_target_properties(awe32_p109_sf2_preset_audit PROPERTIES CXX_STANDARD 23)
 
+# P112: current P110/P111 ROM + user-SF2 all-presets real 86Box audio audit.
+add_executable(awe32_p112_all_presets_audio_audit "../../tools/p112_all_presets_audio_audit.cpp")
+target_include_directories(awe32_p112_all_presets_audio_audit PRIVATE "." "../../src/vst3" "../../upstream/AWE32Emu/AWE32Emu/src")
+target_link_libraries(awe32_p112_all_presets_audio_audit PRIVATE awe32_chip_safety)
+set_target_properties(awe32_p112_all_presets_audio_audit PROPERTIES CXX_STANDARD 23)
+
 # P90: exact observable Creative SF2 driver mappings (synthetic region tests).
 add_executable(awe32_p90_sf2_driver_registers_test "${PROJECT_SOURCE_DIR}/tests/p90_sf2_driver_registers.cpp")
 target_include_directories(awe32_p90_sf2_driver_registers_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${UPSTREAM_SRC}")
