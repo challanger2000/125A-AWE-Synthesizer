@@ -1,9 +1,9 @@
 name: P117 - Functional GUI layout and direct preset selection
 on:
   push:
-    branches: [develop/p117-master-volume]
+    branches: [develop/p117-vstgui-layout]
     paths:
-      - '.github/workflows/p117-master-volume-vst3.yml'
+      - '.github/workflows/p117-functional-layout-vst3.yml'
       - 'CMakeLists.txt'
       - 'src/vst3/**'
       - 'src/engine/**'
@@ -60,7 +60,7 @@ jobs:
           if (-not $editor) { throw "P117 EditorHost missing" }
           python tools/p18_editorhost_smoke.py --editorhost "$editor" --plugin "$plugin" --output build-p117/p117-gui
           if ($LASTEXITCODE -ne 0) { throw "P117 GUI smoke failed" }
-      - name: Package P117 Windows VST3 with new master volume
+      - name: Package P117 functional 13-knob VST3 and direct preset selectors
         uses: actions/upload-artifact@v4
         with:
           name: 125A-P117-Functional-Layout-Windows-x64-VST3
