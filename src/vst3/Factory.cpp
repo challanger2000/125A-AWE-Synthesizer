@@ -549,10 +549,21 @@ public:
     tresult PLUGIN_API process(ProcessData& data) override {
         if(data.numSamples<0 || uint32_t(data.numSamples)>capacity_)
             return kInvalidArgument;
-        // P118-03: process may briefly serialize with a host-side atomic
-        // engine swap, but MUST NOT discard NoteOff/MIDI/automation. All
-        // long-running asset/stream operations run outside this mutex.
-        std::unique_lock<std::mutex> lock(engineMutex_);
+        // P119: no control mutex is acquired on the audio callback.
+        // The guard prevents a live synth being destroyed during this block.
+        auto engineRead=engines_.Read();
+        Engine* const entry=engineRead.get();
+        Synth* const synth_=entry?entry->synth.get():nullptr;
+        const uint64_t restore=gainRestoreEpoch_.load(std::memory_order_acquire);
+        if(restore!=lastGainRestoreEpoch_) {
+            volumeGain_.restore(gainRestoreValue_.load(std::memory_order_acquire));
+            lastGainRestoreEpoch_=restore;
+        }
+        const uint64_t revision=entry?entry->revision:0;
+        if(revision!=lastRtRevision_) {
+            if(synth_)ApplyRtParameters(*synth_);
+            lastRtRevision_=revision;
+        }
         // P118: VST3 parameter points carry their own sampleOffset.
         // Keep one cursor per parameter queue and merge them with MIDI events.
         // No allocation or sorting on the audio thread. The number of known
@@ -586,27 +597,30 @@ public:
         }
         auto apply=[&](ParamID id,ParamValue val) {
             if(id==kProgramID) {
-                state_.program=static_cast<uint32_t>(std::clamp(
+                const auto program=static_cast<uint32_t>(std::clamp(
                     int(std::lround(val*127.)),0,127));
+                rtProgram_.store(program,std::memory_order_release);
                 if(synth_)for(int ch=0;ch<16;++ch)
                     synth_->ProgramChange(static_cast<uint8_t>(ch),
-                        static_cast<uint8_t>(state_.program));
+                        static_cast<uint8_t>(program));
             } else if(id==kBankID) {
                 const auto bank=static_cast<uint32_t>(std::clamp(
                     int(std::lround(val*AssetState::kMaxBank)),0,
                     int(AssetState::kMaxBank)));
-                if(bank!=state_.bank) {
-                    state_.bank=bank;
+                if(bank!=rtBank_.load(std::memory_order_relaxed)) {
+                    rtBank_.store(bank,std::memory_order_release);
                     if(synth_)synth_->SelectBrowserBank(static_cast<uint16_t>(bank));
                 }
             } else if(id==kVolumeID) {
-                state_.masterVolume=static_cast<uint32_t>(std::lround(
+                const auto gain=static_cast<uint32_t>(std::lround(
                     val*MasterOutput::kScale));
-                volumeGain_.setTarget(state_.masterVolume);
+                rtMaster_.store(gain,std::memory_order_release);
+                volumeGain_.setTarget(gain);
             } else if(id>=kGuiFirstID && id<kGuiFirstID+kGuiCount) {
                 const int idx=int(id-kGuiFirstID);
-                state_.controls[idx]=static_cast<uint32_t>(
-                    std::lround(val*AssetState::kControlScale));
+                rtControls_[idx].store(static_cast<uint32_t>(
+                    std::lround(val*AssetState::kControlScale)),
+                    std::memory_order_release);
                 if(synth_)synth_->SetGuiControl(idx,static_cast<float>(val));
             } else {
                 const auto midi=MidiControlMapping::Decode(id);
@@ -698,8 +712,8 @@ public:
                     std::isfinite(e.noteOn.velocity)) {
                     const uint8_t vel=static_cast<uint8_t>(std::clamp(
                         int(std::lround(e.noteOn.velocity*127.f)),0,127));
-                    if(AllowEmuNoteOn(sf2Configured_||gmLoaded_,
-                        sf2Loaded_||gmLoaded_,
+                    if(AllowEmuNoteOn(entry&&(entry->sf2Configured||entry->gmLoaded),
+                        entry&&(entry->sf2Loaded||entry->gmLoaded),
                         synth_->Core().ChipVariant()==Emu8000Core::Chip::Box86))
                         synth_->NoteOn(static_cast<uint8_t>(e.noteOn.channel),
                             static_cast<uint8_t>(e.noteOn.pitch),vel);
@@ -734,7 +748,7 @@ private:
         uint64_t revision=0;
     };
     RealtimeEngineExchange<Engine> engines_;
-    Engine* lastRtEngine_=nullptr;  // comparison only; never dereferenced
+    uint64_t lastRtRevision_=0; // audio-thread-only engine revision
     uint64_t nextRevision_=0;
     std::vector<int16_t> scratch_;
     MasterOutput::Gain volumeGain_{};
