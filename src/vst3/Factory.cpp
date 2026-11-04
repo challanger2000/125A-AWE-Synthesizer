@@ -708,7 +708,7 @@ public:
         VSTGUI::VST3Editor*) override {
         if(name&&std::strcmp(name,"AwePresetBrowser")==0) {
             RequestHardwareInfo();
-            return new PresetBrowserView({0,0,1040,680},this,sfCatalog_,fmCatalog_,
+            return new PresetBrowserView({0,0,1200,780},this,sfCatalog_,fmCatalog_,
                 FactoryBank(L"125A_Logo_Master_FINAL.svg"),
                 [this]() {return Sf2AudioStatus();},
                 [this]() {return HardwareInfo();},
