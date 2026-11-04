@@ -40,7 +40,8 @@ using namespace Steinberg::Vst;
 inline const FUID kProcessorUID(0x125A8000,0x81A24A93,0xB426CC70,0x3906F211);
 inline const FUID kControllerUID(0x125A8000,0xAE274BC1,0xA4B02DA3,0x573CC990);
 inline constexpr ParamID kProgramID=1000;
-inline constexpr ParamID kEngineID=1001;
+inline constexpr ParamID kGuiFirstID=1100;
+inline constexpr int kGuiCount=AssetState::kControlCount;
 inline constexpr ParamID kBankID=1002; // SF2 bank, fixed normalized range 0..16383
 // Persistence data contract is in AssetState.h.
 // Factory banks are packaged *inside* the Windows VST3 by CMake. The path
@@ -92,6 +93,7 @@ public:
         return kResultOk;
     }
     tresult PLUGIN_API setActive(TBool active) override {
+        std::lock_guard<std::mutex> lock(engineMutex_);
         if(active) {
             if(!capacity_)return kResultFalse;
             synth_=std::make_unique<Synth>(rate_);
@@ -107,6 +109,8 @@ public:
                     assetError_=std::move(error);
             }
             synth_->Core().PowerOnInit();
+            for(int i=0;i<kGuiCount;++i)
+                synth_->SetGuiControl(i,float(state_.controls[i])/AssetState::kControlScale);
             if(sf2Configured_) {
                 std::string error;
                 if(synth_->LoadBank(state_.sf2Path,error)) {
@@ -121,51 +125,20 @@ public:
             synth_->SelectBrowserBank(static_cast<uint16_t>(state_.bank));
             for(int c=0;c<16;++c)synth_->ProgramChange(static_cast<uint8_t>(c),
                 static_cast<uint8_t>(state_.program));
-            // Both engines are constructed outside the audio callback.
-            // The OPL3 delay matches the 86Box FIFO reported to the host.
-            opl_=std::make_unique<Opl3Midi>(rate_,synth_->Core().ChipLatencyFrames());
-            cqm_=std::make_unique<Opl3Midi>(rate_,synth_->Core().ChipLatencyFrames(),true);
-            fmReady_=true;
-            // Factory FM banks load automatically; a user-selected IBK
-            // explicitly overrides them. No setup files are needed to play FM.
-            const std::string melodicPath=state_.ibkPath.empty() ?
-                FactoryBank(L"MAUIFM.IBK") : state_.ibkPath;
-            const std::string drumsPath=state_.drumIbkPath.empty() ?
-                FactoryBank(L"DRUM.IBK") : state_.drumIbkPath;
-            std::string error;
-            // Don't short circuit: both emulated chips load the same FM
-            // parameter data, but each renders via its own hardware core.
-            const bool yamahaLoaded=!melodicPath.empty() &&
-                opl_->LoadMelodicIbk(melodicPath,error);
-            const bool creativeLoaded=!melodicPath.empty() &&
-                cqm_->LoadMelodicIbk(melodicPath,error);
-            const bool rhythmLoaded=!drumsPath.empty() &&
-                opl_->LoadPercussionIbk(drumsPath,error);
-            if(!yamahaLoaded||!creativeLoaded||!rhythmLoaded) {
-                assetError_=error.empty() ?
-                    "Built-in FM bank resource not found in VST3" : std::move(error);
-                fmReady_=false;
-            }
-            // Creative CQM 0.9 beta percussion deliberately remains disabled.
-            for(int c=0;c<16;++c)
-                {
-                    opl_->ProgramChange(static_cast<uint8_t>(c),
-                        static_cast<uint8_t>(state_.program));
-                    cqm_->ProgramChange(static_cast<uint8_t>(c),
-                        static_cast<uint8_t>(state_.program));
-                }
             // This is a non-realtime activation callback. The VST3 connection
             // passes the actual processor loading outcome to the GUI, not
             // just the SF2 phdr names the controller happened to parse.
             sendTextMessage(("125A_SF2_STATUS:"+sf2Status).c_str());
-        } else {cqm_.reset();opl_.reset();synth_.reset();}
+        } else {synth_.reset();}
         return AudioEffect::setActive(active);
     }
     uint32 PLUGIN_API getLatencySamples() override {
+        std::lock_guard<std::mutex> lock(engineMutex_);
         return synth_?synth_->Core().ChipLatencyFrames():0;
     }
     tresult PLUGIN_API getState(IBStream* stream) override {
         if(!stream)return kInvalidArgument;
+        std::lock_guard<std::mutex> lock(engineMutex_);
         ResolveAssets();
         const auto send=[&](const void* buffer,size_t n) {
             int32 written=0;
@@ -178,6 +151,7 @@ public:
     }
     tresult PLUGIN_API setState(IBStream* stream) override {
         if(!stream)return kInvalidArgument;
+        std::lock_guard<std::mutex> lock(engineMutex_);
         const auto receive=[&](void* buffer,size_t n) {
             int32 received=0;
             return n<=AssetState::kMaxPath &&
@@ -186,22 +160,30 @@ public:
         };
         AssetState::Data candidate;
         if(!AssetState::Read(receive,candidate))return kResultFalse;
+        candidate.engine=0; // legacy FM projects migrate to EMU8000.
         state_=std::move(candidate);
+        if(synth_)for(int i=0;i<kGuiCount;++i)
+            synth_->SetGuiControl(i,float(state_.controls[i])/AssetState::kControlScale);
         if(synth_)synth_->SelectBrowserBank(static_cast<uint16_t>(state_.bank));
         if(synth_)for(int c=0;c<16;++c)
             synth_->ProgramChange(static_cast<uint8_t>(c),
-                static_cast<uint8_t>(state_.program));
-        if(opl_)for(int c=0;c<16;++c)
-            opl_->ProgramChange(static_cast<uint8_t>(c),
-                static_cast<uint8_t>(state_.program));
-        if(cqm_)for(int c=0;c<16;++c)
-            cqm_->ProgramChange(static_cast<uint8_t>(c),
                 static_cast<uint8_t>(state_.program));
         // File replacement while active is deferred until reactivation.
         return kResultOk;
     }
     tresult PLUGIN_API process(ProcessData& data) override {
         if(data.numSamples<0)return kInvalidArgument;
+        std::unique_lock<std::mutex> lock(engineMutex_,std::try_to_lock);
+        if(!lock.owns_lock()) {
+            if(data.numOutputs>0&&data.outputs&&data.outputs[0].channelBuffers32&&
+               data.symbolicSampleSize==kSample32) {
+                for(int c=0;c<data.outputs[0].numChannels;++c)
+                    if(auto* b=data.outputs[0].channelBuffers32[c])
+                        std::fill_n(b,data.numSamples,0.f);
+                data.outputs[0].silenceFlags=3u;
+            }
+            return kResultOk;
+        }
         // VST3 explicitly permits a parameter-only process call without
         // any audio bus or output buffers. Apply changes before checking I/O.
         if(auto* changes=data.inputParameterChanges) {
@@ -218,12 +200,6 @@ public:
                         if(synth_)for(int c=0;c<16;++c)
                             synth_->ProgramChange(static_cast<uint8_t>(c),
                                 static_cast<uint8_t>(state_.program));
-                        if(opl_)for(int c=0;c<16;++c)
-                            opl_->ProgramChange(static_cast<uint8_t>(c),
-                                static_cast<uint8_t>(state_.program));
-                        if(cqm_)for(int c=0;c<16;++c)
-                            cqm_->ProgramChange(static_cast<uint8_t>(c),
-                                static_cast<uint8_t>(state_.program));
                     } else if(q->getParameterId()==kBankID) {
                         const auto bank=static_cast<uint32_t>(std::clamp(
                             int(std::lround(val*AssetState::kMaxBank)),0,
@@ -232,16 +208,18 @@ public:
                             state_.bank=bank;
                             if(synth_)synth_->SelectBrowserBank(static_cast<uint16_t>(bank));
                         }
-                    } else if(q->getParameterId()==kEngineID) {
-                        const uint32_t mode=static_cast<uint32_t>(std::clamp(int(std::lround(val*2.)),0,2));
-                        if(mode!=state_.engine) {
-                            if(opl_)opl_->AllNotesOff();
-                            if(cqm_)cqm_->AllNotesOff();
-                            if(synth_)for(int c=0;c<16;++c)
-                                synth_->ControlChange(static_cast<uint8_t>(c),120,0);
-                            state_.engine=mode;
-                        }
+                    } else if(q->getParameterId()>=kGuiFirstID &&
+                              q->getParameterId()<kGuiFirstID+kGuiCount) {
+                        const int index=int(q->getParameterId()-kGuiFirstID);
+                        const float amount=static_cast<float>(std::clamp(val,0.,1.));
+                        state_.controls[index]=static_cast<uint32_t>(
+                            std::lround(amount*AssetState::kControlScale));
+                        if(synth_)synth_->SetGuiControl(index,amount);
                     }
+                }
+            }
+        }
+        // Hosts may flush                    }
                 }
             }
         }
@@ -259,24 +237,13 @@ public:
         std::fill_n(l,data.numSamples,0.f);
         if(r)std::fill_n(r,data.numSamples,0.f);
         data.outputs[0].silenceFlags=r?3u:1u;
-        if(!synth_||!opl_||!cqm_||uint32(data.numSamples)>capacity_)
+        if(!synth_||uint32(data.numSamples)>capacity_)
             return kResultOk;
 
         const auto render=[&](int32 from,int32 to) {
             if(to<=from)return;
-            if(state_.engine==1||state_.engine==2) {
-                if(fmReady_) {
-                    auto* fm=(state_.engine==2)?cqm_.get():opl_.get();
-                    fm->RenderBlock(scratch_.data()+size_t{2}*from,
-                                    static_cast<uint32_t>(to-from));
-                } else {
-                    std::fill_n(scratch_.data()+size_t{2}*from,
-                                size_t{2}*(to-from),int16_t{0});
-                }
-            } else {
-                synth_->RenderBlock(scratch_.data()+size_t{2}*from,
-                                    static_cast<uint32_t>(to-from));
-            }
+            synth_->RenderBlock(scratch_.data()+size_t{2}*from,
+                                static_cast<uint32_t>(to-from));
             for(int32 i=from;i<to;++i) {
                 const float left=scratch_[size_t{2}*i]/32768.f;
                 const float right=scratch_[size_t{2}*i+1]/32768.f;
@@ -297,24 +264,13 @@ public:
                e.noteOn.pitch>=0&&e.noteOn.pitch<=127&&std::isfinite(e.noteOn.velocity)) {
                 const uint8_t vel=static_cast<uint8_t>(std::clamp(
                     int(std::lround(e.noteOn.velocity*127.f)),0,127));
-                if(state_.engine==1||state_.engine==2) {
-                    if(fmReady_) {
-                        auto* fm=(state_.engine==2)?cqm_.get():opl_.get();
-                        fm->NoteOn(static_cast<uint8_t>(e.noteOn.channel),
-                                   static_cast<uint8_t>(e.noteOn.pitch),vel);
-                    }
-                } else if(AllowEmuNoteOn(sf2Configured_,sf2Loaded_))
+                if(AllowEmuNoteOn(sf2Configured_,sf2Loaded_))
                     synth_->NoteOn(static_cast<uint8_t>(e.noteOn.channel),
                                    static_cast<uint8_t>(e.noteOn.pitch),vel);
             }else if(e.type==Event::kNoteOffEvent&&e.noteOff.channel>=0&&
                      e.noteOff.channel<16&&e.noteOff.pitch>=0&&e.noteOff.pitch<=127) {
-                if(state_.engine==1||state_.engine==2) {
-                    auto* fm=(state_.engine==2)?cqm_.get():opl_.get();
-                    fm->NoteOff(static_cast<uint8_t>(e.noteOff.channel),
-                                 static_cast<uint8_t>(e.noteOff.pitch));
-                } else
-                    synth_->NoteOff(static_cast<uint8_t>(e.noteOff.channel),
-                                    static_cast<uint8_t>(e.noteOff.pitch));
+                synth_->NoteOff(static_cast<uint8_t>(e.noteOff.channel),
+                                static_cast<uint8_t>(e.noteOff.pitch));
             }
         }
         render(pos,data.numSamples);
@@ -324,13 +280,11 @@ public:
     }
 private:
     std::unique_ptr<Synth> synth_;
-    std::unique_ptr<Opl3Midi> opl_;
-    std::unique_ptr<Opl3Midi> cqm_;
     std::vector<int16_t> scratch_;
     uint32_t rate_=44100,capacity_=0;
     AssetState::Data state_{};
     std::string assetError_;
-    bool fmReady_=true;
+    mutable std::mutex engineMutex_; // never block realtime rendering
     bool sf2Configured_=false,sf2Loaded_=false; // written outside process()
     void ResolveAssets() {
         AssetConfig::Paths configured;
