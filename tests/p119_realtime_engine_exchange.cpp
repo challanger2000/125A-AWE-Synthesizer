@@ -52,7 +52,15 @@ int main() {
         ok&=check(destroyed.load()==1&&slot.RetiredCountForTest()==0,
             "old engine destroyed on control thread after audio callback exits");
         slot.Publish(nullptr);
-        ok&=check(destroyed.load()==2,"retired engine destroyed off audio thread");
+        // P120 reclamation is intentionally asynchronous and occurs off the
+        // audio callback. Never assert synchronous destruction at Publish().
+        const auto deadline=std::chrono::steady_clock::now()+
+                            std::chrono::seconds(2);
+        while(destroyed.load()!=2 &&
+              std::chrono::steady_clock::now()<deadline)
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        ok&=check(destroyed.load()==2,
+           "retired engine is autonomously destroyed on non-audio thread");
     }
     std::cout<<(ok?"P119_ENGINE_EXCHANGE_PASS":"P119_ENGINE_EXCHANGE_FAIL")<<"\n";
     return ok?0:1;
