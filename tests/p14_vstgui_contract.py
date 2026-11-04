@@ -57,7 +57,12 @@ assert 'hardwareInfoProvider_' in h and 'hardwareInfoLabel_' in h
 assert 'addView(new HardwareFaceplate({0,0,1200,780}))' in b and '32 VOICES  /  44.1 kHz' in b
 assert 'SyncHardwareInfo();' in b
 assert 'sfCatalog_=std::move(sf2PendingCatalog_)' in f
-assert 'std::try_to_lock' in f
+assert 'std::try_to_lock' not in f
+assert 'std::unique_lock<std::mutex> lock(engineMutex_)' in f
+assert 'getMidiControllerAssignment(' in f and 'IMidiMapping' in f
+assert 'MidiControlMapping::Decode(id)' in f
+assert 'sampleOffset' in f and 'ParameterCursor' in f
+assert 'assetGeneration_' in f and 'ApplyLiveParameters(*replacement)' in f
 assert 'GetOpenFileNameW(&ofn)' in b
 assert 'NativeChooseFile(path,false)' in b
 assert 'AddKnob(0,' in b and 'AddKnob(11,' in b
