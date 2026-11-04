@@ -91,6 +91,18 @@ public:
         }
         return current_;
     }
+    // Host automation already provides the exact linear trajectory.
+    // Do not restart the 64-sample dezipper for every interpolated frame:
+    // doing so turns a 64-frame fade into a low-pass decay ending at 62.5%.
+    // This resets the manual-change ramp ONLY while an automation queue
+    // explicitly owns the parameter.
+    float nextAutomated(double normalized) noexcept {
+        const float value=static_cast<float>(std::clamp(normalized,0.,1.));
+        current_=target_=value;
+        step_=0.f;
+        remaining_=0;
+        return value;
+    }
     static float fromStored(uint32_t value) noexcept {
         return static_cast<float>(std::min(value,kScale))/static_cast<float>(kScale);
     }
