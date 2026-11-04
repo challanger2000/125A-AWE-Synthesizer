@@ -11,6 +11,7 @@
 #include "PresetCatalog.h"
 #include "PresetBrowserView.h"
 #include "Sf2LoadPolicy.h"
+#include "RomGmBank.h"
 #include "public.sdk/source/vst/vstparameters.h"
 #include "public.sdk/source/main/moduleinit.h"
 #include "pluginterfaces/base/ustring.h"
@@ -104,6 +105,7 @@ public:
             ResolveAssets();
             sf2Configured_=!state_.sf2Path.empty();
             sf2Loaded_=false;
+            gmLoaded_=false;
             std::string status;
             if(state_.romPath.empty()) {
                 // Strict AWE64 mode: ROM absent means NO software fallback.
@@ -124,17 +126,21 @@ public:
                         for(int i=0;i<kGuiCount;++i)
                             chip->SetGuiControl(i,
                                 float(state_.controls[i])/AssetState::kControlScale);
-                        status="Original-ROM geladen: SF2 LADEN.";
-                        if(sf2Configured_) {
-                            if(chip->LoadBank(state_.sf2Path,error)) {
-                                sf2Loaded_=true;
-                                status="86Box-EMU8000: ROM und SF2 geladen.";
-                            } else {
-                                assetError_="SF2-Ladefehler: "+(error.empty() ?
-                                    std::string("unbekannter Grund"):error);
-                                status=assetError_;
-                            }
-                        }
+                        const auto banks=RomGmBank::LoadBanks(
+                            *chip,state_.romPath,state_.sf2Path);
+                        gmLoaded_=banks.gm;
+                        sf2Loaded_=banks.sf2;
+                        if(sf2Configured_&&!sf2Loaded_) {
+                            assetError_="SF2-Ladefehler: "+banks.sf2Error;
+                            status=assetError_;
+                        } else if(gmLoaded_&&sf2Loaded_)
+                            status="86Box: originale GM-ROM-Bank und SF2 geladen.";
+                        else if(gmLoaded_)
+                            status="86Box: originale 1MGM-Bank (SYNTHGM.SBK) geladen.";
+                        else if(sf2Loaded_)
+                            status="86Box: SF2 geladen. SYNTHGM.SBK fehlt neben ROM.";
+                        else
+                            status="86Box: ROM bereit. SYNTHGM.SBK neben ROM oder SF2 laden.";
                         chip->SelectBrowserBank(static_cast<uint16_t>(state_.bank));
                         for(int c=0;c<16;++c)
                             chip->ProgramChange(static_cast<uint8_t>(c),
@@ -152,6 +158,7 @@ public:
         } else {
             hostActive_=false;
             sf2Loaded_=false;
+            gmLoaded_=false;
             synth_.reset();
         }
         return AudioEffect::setActive(active);
@@ -189,7 +196,7 @@ public:
             }
             std::string error;
             std::string sf2Error;
-            bool loadedSf2=false;
+            bool loadedSf2=false,loadedGm=false;
             std::unique_ptr<Synth> prepared;
             try {
                 // A chip with the new ROM is fully initialized off the audio
@@ -203,11 +210,12 @@ public:
                     for(int i=0;i<kGuiCount;++i)
                         prepared->SetGuiControl(
                             i,float(model.controls[i])/AssetState::kControlScale);
-                    if(active&&!model.sf2Path.empty()) {
-                        if(prepared->LoadBank(model.sf2Path,sf2Error))
-                            loadedSf2=true;
-                        else if(sf2Error.empty())
-                            sf2Error="SF2 nicht ladbar";
+                    if(active) {
+                        auto banks=RomGmBank::LoadBanks(
+                            *prepared,path,model.sf2Path);
+                        loadedGm=banks.gm;
+                        loadedSf2=banks.sf2;
+                        sf2Error=std::move(banks.sf2Error);
                     }
                     // A valid ROM is accepted even if an old/invalid SF2
                     // cannot be loaded; a valid bank can then be selected.
@@ -233,14 +241,16 @@ public:
                 sf2Configured_=!model.sf2Path.empty();
                 sf2Loaded_=active&&loadedSf2&&
                     bool(synth_)&&synth_->Core().ChipVariant()==Emu8000Core::Chip::Box86;
+                gmLoaded_=active&&loadedGm&&
+                    bool(synth_)&&synth_->Core().ChipVariant()==Emu8000Core::Chip::Box86;
                 info=HardwareDescriptor();
             }
             sendTextMessage(("125A_HW_INFO:"+info).c_str());
             const std::string status=active ?
-                (sf2Error.empty() ?
-                    "ROM geladen. 86Box-EMU8000-Kern aktiv." :
-                    ("ROM geladen. SF2-Ladefehler: "+sf2Error+
-                     ". Mit SF2 LADEN neue Bank auswaehlen.")) :
+                (!sf2Error.empty() ?
+                    ("ROM geladen. SF2-Ladefehler: "+sf2Error) :
+                    (loadedGm ? "ROM + originale 1MGM GM-Bank geladen." :
+                     "ROM geladen. SYNTHGM.SBK neben ROM ablegen.")) :
                 "ROM validiert. Wird bei Aktivierung geladen.";
             sendTextMessage(("125A_SF2_STATUS:"+status).c_str());
             sendTextMessage("125A_ROM_ACK:OK");
@@ -268,6 +278,7 @@ public:
         }
         std::string error;
         std::unique_ptr<Synth> replacement;
+        bool loadedGm=false;
         if(active&&romReady) {
             try {
                 replacement=std::make_unique<Synth>(sampleRate);
@@ -280,8 +291,11 @@ public:
                     for(int i=0;i<kGuiCount;++i)
                         replacement->SetGuiControl(
                             i,float(model.controls[i])/AssetState::kControlScale);
-                    if(!replacement->LoadBank(path,error))
-                        error="SF2: "+error;
+                    const auto banks=RomGmBank::LoadBanks(
+                        *replacement,model.romPath,path);
+                    loadedGm=banks.gm;
+                    if(!banks.sf2)
+                        error="SF2: "+banks.sf2Error;
                 }
             } catch(const std::exception& e) {error=e.what();}
             if(!error.empty()) {
@@ -301,6 +315,7 @@ public:
             state_.pathsSpecified=true;
             sf2Configured_=true;
             sf2Loaded_=active&&romReady;
+            gmLoaded_=active&&romReady&&loadedGm;
         }
         std::string sysInfo;
         {
@@ -444,7 +459,8 @@ public:
                e.noteOn.pitch>=0&&e.noteOn.pitch<=127&&std::isfinite(e.noteOn.velocity)) {
                 const uint8_t vel=static_cast<uint8_t>(std::clamp(
                     int(std::lround(e.noteOn.velocity*127.f)),0,127));
-                if(AllowEmuNoteOn(sf2Configured_,sf2Loaded_,
+                if(AllowEmuNoteOn(sf2Configured_||gmLoaded_,
+                    sf2Loaded_||gmLoaded_,
                     synth_->Core().ChipVariant()==Emu8000Core::Chip::Box86))
                     synth_->NoteOn(static_cast<uint8_t>(e.noteOn.channel),
                                    static_cast<uint8_t>(e.noteOn.pitch),vel);
@@ -468,6 +484,7 @@ private:
     mutable std::mutex engineMutex_; // never block realtime rendering
     bool hostActive_=false; // may be true while no ROM / no core exists
     bool sf2Configured_=false,sf2Loaded_=false; // written outside process()
+    bool gmLoaded_=false; // only true for validated ROM-backed 1MGM bank
     // Report the currently running chip, not merely paths in assets.cfg.
     // Call under engineMutex_ from non-realtime code only.
     std::string HardwareDescriptor() const {
@@ -521,6 +538,12 @@ public:
             sf2PendingAck_=msg+sizeof(ack)-1;
             return kResultOk;
         }
+        constexpr char romAck[]="125A_ROM_ACK:";
+        if(msg && std::strncmp(msg,romAck,sizeof(romAck)-1)==0) {
+            std::lock_guard<std::mutex> lock(sf2StatusMutex_);
+            romPendingAck_=msg+sizeof(romAck)-1;
+            return kResultOk;
+        }
         constexpr char hwInfoPrefix[]="125A_HW_INFO:";
         if(msg&&std::strncmp(msg,hwInfoPrefix,sizeof(hwInfoPrefix)-1)==0) {
             std::lock_guard<std::mutex> lock(sf2StatusMutex_);
@@ -537,17 +560,33 @@ public:
     }
     // Called only on the editor/UI thread. Keep the PresetCatalog object
     // stable: the VSTGUI browser stores a const reference to it.
+    void AppendGmCatalog() {
+        const auto gm=RomGmBank::AdjacentFile(romPath_);
+        std::string error;
+        if(!gm.empty() && RomGmBank::ValidDescriptor(gm,error))
+            sfCatalog_.AppendRomGm(gm,error);
+    }
     uint64_t CatalogRevision() {
-        std::string ack;
+        std::string ack,romAck;
         {
             std::lock_guard<std::mutex> lock(sf2StatusMutex_);
             ack.swap(sf2PendingAck_);
+            romAck.swap(romPendingAck_);
         }
         if(ack=="OK" && !sf2PendingPath_.empty()) {
             sfCatalog_=std::move(sf2PendingCatalog_);
             sf2Path_=std::move(sf2PendingPath_);
+            AppendGmCatalog();
             ++sfCatalogRevision_;
         } else if(!ack.empty()) sf2PendingPath_.clear();
+        if(romAck=="OK" && !romPendingPath_.empty()) {
+            romPath_=std::move(romPendingPath_);
+            sfCatalog_=PresetCatalog{};
+            std::string error;
+            if(!sf2Path_.empty())sfCatalog_.LoadSoundFont(sf2Path_,error);
+            AppendGmCatalog();
+            ++sfCatalogRevision_;
+        } else if(!romAck.empty()) romPendingPath_.clear();
         return sfCatalogRevision_;
     }
     std::string CurrentSf2Path() const {return sf2Path_;}
@@ -590,12 +629,14 @@ public:
             sf2AudioStatus_="ROM-Ladefehler: Kein VST3-Nachrichtenkanal.";
             return false;
         }
+        romPendingPath_=path;
         msg->setMessageID("125A_ROM_LOAD");
         msg->getAttributes()->setBinary("Path",path.data(),
                                          static_cast<uint32>(path.size()));
         const auto result=sendMessage(msg);
         msg->release();
         if(result!=kResultOk) {
+            romPendingPath_.clear();
             std::lock_guard<std::mutex> lock(sf2StatusMutex_);
             sf2AudioStatus_="ROM-Ladefehler: Audioprozessor nicht erreichbar.";
             return false;
@@ -705,6 +746,7 @@ public:
 private:
     PresetCatalog sfCatalog_{},fmCatalog_{};
     std::string sf2Path_;
+    std::string romPath_,romPendingPath_,romPendingAck_;
     std::string sf2PendingPath_;
     PresetCatalog sf2PendingCatalog_{};
     uint64_t sfCatalogRevision_=0;
@@ -724,8 +766,10 @@ private:
         sfCatalog_=PresetCatalog{};
         fmCatalog_=PresetCatalog{};
         sf2Path_=paths.sf2;
+        romPath_=paths.rom;
         std::string error;
         if(!paths.sf2.empty())sfCatalog_.LoadSoundFont(paths.sf2,error);
+        AppendGmCatalog();
         ++sfCatalogRevision_;
         // Legacy FM preset data is no longer loaded into this AWE-only plugin.
     }
