@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <filesystem>
 #include <map>
 #include <typeinfo>
 
@@ -557,7 +558,7 @@ Bank Load(const std::string& path)
 {
     Bank bank;
 
-    std::ifstream file(path, std::ios::binary);
+    std::ifstream file(std::filesystem::u8path(path), std::ios::binary);
     if (!file) { bank.errorMessage = StrFormat(_("Cannot open file: %s"), path.c_str()); return bank; }
 
     std::vector<uint8_t> buf((std::istreambuf_iterator<char>(file)),

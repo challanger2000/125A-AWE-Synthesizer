@@ -32,7 +32,7 @@ public:
     // CF: 'phdr' is an SF2 preset table (38 bytes/entry), final record EOP.
     bool LoadSoundFont(const std::string& path,std::string& error) {
         namespace fs=std::filesystem;
-        std::ifstream in(path,std::ios::binary);
+        std::ifstream in(fs::u8path(path),std::ios::binary);
         if(!in) {error="Preset catalog: cannot open SF2";return false;}
         in.seekg(0,std::ios::end);
         const auto end=in.tellg();

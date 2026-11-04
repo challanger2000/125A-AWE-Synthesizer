@@ -11,7 +11,6 @@
 #include "PresetCatalog.h"
 #include "PresetBrowserView.h"
 #include "Sf2LoadPolicy.h"
-#include "Opl3Midi.h"
 #include "public.sdk/source/vst/vstparameters.h"
 #include "public.sdk/source/main/moduleinit.h"
 #include "pluginterfaces/base/ustring.h"
@@ -541,7 +540,7 @@ private:
         sf2Path_=paths.sf2;
         std::string error;
         if(!paths.sf2.empty())sfCatalog_.LoadSoundFont(paths.sf2,error);
-        const auto melodic=paths.ibk.empty()?FactoryBank(L"MAUIFM.IBK"):paths.ibk;
+        ++sfCatalogRevision_;
         // Legacy FM preset data is no longer loaded into this AWE-only plugin.
     }
 };
