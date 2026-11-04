@@ -571,8 +571,22 @@ Bank Load(const std::string& path)
     std::ifstream file(std::filesystem::u8path(path), std::ios::binary);
     if (!file) { bank.errorMessage = StrFormat(_("Cannot open file: %s"), path.c_str()); return bank; }
 
-    std::vector<uint8_t> buf((std::istreambuf_iterator<char>(file)),
-                              std::istreambuf_iterator<char>());
+    // Cap hostile inputs before allocating; playable banks are limited
+    // to 28 MiB of sample RAM, so a 64 MiB RIFF cap leaves ample metadata.
+    constexpr uint64_t kMaxRiffBytes=64ull*1024ull*1024ull;
+    file.seekg(0,std::ios::end);
+    const auto end=file.tellg();
+    if(end<0 || static_cast<uint64_t>(end)>kMaxRiffBytes) {
+        bank.errorMessage = _("SoundFont exceeds supported file size");
+        return bank;
+    }
+    file.seekg(0,std::ios::beg);
+    std::vector<uint8_t> buf(static_cast<size_t>(end));
+    if(!buf.empty() && !file.read(
+        reinterpret_cast<char*>(buf.data()),static_cast<std::streamsize>(buf.size()))) {
+        bank.errorMessage = _("Truncated SoundFont file");
+        return bank;
+    }
     if (buf.size() >= 7 && std::memcmp(buf.data(), "AIL3MDI", 7) == 0)
     {
         std::vector<uint8_t> riff;
@@ -613,14 +627,22 @@ Bank Load(const std::string& path)
     const uint16_t major = RdU16(&buf[ifil->offset]);
     bank.version = (major < 2) ? Version::Sf1 : Version::Sf2;
 
-    if (const Chunk* n = need("INAM")) bank.name = CStr(&buf[n->offset], n->size);
-    if (const Chunk* r = need("irom")) bank.romName = CStr(&buf[r->offset], r->size);
+    if (const Chunk* n = need("INAM"))
+        if (n->size) bank.name = CStr(&buf[n->offset], n->size);
+    if (const Chunk* r = need("irom"))
+        if (r->size) bank.romName = CStr(&buf[r->offset], r->size);
 
     // ---- sample data ----
     if (const Chunk* smpl = need("smpl"))
     {
+        if(smpl->size & 1u) {
+            bank.errorMessage = _("Odd-length SoundFont PCM sample chunk");
+            return bank;
+        }
         bank.sampleData.resize(smpl->size / 2);
-        std::memcpy(bank.sampleData.data(), &buf[smpl->offset], bank.sampleData.size() * 2);
+        if(!bank.sampleData.empty())
+            std::memcpy(bank.sampleData.data(), &buf[smpl->offset],
+                        bank.sampleData.size()*2);
     }
 
     // ---- sample headers ----
