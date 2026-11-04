@@ -182,6 +182,37 @@ int main() {
     ok &= ck(!AssetConfig::Parse(malformed,keep)&&
              keep.rom=="valid rom"&&keep.sf2=="valid sf2",
              "invalid configuration fails without replacing old paths");
+    // P117 regression: the processor restored ROM correctly, but controller
+    // had previously dropped model.romPath and thus hid original SBK GM presets.
+    AssetState::Data saved;
+    saved.pathsSpecified=true;
+    saved.romPath="C:\\AWE64 Gold\\awe32.raw";
+    saved.sf2Path="D:\\Banks\\Synth 512 Bank.sf2";
+    saved.ibkPath="D:\\Legacy\\fm.ibk";
+    saved.drumIbkPath="D:\\Legacy\\drums.ibk";
+    AssetState::Data restored;
+    AssetConfig::Paths controllerPaths;
+    ok &= ck(decode(encode(saved),restored)&&
+             AssetConfig::ResolveController(&restored,controllerPaths)&&
+             controllerPaths.rom==saved.romPath&&
+             controllerPaths.sf2==saved.sf2Path&&
+             controllerPaths.ibk==saved.ibkPath&&
+             controllerPaths.drumIbk==saved.drumIbkPath,
+             "P117: host V9 recall restores ROM path for adjacent SYNTHGM.SBK in controller");
+    // An explicitly saved empty ROM means 'no ROM' and must NOT be replaced
+    // by arbitrary global config; the editor and processor agree.
+    saved.romPath.clear();
+    ok &= ck(AssetConfig::ResolveController(&saved,controllerPaths)&&
+             controllerPaths.rom.empty()&&
+             controllerPaths.sf2==saved.sf2Path,
+             "P117: explicit no-ROM project state stays no-ROM in browser");
+    AssetState::Data invalid;
+    invalid.pathsSpecified=true;
+    invalid.romPath=std::string(AssetState::kMaxPath+1,'z');
+    AssetConfig::Paths untouched{"safe original"};
+    ok &= ck(!AssetConfig::ResolveController(&invalid,untouched)&&
+             untouched.rom=="safe original",
+             "P117: invalid project ROM path cannot partially change controller paths");
     std::cout<<(ok?"ASSET STATE PASS":"ASSET STATE FAIL")<<'\n';
     return ok?0:1;
 }
