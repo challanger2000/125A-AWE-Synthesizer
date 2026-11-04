@@ -375,116 +375,192 @@ public:
         return kResultOk;
     }
     tresult PLUGIN_API process(ProcessData& data) override {
-        if(data.numSamples<0)return kInvalidArgument;
+        if(data.numSamples<0 || uint32_t(data.numSamples)>capacity_)
+            return kInvalidArgument;
         std::unique_lock<std::mutex> lock(engineMutex_,std::try_to_lock);
         if(!lock.owns_lock()) {
-            if(data.numOutputs>0&&data.outputs&&data.outputs[0].channelBuffers32&&
+            // P117-03 remains an open architecture issue: do not pretend this
+            // fallback preserves realtime notes/automation on a contention.
+            if(data.numOutputs>0 && data.outputs &&
+               data.outputs[0].channelBuffers32 &&
                data.symbolicSampleSize==kSample32) {
                 for(int c=0;c<data.outputs[0].numChannels;++c)
-                    if(auto* b=data.outputs[0].channelBuffers32[c])
-                        std::fill_n(b,data.numSamples,0.f);
+                    if(auto* out=data.outputs[0].channelBuffers32[c])
+                        std::fill_n(out,data.numSamples,0.f);
                 data.outputs[0].silenceFlags=3u;
             }
             return kResultOk;
         }
-        // VST3 explicitly permits a parameter-only process call without
-        // any audio bus or output buffers. Apply changes before checking I/O.
+        // P118: VST3 parameter points carry their own sampleOffset.
+        // Keep one cursor per parameter queue and merge them with MIDI events.
+        // No allocation or sorting on the audio thread. The number of known
+        // parameters is bounded below the 1024 preallocated cursor slots.
+        int32 activeQueues=0;
+        const auto advance=[&](ParameterCursor& c)->bool {
+            while(c.point<c.count) {
+                int32 offset=0;
+                ParamValue value=0.;
+                if(c.queue->getPoint(c.point,offset,value)==kResultOk &&
+                   std::isfinite(value)) {
+                    c.offset=std::clamp(offset,0,data.numSamples);
+                    c.value=std::clamp(value,0.,1.);
+                    return true;
+                }
+                ++c.point;
+            }
+            return false;
+        };
         if(auto* changes=data.inputParameterChanges) {
-            const int32 n=std::clamp(changes->getParameterCount(),0,1024);
-            for(int32 i=0;i<n;++i) {
+            const int32 count=std::max<int32>(0,changes->getParameterCount());
+            for(int32 i=0;i<count && activeQueues<int32(paramCursors_.size());++i) {
                 auto* q=changes->getParameterData(i);
                 if(!q||q->getPointCount()<=0)continue;
-                int32 off=0;
-                ParamValue val=0;
-                if(q->getPoint(q->getPointCount()-1,off,val)==kResultOk&&std::isfinite(val)) {
-                    if(q->getParameterId()==kProgramID) {
-                        state_.program=static_cast<uint32_t>(std::clamp(
-                            int(std::lround(val*127.)),0,127));
-                        if(synth_)for(int c=0;c<16;++c)
-                            synth_->ProgramChange(static_cast<uint8_t>(c),
-                                static_cast<uint8_t>(state_.program));
-                    } else if(q->getParameterId()==kBankID) {
-                        const auto bank=static_cast<uint32_t>(std::clamp(
-                            int(std::lround(val*AssetState::kMaxBank)),0,
-                            int(AssetState::kMaxBank)));
-                        if(bank!=state_.bank) {
-                            state_.bank=bank;
-                            if(synth_)synth_->SelectBrowserBank(static_cast<uint16_t>(bank));
-                        }
-                    } else if(q->getParameterId()==kVolumeID) {
-                        state_.masterVolume=static_cast<uint32_t>(std::lround(
-                            std::clamp(val,0.,1.)*MasterOutput::kScale));
-                        volumeGain_.setTarget(state_.masterVolume);
-                    } else if(q->getParameterId()>=kGuiFirstID &&
-                              q->getParameterId()<kGuiFirstID+kGuiCount) {
-                        const int index=int(q->getParameterId()-kGuiFirstID);
-                        const float amount=static_cast<float>(std::clamp(val,0.,1.));
-                        state_.controls[index]=static_cast<uint32_t>(
-                            std::lround(amount*AssetState::kControlScale));
-                        if(synth_)synth_->SetGuiControl(index,amount);
-                    }
-                }
+                ParameterCursor cursor{};
+                cursor.queue=q;
+                cursor.id=q->getParameterId();
+                cursor.count=q->getPointCount();
+                if(advance(cursor))paramCursors_[activeQueues++]=cursor;
             }
         }
-        // Hosts may flush controls with numOutputs=0, numChannels=0 or a
-        // null buffer. Such calls are valid: no audio work is required.
-        if(data.numOutputs<1||!data.outputs ||
-           data.outputs[0].numChannels<1 ||
-           data.symbolicSampleSize!=kSample32 ||
-           !data.outputs[0].channelBuffers32 ||
-           !data.outputs[0].channelBuffers32[0])
-            return kResultOk;
-        auto* const l=data.outputs[0].channelBuffers32[0];
-        auto* const r=(data.outputs[0].numChannels>=2)
-            ? data.outputs[0].channelBuffers32[1] : nullptr;
-        std::fill_n(l,data.numSamples,0.f);
-        if(r)std::fill_n(r,data.numSamples,0.f);
-        data.outputs[0].silenceFlags=r?3u:1u;
-        if(!synth_||uint32(data.numSamples)>capacity_)
-            return kResultOk;
-
-        const auto render=[&](int32 from,int32 to) {
-            if(to<=from)return;
-            synth_->RenderBlock(scratch_.data()+size_t{2}*from,
-                                static_cast<uint32_t>(to-from));
-            for(int32 i=from;i<to;++i) {
-                const float gain=volumeGain_.next();
-                const float left=(scratch_[size_t{2}*i]/32768.f)*gain;
-                const float right=(scratch_[size_t{2}*i+1]/32768.f)*gain;
-                if(r) {l[i]=left;r[i]=right;}
-                else l[i]=(left+right)*0.5f;
+        auto apply=[&](ParamID id,ParamValue val) {
+            if(id==kProgramID) {
+                state_.program=static_cast<uint32_t>(std::clamp(
+                    int(std::lround(val*127.)),0,127));
+                if(synth_)for(int ch=0;ch<16;++ch)
+                    synth_->ProgramChange(static_cast<uint8_t>(ch),
+                        static_cast<uint8_t>(state_.program));
+            } else if(id==kBankID) {
+                const auto bank=static_cast<uint32_t>(std::clamp(
+                    int(std::lround(val*AssetState::kMaxBank)),0,
+                    int(AssetState::kMaxBank)));
+                if(bank!=state_.bank) {
+                    state_.bank=bank;
+                    if(synth_)synth_->SelectBrowserBank(static_cast<uint16_t>(bank));
+                }
+            } else if(id==kVolumeID) {
+                state_.masterVolume=static_cast<uint32_t>(std::lround(
+                    val*MasterOutput::kScale));
+                volumeGain_.setTarget(state_.masterVolume);
+            } else if(id>=kGuiFirstID && id<kGuiFirstID+kGuiCount) {
+                const int idx=int(id-kGuiFirstID);
+                state_.controls[idx]=static_cast<uint32_t>(
+                    std::lround(val*AssetState::kControlScale));
+                if(synth_)synth_->SetGuiControl(idx,static_cast<float>(val));
+            } else if(synth_) {
+                const auto midi=MidiControlMapping::Decode(id);
+                if(!midi.valid)return;
+                const uint8_t channel=static_cast<uint8_t>(midi.channel);
+                if(midi.number==129)
+                    synth_->PitchBend(channel,MidiControlMapping::PitchBend(val));
+                else if(midi.number==128)
+                    synth_->ChannelPressure(channel,MidiControlMapping::Byte(val));
+                else synth_->ControlChange(channel,static_cast<uint8_t>(midi.number),
+                                           MidiControlMapping::Byte(val));
             }
         };
-        int32 pos=0;
+
+        const bool hasOutput=(data.numOutputs>0 && data.outputs &&
+            data.symbolicSampleSize==kSample32 &&
+            data.outputs[0].numChannels>0 &&
+            data.outputs[0].channelBuffers32 &&
+            data.outputs[0].channelBuffers32[0]);
+        auto* left=hasOutput?data.outputs[0].channelBuffers32[0]:nullptr;
+        auto* right=hasOutput&&data.outputs[0].numChannels>=2
+            ?data.outputs[0].channelBuffers32[1]:nullptr;
+        if(hasOutput) {
+            std::fill_n(left,data.numSamples,0.f);
+            if(right)std::fill_n(right,data.numSamples,0.f);
+            data.outputs[0].silenceFlags=right?3u:1u;
+        }
+        const bool canRender=hasOutput&&bool(synth_);
+        int32 position=0;
+        const auto render=[&](int32 end) {
+            end=std::clamp(end,position,data.numSamples);
+            if(canRender&&end>position) {
+                synth_->RenderBlock(scratch_.data()+2*size_t(position),
+                                    static_cast<uint32_t>(end-position));
+                for(int32 i=position;i<end;++i) {
+                    const float gain=volumeGain_.next();
+                    const float l=(scratch_[size_t(i)*2]/32768.f)*gain;
+                    const float r=(scratch_[size_t(i)*2+1]/32768.f)*gain;
+                    if(right){left[i]=l;right[i]=r;}
+                    else left[i]=(l+r)*0.5f;
+                }
+            }
+            position=end;
+        };
         IEventList* events=data.inputEvents;
-        const int32 n=events?std::clamp(events->getEventCount(),0,8192):0;
-        for(int32 i=0;i<n;++i) {
-            Event e{};
-            if(events->getEvent(i,e)!=kResultOk||e.sampleOffset<pos)continue;
-            const int32 at=std::clamp(e.sampleOffset,pos,data.numSamples);
-            render(pos,at);
-            pos=at;
-            if(e.type==Event::kNoteOnEvent&&e.noteOn.channel>=0&&e.noteOn.channel<16&&
-               e.noteOn.pitch>=0&&e.noteOn.pitch<=127&&std::isfinite(e.noteOn.velocity)) {
-                const uint8_t vel=static_cast<uint8_t>(std::clamp(
-                    int(std::lround(e.noteOn.velocity*127.f)),0,127));
-                if(AllowEmuNoteOn(sf2Configured_||gmLoaded_,
-                    sf2Loaded_||gmLoaded_,
-                    synth_->Core().ChipVariant()==Emu8000Core::Chip::Box86))
-                    synth_->NoteOn(static_cast<uint8_t>(e.noteOn.channel),
-                                   static_cast<uint8_t>(e.noteOn.pitch),vel);
-            }else if(e.type==Event::kNoteOffEvent&&e.noteOff.channel>=0&&
-                     e.noteOff.channel<16&&e.noteOff.pitch>=0&&e.noteOff.pitch<=127) {
-                synth_->NoteOff(static_cast<uint8_t>(e.noteOff.channel),
-                                static_cast<uint8_t>(e.noteOff.pitch));
+        const int32 eventCount=events?std::max<int32>(0,events->getEventCount()):0;
+        int32 nextEvent=0;
+        Event currentEvent{};
+        bool eventReady=false;
+        const auto advanceEvent=[&]() {
+            eventReady=false;
+            while(nextEvent<eventCount) {
+                if(events->getEvent(nextEvent++,currentEvent)==kResultOk) {
+                    eventReady=true;
+                    break;
+                }
+            }
+        };
+        advanceEvent();
+        while(activeQueues>0||eventReady) {
+            int32 which=-1,at=data.numSamples;
+            for(int32 i=0;i<activeQueues;++i) {
+                const auto time=std::max(position,paramCursors_[i].offset);
+                if(which<0||time<at) {which=i;at=time;}
+            }
+            const int32 midiAt=eventReady
+                ?std::clamp(currentEvent.sampleOffset,position,data.numSamples)
+                :data.numSamples;
+            // Parameter changes at a given sample precede NoteOn at that sample.
+            const bool useParameter=which>=0&&(!eventReady||at<=midiAt);
+            render(useParameter?at:midiAt);
+            if(useParameter) {
+                auto& c=paramCursors_[which];
+                apply(c.id,c.value);
+                ++c.point;
+                if(!advance(c)) {
+                    c=paramCursors_[--activeQueues];
+                }
+            } else {
+                const auto& e=currentEvent;
+                if(synth_&&e.type==Event::kNoteOnEvent&&
+                    e.noteOn.channel>=0&&e.noteOn.channel<16&&
+                    e.noteOn.pitch>=0&&e.noteOn.pitch<=127&&
+                    std::isfinite(e.noteOn.velocity)) {
+                    const uint8_t vel=static_cast<uint8_t>(std::clamp(
+                        int(std::lround(e.noteOn.velocity*127.f)),0,127));
+                    if(AllowEmuNoteOn(sf2Configured_||gmLoaded_,
+                        sf2Loaded_||gmLoaded_,
+                        synth_->Core().ChipVariant()==Emu8000Core::Chip::Box86))
+                        synth_->NoteOn(static_cast<uint8_t>(e.noteOn.channel),
+                            static_cast<uint8_t>(e.noteOn.pitch),vel);
+                } else if(synth_&&e.type==Event::kNoteOffEvent&&
+                    e.noteOff.channel>=0&&e.noteOff.channel<16&&
+                    e.noteOff.pitch>=0&&e.noteOff.pitch<=127) {
+                    synth_->NoteOff(static_cast<uint8_t>(e.noteOff.channel),
+                        static_cast<uint8_t>(e.noteOff.pitch));
+                }
+                advanceEvent();
             }
         }
-        render(pos,data.numSamples);
-        for(int32 i=0;i<data.numSamples;++i)
-            if(l[i]!=0.f||(r&&r[i]!=0.f)){data.outputs[0].silenceFlags=0;break;}
+        render(data.numSamples);
+        if(hasOutput)for(int32 i=0;i<data.numSamples;++i)
+            if(left[i]!=0.f||(right&&right[i]!=0.f)) {
+                data.outputs[0].silenceFlags=0;
+                break;
+            }
         return kResultOk;
     }
 private:
+    struct ParameterCursor {
+        IParamValueQueue* queue=nullptr;
+        ParamID id=0;
+        int32 point=0,count=0,offset=0;
+        ParamValue value=0.;
+    };
+    std::array<ParameterCursor,1024> paramCursors_{};
     std::unique_ptr<Synth> synth_;
     std::vector<int16_t> scratch_;
     MasterOutput::Gain volumeGain_{};
