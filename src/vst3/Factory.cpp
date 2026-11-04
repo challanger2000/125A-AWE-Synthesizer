@@ -596,6 +596,36 @@ public:
                 if(advance(cursor))paramCursors_[activeQueues++]=cursor;
             }
         }
+        // Continuous VST3 parameters are interpolated between points.
+        // Master runs per output frame; SF2 overlay curves are sampled at
+        // each NoteOn (the hardware overlay is applied to new voices).
+        MasterOutput::Curve masterCurve;
+        bool masterCurveActive=false;
+        std::array<MasterOutput::Curve,kGuiCount> overlayCurves{};
+        std::array<bool,kGuiCount> overlayEnabled{};
+        const auto readPoint=+[](void* context,int32_t index,
+                                 int32_t& offset,double& value)->bool {
+            auto* queue=static_cast<IParamValueQueue*>(context);
+            ParamValue normalized=0.;
+            if(queue->getPoint(index,offset,normalized)!=kResultOk)return false;
+            value=normalized;
+            return true;
+        };
+        for(int32 i=0;i<activeQueues;++i) {
+            auto& c=paramCursors_[i];
+            if(c.id==kVolumeID) {
+                masterCurve.reset(c.queue,readPoint,c.count,
+                    double(rtMaster_.load(std::memory_order_relaxed))/
+                    MasterOutput::kScale);
+                masterCurveActive=true;
+            } else if(c.id>=kGuiFirstID&&c.id<kGuiFirstID+kGuiCount) {
+                const int idx=int(c.id-kGuiFirstID);
+                overlayCurves[idx].reset(c.queue,readPoint,c.count,
+                    double(rtControls_[idx].load(std::memory_order_relaxed))/
+                    AssetState::kControlScale);
+                overlayEnabled[idx]=true;
+            }
+        }
         auto apply=[&](ParamID id,ParamValue val) {
             if(id==kProgramID) {
                 const auto program=static_cast<uint32_t>(std::clamp(
@@ -662,6 +692,11 @@ public:
                 synth_->RenderBlock(scratch_.data()+2*size_t(position),
                                     static_cast<uint32_t>(end-position));
                 for(int32 i=position;i<end;++i) {
+                    if(masterCurveActive) {
+                        const auto target=static_cast<uint32_t>(std::lround(
+                            masterCurve.valueAt(i)*MasterOutput::kScale));
+                        volumeGain_.setTarget(target);
+                    }
                     const float gain=volumeGain_.next();
                     const float l=(scratch_[size_t(i)*2]/32768.f)*gain;
                     const float r=(scratch_[size_t(i)*2+1]/32768.f)*gain;
@@ -711,6 +746,13 @@ public:
                     e.noteOn.channel>=0&&e.noteOn.channel<16&&
                     e.noteOn.pitch>=0&&e.noteOn.pitch<=127&&
                     std::isfinite(e.noteOn.velocity)) {
+                    for(int k=0;k<kGuiCount;++k)if(overlayEnabled[k]) {
+                        const auto value=overlayCurves[k].valueAt(pos);
+                        rtControls_[k].store(static_cast<uint32_t>(std::lround(
+                            value*AssetState::kControlScale)),
+                            std::memory_order_relaxed);
+                        synth_->SetGuiControl(k,static_cast<float>(value));
+                    }
                     const uint8_t vel=static_cast<uint8_t>(std::clamp(
                         int(std::lround(e.noteOn.velocity*127.f)),0,127));
                     if(AllowEmuNoteOn(entry&&(entry->sf2Configured||entry->gmLoaded),
