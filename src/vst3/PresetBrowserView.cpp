@@ -75,7 +75,10 @@ public:
 class HardwareKnob final : public CControl {
 public:
     HardwareKnob(const CRect& r,IControlListener* listener,int tag)
-        :CControl(r,listener,tag,nullptr) {setMin(0.f);setMax(1.f);}
+        :CControl(r,listener,tag,nullptr) {
+        setMin(0.f);setMax(1.f);
+        setDefaultValue(0.f); // P118: neutral for all 12 SF2 overlays
+    }
     void draw(CDrawContext* ctx) override {
         const CRect outer=getViewSize();
         CRect inner=outer;inner.inset(4,4);
@@ -247,6 +250,7 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
 
     MakeLabel({29,602,599,621},"MASTER / EFFECT SENDS",true);
     masterVolume_=new HardwareKnob({115,626,177,688},this,kMasterVolume);
+    masterVolume_->setDefaultValue(1.f); // P118: host unity on Ctrl-click
     masterVolume_->setValue(1.f);
     addView(masterVolume_);
     auto* masterTitle=MakeLabel({94,694,197,711},"VOLUME",true);
@@ -348,6 +352,7 @@ void PresetBrowserView::Select(uint16_t bank,uint8_t program) {
         0,sf_,fm_,bank_,program_).c_str());
     if(changedBank)RebuildActiveMenus();
     else SyncActiveMenuSelection();
+    SyncBrowserSelection(); // PREV/NEXT and host selection must follow browser highlight
 }
 void PresetBrowserView::RebuildActiveMenus() {
     // These menus are neither search-filtered nor limited to 0..127 GM.
@@ -407,6 +412,10 @@ void PresetBrowserView::RebuildRows() {
             "Keine Treffer. Suche oder Bankfilter aendern.");
         empty_->setVisible(expanded_);
     } else empty_->setVisible(false);
+    SyncBrowserSelection();
+}
+void PresetBrowserView::SyncBrowserSelection() {
+    if(!table_)return;
     int selected=-1;
     for(size_t i=0;i<rows_.size();++i)
         if(rows_[i].program==program_&&rows_[i].bank==bank_) {
