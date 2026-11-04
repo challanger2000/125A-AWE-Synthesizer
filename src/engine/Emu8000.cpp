@@ -1550,6 +1550,7 @@ void Emu8000Core::RenderBlock(int16_t* out, uint32_t numFrames)
                 RenderNative(&l, &r, 1);
                 int32_t il = 0, ir = 0;
                 m_box.RenderFrame(il, ir);
+                if (m_rawOutputTap) m_rawOutputTap->RecordFrame(il, ir);
                 out[2u * i] = static_cast<int16_t>(std::clamp(il, -32768, 32767));
                 out[2u * i + 1] = static_cast<int16_t>(std::clamp(ir, -32768, 32767));
             }
