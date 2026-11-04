@@ -8,6 +8,7 @@ on:
       - 'src/vst3/**'
       - 'src/engine/**'
       - 'tests/asset_state.cpp'
+      - 'tests/p14_vstgui_contract.py'
       - 'tests/p116_master_volume.cpp'
   workflow_dispatch:
 permissions:
