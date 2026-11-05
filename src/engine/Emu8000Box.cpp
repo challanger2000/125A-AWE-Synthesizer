@@ -224,8 +224,23 @@ void Emu8000Box::PortWrite(uint16_t port, uint16_t value, bool isByte)
     if (I.overflowed) return;
     if (I.pendingCount == I.pending.size())
     {
-        I.overflowed = true;
-        return;
+        // P121: the old implementation latched overflowed=true forever,
+        // silencing ALL channels until the entire chip was reinitialized.
+        // A dense but valid set of host register writes may fill this
+        // fixed-capacity buffer before the next 980-frame 86Box tick.
+        // Commit these writes in order at their original sample offsets,
+        // exactly as PortRead/FlushBlock already do, then reuse the buffer.
+        // No allocations, no dropped register writes and no permanent mute.
+        for (size_t index = 0; index < I.pendingCount; ++index)
+        {
+            const Impl::Write& w = I.pending[index];
+            I.emu.target_pos = w.offset;
+            if (w.isByte)
+                emu8k_outb(w.port, static_cast<uint8_t>(w.value), &I.emu);
+            else
+                emu8k_outw(w.port, w.value, &I.emu);
+        }
+        I.pendingCount = 0;
     }
     I.pending[I.pendingCount++] = { I.frameInBlock, port, value, isByte };
 }
