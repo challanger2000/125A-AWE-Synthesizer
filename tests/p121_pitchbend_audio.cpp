@@ -18,7 +18,8 @@ static bool check(bool yes,const char* text) {
     return yes;
 }
 struct Rig {
-    Synth synth{44100};
+    explicit Rig(uint32_t hostRate=44100):synth(hostRate){}
+    Synth synth;
     bool Init(const fs::path& path,int notes=1) {
         auto& chip=synth.Core();
         chip.SetChipRamKb(512);
@@ -143,6 +144,30 @@ int main(){
             split.synth.RenderBlock(b.data()+2*i,1);
         ok &= check(a==b,
             "Win95 pan glide is PCM-identical for whole blocks and single-frame blocks");
+    }
+    {
+        // The 227-frame VXD timer uses the *chip* 44.1 kHz clock, not
+        // host output frames. Read the actual production PSST register
+        // after precisely 50ms at three host sample rates.
+        std::array<uint8_t,3> currentPan{};
+        std::array<uint8_t,3> startPan{};
+        constexpr std::array<uint32_t,3> rates{44100,48000,96000};
+        for(size_t i=0;i<rates.size();++i) {
+            Rig rig(rates[i]);
+            if(!rig.Init(rom))return 2;
+            rig.synth.ControlChange(0,10,0);
+            startPan[i]=static_cast<uint8_t>(
+                rig.synth.Core().ReadDriver(Emu8000::Reg::PSST,0)>>24);
+            const uint32_t frames=rates[i]/20; // exactly 50 milliseconds
+            std::vector<int16_t> pcm(size_t(frames)*2);
+            rig.synth.RenderBlock(pcm.data(),frames);
+            currentPan[i]=static_cast<uint8_t>(
+                rig.synth.Core().ReadDriver(Emu8000::Reg::PSST,0)>>24);
+        }
+        ok &= check(currentPan[0]!=startPan[0] &&
+                    currentPan[0]==currentPan[1] &&
+                    currentPan[1]==currentPan[2],
+            "real PSST pan progression is identical after 50ms at 44.1/48/96 kHz");
     }
     {
         // Nonzero bend + unchanged bend value + new RPN 0,0 range must
