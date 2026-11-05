@@ -1,4 +1,4 @@
-name: P121 - Pitchbend audio and queue regression
+name: P122 - Bank reselect and pitchbend Windows regressions
 on:
   push:
     branches: [fix/p121-pitchbend-automation, fix/p122-bank-dirty-audit]
@@ -26,6 +26,8 @@ on:
       - 'src/engine/CMakeLists.txt'
       - 'src/engine/SoundFont.cpp'
       - 'tests/p121_pitchbend_audio.cpp'
+      - 'tests/p122_browser_bank_command.cpp'
+      - 'tests/p122_vst3_bank_host.cpp'
       - 'src/engine/Emu8000Box.cpp'
       - 'src/engine/Synth.cpp'
       - 'src/engine/Synth.h'
@@ -86,18 +88,18 @@ jobs:
             python tools/p18_editorhost_smoke.py --editorhost "$editor" --plugin "$plugin" --output "build-p121/p121-gui/run-$attempt"
             if ($LASTEXITCODE -ne 0) { throw "P121 EditorHost iteration $attempt failed" }
           }
-      - name: Package P121 functional 13-knob VST3 and direct preset selectors
+      - name: Package P122 functional VST3 with verified bank reselect
         uses: actions/upload-artifact@v4
         with:
-          name: 125A-P121-Pitchbend-Windows-x64-VST3
+          name: 125A-P122-Windows-x64-VST3
           path: build-p121/VST3/Release/
           if-no-files-found: error
           retention-days: 7
-      - name: Package actual P120 GUI screenshot evidence
+      - name: Package P122 EditorHost GUI screenshot evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: 125A-P121-EditorHost-GUI-Smoke
+          name: 125A-P122-EditorHost-GUI-Smoke
           path: build-p121/p121-gui/
           if-no-files-found: warn
           retention-days: 7
