@@ -31,7 +31,8 @@ public:
                       std::function<bool(const std::string&)> romLoadRequest,
                       std::function<bool(const std::string&)> sf2LoadRequest,
                       std::function<std::string()> sf2CurrentPath,
-                      std::function<uint64_t()> sf2CatalogRevision);
+                      std::function<uint64_t()> sf2CatalogRevision,
+                      std::function<bool(uint16_t)> browserBankReselect);
     void onIdle() override;
     void valueChanged(VSTGUI::CControl*) override;
     int32_t dbGetNumRows(VSTGUI::CDataBrowser*) override;
@@ -60,6 +61,7 @@ private:
     std::function<bool(const std::string&)> sf2LoadRequest_;
     std::function<std::string()> sf2CurrentPath_;
     std::function<uint64_t()> sf2CatalogRevision_;
+    std::function<bool(uint16_t)> browserBankReselect_;
     uint64_t lastCatalogRevision_=0;
     std::string lastStatus_,lastPath_,lastHardwareInfo_;
     uint16_t bank_=0;

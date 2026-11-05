@@ -197,14 +197,16 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     std::function<bool(const std::string&)> romLoadRequest,
     std::function<bool(const std::string&)> sf2LoadRequest,
     std::function<std::string()> sf2CurrentPath,
-    std::function<uint64_t()> sf2CatalogRevision)
+    std::function<uint64_t()> sf2CatalogRevision,
+    std::function<bool(uint16_t)> browserBankReselect)
     : CViewContainer(rect),controller_(controller),sf_(sf),fm_(legacyFm),
       sf2StatusProvider_(std::move(sf2StatusProvider)),
       hardwareInfoProvider_(std::move(hardwareInfoProvider)),
       romLoadRequest_(std::move(romLoadRequest)),
       sf2LoadRequest_(std::move(sf2LoadRequest)),
       sf2CurrentPath_(std::move(sf2CurrentPath)),
-      sf2CatalogRevision_(std::move(sf2CatalogRevision)) {
+      sf2CatalogRevision_(std::move(sf2CatalogRevision)),
+      browserBankReselect_(std::move(browserBankReselect)) {
     setBackgroundColor(kBack);
     addView(new HardwareFaceplate({0,0,1200,780}));
     // Functional first pass: gold letterform is native VSTGUI text.
@@ -352,9 +354,13 @@ void PresetBrowserView::ChangeParameter(Steinberg::Vst::ParamID tag,double norm)
     controller_->endEdit(tag);
 }
 void PresetBrowserView::Select(uint16_t bank,uint8_t program) {
-    // Reassert the selected browser bank even when its displayed value is
-    // unchanged: MIDI CC0/32 can have changed the effective sounding bank.
+    // Host automation may coalesce an edit when the normalized bank value is
+    // unchanged, although an intervening MIDI CC0 switched the *audio* bank.
+    // Reassert through the controller-to-processor message path in that case.
+    const bool sameHostBank=controller_ &&
+        std::lround(controller_->getParamNormalized(kBankParam)*16383.)==bank;
     ChangeParameter(kBankParam,double(bank)/16383.);
+    if(sameHostBank&&browserBankReselect_)browserBankReselect_(bank);
     ChangeParameter(kProgram,double(program)/127.);
     // Reflect the clicked instrument immediately. The following idle
     // compares bank/program back with the controller: an unaccepted host

@@ -146,3 +146,11 @@ option(125A_BUILD_OPL3_PROBES "Build isolated register-level OPL3 core tests" ON
 if(125A_BUILD_OPL3_PROBES)
   add_subdirectory(src/opl3)
 endif()
+
+# P122: repeated GUI bank selections must survive host parameter coalescing,
+# without an allocation or lock in the real-time consumer.
+add_executable(awe32_p122_browser_bank_command_test tests/p122_browser_bank_command.cpp)
+target_include_directories(awe32_p122_browser_bank_command_test PRIVATE src/vst3)
+target_compile_features(awe32_p122_browser_bank_command_test PRIVATE cxx_std_23)
+add_test(NAME 125A_p122_browser_bank_command
+  COMMAND awe32_p122_browser_bank_command_test)

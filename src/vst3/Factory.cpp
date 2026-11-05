@@ -17,6 +17,7 @@
 #include "MidiProgramRouting.h"
 #include "MidiQueueOrdering.h"
 #include "MidiLiveState.h"
+#include "BrowserBankCommand.h"
 #include "RealtimeEngineExchange.h"
 #include "public.sdk/source/vst/vstparameters.h"
 #include "public.sdk/source/main/moduleinit.h"
@@ -199,6 +200,19 @@ public:
     // Load on the host's connection thread, then swap the chip under a short
     // render try-lock. Failed loads retain the previous working SoundFont.
     tresult PLUGIN_API notify(IMessage* msg) override {
+        if(msg && FIDStringsEqual(msg->getMessageID(),"125A_BROWSER_BANK_RESELECT")) {
+            // The host may suppress a parameter edit when its normalized bank
+            // value did not change, even though MIDI CC0 has superseded it.
+            // A controller message is delivered off the audio thread. Publish
+            // only a fixed-size atomic command, NEVER mutate Synth here.
+            int64 bank=0;
+            if(!msg->getAttributes() ||
+               msg->getAttributes()->getInt("Bank",bank)!=kResultOk ||
+               bank<0 || bank>AssetState::kMaxBank)
+                return kInvalidArgument;
+            return browserBankCommand_.Publish(static_cast<unsigned>(bank))
+                ?kResultOk:kInvalidArgument;
+        }
         if(msg && FIDStringsEqual(msg->getMessageID(),"125A_HW_INFO_REQUEST")) {
             std::string snapshot;
             {
@@ -528,6 +542,8 @@ public:
             // audio callback; that callback restores MIDI state itself.
             rtProgram_.store(candidate.program,std::memory_order_release);
             rtBank_.store(candidate.bank,std::memory_order_release);
+            // State recall takes precedence over any unconsumed GUI reselect.
+            browserBankCommand_.Publish(candidate.bank);
             rtMaster_.store(candidate.masterVolume,std::memory_order_release);
             rtChannelProgramMask_.store(
                 candidate.channelProgramMask,std::memory_order_release);
@@ -584,6 +600,15 @@ public:
         if(revision!=lastRtRevision_) {
             if(synth_)ApplyRtParameters(*synth_);
             lastRtRevision_=revision;
+        }
+        // Explicit UI bank reselection does not depend on a host emitting an
+        // unchanged automation value. Apply at the next audio block boundary,
+        // after engine recreation, before incoming MIDI events are processed.
+        uint16_t reselectedBank=0;
+        if(browserBankCommand_.Consume(lastBrowserBankCommand_,reselectedBank)) {
+            rtBank_.store(reselectedBank,std::memory_order_release);
+            liveMidi_.BrowserBankSelected();
+            if(synth_)synth_->SelectBrowserBank(reselectedBank);
         }
         // P118: VST3 parameter points carry their own sampleOffset.
         // Keep one cursor per parameter queue and merge them with MIDI events.
@@ -933,6 +958,8 @@ private:
     std::atomic<uint32_t> rtChannelProgramMask_{0};
     std::atomic<uint64_t> browserSelectionEpoch_{0};
     uint64_t lastBrowserSelectionEpoch_=0; // audio thread only
+    BrowserBankCommand browserBankCommand_{};
+    uint64_t lastBrowserBankCommand_=0; // audio thread only
     std::array<std::atomic<uint32_t>,kGuiCount> rtControls_{};
     std::atomic<uint64_t> gainRestoreEpoch_{0};
     std::atomic<uint32_t> gainRestoreValue_{MasterOutput::kDefault};
@@ -1165,6 +1192,18 @@ public:
         return sfCatalogRevision_;
     }
     std::string CurrentSf2Path() const {return sf2Path_;}
+    bool RequestBrowserBankReselect(uint16_t bank) {
+        if(bank>AssetState::kMaxBank)return false;
+        auto* msg=allocateMessage();
+        if(!msg)return false;
+        msg->setMessageID("125A_BROWSER_BANK_RESELECT");
+        const auto set=msg->getAttributes()
+            ?msg->getAttributes()->setInt("Bank",static_cast<int64>(bank))
+            :kInvalidArgument;
+        const auto sent=set==kResultOk?sendMessage(msg):kResultFalse;
+        msg->release();
+        return sent==kResultOk;
+    }
     bool RequestSf2Load(const std::string& path) {
         if(!AssetState::validPath(path)||path.empty()||!sf2PendingPath_.empty())
             return false;
@@ -1360,7 +1399,8 @@ public:
                 [this](const std::string& path) {return RequestRomLoad(path);},
                 [this](const std::string& path) {return RequestSf2Load(path);},
                 [this]() {return CurrentSf2Path();},
-                [this]() {return CatalogRevision();});
+                [this]() {return CatalogRevision();},
+                [this](uint16_t bank) {return RequestBrowserBankReselect(bank);});
         }
         return nullptr;
     }
