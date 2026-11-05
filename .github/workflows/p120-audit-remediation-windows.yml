@@ -56,7 +56,7 @@ jobs:
       - name: Test state migration, master-gain smoothing and existing regressions
         shell: pwsh
         run: |
-          ctest --test-dir build-p120 -C Release --output-on-failure
+          ctest --test-dir build-p120 -C Release --output-on-failure --timeout 90
           if ($LASTEXITCODE -ne 0) { throw "P120 CTest failures" }
       - name: Normalize and validate VST3 metadata JSON
         shell: pwsh
