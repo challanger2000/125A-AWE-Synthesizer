@@ -561,7 +561,8 @@ public:
                 return kResultFalse;
             // Publish control values before the new engine is visible to the
             // audio callback; that callback restores MIDI state itself.
-            RealtimeStateVersion::Writer controlWrite(rtStateVersion_.Control());
+            RealtimeStateVersion::Writer controlWrite(
+                rtStateVersion_, RealtimeStateVersion::Domain::Control);
             rtProgram_.store(candidate.program,std::memory_order_release);
             rtBank_.store(candidate.bank,std::memory_order_release);
             // State recall takes precedence over any unconsumed GUI reselect.
@@ -602,7 +603,8 @@ public:
     tresult PLUGIN_API process(ProcessData& data) override {
         if(data.numSamples<0 || uint32_t(data.numSamples)>capacity_)
             return kInvalidArgument;
-        RealtimeStateVersion::Writer audioWrite(rtStateVersion_.Audio());
+        // Realtime state transactions are guarded at the *actual writes*.
+        // A whole-block epoch made ordinary getState() fail during playback.
         // P119: no control mutex is acquired on the audio callback.
         // The guard prevents a live synth being destroyed during this block.
         auto engineRead=engines_.Read();
@@ -629,9 +631,13 @@ public:
         // after engine recreation, before incoming MIDI events are processed.
         uint16_t reselectedBank=0;
         if(browserBankCommand_.Consume(lastBrowserBankCommand_,reselectedBank)) {
-            rtBank_.store(reselectedBank,std::memory_order_release);
-            liveMidi_.BrowserBankSelected();
-            if(synth_)synth_->SelectBrowserBank(reselectedBank);
+            RealtimeStateVersion::Writer write(
+                rtStateVersion_, RealtimeStateVersion::Domain::Audio);
+            if(write) {
+                rtBank_.store(reselectedBank,std::memory_order_release);
+                liveMidi_.BrowserBankSelected();
+                if(synth_)synth_->SelectBrowserBank(reselectedBank);
+            } // A concurrent project recall takes precedence.
         }
         // P118: VST3 parameter points carry their own sampleOffset.
         // Keep one cursor per parameter queue and merge them with MIDI events.
@@ -736,6 +742,13 @@ public:
         }
         activeQueues=retainedQueues;
         auto apply=[&](ParamID id,ParamValue val) {
+            const bool persisted = id==kProgramID || id==kBankID ||
+                id==kVolumeID || (id>=kGuiFirstID&&id<kGuiFirstID+kGuiCount) ||
+                MidiProgramRouting::Channel(id)>=0;
+            RealtimeStateVersion::Writer write(
+                rtStateVersion_, RealtimeStateVersion::Domain::Audio,persisted);
+            // Recall has priority; never publish half a program transaction.
+            if(!write)return;
             if(id==kProgramID) {
                 const auto program=static_cast<uint32_t>(std::clamp(
                     int(std::lround(val*127.)),0,127));
@@ -915,9 +928,11 @@ public:
                     std::isfinite(e.noteOn.velocity)) {
                     for(int k=0;k<kGuiCount;++k)if(overlayEnabled[k]) {
                         const auto value=overlayCurves[k].valueAt(position);
-                        rtControls_[k].store(static_cast<uint32_t>(std::lround(
+                        RealtimeStateVersion::Writer write(
+                            rtStateVersion_,RealtimeStateVersion::Domain::Audio);
+                        if(write)rtControls_[k].store(static_cast<uint32_t>(std::lround(
                             value*AssetState::kControlScale)),
-                            std::memory_order_relaxed);
+                            std::memory_order_release);
                         synth_->SetGuiControl(k,static_cast<float>(value));
                     }
                     // Pitch at NoteOn must match the continuous curve at
