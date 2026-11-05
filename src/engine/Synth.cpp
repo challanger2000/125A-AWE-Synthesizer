@@ -611,7 +611,7 @@ void Synth::PanStepVxd(int voice)
     m_core.Write(Reg::PTRX, voice, (ptrx & 0xFFFFFF00u) | aux);
     if (a.vxdPanCur != a.vxdPanTarget)
         a.vxdPanTimer = static_cast<int32_t>(
-            VxdPanClock::NextHostFrames(m_hostRate,a.vxdPanRemainder));
+            AWE125::VxdPanClock::NextHostFrames(m_hostRate,a.vxdPanRemainder));
 }
 
 // SBAWE.VXD CC1 (0xC0FFC650): FMMOD pitch depth of every voice of the
