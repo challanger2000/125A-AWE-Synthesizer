@@ -100,6 +100,9 @@ public:
     tresult PLUGIN_API setProcessing(TBool /*processing*/) override {
         return kResultOk;
     }
+    // Arbitrary user SF2 envelopes and effect returns may ring for a long
+    // time after NoteOff: a zero tail falsely truncates audible output.
+    uint32 PLUGIN_API getTailSamples() override { return kInfiniteTail; }
     tresult PLUGIN_API canProcessSampleSize(int32 type) override {
         return type==kSample32?kResultTrue:kResultFalse;
     }
@@ -641,12 +644,7 @@ public:
             volumeGain_.restore(gainRestoreValue_.load(std::memory_order_acquire));
             lastGainRestoreEpoch_=restore;
         }
-        const uint64_t bankEpoch=
-            browserSelectionEpoch_.load(std::memory_order_acquire);
-        if(bankEpoch!=lastBrowserSelectionEpoch_) {
-            liveMidi_.BrowserBankSelected();
-            lastBrowserSelectionEpoch_=bankEpoch;
-        }
+        SyncBrowserRecallInvalidation();
         const uint64_t revision=entry?entry->revision:0;
         if(revision!=lastRtRevision_) {
             if(synth_)ApplyRtParameters(*synth_);
@@ -789,6 +787,11 @@ public:
                     synth_->ProgramChange(static_cast<uint8_t>(ch),
                         static_cast<uint8_t>(program));
             } else if(id==kBankID) {
+                // A recall that committed AFTER this process() began may
+                // leave a deferred bank command. A later parameter edit
+                // supersedes it, including a repeated equal-value edit.
+                SyncBrowserRecallInvalidation();
+                SupersedeQueuedBrowserBank();
                 const auto bank=static_cast<uint32_t>(std::clamp(
                     int(std::lround(val*AssetState::kMaxBank)),0,
                     int(AssetState::kMaxBank)));
@@ -825,8 +828,25 @@ public:
                 if(!midi.valid)return;
                 // Remember parameter-only MIDI even without a ROM/engine.
                 // One-shot CC 120/123 are forwarded but never replayed.
-                liveMidi_.Accept(static_cast<unsigned>(midi.channel),
-                                 midi.number,val);
+                // Bank CC events accepted after a mid-block recall must
+                // survive its deferred command and pending invalidation.
+                if(midi.number==0||midi.number==32) {
+                    SyncBrowserRecallInvalidation();
+                    liveMidi_.Accept(static_cast<unsigned>(midi.channel),
+                                     midi.number,val);
+                    const auto newer=browserSelectionEpoch_.load(
+                        std::memory_order_acquire);
+                    if(newer!=lastBrowserSelectionEpoch_) {
+                        liveMidi_.BrowserBankSelected();
+                        lastBrowserSelectionEpoch_=newer;
+                        liveMidi_.Accept(static_cast<unsigned>(midi.channel),
+                                         midi.number,val);
+                    }
+                    SupersedeQueuedBrowserBank();
+                } else {
+                    liveMidi_.Accept(static_cast<unsigned>(midi.channel),
+                                     midi.number,val);
+                }
                 if(!synth_)return;
                 const uint8_t channel=static_cast<uint8_t>(midi.channel);
                 if(midi.number==129)
@@ -1054,6 +1074,18 @@ private:
         e->gmLoaded=gm;e->sf2Loaded=sf2;e->sf2Configured=configured;
         e->revision=++nextRevision_;
         return e;
+    }
+    void SyncBrowserRecallInvalidation() noexcept {
+        const auto epoch=browserSelectionEpoch_.load(std::memory_order_acquire);
+        if(epoch!=lastBrowserSelectionEpoch_) {
+            liveMidi_.BrowserBankSelected();
+            lastBrowserSelectionEpoch_=epoch;
+        }
+    }
+    void SupersedeQueuedBrowserBank() noexcept {
+        // Audio-owned acknowledgement: only commands accepted before this
+        // later bank input are superseded. Later GUI messages stay pending.
+        lastBrowserBankCommand_=browserBankCommand_.Snapshot();
     }
     void ApplyRtParameters(Synth& target) noexcept {
         for(int i=0;i<kGuiCount;++i)
