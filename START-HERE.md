@@ -1,50 +1,41 @@
 # START HERE — 125A AWE Synthesizer
 
-Stand: 2026-11-05. Dieses Dokument beschreibt den aktuellen **Entwicklungs-/Prüfstand**, keine Freigabe.
+**Stand: 2026-11-05. Entwicklungs-/Prüfstand, keine GUI- oder Releasefreigabe.**
 
-## Wo wird weiterentwickelt?
+## Verbindlicher aktueller Projektstand
 
 - Repository: `challanger2000/125A-AWE-Synthesizer`.
-- Einziger aktiver Korrektur-Branch: `fix/p122-bank-dirty-audit`.
-- **Aktueller Windows-getesteter P125-Korrekturkandidat:** `805a2ef1d49133aae022256161c275240ac80fed`. **Unabhängiges Codex-GO noch NOT RUN.**
-- Vorheriger P124-Code `2f0c4d225f41f51c1b37d3c04986845024c0f80f`: **unabhängiger Nachaudit FAIL / GUI-NO-GO**, trotz vorheriger grüner Windows-Tests.
-- Aktueller erfolgreicher Windows-Prüflauf: https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42069200394
-- Binaries (Actions artifact): `125A-P122-Windows-x64-VST3`.
-- GUI-Nachweise (Actions artifact): `125A-P122-EditorHost-GUI-Smoke`.
-- `main` ist **nicht** der aktuelle Entwicklungsstand. Nicht ohne vollständige Abnahme übernehmen.
+- **Einziger aktiver Korrektur-Branch:** `fix/p122-bank-dirty-audit`. `main` ist **nicht** der aktuelle Entwicklungs-/Release-Stand; nicht ungeprüft übernehmen.
+- **Aktuell Windows-getesteter P126-C++-Commit:** [`713dcc8cf69a4a644809a5d9b305a7900aca73c0`](https://github.com/challanger2000/125A-AWE-Synthesizer/commit/713dcc8cf69a4a644809a5d9b305a7900aca73c0).
+- [**Windows Actions #42086496250: SUCCESS**](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42086496250) — realer Windows-x64-VST3-Build, native/VST3-Regressionstests, Metadaten, EditorHost und Testpaketierung. **Das ist kein unabhängiges Codex-GO.**
+- Actions-Artefakte: `125A-P122-Windows-x64-VST3` (technischer Testbuild) und `125A-P122-EditorHost-GUI-Smoke`; kein freigegebenes Gumroad-/Releasepaket.
+- **Neuester unabhängiger Codex-Status:** **P125 `805a2ef1` GUI-NO-GO / RELEASE-NO-GO.** Dessen schwere Fails sind [hier dokumentiert](docs/P126-BANK-ORDER-CORRECTION.md). **Ein unabhängiger P126-Nachaudit ist NOT RUN.**
+- **READ-ONLY-Prüfauftrag:** [P126-Korrektur, Regressionen und vollständige Nachauditvorgaben](docs/P126-BANK-ORDER-CORRECTION.md).
 
-## Verifizierte Windows-Prüfungen am P125-Kandidaten (weiterhin kein GUI-GO)
+## Chronologie der unabhängigen Befunde — NICHT mit grünen CI-Runs verwechseln
 
-- Windows-Build und komplette native/VST3-Testphase **PASS** (Actions #42069200394), darunter die um eine **späte Bank-5-Parameterqueue bei bereits laufendem Callback und dazwischenliegendem Bank-0-Recall** erweiterte `125A_p122_vst3_bank_host`-Regression; der Zustand muss vor/nach dem Folgeblock Bank 5 bleiben. Außerdem testet sie den späteren absichtlichen Rückwechsel auf Bank 0 und die nichtnullige Tail-Meldung.
-- Steinberg VST3 Validator: 47/47 PASS.
-- Windows EditorHost: 3/3 echte GUI-Durchläufe, Exitcode jeweils 0.
-- Neu: ausdrückliche Bank-Neuauswahl über VST3-Controller/Prozessor-Nachricht. Die DAW kann einen unveränderten Bank-Parameterwert unterdrücken, die Nachricht aber nicht mit der gewöhnlichen Parameterqueue verwechseln.
-- Normale konstante Bank-Automation löst **keine** wiederholte Browserbank-Übernahme aus, damit jüngere MIDI-CC0-Wahlen bestehen bleiben.
-- Ablehnendes `IComponentHandler2::setDirty` führt nicht mehr zu unbegrenzten Wiederholungen. `restartComponent(kLatencyChanged)` wird bei Ablehnung höchstens dreimal pro Änderung versucht. Win32-Dispatcher-Shutdown mit noch ausstehendem Timer wird separat getestet.
-- P121-Pitchbend-Fix und Synth-/86Box-PCM-Regression sind im Stand enthalten. Audiodaten in CI stammen aus einer synthetischen Test-ROM, nicht aus einem Original-ROM.
-- **Neu in P125:** Verzögerte P124-Recall-Bankkommandos werden von später angenommenen Bankparametern bzw. CC0/CC32 überholt; der Browser-Epoch wird für spät eintreffende MIDI-Bankdaten erneut abgeglichen. `getTailSamples()` meldet konservativ `kInfiniteTail` statt fälschlich 0. Die echte Originalhardware-Tail- und Ziel-DAW-Prüfung ist **NOT RUN**.
-- Der unabhängige P123-Codex-Nachaudit **bestätigte alle vier P123-Korrekturen**, einschließlich 30.000 Processor-Roundtrips und 500/500 Saves mit tatsächlich klingender Einzelstimme. Zwei neue HOHE Fehler blieben: ein später angenommener Bank-5-Auftrag wurde von einem älteren Recall überschrieben, und `setProcessing(true/false)` lieferte `kNotImplemented`. **P124** korrigierte die zunächst bekannten Reproduktionen, aber der **unabhängige P124-Nachaudit fand erneut den Bankfehler bei bereits gestartetem Audio-Callback (FAIL)**. Processing-Handshake ist dagegen **PASS**. **P125** korrigiert die neue Reihenfolge und die fehlende Tail-Meldung; [P125-Befund, Änderungen und exakter unabhängiger Prüfauftrag](docs/P125-LATE-BANK-TAIL-CORRECTION.md). Original-ROM und Ziel-DAW bleiben NOT RUN.
+1. **P123**: Frühere korrigierte 30.000-Processor-State-Roundtrips, 500/500 Saves mit klingender Einzelstimme, Pan-Rate und Browser-Retry unabhängig PASS. Ein späterer Browser-Bankbefehl konnte einen älteren Recall nicht sicher überholen; `setProcessing` war `kNotImplemented` (beide HOCH).
+2. **P124 `2f0c4d2`**: Processing-Handshake unabhängig **PASS**. Wieder **FAIL HOCH** bei bereits begonnenem Audioblock, dann Recall Bank 0, danach Bank 5 per Host-/MIDI-Bankqueue; Folgeblock setzte Bank 5 auf 0. `getTailSamples()==0` trotz ~0,9 s hörbarer Release-Tail.
+3. **P125 `805a2ef1`**: Der zuvor scheiternde Audioblock/Recall/Bank5-Fall unabhängig **PASS**, die **umgekehrte zeitliche Richtung** jedoch **FAIL**. Weitere **HOHE Fails**: Browserauftrag geht verloren, MIDI-Kanaltrennung verletzt, neuerer Recall kann überschrieben werden. `kInfiniteTail` **PASS**, jedoch Chorus-Nachklang/Leerlauf weiter problematisch. Hohe CPU-Last; Wiederholung nur **498/500** erfolgreiche Saves. Daher **unabhängiges GUI-NO-GO / RELEASE-NO-GO** trotz grüner Windows-Tests.
+4. **P126 `713dcc8c`**: Neuer eigenständiger `BankOrder` mit **drei gestempelten Quellen** (Recall bei Start, Browser-Notify, gewöhnlicher Host-Bankparameter), ohne alte unbedingte Browser-Snapshot-Quittierung. MIDI CC0/CC32 bleiben kanalbezogen mit eigener Zeitordnung; spätere Bankparameter werden bei Control-Gate-Kollision nicht vergessen. **Beide** Recall-Zeitfolgen und CC0-vs.-Browser im realen Windows-VST3-Test ergänzt. **Windows-CI SUCCESS; unabhängiges P126-GO NOT RUN.** Keine Änderungen an Sample-DSP, Chorus, RAM-Limit, ROM-Pflicht oder Stateformat.
 
-## Noch offen — Release NO-GO
+## Noch offene Gates — GUI NO-GO / Release NO-GO
 
-1. Unabhängige **echte VST3-Audioautomation** mit Original-ROM und Original-SBK/SF2, insbesondere konstante vs. dichte Pitchbend-Queue bei Panbewegungen und 16 Stimmen.
-2. Bankwechsel über MIDI-CC0, anschließend **erneute Auswahl derselben Browserbank im DAW-Host**: UI-Anzeige, erklingende Bank und Speicherzustand müssen übereinstimmen.
-3. Die Win32-Timer-Shutdown-Regression ist bestanden; ein **Host-Integrationstest mit echtem ausstehendem ACK und restartComponent** in der Ziel-DAW bleibt für Release-Abnahme offen.
-4. **GUI-Start — AUSDRÜCKLICH NO-GO:** Alle vier P123-Korrekturen wurden unabhängig bestätigt. Der unabhängige **P124-Nachaudit des exakten `2f0c4d2` ist durchgeführt und im Bank-Recall FAIL**, obwohl Processing-Lifecycle PASS. P125 (`805a2ef1`) hat den kompletten Windows-Workflow bestanden; **sein erneuter unabhängiger Codex-Nachaudit ist NOT RUN**. Teste unbedingt die vom P124-Audit ausgeführte gesperrte Audioqueue, Recall 0, Bank 5 über kBankID **und CC0/CC32**, Zustand/Folgeblock und tatsächliche klingende Bank. Originalhardware-Klanggleichheit ist für den GUI-Start nicht allein erforderlich.
-5. **Release NO-GO:** Im P124-Audit blieben unter hoher Last Deadline-Überschreitungen und eine Save-Abweisung. Die P125-Windows-Prüfung allein hebt diese Befunde nicht auf. Zusätzlich stehen unabhängiger P125-Nachaudit sowie echte ROM-/SF2-Audio- und Ziel-DAW-Abnahmetests aus; kein Release-/Gumroad-Paket vor GO.
+- **GUI-NO-GO:** Unabhängiger Codex-Nachaudit des **exakten P126-Codecommits** muss sämtliche ursprünglichen P125-FAIL-Szenarien wiederholen: *beide* zeitlichen Richtungen, normalen `PresetBrowserView::Select`-Parameterweg, explizite Re-Select-Nachricht, MIDI CC0/CC32 auf mehreren Kanälen, neuere vs. ältere Recalls, tatsächlich erklingende Bank, persistierte V10-Snapshots vor/nach Folgeblock, Browserfehler→Wiederverbindung, Host-Konformität und Negativmutationen. Nur eine erfolgreich klingende Demo genügt nicht. Fehlende Originalhardware-Klangparität allein ist nicht das GUI-Gate.
+- **Release-NO-GO:** Zusätzlich CPU-/Deadlineprofil bei 16/30 Stimmen, dichtem Pitch und während Recall; Save-Verfügbarkeit, insbesondere P125 **498/500**; tatsächlicher Chorus-/Reverb-Nachlauf und `kInfiniteTail`-Host-/Idle-Kosten; echte Windows-Ziel-DAW/ASIO-Save/Close/Reopen, Original-ROM/SYNTHGM.SBK und autorisierte SF2-Audio-/Automations-Abnahme. Keine Erklärungen ohne Messung.
+- Strict VST3 `setProcessing(true/false)` bislang unabhängig PASS; nicht ohne Nachweis als weiterhin defekt aufführen.
+- **Keine Release- oder Gumroad-Pakete** bis eigener Release-Freigabe.
 
-## Nach der klassischen Version — ausdrücklich zurückgestellte Erweiterungen
+## Nach Classic — ausdrücklich zurückgestellte Ideen
 
-- **Nicht jetzt beginnen:** [Extended AWE Sampler — vorgemerkter Entwicklungsabschnitt](docs/FUTURE-EXTENDED-AWE-SAMPLER.md).
-- Gewünscht: **direkter WAV-Import**, später Multisampling/Velocity-Zonen, Loop-Editor und eigene Presets; **Sample-Speicher bis 1 GiB** als technisches Forschungsziel (24-Bit-EMU8000-Adressraum bisher kein direkter 1-GiB-RAM).
-- Die Reihenfolge ist verbindlich: erst P124/independenter Audit, dann die originale EMU8000-Effektimplementierung, optional fertige GUI und Classic-Abnahme, **erst anschließend** Extended-Entwicklung. **Classic bleibt mit ROM-Pflicht/28 MiB unverändert.**
-- Keine aktuellen C++-Implementierungen oder eigenmächtige Scope-Erweiterung aufgrund dieser Notiz.
+- [Extended AWE Sampler / Sound-Blaster-Hybridsynth](docs/FUTURE-EXTENDED-AWE-SAMPLER.md): ROM + WAV-Layer, eigener Instrumenteneditor, später optional OPL3 und Creative-CQM-Vergleichsprojekte ADLplug-Next/OPL3GM. 1-GiB-Sampleverwaltung nur **Forschungsziel**, keine aktuell verfügbare EMU8000-Hardwareadressierung.
+- **Nicht jetzt beginnen.** Zuerst unabhängiger P126-Audit, schwere Classic-Befunde, historische EMU8000-Effektvalidierung, GUI- und separate Release-Abnahme. Classic-Originalmodus weiterhin ROM-Pflicht und 28 MiB. Keine eigenmächtige Erweiterungsentwicklung.
 
-## Repository-Pflege
+## Entwicklung und Repository-Pflege
 
-- Keine weiteren P-Branches für bloße Einzelkorrekturen anlegen. Fehler zunächst auf dem aktuellen Korrektur-Branch beheben.
-- Frühere P120/P121-Stände und weitere übernommene Historie wurden als `archive/pre-p122-cleanup/*` Git-Tags erhalten.
-- Historische offene Pull Requests nicht blind schließen oder Quell-/Zielbranches löschen.
-- Keine originalen Creative-ROMs, SoundFonts oder anderen proprietären Daten in öffentliche Tests oder Pakete aufnehmen.
+- Keine neuen P-Branches für kleine Korrekturen. Nacharbeiten ausschließlich im vorhandenen Branch. Frühere historische Stände als Tags `archive/pre-p122-cleanup/*` vorhanden.
+- Öffentliche CI nutzt ausschließlich synthetische Test-Assets; Creative-ROMs/SBK und proprietäre SF2s niemals hochladen oder mitliefern.
+- Historische PRs nicht ungeprüft schließen, Quellbranches nicht voreilig löschen.
+- [Engineering-Guardrails](https://github.com/challanger2000/125A-Engineering/blob/main/ENGINEERING-GUARDRAILS.md) gelten für unabhängige Regressionen, negative Orakel und das Trennen von CI-Erfolg und tatsächlicher Freigabe.
 
-Dieses Dokument hat Vorrang gegenüber der veralteten P13-Einleitung, die zuvor in der README stand.
+Dieses Dokument hat Vorrang gegenüber älteren P13-/P124-/P125-Einleitungen.
