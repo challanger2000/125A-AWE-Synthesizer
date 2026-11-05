@@ -91,6 +91,28 @@ int main() {
     ordered.CommitRecall(precedingBrowser,0);
     ok&=check(ordered.Latest().bank==9,
               "later browser bank 9 wins despite slow recall commit");
+    // P127 F01: completed newer recall must not be replaced by an older
+    // recall whose stream read was delayed before the control epoch snapshot.
+    AWE125::BankOrder overlappingRecalls;
+    const uint64_t oldProject=overlappingRecalls.BeginRecall();
+    const uint64_t newProject=overlappingRecalls.BeginRecall();
+    ok&=check(overlappingRecalls.CommitRecall(newProject,5) &&
+              overlappingRecalls.LatestRecall().bank==5 &&
+              !overlappingRecalls.CommitRecall(oldProject,0) &&
+              overlappingRecalls.LatestRecall().sequence==newProject &&
+              overlappingRecalls.Latest().bank==5,
+              "P127 old delayed recall cannot publish over completed newer recall");
+    // P127 F02: rereading the authoritative choice after acquiring the
+    // state-writer gate is essential. Reading before the gate is stale.
+    AWE125::BankOrder pendingBeforeGate;
+    pendingBeforeGate.PublishBrowser(5);
+    const auto staleChoice=pendingBeforeGate.Latest();
+    const uint64_t laterProject=pendingBeforeGate.BeginRecall();
+    ok&=check(pendingBeforeGate.CommitRecall(laterProject,0) &&
+              staleChoice.bank==5 &&
+              pendingBeforeGate.Latest().bank==0 &&
+              pendingBeforeGate.Latest().sequence>staleChoice.sequence,
+              "P127 pending bank must be revalidated after a newer recall");
     // MIDI CC0/CC32 is channel-local: neither is allowed to acknowledge or
     // overwrite the latest global browser selection.
     AWE125::MidiLiveState midi;
