@@ -19,6 +19,7 @@
 #include "MidiLiveState.h"
 #include "BrowserBankCommand.h"
 #include "HostNotificationRetry.h"
+#include "RealtimeStateVersion.h"
 #include "RealtimeEngineExchange.h"
 #include "public.sdk/source/vst/vstparameters.h"
 #include "public.sdk/source/main/moduleinit.h"
@@ -47,6 +48,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace AWE125 {
@@ -438,23 +440,40 @@ public:
         // P118: never keep the realtime engine mutex across host-supplied
         // IBStream::write() or a filesystem configuration lookup.
         AssetState::Data snapshot;
-        {
-            std::lock_guard<std::mutex> lock(engineMutex_);
-            snapshot=state_;
+        bool consistent=false;
+        // Each audio block and each control-thread project recall brackets
+        // its multi-parameter updates with independent generation counters.
+        // getState must never combine program/mask/channel values from two
+        // different program changes. No realtime mutex or heap allocation.
+        for(int attempt=0;attempt<4096;++attempt) {
+            const auto before=rtStateVersion_.Capture();
+            if(!rtStateVersion_.Readable(before)) {
+                if((attempt&31)==31)std::this_thread::yield();
+                continue;
+            }
+            {
+                std::lock_guard<std::mutex> lock(engineMutex_);
+                snapshot=state_;
+            }
+            snapshot.program=rtProgram_.load(std::memory_order_acquire);
+            snapshot.bank=rtBank_.load(std::memory_order_acquire);
+            snapshot.masterVolume=rtMaster_.load(std::memory_order_acquire);
+            snapshot.channelProgramMask=
+                rtChannelProgramMask_.load(std::memory_order_acquire);
+            for(int ch=0;ch<16;++ch)
+                snapshot.channelPrograms[ch]=rtChannelPrograms_[ch].load(
+                    std::memory_order_acquire);
+            for(int i=0;i<kGuiCount;++i)
+                snapshot.controls[i]=rtControls_[i].load(std::memory_order_acquire);
+            if(rtStateVersion_.Unchanged(before)) {
+                consistent=true;
+                break;
+            }
+            if((attempt&31)==31)std::this_thread::yield();
         }
-        // The audio callback publishes numeric host parameters atomically.
-        // This snapshot has the same V1-V9 binary layout, without reading
-        // mutable audio-thread memory on a control thread.
-        snapshot.program=rtProgram_.load(std::memory_order_acquire);
-        snapshot.bank=rtBank_.load(std::memory_order_acquire);
-        snapshot.masterVolume=rtMaster_.load(std::memory_order_acquire);
-        snapshot.channelProgramMask=
-            rtChannelProgramMask_.load(std::memory_order_acquire);
-        for(int ch=0;ch<16;++ch)
-            snapshot.channelPrograms[ch]=rtChannelPrograms_[ch].load(
-                std::memory_order_acquire);
-        for(int i=0;i<kGuiCount;++i)
-            snapshot.controls[i]=rtControls_[i].load(std::memory_order_acquire);
+        // Reject a save request rather than serializing a torn multi-channel
+        // instrument combination under unbounded concurrent automation.
+        if(!consistent)return kResultFalse;
         if(!snapshot.pathsSpecified) {
             AssetConfig::Paths configured;
             if(AssetConfig::Load(configured)) {
@@ -541,6 +560,7 @@ public:
                 return kResultFalse;
             // Publish control values before the new engine is visible to the
             // audio callback; that callback restores MIDI state itself.
+            RealtimeStateVersion::Writer controlWrite(rtStateVersion_.Control());
             rtProgram_.store(candidate.program,std::memory_order_release);
             rtBank_.store(candidate.bank,std::memory_order_release);
             // State recall takes precedence over any unconsumed GUI reselect.
@@ -581,6 +601,7 @@ public:
     tresult PLUGIN_API process(ProcessData& data) override {
         if(data.numSamples<0 || uint32_t(data.numSamples)>capacity_)
             return kInvalidArgument;
+        RealtimeStateVersion::Writer audioWrite(rtStateVersion_.Audio());
         // P119: no control mutex is acquired on the audio callback.
         // The guard prevents a live synth being destroyed during this block.
         auto engineRead=engines_.Read();
@@ -966,6 +987,7 @@ private:
     std::string hardwareStatus_="RAM --  |  ROM: ERFORDERLICH  |  CORE: INAKTIV";
     uint64_t assetGeneration_=0;
     MidiLiveState liveMidi_{}; // exclusively audio-thread owned
+    RealtimeStateVersion rtStateVersion_{};
     // Real-time parameters are single-word atomics; getState/load paths never
     // touch a mutable synth or wait for a reader to release a mutex.
     std::atomic<uint32_t> rtProgram_{0},rtBank_{0};

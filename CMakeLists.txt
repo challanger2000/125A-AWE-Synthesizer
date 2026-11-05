@@ -162,3 +162,10 @@ if(WIN32)
   target_compile_features(awe32_p122_host_shutdown_test PRIVATE cxx_std_23)
   add_test(NAME 125A_p122_host_shutdown COMMAND awe32_p122_host_shutdown_test)
 endif()
+
+# P122 Codex audit: protect project state from torn multi-channel program
+# snapshots during automation and concurrent control-thread recall.
+add_executable(awe32_p122_state_snapshot_test tests/p122_rt_state_snapshot.cpp)
+target_include_directories(awe32_p122_state_snapshot_test PRIVATE src/vst3)
+target_compile_features(awe32_p122_state_snapshot_test PRIVATE cxx_std_23)
+add_test(NAME 125A_p122_state_snapshot COMMAND awe32_p122_state_snapshot_test)
