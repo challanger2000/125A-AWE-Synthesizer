@@ -1758,6 +1758,46 @@ void Synth::PitchBend(uint8_t channel, int16_t value)
     RefreshChannel(channel);
 }
 
+bool Synth::HasPlayingVoicesOnChannel(uint8_t channel) const noexcept
+{
+    if (channel >= 16) return false;
+    for (int v = 0; v < NoteVoices(); ++v)
+    {
+        const VoiceAlloc& voice = m_alloc[v];
+        if (voice.channel == channel && (voice.inUse || voice.heldBySustain))
+            return true;
+    }
+    return false;
+}
+
+void Synth::PitchBendAutomated(uint8_t channel, int16_t value)
+{
+    if (channel >= 16) return;
+    if (Awe32::IsDosLike(m_core.DriverVariant()))
+    {
+        // MDI already excludes all free voices. Preserve its original
+        // arithmetic and update behavior.
+        if (m_channels[channel].pitchBend != value)
+            PitchBendMdi(channel, value);
+        return;
+    }
+    auto& ch = m_channels[channel];
+    if (ch.pitchBend == value) return;
+    ch.pitchBend = value;  // future NoteOn takes this exact bend
+    const int bend = PitchBendOffset(channel);
+    for (int v = 0; v < NoteVoices(); ++v)
+    {
+        const VoiceAlloc& voice = m_alloc[v];
+        // Do NOT match free VXD states by high byte: 0x0FFE falsely
+        // matches channel 15 and would issue 32 IP writes per frame.
+        if (voice.channel != channel ||
+            (!voice.inUse && !voice.heldBySustain)) continue;
+        const uint16_t pitch = static_cast<uint16_t>(
+            std::clamp(voice.basePitch + bend, 0, 65535));
+        m_core.Write(Reg::IP, v, pitch);
+    }
+}
+
 void Synth::RenderBlock(int16_t* out, uint32_t numFrames)
 {
     if (m_core.DriverVariant() == Awe32::Driver::Win95)
