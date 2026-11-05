@@ -352,7 +352,9 @@ void PresetBrowserView::ChangeParameter(Steinberg::Vst::ParamID tag,double norm)
     controller_->endEdit(tag);
 }
 void PresetBrowserView::Select(uint16_t bank,uint8_t program) {
-    if(bank!=bank_)ChangeParameter(kBankParam,double(bank)/16383.);
+    // Reassert the selected browser bank even when its displayed value is
+    // unchanged: MIDI CC0/32 can have changed the effective sounding bank.
+    ChangeParameter(kBankParam,double(bank)/16383.);
     ChangeParameter(kProgram,double(program)/127.);
     // Reflect the clicked instrument immediately. The following idle
     // compares bank/program back with the controller: an unaccepted host
