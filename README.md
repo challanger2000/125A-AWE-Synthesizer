@@ -4,9 +4,10 @@ Windows x64 VST3 instrument project: historically faithful Sound Blaster AWE32/A
 **Current development checkpoint (2026-11-05): P122 — Windows VST3 test candidate; release NO-GO.**
 
 - **Active correction branch:** `fix/p122-bank-dirty-audit`; keep `main` stable until independent release approval.
-- **Verified code commit:** `f8b65bfdb33ba66e1cb51217b11a385027faad3b`.
-- **GitHub Windows run:** [P122 Windows regression #41962502264](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/41962502264) — **33/33 CTests, 47/47 Steinberg Validator, 3/3 EditorHost GUI runs PASS**. Includes direct real VST3 bank-message/zero-sample flush testing and dense 86Box pitchbend regression using synthetic ROM.
+- **Verified code commit:** `d8b0af795dddd86594ef7076b061f75b65340fee`.
+- **GitHub Windows run:** [P122 Windows regression #42035683374](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42035683374) — **34/34 CTests, 47/47 Steinberg Validator, 3/3 EditorHost GUI runs PASS**. Includes direct real VST3 bank-message/zero-sample flush testing and dense 86Box pitchbend regression using synthetic ROM.
 - **Release boundary:** P120 remains NO-GO. P122 is **not a release GO** until independent VST3 audio automation checks with the user's original ROM/SBK/SF2, true bank reselect after MIDI CC0 in the target DAW, and close-with-pending-ACK/restart validation are satisfactorily resolved. GUI development can begin next; these open tests block release approval, not the start of GUI work.
+- **Codex audit remediation:** all five reported findings addressed on P122; targeted tests including real VST3 concurrent program/save regression pass. Independent Codex re-audit of latest HEAD is still outstanding. [Remediation detail](docs/P122-CODEX-AUDIT-NACHPROBE.md).
 - **Entry document:** [START-HERE.md](START-HERE.md). Historical P13-era notes further below are not current release evidence.
 - A complete version-pinned *upstream source snapshot* (C and C++) is under `upstream/AWE32Emu/`; its original CMake console executable is preserved separately.
 - The upstream snapshot is from [turican0/AWE32Emu](https://github.com/turican0/AWE32Emu), exact commit `17b0578fe59909dfaa784b5531d6d1a3a80729ce` (2026-10-21). It contains the modified [86Box](https://github.com/86Box/86Box) EMU8000 core.
