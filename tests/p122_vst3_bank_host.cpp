@@ -6,6 +6,7 @@
 #include "public.sdk/source/vst/hosting/parameterchanges.h"
 #include "public.sdk/source/common/memorystream.h"
 #include "AssetState.h"
+#include "MidiControlMapping.h"
 #include <windows.h>
 #include <atomic>
 #include <thread>
@@ -234,6 +235,72 @@ int wmain(int argc,wchar_t** argv) {
                           snapshotBank(component,bank)&&bank==0,
                           "newer deliberate bank-zero parameter remains effective");
             }
+            // P126 reverse direction: recall starts FIRST but finishes
+            // AFTER an ordinary bank-5 parameter point was accepted and
+            // saved. P125 only protected the inverse paused-audio schedule.
+            MemoryStream normalizeZero;
+            ok&=check(makeRecall(normalizeZero) &&
+                      component->setState(&normalizeZero)==kResultOk &&
+                      audio->process(data)==kResultOk,
+                      "P126 start reverse-order probe with bank-zero recall");
+            PausedStateStream reverseRecall;
+            const bool reverseReady=makeRecall(reverseRecall);
+            ok&=check(reverseReady,"P126 prepare paused original bank-zero recall");
+            if(reverseReady) {
+                reverseRecall.pauseOnRead.store(true,std::memory_order_release);
+                std::atomic<bool> reverseOk{false};
+                std::thread blockedRecall([&]{
+                    reverseOk.store(component->setState(&reverseRecall)==kResultOk,
+                                    std::memory_order_release);
+                });
+                while(!reverseRecall.entered.load(std::memory_order_acquire))
+                    std::this_thread::yield();
+                ParameterChanges bank5(1);
+                int32 ix=0,pi=0;
+                auto* q=bank5.addParameterData(ParamID(1002),ix);
+                ProcessData laterParam{};
+                laterParam.processMode=kRealtime;
+                laterParam.symbolicSampleSize=kSample32;
+                laterParam.numSamples=0;
+                laterParam.inputParameterChanges=&bank5;
+                const bool accepted=q&&q->addPoint(0,5./16383.,pi)==kResultOk &&
+                                    audio->process(laterParam)==kResultOk;
+                uint16_t beforeEnd=999,afterEnd=999,following=999;
+                const bool savedDuring=accepted&&snapshotBank(component,beforeEnd);
+                reverseRecall.releaseRead.store(true,std::memory_order_release);
+                blockedRecall.join();
+                const bool savedAfter=reverseOk.load()&&
+                                      snapshotBank(component,afterEnd);
+                const bool next=audio->process(data)==kResultOk &&
+                                snapshotBank(component,following);
+                ok&=check(savedDuring&&beforeEnd==5&&savedAfter&&afterEnd==5&&
+                          next&&following==5,
+                          "slow earlier recall 0 cannot erase later saved bank 5 parameter");
+                MemoryStream newerRecall;
+                ok&=check(makeRecall(newerRecall) &&
+                          component->setState(&newerRecall)==kResultOk &&
+                          audio->process(data)==kResultOk &&
+                          snapshotBank(component,bank)&&bank==0,
+                          "genuinely later bank-zero recall still supersedes bank 5");
+            }
+            // CC0 belongs to one MIDI channel. It must never suppress or
+            // acknowledge a new GLOBAL browser selection for the others.
+            ParameterChanges channelBank(1);
+            int32 ccIndex=0,ccPoint=0;
+            auto* cc=channelBank.addParameterData(
+                AWE125::MidiControlMapping::ParamID(2,
+                    AWE125::MidiControlMapping::Index(0)),ccIndex);
+            ProcessData ccBlock{};
+            ccBlock.processMode=kRealtime;
+            ccBlock.symbolicSampleSize=kSample32;
+            ccBlock.numSamples=0;
+            ccBlock.inputParameterChanges=&channelBank;
+            ok&=check(cc&&cc->addPoint(0,5./127.,ccPoint)==kResultOk &&
+                      audio->process(ccBlock)==kResultOk &&
+                      sendBank(connection,9)==kResultOk &&
+                      audio->process(data)==kResultOk &&
+                      snapshotBank(component,bank)&&bank==9,
+                      "channel-3 CC0 cannot discard newer global browser bank 9");
             // A true exported VST3 processor concurrently receives rapid
             // program-change parameter queues and getState() calls.
             // The host must never serialize a mixture of two programs.
