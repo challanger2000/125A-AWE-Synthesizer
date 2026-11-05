@@ -129,6 +129,41 @@ int main(){
         ok &= check(audible(pcm),
             "2048 continuous pitch frames with 16 active voices never latch chip silence");
     }
+    {
+        // A pan glide must generate identical chip PCM regardless of how
+        // many small render calls unrelated MIDI automation causes.
+        Rig whole,split;
+        if(!whole.Init(rom)||!split.Init(rom))return 2;
+        whole.synth.ControlChange(0,10,0);
+        split.synth.ControlChange(0,10,0);
+        constexpr int frames=2048;
+        std::vector<int16_t> a(frames*2),b(frames*2);
+        whole.synth.RenderBlock(a.data(),frames);
+        for(int i=0;i<frames;++i)
+            split.synth.RenderBlock(b.data()+2*i,1);
+        ok &= check(a==b,
+            "Win95 pan glide is PCM-identical for whole blocks and single-frame blocks");
+    }
+    {
+        // Nonzero bend + unchanged bend value + new RPN 0,0 range must
+        // rewrite pitch registers of currently active voices.
+        Rig unchanged,changed;
+        if(!unchanged.Init(rom)||!changed.Init(rom))return 2;
+        for(auto* synth:{&unchanged.synth,&changed.synth}) {
+            synth->ControlChange(0,101,0);
+            synth->ControlChange(0,100,0);
+            synth->PitchBendAutomated(0,4096);
+        }
+        changed.synth.ControlChange(0,6,12);
+        // Previously this duplicate bend was incorrectly suppressed even
+        // though pitch range, and therefore effective pitch, had changed.
+        changed.synth.PitchBendAutomated(0,4096);
+        std::vector<int16_t> a(2048*2),b(2048*2);
+        unchanged.synth.RenderBlock(a.data(),2048);
+        changed.synth.RenderBlock(b.data(),2048);
+        ok &= check(a!=b,
+            "RPN pitch-range update changes sustained-note PCM with unchanged bend value");
+    }
     std::cout<<(ok?"P121_PITCHBEND_AUDIO_PASS":"P121_PITCHBEND_AUDIO_FAIL")<<"\n";
     return ok?0:1;
 }

@@ -188,6 +188,7 @@ private:
     void ReleaseVoice(int voice);
     void KillVoice(int voice);
     void RefreshChannel(uint8_t channel);
+    void RefreshAutomatedChannelPitch(uint8_t channel);
     int  BankNumberFor(uint8_t channel) const;
     int  PitchBendOffset(uint8_t channel) const;
     void StartVoice(int voice, uint8_t channel, uint8_t note, uint8_t velocity,

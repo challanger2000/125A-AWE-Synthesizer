@@ -359,8 +359,18 @@ void PresetBrowserView::Select(uint16_t bank,uint8_t program) {
     // Reassert through the controller-to-processor message path in that case.
     const bool sameHostBank=controller_ &&
         std::lround(controller_->getParamNormalized(kBankParam)*16383.)==bank;
+    if(sameHostBank&&(!browserBankReselect_ ||
+                      !browserBankReselect_(bank))) {
+        // Without the explicit message the host may discard this unchanged
+        // parameter edit while CC0 continues to select a different bank.
+        // Do not pretend a new program selection succeeded.
+        if(hint_) {
+            hint_->setText("Bank-Neuauswahl fehlgeschlagen: Verbindung zum Prozessor pruefen.");
+            hint_->setFontColor(CColor(255,143,122,255));
+        }
+        return;
+    }
     ChangeParameter(kBankParam,double(bank)/16383.);
-    if(sameHostBank&&browserBankReselect_)browserBankReselect_(bank);
     ChangeParameter(kProgram,double(program)/127.);
     // Reflect the clicked instrument immediately. The following idle
     // compares bank/program back with the controller: an unaccepted host

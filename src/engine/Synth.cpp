@@ -1702,8 +1702,17 @@ void Synth::ControlChange(uint8_t channel, uint8_t controller, uint8_t value)
     case 101: ch.rpnMsb = value; break;
     case 100: ch.rpnLsb = value; break;
     case 6:
-        if (ch.rpnMsb == 0 && ch.rpnLsb == 0)
+        if (ch.rpnMsb == 0 && ch.rpnLsb == 0 &&
+            ch.pitchBendRangeSemitones != value)
+        {
             ch.pitchBendRangeSemitones = value;
+            // A bend does not need a new CC129 value for its effective pitch
+            // to change: the selected RPN range is part of that pitch.
+            // The automated bend cache must not suppress this update.
+            if (Awe32::IsDosLike(m_core.DriverVariant()))
+                PitchBendMdi(channel, ch.pitchBend);
+            else RefreshAutomatedChannelPitch(channel);
+        }
         break;
     // The fine part of the range (cents) does not fit into the register
     // anyway - the driver computes in whole semitones, so we just accept it.
@@ -1784,6 +1793,11 @@ void Synth::PitchBendAutomated(uint8_t channel, int16_t value)
     auto& ch = m_channels[channel];
     if (ch.pitchBend == value) return;
     ch.pitchBend = value;  // future NoteOn takes this exact bend
+    RefreshAutomatedChannelPitch(channel);
+}
+
+void Synth::RefreshAutomatedChannelPitch(uint8_t channel)
+{
     const int bend = PitchBendOffset(channel);
     for (int v = 0; v < NoteVoices(); ++v)
     {
@@ -1800,15 +1814,32 @@ void Synth::PitchBendAutomated(uint8_t channel, int16_t value)
 
 void Synth::RenderBlock(int16_t* out, uint32_t numFrames)
 {
-    if (m_core.DriverVariant() == Awe32::Driver::Win95)
-        for (int v = 0; v < kVxdVoices; ++v)
-        {
-            VoiceAlloc& a = m_alloc[v];
-            if (a.vxdPanTimer < 0) continue;
-            a.vxdPanTimer -= static_cast<int32_t>(numFrames);
-            if (a.vxdPanTimer <= 0) PanStepVxd(v);
-        }
-    m_core.RenderBlock(out, numFrames);
+    // Driver pan glides run every 227 chip frames, not once per host
+    // RenderBlock call. Splitting a block for a different channel's pitch
+    // automation must NOT change the pan trajectory or rendered PCM.
+    uint32_t rendered = 0;
+    const bool win95 = m_core.DriverVariant() == Awe32::Driver::Win95;
+    while (rendered < numFrames)
+    {
+        uint32_t slice = numFrames - rendered;
+        if (win95)
+            for (int v = 0; v < kVxdVoices; ++v)
+            {
+                const int32_t timer = m_alloc[v].vxdPanTimer;
+                if (timer >= 0)
+                    slice = std::min(slice, static_cast<uint32_t>(std::max(1, timer)));
+            }
+        m_core.RenderBlock(out + 2u * rendered, slice);
+        rendered += slice;
+        if (win95)
+            for (int v = 0; v < kVxdVoices; ++v)
+            {
+                VoiceAlloc& a = m_alloc[v];
+                if (a.vxdPanTimer < 0) continue;
+                a.vxdPanTimer -= static_cast<int32_t>(slice);
+                if (a.vxdPanTimer <= 0) PanStepVxd(v);
+            }
+    }
 }
 
 bool Synth::OpenNoteDump(const std::string& path)

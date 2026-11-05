@@ -919,6 +919,17 @@ public:
                 advanceEvent();
             }
         }
+        // A legal zero-sample VST3 flush can still carry PitchBend points.
+        // Curves were intentionally removed from the generic event queue,
+        // so commit the last frame-zero bend explicitly for the next NoteOn.
+        if(data.numSamples==0)
+            for(int ch=0;ch<16;++ch)if(pitchEnabled[ch]) {
+                const auto normalized=pitchCurves[ch].valueAt(0);
+                liveMidi_.Accept(static_cast<unsigned>(ch),129,normalized);
+                if(synth_)synth_->PitchBendAutomated(
+                    static_cast<uint8_t>(ch),
+                    MidiControlMapping::PitchBend(normalized));
+            }
         render(data.numSamples);
         if(hasOutput)for(int32 i=0;i<data.numSamples;++i)
             if(left[i]!=0.f||(right&&right[i]!=0.f)) {
