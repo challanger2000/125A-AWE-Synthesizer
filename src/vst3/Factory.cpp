@@ -453,11 +453,28 @@ public:
         // IBStream::write() or a filesystem configuration lookup.
         AssetState::Data snapshot;
         bool consistent=false;
+        // A bank event may be accepted without RT writer ownership. Take
+        // it from the authoritative stamped source when saving, rather than
+        // only the audio-applied rtBank_ value.
+        const auto fillRealtime=[&](AssetState::Data& target) {
+            target.program=rtProgram_.load(std::memory_order_acquire);
+            target.bank=rtBank_.load(std::memory_order_acquire);
+            target.masterVolume=rtMaster_.load(std::memory_order_acquire);
+            target.channelProgramMask=
+                rtChannelProgramMask_.load(std::memory_order_acquire);
+            for(int ch=0;ch<16;++ch)
+                target.channelPrograms[ch]=rtChannelPrograms_[ch].load(
+                    std::memory_order_acquire);
+            for(int i=0;i<kGuiCount;++i)
+                target.controls[i]=rtControls_[i].load(
+                    std::memory_order_acquire);
+        };
         // Each audio block and each control-thread project recall brackets
         // its multi-parameter updates with independent generation counters.
         // getState must never combine program/mask/channel values from two
         // different program changes. No realtime mutex or heap allocation.
         for(int attempt=0;attempt<4096;++attempt) {
+            const auto bankBefore=bankOrder_.Latest();
             const auto before=rtStateVersion_.Capture();
             if(!rtStateVersion_.Readable(before)) {
                 if((attempt&31)==31)std::this_thread::yield();
@@ -467,25 +484,33 @@ public:
                 std::lock_guard<std::mutex> lock(engineMutex_);
                 snapshot=state_;
             }
-            snapshot.program=rtProgram_.load(std::memory_order_acquire);
-            snapshot.bank=rtBank_.load(std::memory_order_acquire);
-            snapshot.masterVolume=rtMaster_.load(std::memory_order_acquire);
-            snapshot.channelProgramMask=
-                rtChannelProgramMask_.load(std::memory_order_acquire);
-            for(int ch=0;ch<16;++ch)
-                snapshot.channelPrograms[ch]=rtChannelPrograms_[ch].load(
-                    std::memory_order_acquire);
-            for(int i=0;i<kGuiCount;++i)
-                snapshot.controls[i]=rtControls_[i].load(std::memory_order_acquire);
-            if(rtStateVersion_.Unchanged(before)) {
+            fillRealtime(snapshot);
+            const auto bankAfter=bankOrder_.Latest();
+            if(rtStateVersion_.Unchanged(before) &&
+               bankBefore.sequence==bankAfter.sequence &&
+               bankBefore.bank==bankAfter.bank) {
+                // Latest() includes bank edits whose audio writer was refused
+                // by a simultaneous control recall, even before next process.
+                snapshot.bank=bankAfter.bank;
                 consistent=true;
                 break;
             }
             if((attempt&31)==31)std::this_thread::yield();
         }
-        // Reject a save request rather than serializing a torn multi-channel
-        // instrument combination under unbounded concurrent automation.
-        if(!consistent)return kResultFalse;
+        // P127: do not reject a legitimate project save just because
+        // fast program automation exhausts optimistic snapshot attempts.
+        // getState is never an audio callback: a control-side exclusive writer
+        // can produce a guaranteed coherent snapshot. Lock order is the same
+        // engineMutex_ -> rtStateVersion_ order used by setState, and the
+        // audio callback still makes only its single nonblocking try-CAS.
+        if(!consistent) {
+            std::lock_guard<std::mutex> lock(engineMutex_);
+            RealtimeStateVersion::Writer readGuard(
+                rtStateVersion_,RealtimeStateVersion::Domain::Control);
+            snapshot=state_;
+            fillRealtime(snapshot);
+            snapshot.bank=bankOrder_.Latest().bank;
+        }
         if(!snapshot.pathsSpecified) {
             AssetConfig::Paths configured;
             if(AssetConfig::Load(configured)) {
@@ -577,17 +602,33 @@ public:
             // audio callback; that callback restores MIDI state itself.
             RealtimeStateVersion::Writer controlWrite(
                 rtStateVersion_, RealtimeStateVersion::Domain::Control);
-            // Recall is ordered at entry, BEFORE its potentially slow
-            // stream/ROM work. Ordinary VST3 parameter changes and browser
-            // messages have independent stamped producers; neither can be
-            // overwritten by an older recall finishing later.
-            bankOrder_.CommitRecall(recallSequence,
-                                    static_cast<uint16_t>(candidate.bank));
+            // Two recalls may overlap or even be reentered in a host
+            // stream callback. A stale one must not change ANY project
+            // fields/engine after a later recall has committed.
+            if(!bankOrder_.CommitRecall(
+                    recallSequence,static_cast<uint16_t>(candidate.bank)))
+                return kResultFalse; // superseded, never report a false commit
             const auto latestBank=bankOrder_.Latest();
             if(candidate.bank!=latestBank.bank) {
                 candidate.bank=latestBank.bank;
                 if(prepared)prepared->SelectBrowserBank(latestBank.bank);
             }
+            // Browser selects (bank, program) via separate host edits. A
+            // program selection accepted after this recall STARTED must
+            // survive together with the later bank. Preserve the semantic
+            // global-program transaction, not the old recalled program.
+            const uint64_t liveProgram=audioProgramSelection_.load(
+                std::memory_order_acquire);
+            if((liveProgram>>8)>recallSequence) {
+                candidate.program=static_cast<uint32_t>(liveProgram&0xFFu);
+                candidate.channelProgramMask=0;
+                candidate.channelPrograms.fill(candidate.program);
+            }
+            if(prepared)for(int ch=0;ch<16;++ch)
+                prepared->ProgramChange(static_cast<uint8_t>(ch),
+                    static_cast<uint8_t>(
+                        (candidate.channelProgramMask&(1u<<ch))
+                            ?candidate.channelPrograms[ch]:candidate.program));
             rtProgram_.store(candidate.program,std::memory_order_release);
             rtBank_.store(candidate.bank,std::memory_order_release);
             rtMaster_.store(candidate.masterVolume,std::memory_order_release);
@@ -780,6 +821,10 @@ public:
                 rtChannelProgramMask_.store(0,std::memory_order_release);
                 for(int ch=0;ch<16;++ch)
                     rtChannelPrograms_[ch].store(program,std::memory_order_release);
+                // Shared event sequence: newer browser program edits can win
+                // over a slow, earlier recall, just as their bank edits do.
+                audioProgramSelection_.store(
+                    (bankOrder_.Next()<<8)|program,std::memory_order_release);
                 if(synth_)for(int ch=0;ch<16;++ch)
                     synth_->ProgramChange(static_cast<uint8_t>(ch),
                         static_cast<uint8_t>(program));
@@ -1029,6 +1074,7 @@ private:
     std::array<std::atomic<uint32_t>,16> rtChannelPrograms_{};
     std::atomic<uint32_t> rtChannelProgramMask_{0};
     BankOrder bankOrder_{};
+    std::atomic<uint64_t> audioProgramSelection_{0};
     uint64_t lastGlobalBankSequence_=0; // audio thread only
     uint64_t lastRecallSequence_=0; // audio thread only
     uint64_t lastHostBankParamSequence_=0; // audio thread only
@@ -1073,11 +1119,14 @@ private:
         lastGlobalBankSequence_=bank.sequence;
     }
     void ApplyPendingGlobalBank(Synth* target) noexcept {
-        const auto desired=bankOrder_.Latest();
-        if(desired.sequence<=lastGlobalBankSequence_)return;
+        if(bankOrder_.Latest().sequence<=lastGlobalBankSequence_)return;
         RealtimeStateVersion::Writer write(
             rtStateVersion_,RealtimeStateVersion::Domain::Audio);
-        if(write)ApplyGlobalBankUnderWriter(target,desired);
+        if(!write)return;
+        // Never use the decision read BEFORE acquiring the state gate.
+        // A newer recall may have committed while this callback was parked.
+        SyncCommittedRecall();
+        ApplyGlobalBankUnderWriter(target,bankOrder_.Latest());
     }
     void ApplyRtParameters(Synth& target) noexcept {
         for(int i=0;i<kGuiCount;++i)
