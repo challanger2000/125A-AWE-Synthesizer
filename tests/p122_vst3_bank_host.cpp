@@ -31,6 +31,20 @@ public:
     }
 };
 
+// Reproduce the inverse P124 race: process() has observed an old bank
+// generation, then waits in a host queue getter. A complete project recall
+// publishes bank 0; only afterwards the blocked callback accepts bank 5.
+class PausedParameterChanges final : public ParameterChanges {
+public:
+    explicit PausedParameterChanges(int32 n): ParameterChanges(n) {}
+    std::atomic<bool> entered{false},releaseRead{false};
+    int32 PLUGIN_API getParameterCount() override {
+        entered.store(true,std::memory_order_release);
+        while(!releaseRead.load(std::memory_order_acquire))
+            std::this_thread::yield();
+        return ParameterChanges::getParameterCount();
+    }
+};
 static bool check(bool ok,const char* label) {
     std::cout<<(ok?"PASS: ":"FAIL: ")<<label<<"\n";
     return ok;
@@ -114,6 +128,8 @@ int wmain(int argc,wchar_t** argv) {
             setup.maxSamplesPerBlock=128;
             ok&=check(audio->setupProcessing(setup)==kResultOk,
                        "processor configured at 44.1 kHz");
+            ok&=check(audio->getTailSamples()==kInfiniteTail,
+                       "sounding synth reports a nonzero unbounded tail");
             uint16_t bank=999;
             ok&=check(snapshotBank(component,bank)&&bank==0,
                        "initial bank persists as zero");
@@ -167,6 +183,57 @@ int wmain(int argc,wchar_t** argv) {
                       audio->process(data)==kResultOk &&
                       snapshotBank(component,bank) && bank==0,
                        "new V10 recall overrides previously queued bank 7");
+            // P125: prior real VST3 tests paused the RECALL, not process().
+            // Here process() begins before recall, and bank 5 arrives through
+            // the ordinary kBankID parameter path AFTER the recall commits.
+            PausedParameterChanges delayedBank(1);
+            int32 bankIndex=0,pointIndex=0;
+            auto* bankQueue=delayedBank.addParameterData(ParamID(1002),bankIndex);
+            const bool queuedBank5=bankQueue &&
+                bankQueue->addPoint(64,5.0/16383.0,pointIndex)==kResultOk;
+            ok&=check(queuedBank5,"enqueue later bank 5 at sample 64");
+            if(queuedBank5) {
+                ProcessData delayedBlock{};
+                delayedBlock.processMode=kRealtime;
+                delayedBlock.symbolicSampleSize=kSample32;
+                delayedBlock.numSamples=128;
+                delayedBlock.inputParameterChanges=&delayedBank;
+                std::atomic<bool> callbackOk{false};
+                std::thread blockedAudio([&] {
+                    callbackOk.store(audio->process(delayedBlock)==kResultOk,
+                                     std::memory_order_release);
+                });
+                while(!delayedBank.entered.load(std::memory_order_acquire))
+                    std::this_thread::yield();
+                MemoryStream midBlockRecall;
+                const bool recallReady=makeRecall(midBlockRecall);
+                const bool midRecallOk=recallReady &&
+                    component->setState(&midBlockRecall)==kResultOk;
+                delayedBank.releaseRead.store(true,std::memory_order_release);
+                blockedAudio.join();
+                uint16_t afterFirst=999,afterSecond=999;
+                const bool firstSave=snapshotBank(component,afterFirst);
+                const bool followingBlock=audio->process(data)==kResultOk;
+                const bool secondSave=snapshotBank(component,afterSecond);
+                ok&=check(midRecallOk&&callbackOk.load()&&firstSave &&
+                          followingBlock&&secondSave &&
+                          afterFirst==5&&afterSecond==5,
+                          "mid-block recall bank 0 cannot undo later parameter bank 5 in next block");
+                // Intentional later bank-zero automation must still work;
+                // the fix must not turn bank selection into a sticky lock.
+                ParameterChanges backToZero(1);
+                int32 idx=0,pnt=0;
+                auto* q=backToZero.addParameterData(ParamID(1002),idx);
+                ProcessData turnBack{};
+                turnBack.processMode=kRealtime;
+                turnBack.symbolicSampleSize=kSample32;
+                turnBack.numSamples=0;
+                turnBack.inputParameterChanges=&backToZero;
+                ok&=check(q&&q->addPoint(0,0.,pnt)==kResultOk &&
+                          audio->process(turnBack)==kResultOk &&
+                          snapshotBank(component,bank)&&bank==0,
+                          "newer deliberate bank-zero parameter remains effective");
+            }
             // A true exported VST3 processor concurrently receives rapid
             // program-change parameter queues and getState() calls.
             // The host must never serialize a mixture of two programs.
