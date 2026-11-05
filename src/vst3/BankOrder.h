@@ -24,10 +24,18 @@ public:
         return next_.fetch_add(1,std::memory_order_acq_rel);
     }
     uint64_t BeginRecall() noexcept { return Next(); }
-    void CommitRecall(uint64_t sequence,uint16_t bank) noexcept {
-        // Callers serialize successful recalls with engineMutex_ and reject
-        // a stale assetGeneration_ before publishing.
-        recall_.store(Pack(sequence,bank),std::memory_order_release);
+    bool CommitRecall(uint64_t sequence,uint16_t bank) noexcept {
+        // Recall work may overlap or reenter before its first IBStream read.
+        // The control mutex serializes commits, but not their START order:
+        // never allow an older recall to replace a newer committed recall.
+        const uint64_t desired=Pack(sequence,bank);
+        uint64_t current=recall_.load(std::memory_order_acquire);
+        while(Sequence(current)<sequence) {
+            if(recall_.compare_exchange_weak(current,desired,
+                    std::memory_order_acq_rel,std::memory_order_acquire))
+                return true;
+        }
+        return false;
     }
     uint64_t PublishAudio(uint16_t bank) noexcept {
         const uint64_t sequence=Next();
