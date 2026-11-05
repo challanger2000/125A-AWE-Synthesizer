@@ -19,7 +19,7 @@ static bool check(bool ok,const char* label) {
 static bool snapshotBank(IComponent* component,uint16_t& bank) {
     MemoryStream stream;
     if(component->getState(&stream)!=kResultOk)return false;
-    stream.rewind();
+    if(stream.seek(0,IBStream::kIBSeekSet,nullptr)!=kResultOk)return false;
     AWE125::AssetState::Data data;
     const auto read=[&](void* dst,size_t count) {
         int32 received=0;
