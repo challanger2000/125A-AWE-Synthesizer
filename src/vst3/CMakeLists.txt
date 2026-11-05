@@ -49,7 +49,8 @@ endif()
 # message, audio-block consumption and persisted bank without a user ROM.
 if(WIN32)
   add_executable(awe32_p122_vst3_bank_host_test
-      "${PROJECT_SOURCE_DIR}/tests/p122_vst3_bank_host.cpp")
+      "${PROJECT_SOURCE_DIR}/tests/p122_vst3_bank_host.cpp"
+      "${PROJECT_SOURCE_DIR}/external/vst3sdk/public.sdk/source/common/memorystream.cpp")
   target_include_directories(awe32_p122_vst3_bank_host_test PRIVATE
       "${PROJECT_SOURCE_DIR}/external/vst3sdk"
       "${PROJECT_SOURCE_DIR}/src/vst3")
