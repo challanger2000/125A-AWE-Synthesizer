@@ -18,6 +18,7 @@
 #include "MidiQueueOrdering.h"
 #include "MidiLiveState.h"
 #include "BrowserBankCommand.h"
+#include "HostNotificationRetry.h"
 #include "RealtimeEngineExchange.h"
 #include "public.sdk/source/vst/vstparameters.h"
 #include "public.sdk/source/main/moduleinit.h"
@@ -1482,6 +1483,7 @@ private:
     bool latencyChangePending_=false;
     bool hostDirtyPending_=false;
     uint64_t hostDirtySeq_=0,hostLatencySeq_=0;
+    HostNotificationRetry latencyRetry_{};
     WinUiDispatch hostDispatch_{};
     static bool HostSignalThunk(void* self) {
         return static_cast<Controller*>(self)->DeliverHostSignals();
@@ -1508,8 +1510,11 @@ private:
         if(dirty)
             dirtyOk=!componentHandler2||setDirty(true)==kResultOk;
         if(latency) {
+            // With no host handler there is nobody to notify. Rejecting hosts
+            // get at most three attempts per distinct status change.
             if(auto* handler=getComponentHandler())
                 latencyOk=handler->restartComponent(kLatencyChanged)==kResultOk;
+            else latencyOk=true;
         }
         bool retry=false;
         {
@@ -1518,7 +1523,8 @@ private:
             // unlimited 250-ms retry loop. Each new ACK has a new sequence
             // and may request its own notification independently.
             if(dirtySeq==hostDirtySeq_)hostDirtyPending_=false;
-            if(latencyOk&&latencySeq==hostLatencySeq_)latencyChangePending_=false;
+            if(latency&&latencySeq==hostLatencySeq_)
+                latencyChangePending_=latencyRetry_.ShouldRetry(latencySeq,latencyOk);
             retry=hostDirtyPending_||latencyChangePending_;
         }
         release(); // possibly destroys this; do not access members afterward

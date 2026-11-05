@@ -154,3 +154,11 @@ target_include_directories(awe32_p122_browser_bank_command_test PRIVATE src/vst3
 target_compile_features(awe32_p122_browser_bank_command_test PRIVATE cxx_std_23)
 add_test(NAME 125A_p122_browser_bank_command
   COMMAND awe32_p122_browser_bank_command_test)
+
+# P122: bounded host restart failures and shutdown with a pending retry timer.
+if(WIN32)
+  add_executable(awe32_p122_host_shutdown_test tests/p122_host_shutdown.cpp)
+  target_include_directories(awe32_p122_host_shutdown_test PRIVATE src/vst3)
+  target_compile_features(awe32_p122_host_shutdown_test PRIVATE cxx_std_23)
+  add_test(NAME 125A_p122_host_shutdown COMMAND awe32_p122_host_shutdown_test)
+endif()
