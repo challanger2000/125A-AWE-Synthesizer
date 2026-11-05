@@ -29,8 +29,10 @@ public:
         // a stale assetGeneration_ before publishing.
         recall_.store(Pack(sequence,bank),std::memory_order_release);
     }
-    void PublishAudio(uint16_t bank) noexcept {
-        audio_.store(Pack(Next(),bank),std::memory_order_release);
+    uint64_t PublishAudio(uint16_t bank) noexcept {
+        const uint64_t sequence=Next();
+        audio_.store(Pack(sequence,bank),std::memory_order_release);
+        return sequence;
     }
     void PublishBrowser(uint16_t bank) noexcept {
         const uint64_t desired=Pack(Next(),bank);
