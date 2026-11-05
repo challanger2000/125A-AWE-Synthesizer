@@ -31,6 +31,13 @@ Stand: 2026-11-05. Dieses Dokument beschreibt den aktuellen **Entwicklungs-/Prü
 4. **GUI-Start — AUSDRÜCKLICH NO-GO:** Alle vier P123-Korrekturen wurden inzwischen von Codex unabhängig bestätigt, aber der P123-Nachaudit fand zwei neue hohe Fehler bei späteren Bankbefehlen und `setProcessing`. P124 besteht den Windows-VST3-Build, 34/34 CTests, 47/47 Validator und 3/3 EditorHost. **Ein erneuter unabhängiger Codex-Nachaudit des exakten P124-Codes ist noch NOT RUN.** Originalhardware-Klanggleichheit ist dafür nicht erforderlich.
 5. **Release NO-GO:** Vor finalem Release sind weiterhin die echten ROM-/SF2-Audio- und DAW-Abnahmetests erforderlich; kein Release-/Gumroad-Paket vor GO.
 
+## Nach der klassischen Version — ausdrücklich zurückgestellte Erweiterungen
+
+- **Nicht jetzt beginnen:** [Extended AWE Sampler — vorgemerkter Entwicklungsabschnitt](docs/FUTURE-EXTENDED-AWE-SAMPLER.md).
+- Gewünscht: **direkter WAV-Import**, später Multisampling/Velocity-Zonen, Loop-Editor und eigene Presets; **Sample-Speicher bis 1 GiB** als technisches Forschungsziel (24-Bit-EMU8000-Adressraum bisher kein direkter 1-GiB-RAM).
+- Die Reihenfolge ist verbindlich: erst P124/independenter Audit, dann die originale EMU8000-Effektimplementierung, optional fertige GUI und Classic-Abnahme, **erst anschließend** Extended-Entwicklung. **Classic bleibt mit ROM-Pflicht/28 MiB unverändert.**
+- Keine aktuellen C++-Implementierungen oder eigenmächtige Scope-Erweiterung aufgrund dieser Notiz.
+
 ## Repository-Pflege
 
 - Keine weiteren P-Branches für bloße Einzelkorrekturen anlegen. Fehler zunächst auf dem aktuellen Korrektur-Branch beheben.
