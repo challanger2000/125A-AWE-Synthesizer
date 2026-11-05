@@ -155,6 +155,107 @@ int wmain(int argc,wchar_t** argv) {
                 "real VST3 getState never combines distinct program automation states");
             ok&=check(successfulReads>0,
                 "real VST3 state snapshots succeed while program automation is running");
+
+            // P123 regression: original P122 tested only ONE audio writer.
+            // A second setState() writer must not leave half 7/half 9 in
+            // the real exported processor, even after both calls end.
+            auto recallNine=[&]()->bool {
+                AWE125::AssetState::Data candidate;
+                candidate.pathsSpecified=true;
+                candidate.program=9;
+                candidate.bank=9;
+                candidate.channelProgramMask=0;
+                for(auto& ch:candidate.channelPrograms)ch=9;
+                MemoryStream stateBytes;
+                const auto write=[&](const void* source,size_t count) {
+                    int32 written=0;
+                    return count<=AWE125::AssetState::kMaxPath &&
+                        stateBytes.write(const_cast<void*>(source),
+                            static_cast<int32>(count),&written)==kResultOk &&
+                        written==static_cast<int32>(count);
+                };
+                if(!AWE125::AssetState::Write(write,candidate))return false;
+                if(stateBytes.seek(0,IBStream::kIBSeekSet,nullptr)!=kResultOk)
+                    return false;
+                return component->setState(&stateBytes)==kResultOk;
+            };
+            std::atomic<bool> recallStart{false},recallOk{true},realtimeOk{true};
+            std::thread audioProgram([&] {
+                while(!recallStart.load(std::memory_order_acquire))
+                    std::this_thread::yield();
+                for(int i=0;i<2500;++i) {
+                    ParameterChanges params(1);
+                    int32 index=0,pointIndex=0;
+                    auto* q=params.addParameterData(ParamID(1000),index);
+                    if(!q || q->addPoint(0,7.0/127.0,pointIndex)!=kResultOk) {
+                        realtimeOk.store(false);
+                        break;
+                    }
+                    ProcessData flush{};
+                    flush.processMode=kRealtime;
+                    flush.symbolicSampleSize=kSample32;
+                    flush.numSamples=0;
+                    flush.inputParameterChanges=&params;
+                    if(audio->process(flush)!=kResultOk) {
+                        realtimeOk.store(false);
+                        break;
+                    }
+                }
+            });
+            std::thread projectRecall([&] {
+                recallStart.store(true,std::memory_order_release);
+                for(int i=0;i<2500;++i)
+                    if(!recallNine()) {recallOk.store(false);break;}
+            });
+            bool allCoherent=true;
+            int reads=0;
+            for(int i=0;i<6000;++i) {
+                AWE125::AssetState::Data state;
+                if(!snapshotState(component,state))continue;
+                ++reads;
+                if(state.channelProgramMask!=0)allCoherent=false;
+                for(const auto v:state.channelPrograms)
+                    if(v!=state.program)allCoherent=false;
+            }
+            audioProgram.join();
+            projectRecall.join();
+            AWE125::AssetState::Data last{};
+            if(!snapshotState(component,last))allCoherent=false;
+            for(const auto v:last.channelPrograms)
+                if(v!=last.program)allCoherent=false;
+            ok&=check(recallOk.load()&&realtimeOk.load()&&allCoherent&&reads>0,
+                "real VST3 parallel setState/process/getState has no mixed channel programs");
+
+            // Ordinary playback without automation must allow ALL host saves.
+            // A synthetic/no-ROM instance exercises host state concurrency.
+            // The sounding original-ROM scenario remains a separate QA gate.
+            ok&=check(component->setActive(true)==kResultOk,
+                "real VST3 processor activated for playback-save stress");
+            std::atomic<bool> playbackOk{true},started{false};
+            std::thread playback([&] {
+                ProcessData play{};
+                play.processMode=kRealtime;
+                play.symbolicSampleSize=kSample32;
+                play.numSamples=128;
+                started.store(true,std::memory_order_release);
+                for(int i=0;i<15000;++i)
+                    if(audio->process(play)!=kResultOk) {
+                        playbackOk.store(false);
+                        break;
+                    }
+            });
+            while(!started.load(std::memory_order_acquire))
+                std::this_thread::yield();
+            int validSaves=0;
+            for(int i=0;i<500;++i) {
+                AWE125::AssetState::Data save;
+                if(snapshotState(component,save))++validSaves;
+            }
+            playback.join();
+            ok&=check(playbackOk.load()&&validSaves==500,
+                "500/500 genuine getState calls succeed during no-automation playback");
+            ok&=check(component->setActive(false)==kResultOk,
+                "real VST3 deactivation after save stress");
         }
         if(connection)connection->release();
         if(audio)audio->release();
