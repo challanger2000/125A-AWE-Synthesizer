@@ -1,4 +1,5 @@
 #include "Synth.h"
+#include "VxdPanClock.h"
 #include "I18n.h"
 #include <cstdio>
 #include "Awe32Curves.h"
@@ -80,7 +81,7 @@ namespace
 }
 
 Synth::Synth(uint32_t sampleRate)
-    : m_core(sampleRate)
+    : m_hostRate(sampleRate ? sampleRate : 44100), m_core(sampleRate)
 {
     BuildDefaultWaveform();
 }
@@ -579,7 +580,8 @@ int Synth::AllocateVoiceVxd(uint16_t state)
 // relax_win95.trace: 227 frames between the pan steps of a voice in 9669
 // cases (189 in the next most common). Each step writes the pan byte of PSST
 // and its complement (0xFF for pan 0) to the low byte of PTRX.
-namespace { constexpr int32_t kVxdPanStepFrames = 227; }
+// The fixed 227 EMU8000-frame interval is converted to the host clock
+// with a fractional remainder; no cumulative drift at 48/96 kHz.
 
 void Synth::PanVxd(uint8_t channel, uint8_t value)
 {
@@ -591,6 +593,7 @@ void Synth::PanVxd(uint8_t channel, uint8_t value)
         if (pan >= 0xFE) pan = 0xFF;
         else if (pan <= 1) pan = 0;
         a.vxdPanTarget = static_cast<uint8_t>(pan);
+        a.vxdPanRemainder = Emu8000Core::kNativeSampleRate / 2u;
         PanStepVxd(v);
     }
 }
@@ -606,7 +609,9 @@ void Synth::PanStepVxd(int voice)
     const uint32_t aux = a.vxdPanCur ? static_cast<uint32_t>((256 - a.vxdPanCur) & 0xFF) : 0xFFu;
     const uint32_t ptrx = m_core.ReadDriver(Reg::PTRX, voice);
     m_core.Write(Reg::PTRX, voice, (ptrx & 0xFFFFFF00u) | aux);
-    if (a.vxdPanCur != a.vxdPanTarget) a.vxdPanTimer = kVxdPanStepFrames;
+    if (a.vxdPanCur != a.vxdPanTarget)
+        a.vxdPanTimer = static_cast<int32_t>(
+            VxdPanClock::NextHostFrames(m_hostRate,a.vxdPanRemainder));
 }
 
 // SBAWE.VXD CC1 (0xC0FFC650): FMMOD pitch depth of every voice of the
