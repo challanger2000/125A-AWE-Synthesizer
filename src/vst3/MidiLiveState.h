@@ -11,6 +11,7 @@ public:
         std::array<bool,MidiControlMapping::kControls.size()> touched{};
         bool rangeTouched=false;
         uint8_t pitchRange=2;
+        uint64_t bankMsbSequence=0,bankLsbSequence=0;
         Channel() noexcept {
             for(std::size_t i=0;i<values.size();++i)
                 values[i]=MidiControlMapping::InitialNormalized(MidiControlMapping::kControls[i]);
@@ -36,16 +37,42 @@ public:
             ch.rangeTouched=true;
         }
     }
+    // MIDI CC0/CC32 are CHANNEL-local, not global browser selections.
+    // All three kinds of bank events share the BankOrder chronological stamp.
+    void AcceptBank(unsigned channel,int number,double normalized,
+                    uint64_t sequence) noexcept {
+        if(channel>=channels_.size()||(number!=0&&number!=32))return;
+        Accept(channel,number,normalized);
+        if(number==0)channels_[channel].bankMsbSequence=sequence;
+        else channels_[channel].bankLsbSequence=sequence;
+    }
     // P120 bank precedence: a later explicit GUI or project-recall bank
     // supersedes older CC0/CC32 values. Do not replay the older CC0,
     // because Synth::ControlChange(0) disables browserBankActive.
     // A subsequent MIDI CC0 will mark its own channel touched again and win.
-    void BrowserBankSelected() noexcept {
+    void BrowserBankSelected(uint64_t selectionSequence=~uint64_t{0}) noexcept {
         constexpr auto msb=static_cast<std::size_t>(MidiControlMapping::Index(0));
         constexpr auto lsb=static_cast<std::size_t>(MidiControlMapping::Index(32));
         for(auto& ch:channels_) {
-            ch.touched[msb]=false;
-            ch.touched[lsb]=false;
+            if(ch.bankMsbSequence<=selectionSequence)ch.touched[msb]=false;
+            if(ch.bankLsbSequence<=selectionSequence)ch.touched[lsb]=false;
+        }
+    }
+    // A global bank select sets browserBankActive on ALL melodic channels.
+    // Re-apply ONLY newer channel-specific CC0/CC32, never a sibling channel.
+    template<class Receiver>
+    void ReplayNewerBankControls(Receiver& receiver,
+                                 uint64_t globalSequence) const noexcept {
+        const auto msb=static_cast<std::size_t>(MidiControlMapping::Index(0));
+        const auto lsb=static_cast<std::size_t>(MidiControlMapping::Index(32));
+        for(unsigned channel=0;channel<channels_.size();++channel) {
+            const auto& ch=channels_[channel];
+            if(ch.touched[msb]&&ch.bankMsbSequence>globalSequence)
+                receiver.ControlChange(static_cast<uint8_t>(channel),0,
+                    MidiControlMapping::Byte(ch.values[msb]));
+            if(ch.touched[lsb]&&ch.bankLsbSequence>globalSequence)
+                receiver.ControlChange(static_cast<uint8_t>(channel),32,
+                    MidiControlMapping::Byte(ch.values[lsb]));
         }
     }
     const Channel& Get(unsigned channel) const noexcept {return channels_[channel];}
