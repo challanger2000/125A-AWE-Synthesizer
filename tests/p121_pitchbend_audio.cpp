@@ -112,6 +112,23 @@ int main(){
         ok &= check(a!=b,
                     "genuine channel-1 automated bend changes pitched PCM");
     }
+    {
+        // Heavy but valid: 16 allocated voices on the same automated
+        // channel with a changing bend over multiple 980-frame chip windows.
+        // It exercises the actual queue drain, not only the idle-channel gate.
+        Rig busy;
+        if(!busy.Init(rom,16))return 2;
+        constexpr int total=6144;
+        std::vector<int16_t> pcm(total*2);
+        for(int frame=0;frame<2048;++frame) {
+            const int value=((frame*29)%16384)-8192;
+            busy.synth.PitchBendAutomated(0,static_cast<int16_t>(value));
+            busy.synth.RenderBlock(pcm.data()+2*frame,1);
+        }
+        busy.synth.RenderBlock(pcm.data()+2*2048,total-2048);
+        ok &= check(audible(pcm),
+            "2048 continuous pitch frames with 16 active voices never latch chip silence");
+    }
     std::cout<<(ok?"P121_PITCHBEND_AUDIO_PASS":"P121_PITCHBEND_AUDIO_FAIL")<<"\n";
     return ok?0:1;
 }
