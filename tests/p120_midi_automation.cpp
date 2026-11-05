@@ -1,6 +1,7 @@
 #include "MidiQueueOrdering.h"
 #include "MidiProgramRouting.h"
 #include "MidiLiveState.h"
+#include "PitchZeroFlush.h"
 #include "MasterOutput.h"
 #include <algorithm>
 #include <cmath>
@@ -87,6 +88,41 @@ int main() {
     }
     ok&=test(equal,
         "128-frame sparse vs dense continuous VST3 pitchbend yields identical per-sample MIDI bends");
+    {
+        struct PitchQueue {
+            struct Point {int32_t offset;double value;};
+            std::vector<Point> points;
+            int32_t getPointCount() const {return static_cast<int32_t>(points.size());}
+        };
+        PitchQueue zero{{{0,.25},{0,.75},{1,.1}}};
+        PitchQueue channel2{{{0,.125}}};
+        std::array<PitchQueue*,16> queues{};
+        queues[0]=&zero;
+        queues[1]=&channel2;
+        const auto point=+[](void* p,int32_t i,int32_t& offset,double& value) {
+            const auto& points=static_cast<PitchQueue*>(p)->points;
+            if(i<0||size_t(i)>=points.size())return false;
+            offset=points[i].offset;
+            value=points[i].value;
+            return true;
+        };
+        MidiLiveState flushed;
+        int count=0;
+        int16_t appliedBend=0;
+        PitchZeroFlush::Commit(queues,point,flushed,
+            [&](uint8_t channel,int16_t bend) {
+                ++count;
+                if(channel==0)appliedBend=bend;
+            });
+        const auto pitchIndex=MidiControlMapping::Index(129);
+        ok&=test(count==2 &&
+            std::abs(flushed.Get(0).values[pitchIndex]-.75)<1e-12 &&
+            std::abs(flushed.Get(1).values[pitchIndex]-.125)<1e-12 &&
+            appliedBend==MidiControlMapping::PitchBend(.75),
+            "production zero-sample flush commits last frame-zero bend per channel");
+        ok&=test(std::abs(flushed.Get(2).values[pitchIndex]-.5)<1e-12,
+            "zero-sample flush does not disturb untouched channels");
+    }
     std::cout<<(ok?"P120_MIDI_AUTOMATION_PASS":"P120_MIDI_AUTOMATION_FAIL")<<"\n";
     return ok?0:1;
 }

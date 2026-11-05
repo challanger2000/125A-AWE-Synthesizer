@@ -3,9 +3,12 @@
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
 #include "pluginterfaces/vst/ivstmessage.h"
 #include "public.sdk/source/vst/hosting/hostclasses.h"
+#include "public.sdk/source/vst/hosting/parameterchanges.h"
 #include "public.sdk/source/common/memorystream.h"
 #include "AssetState.h"
 #include <windows.h>
+#include <atomic>
+#include <thread>
 #include <cstdint>
 #include <cstring>
 #include <iostream>
@@ -16,19 +19,23 @@ static bool check(bool ok,const char* label) {
     std::cout<<(ok?"PASS: ":"FAIL: ")<<label<<"\n";
     return ok;
 }
-static bool snapshotBank(IComponent* component,uint16_t& bank) {
+static bool snapshotState(IComponent* component,
+                          AWE125::AssetState::Data& data) {
     MemoryStream stream;
     if(component->getState(&stream)!=kResultOk)return false;
     if(stream.seek(0,IBStream::kIBSeekSet,nullptr)!=kResultOk)return false;
-    AWE125::AssetState::Data data;
     const auto read=[&](void* dst,size_t count) {
         int32 received=0;
         return count<=AWE125::AssetState::kMaxPath &&
             stream.read(dst,static_cast<int32>(count),&received)==kResultOk &&
             static_cast<size_t>(received)==count;
     };
-    if(!AWE125::AssetState::Read(read,data))return false;
-    bank=static_cast<uint16_t>(data.bank);
+    return AWE125::AssetState::Read(read,data);
+}
+static bool snapshotBank(IComponent* component,uint16_t& bank) {
+    AWE125::AssetState::Data state;
+    if(!snapshotState(component,state))return false;
+    bank=static_cast<uint16_t>(state.bank);
     return true;
 }
 static tresult sendBank(IConnectionPoint* connection,int64 bank) {
@@ -99,6 +106,55 @@ int wmain(int argc,wchar_t** argv) {
                        audio->process(data)==kResultOk &&
                        snapshotBank(component,bank)&&bank==0,
                        "bank zero can be reselected without parameter queue");
+            // A true exported VST3 processor concurrently receives rapid
+            // program-change parameter queues and getState() calls.
+            // The host must never serialize a mixture of two programs.
+            std::atomic<bool> finished{false},writerOk{true};
+            std::thread writer([&] {
+                for(int n=0;n<1500;++n) {
+                    ParameterChanges params(1);
+                    int32 index=0,pointIndex=0;
+                    auto* const q=params.addParameterData(ParamID(1000),index);
+                    if(!q||q->addPoint(0,double(n%128)/127.,pointIndex)!=kResultOk) {
+                        writerOk.store(false);
+                        break;
+                    }
+                    ProcessData flush{};
+                    flush.processMode=kRealtime;
+                    flush.symbolicSampleSize=kSample32;
+                    flush.numSamples=0;
+                    flush.inputParameterChanges=&params;
+                    if(audio->process(flush)!=kResultOk) {
+                        writerOk.store(false);
+                        break;
+                    }
+                }
+                finished.store(true,std::memory_order_release);
+            });
+            bool coherent=true;
+            int successfulReads=0;
+            for(int i=0;i<3000;++i) {
+                AWE125::AssetState::Data state;
+                if(snapshotState(component,state)) {
+                    ++successfulReads;
+                    if(state.channelProgramMask!=0)coherent=false;
+                    for(const auto program:state.channelPrograms)
+                        if(program!=state.program)coherent=false;
+                }
+                if(finished.load(std::memory_order_acquire)&&i>=100)
+                    break;
+            }
+            writer.join();
+            AWE125::AssetState::Data final;
+            const bool finalOk=snapshotState(component,final) &&
+                final.channelProgramMask==0 &&
+                final.program==1499%128;
+            if(finalOk)for(const auto program:final.channelPrograms)
+                if(program!=final.program)coherent=false;
+            ok&=check(writerOk.load()&&finalOk&&coherent,
+                "real VST3 getState never combines distinct program automation states");
+            ok&=check(successfulReads>0,
+                "real VST3 state snapshots succeed while program automation is running");
         }
         if(connection)connection->release();
         if(audio)audio->release();

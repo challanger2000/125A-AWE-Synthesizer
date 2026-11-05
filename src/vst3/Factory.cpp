@@ -17,6 +17,7 @@
 #include "MidiProgramRouting.h"
 #include "MidiQueueOrdering.h"
 #include "MidiLiveState.h"
+#include "PitchZeroFlush.h"
 #include "BrowserBankCommand.h"
 #include "HostNotificationRetry.h"
 #include "RealtimeStateVersion.h"
@@ -673,6 +674,7 @@ public:
         std::array<bool,kGuiCount> overlayEnabled{};
         std::array<MasterOutput::Curve,16> pitchCurves{};
         std::array<bool,16> pitchEnabled{};
+        std::array<IParamValueQueue*,16> zeroSamplePitchQueues{};
         std::array<bool,16> pitchMoving{}; // quantized pitch changes inside block
         // Pitch queues are consumed as a mathematical curve, NOT as separate
         // queue events: even 128 redundant constant points must never split
@@ -708,6 +710,7 @@ public:
                     MidiControlMapping::Index(129)];
                 pitchCurves[ch].reset(c.queue,readPoint,c.count,previous);
                 pitchEnabled[ch]=true;
+                zeroSamplePitchQueues[ch]=c.queue;
                 // A constant queue (including a single change at frame 0)
                 // does not require one-sample render calls. Detect *all*
                 // knots, not only endpoints; a triangular bend could start
@@ -944,13 +947,10 @@ public:
         // Curves were intentionally removed from the generic event queue,
         // so commit the last frame-zero bend explicitly for the next NoteOn.
         if(data.numSamples==0)
-            for(int ch=0;ch<16;++ch)if(pitchEnabled[ch]) {
-                const auto normalized=pitchCurves[ch].valueAt(0);
-                liveMidi_.Accept(static_cast<unsigned>(ch),129,normalized);
-                if(synth_)synth_->PitchBendAutomated(
-                    static_cast<uint8_t>(ch),
-                    MidiControlMapping::PitchBend(normalized));
-            }
+            PitchZeroFlush::Commit(zeroSamplePitchQueues,readPoint,liveMidi_,
+                [&](uint8_t channel,int16_t bend) {
+                    if(synth_)synth_->PitchBendAutomated(channel,bend);
+                });
         render(data.numSamples);
         if(hasOutput)for(int32 i=0;i<data.numSamples;++i)
             if(left[i]!=0.f||(right&&right[i]!=0.f)) {
