@@ -1,0 +1,101 @@
+name: P122 - One-time safe branch cleanup
+on:
+  push:
+    branches: [fix/p122-bank-dirty-audit]
+    paths:
+      - '.github/workflows/p122-safe-branch-cleanup.yml'
+permissions:
+  contents: write
+  pull-requests: read
+jobs:
+  archive-merged:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Archive and delete only fully absorbed, unreferenced branches
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess, sys, urllib.request
+          from urllib.parse import quote
+          repo = os.environ["GITHUB_REPOSITORY"]
+          target = "fix/p122-bank-dirty-audit"
+          def run(*args):
+              return subprocess.run(args, capture_output=True, text=True)
+          def pages(endpoint):
+              data = []
+              page = 1
+              while True:
+                  req = urllib.request.Request(
+                      f"https://api.github.com/repos/{repo}/{endpoint}"
+                      + ("&" if "?" in endpoint else "?") + f"per_page=100&page={page}",
+                      headers={"Authorization":"Bearer "+os.environ["GITHUB_TOKEN"],
+                               "Accept":"application/vnd.github+json",
+                               "X-GitHub-Api-Version":"2022-11-28"})
+                  with urllib.request.urlopen(req) as response:
+                      chunk = json.load(response)
+                  data.extend(chunk)
+                  if len(chunk) < 100: return data
+                  page += 1
+          branches = pages("branches")
+          pulls = pages("pulls?state=open")
+          protected = {"main", target}
+          for pr in pulls:
+              if pr["head"]["repo"] and pr["head"]["repo"]["full_name"] == repo:
+                  protected.add(pr["head"]["ref"])
+              if pr["base"]["repo"] and pr["base"]["repo"]["full_name"] == repo:
+                  protected.add(pr["base"]["ref"])
+          fetch = run("git","fetch","--prune","origin",
+                      "+refs/heads/*:refs/remotes/origin/*")
+          if fetch.returncode:
+              sys.exit("Fetch failed: " + fetch.stderr)
+          target_sha = run("git","rev-parse",f"refs/remotes/origin/{target}")
+          if target_sha.returncode: sys.exit("Target ref missing")
+          target_sha = target_sha.stdout.strip()
+          removed = []
+          kept = []
+          for entry in branches:
+              name = entry["name"]
+              sha = entry["commit"]["sha"]
+              if name in protected:
+                  kept.append((name,"protected/open PR"))
+                  continue
+              ancestor = run("git","merge-base","--is-ancestor",sha,target_sha)
+              if ancestor.returncode != 0:
+                  kept.append((name,"independent commits"))
+                  continue
+              latest = run("git","ls-remote","--heads","origin",
+                           f"refs/heads/{name}")
+              if latest.returncode or not latest.stdout.startswith(sha+"\t"):
+                  kept.append((name,"changed during audit"))
+                  continue
+              tag = f"archive/pre-p122-cleanup/{name}"
+              existing = run("git","ls-remote","--tags","origin",
+                             f"refs/tags/{tag}")
+              if existing.returncode or (existing.stdout and
+                      not existing.stdout.startswith(sha+"\t")):
+                  kept.append((name,"archive tag conflict"))
+                  continue
+              if not existing.stdout:
+                  archived = run("git","push","origin",f"{sha}:refs/tags/{tag}")
+                  if archived.returncode:
+                      kept.append((name,"archive failed: "+archived.stderr.strip()))
+                      continue
+              deletion = run("git","push",f"--force-with-lease=refs/heads/{name}:{sha}",
+                             "origin",f":refs/heads/{name}")
+              if deletion.returncode:
+                  kept.append((name,"delete rejected: "+deletion.stderr.strip()))
+                  continue
+              removed.append(name)
+              print(f"ARCHIVED+DELETED: {name} -> {tag} -> {sha}", flush=True)
+          print(f"FINAL: removed={len(removed)}, preserved={len(kept)}, "
+                f"total={len(branches)}, open_PRs={len(pulls)}")
+          for name, reason in kept:
+              print(f"PRESERVED: {name}: {reason}")
+          PY
