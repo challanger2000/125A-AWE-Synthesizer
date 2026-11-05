@@ -725,12 +725,16 @@ public:
                 const auto bank=static_cast<uint32_t>(std::clamp(
                     int(std::lround(val*AssetState::kMaxBank)),0,
                     int(AssetState::kMaxBank)));
-                // A browser bank event is an explicit re-selection, even
-                // when the stored bank parameter already has that value.
-                // MIDI CC0/32 can have changed the effective sounding bank.
-                liveMidi_.BrowserBankSelected();
-                rtBank_.store(bank,std::memory_order_release);
-                if(synth_)synth_->SelectBrowserBank(static_cast<uint16_t>(bank));
+                // Generic VST3 bank automation can repeat a constant point
+                // across process blocks. It is NOT a new browser gesture:
+                // re-applying it could overwrite a newer MIDI CC0 selection.
+                // Same-value GUI re-selection instead uses the one-shot
+                // 125A_BROWSER_BANK_RESELECT message handled above.
+                if(bank!=rtBank_.load(std::memory_order_relaxed)) {
+                    liveMidi_.BrowserBankSelected();
+                    rtBank_.store(bank,std::memory_order_release);
+                    if(synth_)synth_->SelectBrowserBank(static_cast<uint16_t>(bank));
+                }
             } else if(const int ch=MidiProgramRouting::Channel(id);ch>=0) {
                 const auto program=static_cast<uint32_t>(
                     std::clamp(int(std::lround(val*127.)),0,127));
