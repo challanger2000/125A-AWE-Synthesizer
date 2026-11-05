@@ -18,7 +18,7 @@
 #include "MidiQueueOrdering.h"
 #include "MidiLiveState.h"
 #include "PitchZeroFlush.h"
-#include "BrowserBankCommand.h"
+#include "BankOrder.h"
 #include "HostNotificationRetry.h"
 #include "RealtimeStateVersion.h"
 #include "RealtimeEngineExchange.h"
@@ -225,8 +225,8 @@ public:
                msg->getAttributes()->getInt("Bank",bank)!=kResultOk ||
                bank<0 || bank>AssetState::kMaxBank)
                 return kInvalidArgument;
-            return browserBankCommand_.Publish(static_cast<unsigned>(bank))
-                ?kResultOk:kInvalidArgument;
+            bankOrder_.PublishBrowser(static_cast<uint16_t>(bank));
+            return kResultOk;
         }
         if(msg && FIDStringsEqual(msg->getMessageID(),"125A_HW_INFO_REQUEST")) {
             std::string snapshot;
@@ -509,7 +509,7 @@ public:
         if(!stream)return kInvalidArgument;
         // A slow IBStream read/ROM preparation can overlap a NEWER accepted
         // browser selection. Capture command identity BEFORE reading it.
-        uint64_t bankAtRecallStart=browserBankCommand_.Snapshot();
+        const uint64_t recallSequence=bankOrder_.BeginRecall();
         // P118-04: read an entire candidate without an audio mutex and
         // prepare any new ROM/SF2 engine BEFORE publishing saved paths.
         const auto receive=[&](void* buffer,size_t n) {
@@ -577,22 +577,16 @@ public:
             // audio callback; that callback restores MIDI state itself.
             RealtimeStateVersion::Writer controlWrite(
                 rtStateVersion_, RealtimeStateVersion::Domain::Control);
-            // An earlier command (including unconsumed GUI requests) is
-            // superseded by recall; a NEWER accepted GUI selection is not.
-            // CAS also handles a bank notify that races with this commit.
-            if(!browserBankCommand_.PublishRecallIfUnchanged(
-                    bankAtRecallStart,candidate.bank)) {
-                candidate.bank=static_cast<uint16_t>(
-                    bankAtRecallStart&uint64_t{0xFFFF});
-                if(prepared) {
-                    prepared->SelectBrowserBank(static_cast<uint16_t>(candidate.bank));
-                    for(int ch=0;ch<16;++ch)
-                        prepared->ProgramChange(static_cast<uint8_t>(ch),
-                            static_cast<uint8_t>(
-                                (candidate.channelProgramMask&(1u<<ch))
-                                    ?candidate.channelPrograms[ch]
-                                    :candidate.program));
-                }
+            // Recall is ordered at entry, BEFORE its potentially slow
+            // stream/ROM work. Ordinary VST3 parameter changes and browser
+            // messages have independent stamped producers; neither can be
+            // overwritten by an older recall finishing later.
+            bankOrder_.CommitRecall(recallSequence,
+                                    static_cast<uint16_t>(candidate.bank));
+            const auto latestBank=bankOrder_.Latest();
+            if(candidate.bank!=latestBank.bank) {
+                candidate.bank=latestBank.bank;
+                if(prepared)prepared->SelectBrowserBank(latestBank.bank);
             }
             rtProgram_.store(candidate.program,std::memory_order_release);
             rtBank_.store(candidate.bank,std::memory_order_release);
@@ -602,8 +596,8 @@ public:
             for(int ch=0;ch<16;++ch)
                 rtChannelPrograms_[ch].store(
                     candidate.channelPrograms[ch],std::memory_order_release);
-            // A recalled browser bank supersedes any older touched CC0.
-            browserSelectionEpoch_.fetch_add(1,std::memory_order_acq_rel);
+            // CC0/CC32 invalidation is handled on the audio thread against
+            // this recall's original sequence, per MIDI channel.
             for(int i=0;i<kGuiCount;++i)
                 rtControls_[i].store(candidate.controls[i],std::memory_order_release);
             gainRestoreValue_.store(candidate.masterVolume,std::memory_order_release);
@@ -644,28 +638,15 @@ public:
             volumeGain_.restore(gainRestoreValue_.load(std::memory_order_acquire));
             lastGainRestoreEpoch_=restore;
         }
-        SyncBrowserRecallInvalidation();
+        SyncCommittedRecall();
         const uint64_t revision=entry?entry->revision:0;
         if(revision!=lastRtRevision_) {
             if(synth_)ApplyRtParameters(*synth_);
             lastRtRevision_=revision;
         }
-        // Explicit UI bank reselection does not depend on a host emitting an
-        // unchanged automation value. Apply at the next audio block boundary,
-        // after engine recreation, before incoming MIDI events are processed.
-        uint16_t reselectedBank=0;
-        if(browserBankCommand_.HasPending(lastBrowserBankCommand_)) {
-            RealtimeStateVersion::Writer write(
-                rtStateVersion_, RealtimeStateVersion::Domain::Audio);
-            // Never mark a command consumed if recall owns the state gate:
-            // the pending accepted selection must survive for the next block.
-            if(write && browserBankCommand_.Consume(
-                    lastBrowserBankCommand_,reselectedBank)) {
-                rtBank_.store(reselectedBank,std::memory_order_release);
-                liveMidi_.BrowserBankSelected();
-                if(synth_)synth_->SelectBrowserBank(reselectedBank);
-            }
-        }
+        // Apply only the latest global bank decision. An unsuccessful
+        // realtime writer attempt leaves the stamped value pending.
+        ApplyPendingGlobalBank(synth_);
         // P118: VST3 parameter points carry their own sampleOffset.
         // Keep one cursor per parameter queue and merge them with MIDI events.
         // No allocation or sorting on the audio thread. The number of known
@@ -772,9 +753,25 @@ public:
             const bool persisted = id==kProgramID || id==kBankID ||
                 id==kVolumeID || (id>=kGuiFirstID&&id<kGuiFirstID+kGuiCount) ||
                 MidiProgramRouting::Channel(id)>=0;
+            // Bank controls are accepted before trying the realtime state
+            // gate, so a concurrent recall cannot silently drop the edit.
+            if(id==kBankID) {
+                const uint16_t bank=static_cast<uint16_t>(std::clamp(
+                    int(std::lround(val*AssetState::kMaxBank)),0,
+                    int(AssetState::kMaxBank)));
+                // A constant automation point in every callback isn't an
+                // intentional re-selection. Same-value browser gestures
+                // have their own stamped binary message path.
+                if(!lastHostBankParamValid_||bank!=lastHostBankParam_) {
+                    lastHostBankParam_=bank;
+                    lastHostBankParamValid_=true;
+                    lastHostBankParamSequence_=bankOrder_.PublishAudio(bank);
+                }
+            }
             RealtimeStateVersion::Writer write(
                 rtStateVersion_, RealtimeStateVersion::Domain::Audio,persisted);
-            // Recall has priority; never publish half a program transaction.
+            // Recall has priority; a pending bank event is kept for a later
+            // callback instead of being acknowledged and discarded.
             if(!write)return;
             if(id==kProgramID) {
                 const auto program=static_cast<uint32_t>(std::clamp(
@@ -787,24 +784,7 @@ public:
                     synth_->ProgramChange(static_cast<uint8_t>(ch),
                         static_cast<uint8_t>(program));
             } else if(id==kBankID) {
-                // A recall that committed AFTER this process() began may
-                // leave a deferred bank command. A later parameter edit
-                // supersedes it, including a repeated equal-value edit.
-                SyncBrowserRecallInvalidation();
-                SupersedeQueuedBrowserBank();
-                const auto bank=static_cast<uint32_t>(std::clamp(
-                    int(std::lround(val*AssetState::kMaxBank)),0,
-                    int(AssetState::kMaxBank)));
-                // Generic VST3 bank automation can repeat a constant point
-                // across process blocks. It is NOT a new browser gesture:
-                // re-applying it could overwrite a newer MIDI CC0 selection.
-                // Same-value GUI re-selection instead uses the one-shot
-                // 125A_BROWSER_BANK_RESELECT message handled above.
-                if(bank!=rtBank_.load(std::memory_order_relaxed)) {
-                    liveMidi_.BrowserBankSelected();
-                    rtBank_.store(bank,std::memory_order_release);
-                    if(synth_)synth_->SelectBrowserBank(static_cast<uint16_t>(bank));
-                }
+                ApplyGlobalBankUnderWriter(synth_,bankOrder_.Latest());
             } else if(const int ch=MidiProgramRouting::Channel(id);ch>=0) {
                 const auto program=static_cast<uint32_t>(
                     std::clamp(int(std::lround(val*127.)),0,127));
@@ -828,25 +808,15 @@ public:
                 if(!midi.valid)return;
                 // Remember parameter-only MIDI even without a ROM/engine.
                 // One-shot CC 120/123 are forwarded but never replayed.
-                // Bank CC events accepted after a mid-block recall must
-                // survive its deferred command and pending invalidation.
-                if(midi.number==0||midi.number==32) {
-                    SyncBrowserRecallInvalidation();
+                // CC0/CC32 only override their OWN channel. They do not
+                // acknowledge, suppress or change a global browser command.
+                // A later recall/browser select clears only older CC stamps.
+                if(midi.number==0||midi.number==32)
+                    liveMidi_.AcceptBank(static_cast<unsigned>(midi.channel),
+                                         midi.number,val,bankOrder_.Next());
+                else
                     liveMidi_.Accept(static_cast<unsigned>(midi.channel),
                                      midi.number,val);
-                    const auto newer=browserSelectionEpoch_.load(
-                        std::memory_order_acquire);
-                    if(newer!=lastBrowserSelectionEpoch_) {
-                        liveMidi_.BrowserBankSelected();
-                        lastBrowserSelectionEpoch_=newer;
-                        liveMidi_.Accept(static_cast<unsigned>(midi.channel),
-                                         midi.number,val);
-                    }
-                    SupersedeQueuedBrowserBank();
-                } else {
-                    liveMidi_.Accept(static_cast<unsigned>(midi.channel),
-                                     midi.number,val);
-                }
                 if(!synth_)return;
                 const uint8_t channel=static_cast<uint8_t>(midi.channel);
                 if(midi.number==129)
@@ -1058,10 +1028,12 @@ private:
     std::atomic<uint32_t> rtMaster_{MasterOutput::kDefault};
     std::array<std::atomic<uint32_t>,16> rtChannelPrograms_{};
     std::atomic<uint32_t> rtChannelProgramMask_{0};
-    std::atomic<uint64_t> browserSelectionEpoch_{0};
-    uint64_t lastBrowserSelectionEpoch_=0; // audio thread only
-    BrowserBankCommand browserBankCommand_{};
-    uint64_t lastBrowserBankCommand_=0; // audio thread only
+    BankOrder bankOrder_{};
+    uint64_t lastGlobalBankSequence_=0; // audio thread only
+    uint64_t lastRecallSequence_=0; // audio thread only
+    uint64_t lastHostBankParamSequence_=0; // audio thread only
+    uint16_t lastHostBankParam_=0; // audio thread only
+    bool lastHostBankParamValid_=false; // audio thread only
     std::array<std::atomic<uint32_t>,kGuiCount> rtControls_{};
     std::atomic<uint64_t> gainRestoreEpoch_{0};
     std::atomic<uint32_t> gainRestoreValue_{MasterOutput::kDefault};
@@ -1075,17 +1047,37 @@ private:
         e->revision=++nextRevision_;
         return e;
     }
-    void SyncBrowserRecallInvalidation() noexcept {
-        const auto epoch=browserSelectionEpoch_.load(std::memory_order_acquire);
-        if(epoch!=lastBrowserSelectionEpoch_) {
-            liveMidi_.BrowserBankSelected();
-            lastBrowserSelectionEpoch_=epoch;
+    void SyncCommittedRecall() noexcept {
+        const auto recalled=bankOrder_.LatestRecall();
+        if(recalled.sequence<=lastRecallSequence_)return;
+        // The bank input from an EARLIER callback cannot be replayed over
+        // a newer recall. An input accepted AFTER recall started must survive.
+        liveMidi_.BrowserBankSelected(recalled.sequence);
+        if(!lastHostBankParamValid_||
+           lastHostBankParamSequence_<recalled.sequence) {
+            lastHostBankParam_=recalled.bank;
+            lastHostBankParamValid_=true;
+            lastHostBankParamSequence_=recalled.sequence;
         }
+        lastRecallSequence_=recalled.sequence;
     }
-    void SupersedeQueuedBrowserBank() noexcept {
-        // Audio-owned acknowledgement: only commands accepted before this
-        // later bank input are superseded. Later GUI messages stay pending.
-        lastBrowserBankCommand_=browserBankCommand_.Snapshot();
+    void ApplyGlobalBankUnderWriter(Synth* target,
+                                    BankOrder::Choice bank) noexcept {
+        if(bank.sequence<=lastGlobalBankSequence_)return;
+        rtBank_.store(bank.bank,std::memory_order_release);
+        liveMidi_.BrowserBankSelected(bank.sequence);
+        if(target) {
+            target->SelectBrowserBank(bank.bank);
+            liveMidi_.ReplayNewerBankControls(*target,bank.sequence);
+        }
+        lastGlobalBankSequence_=bank.sequence;
+    }
+    void ApplyPendingGlobalBank(Synth* target) noexcept {
+        const auto desired=bankOrder_.Latest();
+        if(desired.sequence<=lastGlobalBankSequence_)return;
+        RealtimeStateVersion::Writer write(
+            rtStateVersion_,RealtimeStateVersion::Domain::Audio);
+        if(write)ApplyGlobalBankUnderWriter(target,desired);
     }
     void ApplyRtParameters(Synth& target) noexcept {
         for(int i=0;i<kGuiCount;++i)
