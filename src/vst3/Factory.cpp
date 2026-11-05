@@ -700,12 +700,12 @@ public:
                 const auto bank=static_cast<uint32_t>(std::clamp(
                     int(std::lround(val*AssetState::kMaxBank)),0,
                     int(AssetState::kMaxBank)));
-                if(bank!=rtBank_.load(std::memory_order_relaxed)) {
-                    // A later browser selection invalidates earlier CC0/32.
-                    liveMidi_.BrowserBankSelected();
-                    rtBank_.store(bank,std::memory_order_release);
-                    if(synth_)synth_->SelectBrowserBank(static_cast<uint16_t>(bank));
-                }
+                // A browser bank event is an explicit re-selection, even
+                // when the stored bank parameter already has that value.
+                // MIDI CC0/32 can have changed the effective sounding bank.
+                liveMidi_.BrowserBankSelected();
+                rtBank_.store(bank,std::memory_order_release);
+                if(synth_)synth_->SelectBrowserBank(static_cast<uint16_t>(bank));
             } else if(const int ch=MidiProgramRouting::Channel(id);ch>=0) {
                 const auto program=static_cast<uint32_t>(
                     std::clamp(int(std::lround(val*127.)),0,127));
@@ -1470,7 +1470,10 @@ private:
         bool retry=false;
         {
             std::lock_guard<std::mutex> guard(sf2StatusMutex_);
-            if(dirtyOk&&dirtySeq==hostDirtySeq_)hostDirtyPending_=false;
+            // A rejecting IComponentHandler2 must not create an
+            // unlimited 250-ms retry loop. Each new ACK has a new sequence
+            // and may request its own notification independently.
+            if(dirtySeq==hostDirtySeq_)hostDirtyPending_=false;
             if(latencyOk&&latencySeq==hostLatencySeq_)latencyChangePending_=false;
             retry=hostDirtyPending_||latencyChangePending_;
         }
