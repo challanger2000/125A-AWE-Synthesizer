@@ -370,6 +370,11 @@ void PresetBrowserView::Select(uint16_t bank,uint8_t program) {
         }
         return;
     }
+    // An earlier failed same-bank message painted a local red error. Once
+    // the host accepts a later re-selection, restore the authoritative
+    // status text instead of retaining a stale warning across successful UI.
+    lastStatus_.clear();
+    SyncSf2Status();
     ChangeParameter(kBankParam,double(bank)/16383.);
     ChangeParameter(kProgram,double(program)/127.);
     // Reflect the clicked instrument immediately. The following idle
