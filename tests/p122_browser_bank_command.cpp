@@ -1,4 +1,6 @@
 #include "BrowserBankCommand.h"
+#include "BankOrder.h"
+#include "MidiLiveState.h"
 #include "RealtimeStateVersion.h"
 #include <array>
 #include <cstdint>
@@ -67,6 +69,55 @@ int main() {
         ok&=check(bool(rt)&&command.Consume(seen,bank)&&bank==5,
                   "next available audio block applies retained bank 5");
     }
+    // P126: global bank chronology must be shared by ordinary host edits,
+    // browser notify and recalls, not inferred from a browser-only command.
+    AWE125::BankOrder ordered;
+    const uint64_t earlyRecall=ordered.BeginRecall();
+    const uint64_t lateAudio=ordered.PublishAudio(5);
+    ordered.CommitRecall(earlyRecall,0);
+    auto bankChoice=ordered.Latest();
+    ok&=check(bankChoice.bank==5&&bankChoice.sequence==lateAudio,
+              "earlier slow recall cannot overwrite later host parameter bank 5");
+    const uint64_t laterRecall=ordered.BeginRecall();
+    ordered.CommitRecall(laterRecall,0);
+    bankChoice=ordered.Latest();
+    ok&=check(bankChoice.bank==0&&bankChoice.sequence==laterRecall,
+              "newer project recall beats older host parameter bank 5");
+    ordered.PublishBrowser(7);
+    bankChoice=ordered.Latest();
+    ok&=check(bankChoice.bank==7,"browser notify supplies latest global bank");
+    const uint64_t precedingBrowser=ordered.BeginRecall();
+    ordered.PublishBrowser(9);
+    ordered.CommitRecall(precedingBrowser,0);
+    ok&=check(ordered.Latest().bank==9,
+              "later browser bank 9 wins despite slow recall commit");
+    // MIDI CC0/CC32 is channel-local: neither is allowed to acknowledge or
+    // overwrite the latest global browser selection.
+    AWE125::MidiLiveState midi;
+    struct BankReceiver {
+        std::array<int,16> cc0{};
+        std::array<int,16> cc32{};
+        void ControlChange(uint8_t ch,uint8_t cc,uint8_t val) {
+            if(cc==0)cc0[ch]=val;
+            if(cc==32)cc32[ch]=val;
+        }
+    } receiver;
+    const uint64_t beforeBrowser=ordered.Next();
+    midi.AcceptBank(2,0,5.0/127.0,beforeBrowser);
+    const uint64_t browserClock=ordered.Next();
+    midi.BrowserBankSelected(browserClock);
+    const uint64_t laterChannel=ordered.Next();
+    midi.AcceptBank(7,0,11.0/127.0,laterChannel);
+    midi.AcceptBank(7,32,3.0/127.0,ordered.Next());
+    midi.ReplayNewerBankControls(receiver,browserClock);
+    ok&=check(receiver.cc0[2]==0&&receiver.cc0[7]==11&&
+              receiver.cc32[7]==3&&receiver.cc0[1]==0,
+              "newer channel-8 CC bank survives while old channel-3 CC clears");
+    midi.BrowserBankSelected(ordered.Next());
+    BankReceiver cleared;
+    midi.ReplayNewerBankControls(cleared,ordered.Latest().sequence);
+    ok&=check(cleared.cc0[7]==0&&cleared.cc32[7]==0,
+              "later global selection invalidates only older MIDI bank touch");
     std::cout<<(ok?"P122_BROWSER_BANK_COMMAND_PASS":"P122_BROWSER_BANK_COMMAND_FAIL")<<"\n";
     return ok?0:1;
 }
