@@ -69,12 +69,12 @@ static bool snapshotBank(IComponent* component,uint16_t& bank) {
     bank=static_cast<uint16_t>(state.bank);
     return true;
 }
-static bool makeRecall(IBStream& stream,uint32_t bank=0) {
+static bool makeRecall(IBStream& stream,uint32_t bank=0,uint32_t program=0) {
     AWE125::AssetState::Data state;
     state.pathsSpecified=true;
     state.bank=bank;
-    state.program=0;
-    for(auto& p:state.channelPrograms)p=0;
+    state.program=program;
+    for(auto& p:state.channelPrograms)p=program;
     const auto write=[&](const void* data,size_t count) {
         int32 written=0;
         return count<=AWE125::AssetState::kMaxPath &&
@@ -301,6 +301,89 @@ int wmain(int argc,wchar_t** argv) {
                       audio->process(data)==kResultOk &&
                       snapshotBank(component,bank)&&bank==9,
                       "channel-3 CC0 cannot discard newer global browser bank 9");
+            // P127 F01: two actual overlapping setState() calls. An old
+            // paused bank-0 recall must not replace a NEWER completed bank-5
+            // recall, including saved state and following block.
+            MemoryStream f01Base;
+            ok&=check(makeRecall(f01Base,0,0) &&
+                      component->setState(&f01Base)==kResultOk &&
+                      audio->process(data)==kResultOk,
+                      "P127 prepare overlapping-recall test at bank 0");
+            PausedStateStream oldProject;
+            bool oldReady=makeRecall(oldProject,0,0);
+            ok&=check(oldReady,"P127 serialize older bank-zero recall");
+            if(oldReady) {
+                oldProject.pauseOnRead.store(true,std::memory_order_release);
+                std::atomic<tresult> oldResult{kResultOk};
+                std::thread older([&] {
+                    oldResult.store(component->setState(&oldProject),
+                                    std::memory_order_release);
+                });
+                while(!oldProject.entered.load(std::memory_order_acquire))
+                    std::this_thread::yield();
+                MemoryStream newer;
+                const bool newerOk=makeRecall(newer,5,9) &&
+                    component->setState(&newer)==kResultOk;
+                AWE125::AssetState::Data afterNew{};
+                const bool observedNew=snapshotState(component,afterNew);
+                oldProject.releaseRead.store(true,std::memory_order_release);
+                older.join();
+                AWE125::AssetState::Data afterOld{},afterFollow{};
+                const bool oldSaved=snapshotState(component,afterOld);
+                const bool forward=audio->process(data)==kResultOk &&
+                    snapshotState(component,afterFollow);
+                ok&=check(newerOk&&observedNew&&oldSaved&&forward &&
+                          afterNew.bank==5&&afterNew.program==9 &&
+                          afterOld.bank==5&&afterOld.program==9 &&
+                          afterFollow.bank==5&&afterFollow.program==9 &&
+                          oldResult.load()!=kResultOk,
+                          "P127 older paused recall rejected, newer bank/program 5/9 retained");
+            }
+            // P127 F07: genuine host bank+program pair chosen while a
+            // previous project recall is paused in IBStream::read.
+            MemoryStream f07Base;
+            ok&=check(makeRecall(f07Base,0,0) &&
+                      component->setState(&f07Base)==kResultOk &&
+                      audio->process(data)==kResultOk,
+                      "P127 prepare late preset-pair selection");
+            PausedStateStream slowPresetRecall;
+            bool slowPresetReady=makeRecall(slowPresetRecall,0,0);
+            ok&=check(slowPresetReady,"P127 serialize old bank0/program0 recall");
+            if(slowPresetReady) {
+                slowPresetRecall.pauseOnRead.store(true,std::memory_order_release);
+                std::atomic<bool> slowPresetOk{false};
+                std::thread earlier([&] {
+                    slowPresetOk.store(component->setState(&slowPresetRecall)==kResultOk,
+                                       std::memory_order_release);
+                });
+                while(!slowPresetRecall.entered.load(std::memory_order_acquire))
+                    std::this_thread::yield();
+                ParameterChanges presetEdits(2);
+                int32 bidx=0,pidx=0,bpoint=0,ppoint=0;
+                auto* qb=presetEdits.addParameterData(ParamID(1002),bidx);
+                auto* qp=presetEdits.addParameterData(ParamID(1000),pidx);
+                const bool editsReady=qb&&qp &&
+                    qb->addPoint(0,5./16383.,bpoint)==kResultOk &&
+                    qp->addPoint(0,9./127.,ppoint)==kResultOk;
+                ProcessData presetFlush{};
+                presetFlush.processMode=kRealtime;
+                presetFlush.symbolicSampleSize=kSample32;
+                presetFlush.numSamples=0;
+                presetFlush.inputParameterChanges=&presetEdits;
+                const bool applied=editsReady&&audio->process(presetFlush)==kResultOk;
+                slowPresetRecall.releaseRead.store(true,std::memory_order_release);
+                earlier.join();
+                AWE125::AssetState::Data p{},again{};
+                const bool saved=snapshotState(component,p);
+                const bool follow=audio->process(data)==kResultOk&&
+                    snapshotState(component,again);
+                bool channels=true;
+                for(auto n:p.channelPrograms)if(n!=9)channels=false;
+                ok&=check(applied&&slowPresetOk.load()&&saved&&follow&&
+                          p.bank==5&&p.program==9&&p.channelProgramMask==0&&
+                          channels&&again.bank==5&&again.program==9,
+                          "P127 complete later preset 5/9 survives earlier recall");
+            }
             // A true exported VST3 processor concurrently receives rapid
             // program-change parameter queues and getState() calls.
             // The host must never serialize a mixture of two programs.
