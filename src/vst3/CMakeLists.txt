@@ -44,3 +44,19 @@ if(WIN32)
       COMMAND awe32_p120_program_host_test
               "$<TARGET_FILE:125A_AWE_Synthesizer>")
 endif()
+
+# P122: check the real exported VST3 processor's off-thread bank-reselect
+# message, audio-block consumption and persisted bank without a user ROM.
+if(WIN32)
+  add_executable(awe32_p122_vst3_bank_host_test
+      "${PROJECT_SOURCE_DIR}/tests/p122_vst3_bank_host.cpp")
+  target_include_directories(awe32_p122_vst3_bank_host_test PRIVATE
+      "${PROJECT_SOURCE_DIR}/external/vst3sdk"
+      "${PROJECT_SOURCE_DIR}/src/vst3")
+  target_link_libraries(awe32_p122_vst3_bank_host_test PRIVATE sdk sdk_hosting)
+  target_compile_features(awe32_p122_vst3_bank_host_test PRIVATE cxx_std_23)
+  add_dependencies(awe32_p122_vst3_bank_host_test 125A_AWE_Synthesizer)
+  add_test(NAME 125A_p122_vst3_bank_host
+      COMMAND awe32_p122_vst3_bank_host_test
+              "$<TARGET_FILE:125A_AWE_Synthesizer>")
+endif()
