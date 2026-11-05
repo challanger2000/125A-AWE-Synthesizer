@@ -81,6 +81,12 @@ public:
     void SelectBrowserBank(uint16_t bank);
     void ControlChange(uint8_t channel, uint8_t controller, uint8_t value);
     void PitchBend(uint8_t channel, int16_t value);
+    // VST3 host automation: update stored bend, but write IP only for real
+    // allocated voices. Win95's free voice state 0x0FFE otherwise looks
+    // like channel 16 and saturates the finite emulated register queue.
+    // The historical PitchBend() driver path remains unchanged.
+    void PitchBendAutomated(uint8_t channel, int16_t value);
+    bool HasPlayingVoicesOnChannel(uint8_t channel) const noexcept;
 
     void RenderBlock(int16_t* out, uint32_t numFrames);
 
