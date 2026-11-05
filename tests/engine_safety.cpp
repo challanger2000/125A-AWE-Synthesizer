@@ -96,16 +96,20 @@ int main()
     }
     okay &= Check(first.Ready() && second.Ready(), "interleaved instance render survives");
     
-    // Queue overflow must never resize or crash. This is a deliberate
-    // pathological MIDI burst; the adapter then fails closed to silence.
+    // P121: a large but valid write burst must drain bounded queue entries,
+    // NEVER latch a permanent global mute. Separate p121_pitchbend_audio
+    // verifies the stronger property with 16 real voices and nonzero PCM.
+    // Retain this two-instance test for bounded writes and live rendering.
     for (int i = 0; i < 32769; ++i)
         first.PortWrite(0x620, static_cast<uint16_t>(i));
     std::int32_t l = 123, r = 123;
     first.RenderFrame(l, r);
-    okay &= Check(l == 0 && r == 0, "overflow produces deterministic safe silence");
-    okay &= Check(first.PortRead(0x620) == 0xFFFF, "overflow returns safe register value");
+    okay &= Check(first.Ready(),
+                  "32769 writes keep the 86Box instance initialized");
+    (void)first.PortRead(0x620);
     for (int i = 0; i < 1960; ++i) first.RenderFrame(l, r);
-    okay &= Check(l == 0 && r == 0, "post-overflow remains fail-closed");
+    okay &= Check(first.Ready() && second.Ready(),
+                  "oversized burst can continue rendering without breaking a second instance");
 
     // Concurrent new instances cannot rewrite chip tables during active rendering.
     constexpr int kParallel = 4;
