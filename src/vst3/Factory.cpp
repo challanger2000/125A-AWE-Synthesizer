@@ -92,6 +92,14 @@ public:
         addEventInput(STR16("MIDI"),16);
         return kResultOk;
     }
+    // Required VST3 Activated <-> Processing handshake. Steinberg's
+    // AudioEffect base returns kNotImplemented; this instrument keeps MIDI
+    // voice/tail lifetime under event and activation control, so no costly
+    // engine reconfiguration is needed at each transport start/stop.
+    // This method may be called on the realtime thread: constant-time only.
+    tresult PLUGIN_API setProcessing(TBool /*processing*/) override {
+        return kResultOk;
+    }
     tresult PLUGIN_API canProcessSampleSize(int32 type) override {
         return type==kSample32?kResultTrue:kResultFalse;
     }
@@ -496,6 +504,9 @@ public:
     }
     tresult PLUGIN_API setState(IBStream* stream) override {
         if(!stream)return kInvalidArgument;
+        // A slow IBStream read/ROM preparation can overlap a NEWER accepted
+        // browser selection. Capture command identity BEFORE reading it.
+        uint64_t bankAtRecallStart=browserBankCommand_.Snapshot();
         // P118-04: read an entire candidate without an audio mutex and
         // prepare any new ROM/SF2 engine BEFORE publishing saved paths.
         const auto receive=[&](void* buffer,size_t n) {
@@ -563,10 +574,25 @@ public:
             // audio callback; that callback restores MIDI state itself.
             RealtimeStateVersion::Writer controlWrite(
                 rtStateVersion_, RealtimeStateVersion::Domain::Control);
+            // An earlier command (including unconsumed GUI requests) is
+            // superseded by recall; a NEWER accepted GUI selection is not.
+            // CAS also handles a bank notify that races with this commit.
+            if(!browserBankCommand_.PublishRecallIfUnchanged(
+                    bankAtRecallStart,candidate.bank)) {
+                candidate.bank=static_cast<uint16_t>(
+                    bankAtRecallStart&uint64_t{0xFFFF});
+                if(prepared) {
+                    prepared->SelectBrowserBank(static_cast<uint16_t>(candidate.bank));
+                    for(int ch=0;ch<16;++ch)
+                        prepared->ProgramChange(static_cast<uint8_t>(ch),
+                            static_cast<uint8_t>(
+                                (candidate.channelProgramMask&(1u<<ch))
+                                    ?candidate.channelPrograms[ch]
+                                    :candidate.program));
+                }
+            }
             rtProgram_.store(candidate.program,std::memory_order_release);
             rtBank_.store(candidate.bank,std::memory_order_release);
-            // State recall takes precedence over any unconsumed GUI reselect.
-            browserBankCommand_.Publish(candidate.bank);
             rtMaster_.store(candidate.masterVolume,std::memory_order_release);
             rtChannelProgramMask_.store(
                 candidate.channelProgramMask,std::memory_order_release);
@@ -630,14 +656,17 @@ public:
         // unchanged automation value. Apply at the next audio block boundary,
         // after engine recreation, before incoming MIDI events are processed.
         uint16_t reselectedBank=0;
-        if(browserBankCommand_.Consume(lastBrowserBankCommand_,reselectedBank)) {
+        if(browserBankCommand_.HasPending(lastBrowserBankCommand_)) {
             RealtimeStateVersion::Writer write(
                 rtStateVersion_, RealtimeStateVersion::Domain::Audio);
-            if(write) {
+            // Never mark a command consumed if recall owns the state gate:
+            // the pending accepted selection must survive for the next block.
+            if(write && browserBankCommand_.Consume(
+                    lastBrowserBankCommand_,reselectedBank)) {
                 rtBank_.store(reselectedBank,std::memory_order_release);
                 liveMidi_.BrowserBankSelected();
                 if(synth_)synth_->SelectBrowserBank(reselectedBank);
-            } // A concurrent project recall takes precedence.
+            }
         }
         // P118: VST3 parameter points carry their own sampleOffset.
         // Keep one cursor per parameter queue and merge them with MIDI events.

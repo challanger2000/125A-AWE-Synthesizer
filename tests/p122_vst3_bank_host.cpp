@@ -15,6 +15,22 @@
 using namespace Steinberg;
 using namespace Steinberg::Vst;
 
+// Deterministic race: pause inside the actual getState-compatible V10
+// IBStream::read so a newer processor bank message is accepted while an
+// older project recall has already begun.
+class PausedStateStream final : public MemoryStream {
+public:
+    std::atomic<bool> pauseOnRead{false}, entered{false}, releaseRead{false};
+    tresult PLUGIN_API read(void* data,int32 length,int32* received) override {
+        if(pauseOnRead.load(std::memory_order_acquire) &&
+           !entered.exchange(true,std::memory_order_acq_rel)) {
+            while(!releaseRead.load(std::memory_order_acquire))
+                std::this_thread::yield();
+        }
+        return MemoryStream::read(data,length,received);
+    }
+};
+
 static bool check(bool ok,const char* label) {
     std::cout<<(ok?"PASS: ":"FAIL: ")<<label<<"\n";
     return ok;
@@ -37,6 +53,22 @@ static bool snapshotBank(IComponent* component,uint16_t& bank) {
     if(!snapshotState(component,state))return false;
     bank=static_cast<uint16_t>(state.bank);
     return true;
+}
+static bool makeRecall(IBStream& stream,uint32_t bank=0) {
+    AWE125::AssetState::Data state;
+    state.pathsSpecified=true;
+    state.bank=bank;
+    state.program=0;
+    for(auto& p:state.channelPrograms)p=0;
+    const auto write=[&](const void* data,size_t count) {
+        int32 written=0;
+        return count<=AWE125::AssetState::kMaxPath &&
+            stream.write(const_cast<void*>(data),static_cast<int32>(count),
+                         &written)==kResultOk &&
+            written==static_cast<int32>(count);
+    };
+    return AWE125::AssetState::Write(write,state) &&
+           stream.seek(0,IBStream::kIBSeekSet,nullptr)==kResultOk;
 }
 static tresult sendBank(IConnectionPoint* connection,int64 bank) {
     auto* message=new HostMessage;
@@ -106,6 +138,35 @@ int wmain(int argc,wchar_t** argv) {
                        audio->process(data)==kResultOk &&
                        snapshotBank(component,bank)&&bank==0,
                        "bank zero can be reselected without parameter queue");
+            // P124: pause an older setState() in its real stream reader.
+            // A later accepted bank 5 must survive once recall completes.
+            PausedStateStream paused;
+            ok&=check(makeRecall(paused),"prepare real V10 recall bank zero");
+            paused.pauseOnRead.store(true,std::memory_order_release);
+            std::atomic<bool> recallSucceeded{false};
+            std::thread slowRecall([&] {
+                recallSucceeded.store(component->setState(&paused)==kResultOk,
+                                       std::memory_order_release);
+            });
+            while(!paused.entered.load(std::memory_order_acquire))
+                std::this_thread::yield();
+            ok&=check(sendBank(connection,5)==kResultOk,
+                       "new bank 5 accepted after old recall has started");
+            paused.releaseRead.store(true,std::memory_order_release);
+            slowRecall.join();
+            ok&=check(recallSucceeded.load() &&
+                      audio->process(data)==kResultOk &&
+                      snapshotBank(component,bank) && bank==5,
+                       "real VST3 older recall cannot replace later accepted bank 5");
+            // An older pending browser command *should* be overridden when
+            // a recall actually starts after it.
+            MemoryStream plainRecall;
+            ok&=check(makeRecall(plainRecall),"prepare newer bank-zero recall");
+            ok&=check(sendBank(connection,7)==kResultOk &&
+                      component->setState(&plainRecall)==kResultOk &&
+                      audio->process(data)==kResultOk &&
+                      snapshotBank(component,bank) && bank==0,
+                       "new V10 recall overrides previously queued bank 7");
             // A true exported VST3 processor concurrently receives rapid
             // program-change parameter queues and getState() calls.
             // The host must never serialize a mixture of two programs.
@@ -231,6 +292,8 @@ int wmain(int argc,wchar_t** argv) {
             // The sounding original-ROM scenario remains a separate QA gate.
             ok&=check(component->setActive(true)==kResultOk,
                 "real VST3 processor activated for playback-save stress");
+            ok&=check(audio->setProcessing(true)==kResultOk,
+                "strict VST3 host: begin processing after activation");
             std::atomic<bool> playbackOk{true},started{false};
             std::thread playback([&] {
                 ProcessData play{};
@@ -254,8 +317,21 @@ int wmain(int argc,wchar_t** argv) {
             playback.join();
             ok&=check(playbackOk.load()&&validSaves==500,
                 "500/500 genuine getState calls succeed during no-automation playback");
+            ok&=check(audio->setProcessing(false)==kResultOk,
+                "strict VST3 host: stop processing succeeds");
+            ok&=check(audio->setProcessing(true)==kResultOk &&
+                      audio->setProcessing(false)==kResultOk &&
+                      audio->setProcessing(true)==kResultOk,
+                "legal start-stop-start sequence without intervening process");
+            ProcessData resumed{};
+            resumed.processMode=kRealtime;
+            resumed.symbolicSampleSize=kSample32;
+            resumed.numSamples=0;
+            ok&=check(audio->process(resumed)==kResultOk &&
+                      audio->setProcessing(false)==kResultOk,
+                "strict host resumes zero-frame flush then stops");
             ok&=check(component->setActive(false)==kResultOk,
-                "real VST3 deactivation after save stress");
+                "real VST3 deactivation after processing stop");
         }
         if(connection)connection->release();
         if(audio)audio->release();
