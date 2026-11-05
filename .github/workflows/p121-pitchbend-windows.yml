@@ -1,7 +1,7 @@
 name: P121 - Pitchbend audio and queue regression
 on:
   push:
-    branches: [fix/p121-pitchbend-automation]
+    branches: [fix/p121-pitchbend-automation, fix/p122-bank-dirty-audit]
     paths:
       - '.github/workflows/p121-pitchbend-windows.yml'
       - 'CMakeLists.txt'
