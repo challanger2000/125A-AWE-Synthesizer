@@ -65,6 +65,15 @@ target_link_libraries(awe32_sf2_audio_integration_test PRIVATE awe32_chip_safety
 set_target_properties(awe32_sf2_audio_integration_test PROPERTIES CXX_STANDARD 23)
 add_test(NAME 125A_sf2_audio_integration COMMAND awe32_sf2_audio_integration_test)
 
+# P121: real 86Box synthetic ROM / PCM regression for dense pitchbend.
+# Exercises the genuine 32,768-write queue and a playing 16-voice bank.
+add_executable(awe32_p121_pitchbend_audio_test "${PROJECT_SOURCE_DIR}/tests/p121_pitchbend_audio.cpp")
+target_include_directories(awe32_p121_pitchbend_audio_test PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}" "${UPSTREAM_SRC}")
+target_link_libraries(awe32_p121_pitchbend_audio_test PRIVATE awe32_chip_safety)
+set_target_properties(awe32_p121_pitchbend_audio_test PROPERTIES CXX_STANDARD 23)
+add_test(NAME 125A_p121_pitchbend_audio COMMAND awe32_p121_pitchbend_audio_test)
+
 # P25: Reproduce real, user-supplied SF2 timbre through 86Box with an external
 # ROM and bank. The executable has no proprietary assets or external deps.
 # It resolves the same assets.cfg as the VST3 and writes two isolated WAVs.
