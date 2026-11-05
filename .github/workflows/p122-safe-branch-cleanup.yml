@@ -1,4 +1,4 @@
-name: P122 - One-time safe branch cleanup
+name: P122 - Archive historical branches without active PR references
 on:
   push:
     branches: [fix/p122-bank-dirty-audit]
@@ -16,7 +16,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: true
-      - name: Archive and delete only fully absorbed, unreferenced branches
+      - name: Archive old non-PR branch tips before removing obsolete branch refs
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -67,8 +67,11 @@ jobs:
                   kept.append((name,"protected/open PR"))
                   continue
               ancestor = run("git","merge-base","--is-ancestor",sha,target_sha)
-              if ancestor.returncode != 0:
-                  kept.append((name,"independent commits"))
+              # Preserve independent old work as an immutable archive tag.
+              # All open-PR branches are protected above. Git history survives
+              # deletion of this extra branch ref and can be restored by tag.
+              if ancestor.returncode not in (0, 1):
+                  kept.append((name,"cannot establish ancestry"))
                   continue
               latest = run("git","ls-remote","--heads","origin",
                            f"refs/heads/{name}")
