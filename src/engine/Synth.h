@@ -137,7 +137,8 @@ private:
         uint8_t  vxdPatchPan = 64;   // +0x12: pan of the patch (driver units)
         uint8_t  vxdPanTarget = 0;   // +0x18: pan register value to glide to
         uint8_t  vxdPanCur = 0;      // +0x19: pan register value written last
-        int32_t  vxdPanTimer = -1;   // frames to the next glide step, -1 = none
+        int32_t  vxdPanTimer = -1;   // host frames until next glide step
+        uint32_t vxdPanRemainder = 22050; // fixed-point host-frame conversion
         int8_t   vxdFmmodDepth = 0;  // +0x14: FMMOD pitch depth of the patch
         uint8_t  vxdPatchAtten = 0;  // patch attenuation (register units)
         bool     vxdRom1mgm = false; // +16 attenuation for a "1MGM" ROM sample
@@ -216,6 +217,7 @@ private:
     void ResetControllersMdi(uint8_t channel);
     bool ControlChangeMdi(uint8_t channel, uint8_t controller, uint8_t value);
 
+    uint32_t m_hostRate = 44100; // host clock; chip always runs at 44100 Hz
     Emu8000Core m_core;
     std::vector<LoadedBank> m_banks;
     std::array<float,kGuiControlCount> m_guiControls{};
