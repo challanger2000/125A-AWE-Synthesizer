@@ -626,9 +626,10 @@ public:
         std::array<bool,kGuiCount> overlayEnabled{};
         std::array<MasterOutput::Curve,16> pitchCurves{};
         std::array<bool,16> pitchEnabled{};
-        std::array<int16_t,16> lastPitch{};
-        lastPitch.fill(INT16_MIN); // force first exact sample update
-        bool hasPitchCurve=false;
+        std::array<bool,16> pitchMoving{}; // quantized pitch changes inside block
+        // Pitch queues are consumed as a mathematical curve, NOT as separate
+        // queue events: even 128 redundant constant points must never split
+        // a PanVxd/86Box render into 128 one-frame register transactions.
         const auto readPoint=+[](void* context,int32_t index,
                                  int32_t& offset,double& value)->bool {
             auto* queue=static_cast<IParamValueQueue*>(context);
@@ -637,8 +638,9 @@ public:
             value=normalized;
             return true;
         };
+        int32 retainedQueues=0;
         for(int32 i=0;i<activeQueues;++i) {
-            auto& c=paramCursors_[i];
+            const auto c=paramCursors_[i];
             if(c.id==kVolumeID) {
                 masterCurve.reset(c.queue,readPoint,c.count,
                     double(rtMaster_.load(std::memory_order_relaxed))/
@@ -650,19 +652,39 @@ public:
                     double(rtControls_[idx].load(std::memory_order_relaxed))/
                     AssetState::kControlScale);
                 overlayEnabled[idx]=true;
-            } else {
-                const auto midi=MidiControlMapping::Decode(c.id);
-                if(midi.valid&&midi.number==129) {
-                    const int ch=midi.channel;
-                    const auto previous=liveMidi_.Get(
-                        static_cast<unsigned>(ch)).values[
-                        MidiControlMapping::Index(129)];
-                    pitchCurves[ch].reset(c.queue,readPoint,c.count,previous);
-                    pitchEnabled[ch]=true;
-                    hasPitchCurve=true;
-                }
             }
+            const auto midi=MidiControlMapping::Decode(c.id);
+            if(midi.valid&&midi.number==129) {
+                const int ch=midi.channel;
+                const auto previous=liveMidi_.Get(
+                    static_cast<unsigned>(ch)).values[
+                    MidiControlMapping::Index(129)];
+                pitchCurves[ch].reset(c.queue,readPoint,c.count,previous);
+                pitchEnabled[ch]=true;
+                // A constant queue (including a single change at frame 0)
+                // does not require one-sample render calls. Detect *all*
+                // knots, not only endpoints; a triangular bend could start
+                // and end at the same value but move in between.
+                auto probe=pitchCurves[ch];
+                const auto base=MidiControlMapping::PitchBend(probe.valueAt(0));
+                bool moving=MidiControlMapping::PitchBend(probe.valueAt(
+                    std::max<int32>(0,data.numSamples-1)))!=base;
+                for(int32 p=0;p<c.count && !moving;++p) {
+                    int32 offset=0;ParamValue value=0.;
+                    if(c.queue->getPoint(p,offset,value)!=kResultOk ||
+                       !std::isfinite(value)||offset<0||
+                       offset>=data.numSamples)continue;
+                    moving=MidiControlMapping::PitchBend(value)!=base;
+                }
+                pitchMoving[ch]=moving;
+                // Do not retain PitchBend points in the generic queue:
+                // they are consumed by pitchCurves below. This prevents
+                // dense points on a silent channel splitting audio blocks.
+                continue;
+            }
+            paramCursors_[retainedQueues++]=c;
         }
+        activeQueues=retainedQueues;
         auto apply=[&](ParamID id,ParamValue val) {
             if(id==kProgramID) {
                 const auto program=static_cast<uint32_t>(std::clamp(
@@ -712,7 +734,7 @@ public:
                 if(!synth_)return;
                 const uint8_t channel=static_cast<uint8_t>(midi.channel);
                 if(midi.number==129)
-                    synth_->PitchBend(channel,MidiControlMapping::PitchBend(val));
+                    synth_->PitchBendAutomated(channel,MidiControlMapping::PitchBend(val));
                 else if(midi.number==128)
                     synth_->ChannelPressure(channel,MidiControlMapping::Byte(val));
                 else synth_->ControlChange(channel,static_cast<uint8_t>(midi.number),
@@ -738,23 +760,31 @@ public:
         const auto render=[&](int32 end) {
             end=std::clamp(end,position,data.numSamples);
             if(canRender&&end>position) {
-                if(hasPitchCurve) {
-                    // Render in samples only during continuous pitchbend
-                    // automation. Sparse and dense VST3 curves now generate
-                    // identical register values at every frame.
+                bool movingPlayingVoices=false;
+                for(int ch=0;ch<16;++ch)
+                    if(pitchMoving[ch]&&
+                       synth_->HasPlayingVoicesOnChannel(static_cast<uint8_t>(ch)))
+                        movingPlayingVoices=true;
+                if(movingPlayingVoices) {
+                    // Preserve real-time interpolation *only* where a voice
+                    // is actually playing a changing bend. Completely silent
+                    // MIDI channels never write IP or fragment the renderer.
                     for(int32 frame=position;frame<end;++frame) {
-                        for(int ch=0;ch<16;++ch)if(pitchEnabled[ch]) {
-                            const int16_t bend=MidiControlMapping::PitchBend(
-                                pitchCurves[ch].valueAt(frame));
-                            if(lastPitch[ch]!=bend) {
-                                synth_->PitchBend(static_cast<uint8_t>(ch),bend);
-                                lastPitch[ch]=bend;
+                        for(int ch=0;ch<16;++ch)
+                            if(pitchEnabled[ch]&&synth_->HasPlayingVoicesOnChannel(
+                                static_cast<uint8_t>(ch))) {
+                                const int16_t bend=MidiControlMapping::PitchBend(
+                                    pitchCurves[ch].valueAt(frame));
+                                synth_->PitchBendAutomated(static_cast<uint8_t>(ch),bend);
                             }
-                        }
                         synth_->RenderBlock(
                             scratch_.data()+2*size_t(frame),1);
                     }
                 } else {
+                    for(int ch=0;ch<16;++ch)if(pitchEnabled[ch])
+                        synth_->PitchBendAutomated(static_cast<uint8_t>(ch),
+                            MidiControlMapping::PitchBend(
+                                pitchCurves[ch].valueAt(position)));
                     synth_->RenderBlock(
                         scratch_.data()+2*size_t(position),
                         static_cast<uint32_t>(end-position));
@@ -771,6 +801,16 @@ public:
                     else left[i]=(l+r)*0.5f;
                 }
             }
+            // Advance the stored pitch even if its channel had no voices.
+            // A subsequent NoteOn at the next event uses this bend.
+            if(end>position)
+                for(int ch=0;ch<16;++ch)if(pitchEnabled[ch]) {
+                    const auto normalized=pitchCurves[ch].valueAt(end-1);
+                    if(synth_)synth_->PitchBendAutomated(
+                        static_cast<uint8_t>(ch),
+                        MidiControlMapping::PitchBend(normalized));
+                    liveMidi_.Accept(static_cast<unsigned>(ch),129,normalized);
+                }
             position=end;
         };
         IEventList* events=data.inputEvents;
@@ -826,6 +866,13 @@ public:
                             std::memory_order_relaxed);
                         synth_->SetGuiControl(k,static_cast<float>(value));
                     }
+                    // Pitch at NoteOn must match the continuous curve at
+                    // this exact sample even if there were no older voices.
+                    const unsigned channel=static_cast<unsigned>(e.noteOn.channel);
+                    if(pitchEnabled[channel])synth_->PitchBendAutomated(
+                        static_cast<uint8_t>(channel),
+                        MidiControlMapping::PitchBend(
+                            pitchCurves[channel].valueAt(position)));
                     const uint8_t vel=static_cast<uint8_t>(std::clamp(
                         int(std::lround(e.noteOn.velocity*127.f)),0,127));
                     if(AllowEmuNoteOn(entry&&(entry->sf2Configured||entry->gmLoaded),
