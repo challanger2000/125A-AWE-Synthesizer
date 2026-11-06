@@ -1,0 +1,68 @@
+name: Independent P128 engine transition live VST3 reproduction
+on:
+  push:
+    branches: [audit/p128-independent-repro-20261106]
+  workflow_dispatch:
+
+concurrency:
+  group: p128-independent-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  engine-transition-real-processor:
+    runs-on: windows-2022
+    timeout-minutes: 28
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check pinned source revision and SDK
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch v3.8.1_build_84 --recurse-submodules https://github.com/steinbergmedia/vst3sdk.git external/vst3sdk
+          $hash = (git -C external/vst3sdk rev-parse HEAD).Trim()
+          if ($hash -ne '3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96') {
+            throw "Wrong SDK: $hash"
+          }
+      - name: Configure actual VST3 with separate audit-only tester
+        shell: pwsh
+        run: |
+          cmake -S . -B build-audit -G "Visual Studio 17 2022" -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON
+          if ($LASTEXITCODE -ne 0) { throw "Configure failed" }
+      - name: Build production processor and audit-only test host
+        shell: pwsh
+        run: |
+          cmake --build build-audit --config Release --parallel 2 --target awe32_p128_engine_transition_audit
+          if ($LASTEXITCODE -ne 0) { throw "Audit executable build failed" }
+      - name: Reproduce engine-to-null mid-block invalid render access
+        shell: pwsh
+        timeout-minutes: 4
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force artifacts/P128 | Out-Null
+          $exe = @(Get-ChildItem build-audit -Recurse -File -Filter 'awe32_p128_engine_transition_audit.exe')
+          $dll = @(Get-ChildItem build-audit/VST3/Release -Recurse -File -Filter '125A_AWE_Synthesizer.vst3')
+          if ($exe.Count -ne 1 -or $dll.Count -ne 1) {
+            throw 'Missing or ambiguous audit host or real VST3 DLL'
+          }
+          & $exe[0].FullName $dll[0].FullName 2>&1 | Tee-Object -FilePath artifacts/P128/engine-transition.log
+          $rc = $LASTEXITCODE
+          "Exit=$rc" | Set-Content artifacts/P128/exit.txt
+          if ($rc -eq 100) {
+            Write-Host '[REPRODUCED] P128 F02: old canRender remains true after engine->null, real process access violation'
+            'P128_ENGINE_TRANSITION_BUG_REPRODUCED' | Set-Content artifacts/P128/verdict.txt
+          } elseif ($rc -eq 0) {
+            Write-Host '[NOT REPRODUCED] Test completed; inspect code+audio semantics separately'
+            'P128_ENGINE_TRANSITION_NOT_REPRODUCED' | Set-Content artifacts/P128/verdict.txt
+          } else {
+            throw "Audit host returned unexpected $rc; see evidence"
+          }
+      - name: Upload independent audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 125A-P128-Engine-Transition-Independent-Audit
+          path: artifacts/P128/
+          if-no-files-found: warn
+          retention-days: 14
