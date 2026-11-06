@@ -42,8 +42,8 @@ public:
         surface({891,78,1184,188},dark,edge);  // sample file actions
         surface({14,198,781,267},dark,edge);  // bank + preset direct selection
         surface({14,277,781,421},dark,edge);  // four AMP controls
-        surface({14,429,781,588},dark,edge);  // six filter controls
-        surface({14,596,781,746},dark,edge);  // master + sends
+        surface({14,429,781,570},dark,edge);  // six filter controls
+        surface({14,575,781,746},dark,edge);  // master + sends
         surface({792,198,1185,746},dark,edge); // always-available browser
         surface({14,752,1185,778},black,edge); // actual state/errors
         c->setFrameColor(CColor(155,121,69,255));
@@ -267,8 +267,8 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     // the existing per-note effects send overlays; the menus never modify
     // SF2 generator sends, MIDI controllers or master volume.
     MakeLabel({30,601,205,623},"MASTER",true);
-    MakeLabel({268,570,475,589},"REVERB TYPE",true);
-    MakeLabel({513,570,739,589},"CHORUS TYPE",true);
+    MakeLabel({268,576,475,590},"REVERB TYPE",true);
+    MakeLabel({513,576,739,590},"CHORUS TYPE",true);
     reverbMenu_=new COptionMenu({259,591,489,623},this,kReverbType);
     chorusMenu_=new COptionMenu({504,591,741,623},this,kChorusType);
     for(auto* menu:{reverbMenu_,chorusMenu_}) {
