@@ -116,3 +116,9 @@ add_executable(awe32_p97_midi_renderer "../../tools/p97_midi_renderer.cpp")
 target_include_directories(awe32_p97_midi_renderer PRIVATE "." "include" "../../upstream/AWE32Emu/AWE32Emu/src" "../../upstream/AWE32Emu/AWE32Emu/src/86box/include")
 target_link_libraries(awe32_p97_midi_renderer PRIVATE awe32_chip_safety)
 set_target_properties(awe32_p97_midi_renderer PROPERTIES CXX_STANDARD 23)
+
+# P128: audible, allocation-free note transfer at engine publication boundaries.
+add_executable(awe32_p128_note_handoff_test "${PROJECT_SOURCE_DIR}/tests/p128_note_handoff.cpp")
+target_include_directories(awe32_p128_note_handoff_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${UPSTREAM_SRC}")
+target_link_libraries(awe32_p128_note_handoff_test PRIVATE awe32_chip_safety)
+add_test(NAME 125A_p128_note_handoff COMMAND awe32_p128_note_handoff_test)

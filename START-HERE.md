@@ -2,6 +2,12 @@
 
 **Stand: 2026-11-05. Entwicklungs-/Prüfstand, keine GUI- oder Releasefreigabe.**
 
+## P128 – lokale Nachprüfung und Korrekturen (6. November 2026)
+
+- Entwicklungsbasis: `105f756f15253001ee1cd49a234c584ea60fca77` auf `fix/p122-bank-dirty-audit`.
+- [Konkrete Reproduktionen, Korrekturen, Testgrenzen und offene Gates](docs/P128-NATIVE-REAUDIT-AND-CORRECTIONS.md): drei Programm-/Recall-Gate-Rennen, verlorene NoteOns beim Enginewechsel und ein Nullpointer-Absturz nach Engine-Entfernung wurden lokal nachgewiesen und mit Regressionen korrigiert. Eine exakt invalidierte Filterkoeffizienten-Ablage vermeidet identische teure Neuberechnungen; PCM-Vergleich gegen die ursprüngliche und eine ungecachte Engine bleibt bytegleich.
+- **Chorus-Reste weiter FAIL (18/24 Tail-Fälle); Windows-Regressionen des korrigierten Stands NOT RUN.** Native Linux-/SDK-Prüfungen sind keine unabhängige vollständige P128-Abnahme. GUI-NO-GO und RELEASE-NO-GO bleiben bestehen.
+
 ## P128 – unabhängige technische Prüfung im 125A Plugin Test Lab (6. November 2026)
 
 - **Geprüfter AWE-Code/Binärbuild:** P128 `9080fe75e57dd11c8019898ff481ae11839fedc4`, Windows-Artefakt aus [Actions #42146715681](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42146715681).

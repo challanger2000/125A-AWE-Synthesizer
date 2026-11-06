@@ -71,7 +71,16 @@ public:
     // reproduced. See docs/re-notes/86box_comparison.md 15.8.
     void SetMasterVolume(int v) { m_masterVolume = v; }
 
-    void NoteOn(uint8_t channel, uint8_t note, uint8_t velocity);
+    void NoteOn(uint8_t channel, uint8_t note, uint8_t velocity,
+                uint64_t sequence=0);
+    struct HeldNote {
+        uint64_t sequence=0;
+        uint8_t channel=0,note=0,velocity=0;
+        bool sustained=false;
+    };
+    using HeldNotes=std::array<HeldNote,Emu8000Core::kMaxVoices>;
+    HeldNotes CaptureHeldNotes() const noexcept;
+    void RestoreHeldNotes(const HeldNotes& notes,uint64_t afterSequence);
     void NoteOff(uint8_t channel, uint8_t note);
     void ChannelPressure(uint8_t channel, uint8_t value);
     void ProgramChange(uint8_t channel, uint8_t program);
@@ -113,6 +122,7 @@ private:
         uint8_t releaseRate = 0x40;
         uint8_t releaseModRate = 0;
         uint32_t age = 0;
+        uint64_t noteSequence = 0; // identity shared by all layers of a NoteOn
         int      basePitch = 0;   // IP without pitch bend
 
         // SBAWE32.MDI voice block (0x0BC6 + voice * 0x14), family `dos`.
@@ -250,6 +260,7 @@ private:
     std::array<VoiceAlloc, kMaxVoices> m_alloc{};
     std::array<ChannelState, 16> m_channels{};
     uint32_t m_ageCounter = 0;
+    uint64_t m_noteSequence = 0;
 
     // The driver takes voices 30 and 31 for the DRAM refresh; 30 remain for
     // notes. SBAWE.VXD uses them too, though (a Georgia win95 trace has

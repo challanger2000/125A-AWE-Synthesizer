@@ -366,6 +366,10 @@ typedef struct emu8k_voice_t {
     int32_t overshoot_samples;
     double filt_oct_target;
     double filt_oct_curr;
+    /* Exact coefficient memoization; invalidated by every coefficient input. */
+    int cham_cache_valid;
+    int cham_cache_cutoff, cham_cache_q;
+    double cham_cache_oct, cham_cache_f, cham_cache_qd;
 
 } emu8k_voice_t;
 

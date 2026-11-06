@@ -120,6 +120,7 @@ public:
             std::clamp(setup.sampleRate,8000.0,384000.0)));
         capacity_=static_cast<uint32_t>(std::max(setup.maxSamplesPerBlock,1));
         scratch_.assign(size_t{capacity_}*2,0);
+        noteResetEpoch_.fetch_add(1,std::memory_order_release);
         {
             std::lock_guard<std::mutex> lock(engineMutex_);
             engines_.Publish({});
@@ -138,6 +139,7 @@ public:
             {
                 std::lock_guard<std::mutex> lock(engineMutex_);
                 hostActive_=false;
+                noteResetEpoch_.fetch_add(1,std::memory_order_release);
                 ++assetGeneration_;
             ++nonRecallAssetGeneration_;
                 engines_.Publish({});
@@ -755,10 +757,14 @@ public:
             volumeGain_.restore(gainRestoreValue_.load(std::memory_order_acquire));
             lastGainRestoreEpoch_=restore;
         }
+        SyncNoteReset();
         SyncCommittedRecall();
         const uint64_t revision=entry?entry->revision:0;
         if(revision!=lastRtRevision_) {
-            if(synth_)ApplyRtParameters(*synth_);
+            if(synth_) {
+                ApplyRtParameters(*synth_);
+                synth_->RestoreHeldNotes(heldNotes_,bankOrder_.LatestRecall().sequence);
+            }
             lastRtRevision_=revision;
         }
         // Apply only the latest global bank decision. An unsuccessful
@@ -768,6 +774,12 @@ public:
         const auto refreshEngineAtEvent=[&]() noexcept {
             const uint64_t published=engines_.PublishedVersion();
             if(published==seenEngineVersion)return;
+            // Capture before releasing the previous envelope's pin. Retain
+            // only actually allocated held notes, including duplicate keys
+            // and SF2 layers, rather than resurrecting stolen/released notes.
+            const bool resetNotes=SyncNoteReset();
+            const auto notes=resetNotes?Synth::HeldNotes{}:
+                (synth_?synth_->CaptureHeldNotes():heldNotes_);
             newerEngineRead.emplace(engines_);
             seenEngineVersion=published;
             entry=newerEngineRead->get();
@@ -775,7 +787,10 @@ public:
             SyncCommittedRecall();
             const uint64_t newRevision=entry?entry->revision:0;
             if(newRevision!=lastRtRevision_) {
-                if(synth_)ApplyRtParameters(*synth_);
+                if(synth_) {
+                    ApplyRtParameters(*synth_);
+                    synth_->RestoreHeldNotes(notes,bankOrder_.LatestRecall().sequence);
+                }
                 lastRtRevision_=newRevision;
             }
             ApplyPendingGlobalBank(synth_);
@@ -921,32 +936,13 @@ public:
             // Recall has priority; a pending bank event is kept for a later
             // callback instead of being acknowledged and discarded.
             if(!write)return;
-            if(id==kProgramID) {
-                const auto program=static_cast<uint32_t>(std::clamp(
-                    int(std::lround(val*127.)),0,127));
-                rtProgram_.store(program,std::memory_order_release);
-                lastAppliedGlobalProgramSequence_=
-                    audioProgramSelection_.load(std::memory_order_acquire)>>8;
-                lastAppliedChannelProgramSequence_.fill(
-                    lastAppliedGlobalProgramSequence_);
-                rtChannelProgramMask_.store(0,std::memory_order_release);
-                for(int ch=0;ch<16;++ch)
-                    rtChannelPrograms_[ch].store(program,std::memory_order_release);
-                // The intent stamp was published BEFORE the writer attempt.
-                if(synth_)for(int ch=0;ch<16;++ch)
-                    synth_->ProgramChange(static_cast<uint8_t>(ch),
-                        static_cast<uint8_t>(program));
+            if(id==kProgramID || MidiProgramRouting::Channel(id)>=0) {
+                // The intent was accepted before try-writer ownership. A
+                // newer recall may have committed in between. Resolve the
+                // complete current tuple inside the gate, not the old value.
+                ApplyProgramIntentsUnderWriter(synth_);
             } else if(id==kBankID) {
                 ApplyGlobalBankUnderWriter(synth_,bankOrder_.Latest());
-            } else if(const int ch=MidiProgramRouting::Channel(id);ch>=0) {
-                const auto program=static_cast<uint32_t>(
-                    std::clamp(int(std::lround(val*127.)),0,127));
-                rtChannelPrograms_[ch].store(program,std::memory_order_release);
-                lastAppliedChannelProgramSequence_[ch]=
-                    audioChannelSelections_[ch].load(std::memory_order_acquire)>>8;
-                rtChannelProgramMask_.fetch_or(1u<<ch,std::memory_order_acq_rel);
-                if(synth_)synth_->ProgramChange(static_cast<uint8_t>(ch),
-                                                static_cast<uint8_t>(program));
             } else if(id==kVolumeID) {
                 const auto gain=static_cast<uint32_t>(std::lround(
                     val*MasterOutput::kScale));
@@ -996,11 +992,10 @@ public:
             if(right)std::fill_n(right,data.numSamples,0.f);
             data.outputs[0].silenceFlags=right?3u:1u;
         }
-        const bool canRender=hasOutput&&bool(synth_);
         int32 position=0;
         const auto render=[&](int32 end) {
             end=std::clamp(end,position,data.numSamples);
-            if(canRender&&end>position) {
+            if(hasOutput&&synth_&&end>position) {
                 bool movingPlayingVoices=false;
                 for(int ch=0;ch<16;++ch)
                     if(pitchMoving[ch]&&
@@ -1125,7 +1120,7 @@ public:
                         entry&&(entry->sf2Loaded||entry->gmLoaded),
                         synth_->Core().ChipVariant()==Emu8000Core::Chip::Box86))
                         synth_->NoteOn(static_cast<uint8_t>(e.noteOn.channel),
-                            static_cast<uint8_t>(e.noteOn.pitch),vel);
+                            static_cast<uint8_t>(e.noteOn.pitch),vel,bankOrder_.Next());
                 } else if(synth_&&e.type==Event::kNoteOffEvent&&
                     e.noteOff.channel>=0&&e.noteOff.channel<16&&
                     e.noteOff.pitch>=0&&e.noteOff.pitch<=127) {
@@ -1145,6 +1140,7 @@ public:
                 });
         refreshEngineAtEvent();
         render(data.numSamples);
+        heldNotes_=synth_?synth_->CaptureHeldNotes():Synth::HeldNotes{};
         if(hasOutput)for(int32 i=0;i<data.numSamples;++i)
             if(left[i]!=0.f||(right&&right[i]!=0.f)) {
                 data.outputs[0].silenceFlags=0;
@@ -1182,6 +1178,9 @@ private:
     // Separately track lifecycle/asset changes. An older recall can alter
     // assetGeneration_ without invalidating a newer prepared recall.
     uint64_t nonRecallAssetGeneration_=0;
+    std::atomic<uint64_t> noteResetEpoch_{0};
+    uint64_t lastNoteResetEpoch_=0; // audio only
+    Synth::HeldNotes heldNotes_{}; // audio-owned, fixed-size engine handoff
     MidiLiveState liveMidi_{}; // exclusively audio-thread owned
     RealtimeStateVersion rtStateVersion_{};
     // Real-time parameters are single-word atomics; getState/load paths never
@@ -1215,6 +1214,13 @@ private:
         e->gmLoaded=gm;e->sf2Loaded=sf2;e->sf2Configured=configured;
         e->revision=++nextRevision_;
         return e;
+    }
+    bool SyncNoteReset() noexcept {
+        const uint64_t reset=noteResetEpoch_.load(std::memory_order_acquire);
+        if(reset==lastNoteResetEpoch_)return false;
+        heldNotes_={};
+        lastNoteResetEpoch_=reset;
+        return true;
     }
     void SyncCommittedRecall() noexcept {
         const auto recalled=bankOrder_.LatestRecall();
@@ -1270,6 +1276,15 @@ private:
         RealtimeStateVersion::Writer write(
             rtStateVersion_,RealtimeStateVersion::Domain::Audio);
         if(!write)return; // retained as atomic intent for later callback/save
+        ApplyProgramIntentsUnderWriter(target);
+    }
+    void ApplyProgramIntentsUnderWriter(Synth* target) noexcept {
+        // A pre-gate snapshot is only a cheap pending hint. Gate ownership
+        // establishes the recall boundary for both global and channel edits.
+        SyncCommittedRecall();
+        const uint64_t recall=bankOrder_.LatestRecall().sequence;
+        const uint64_t global=audioProgramSelection_.load(
+            std::memory_order_acquire);
         if((global>>8)>std::max(recall,lastAppliedGlobalProgramSequence_)) {
             const uint32_t program=static_cast<uint32_t>(global&0xFFu);
             rtProgram_.store(program,std::memory_order_release);

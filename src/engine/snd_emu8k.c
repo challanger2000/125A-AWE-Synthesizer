@@ -2436,14 +2436,32 @@ emu8k_update_chunk(emu8k_t *emu8k)
                  * only at Q 0 with the cutoff register at 0xFF and no downward
                  * modulation ("the filter does not alter the signal" [PG]). */
                 if (emu_voice->filterq_idx || emu_voice->ifatn_init_filter != 0xFF || emu_voice->filt_oct_curr < 0.0) {
-                    double fc = EMU8K_CHAM_BASE_HZ
-                        * pow(2.0, emu_voice->ifatn_init_filter * EMU8K_CHAM_CENTS / 1200.0 + emu_voice->filt_oct_curr);
-                    if (fc < EMU8K_CHAM_BASE_HZ)
-                        fc = EMU8K_CHAM_BASE_HZ;
-                    if (fc > 44100.0 / 6.0)
-                        fc = 44100.0 / 6.0;
-                    const double F  = 2.0 * sin(M_PI * fc / 44100.0);
-                    const double qd = 1.0 / (EMU8K_CHAM_Q0 * pow(10.0, emu8k_cham_q_db(emu_voice->filterq_idx, fc) / 20.0));
+                    /* Constant envelopes/cutoff previously repeated pow/sin/log2
+                     * for every voice and sample. Reuse only identical inputs;
+                     * moving modulation still uses the original exact formula.
+                     * The test-only uncached build is a bit-exact PCM oracle. */
+                    if (!emu_voice->cham_cache_valid ||
+#ifdef AWE125_TEST_DISABLE_FILTER_CACHE
+                        1 ||
+#endif
+                        emu_voice->cham_cache_cutoff != emu_voice->ifatn_init_filter ||
+                        emu_voice->cham_cache_q != emu_voice->filterq_idx ||
+                        emu_voice->cham_cache_oct != emu_voice->filt_oct_curr) {
+                        double fc = EMU8K_CHAM_BASE_HZ
+                            * pow(2.0, emu_voice->ifatn_init_filter * EMU8K_CHAM_CENTS / 1200.0 + emu_voice->filt_oct_curr);
+                        if (fc < EMU8K_CHAM_BASE_HZ)
+                            fc = EMU8K_CHAM_BASE_HZ;
+                        if (fc > 44100.0 / 6.0)
+                            fc = 44100.0 / 6.0;
+                        emu_voice->cham_cache_f = 2.0 * sin(M_PI * fc / 44100.0);
+                        emu_voice->cham_cache_qd = 1.0 / (EMU8K_CHAM_Q0 * pow(10.0, emu8k_cham_q_db(emu_voice->filterq_idx, fc) / 20.0));
+                        emu_voice->cham_cache_cutoff = emu_voice->ifatn_init_filter;
+                        emu_voice->cham_cache_q = emu_voice->filterq_idx;
+                        emu_voice->cham_cache_oct = emu_voice->filt_oct_curr;
+                        emu_voice->cham_cache_valid = 1;
+                    }
+                    const double F = emu_voice->cham_cache_f;
+                    const double qd = emu_voice->cham_cache_qd;
                     const double in = (double) dat * emu_voice->filt_att / 65536.0;
                     emu_voice->cham_lp += F * emu_voice->cham_bp;
                     const double hp = in - emu_voice->cham_lp - qd * emu_voice->cham_bp;

@@ -1378,6 +1378,7 @@ void Synth::StartVoice(int voice, uint8_t channel, uint8_t note, uint8_t velocit
     a.channel = channel;
     a.note = note;
     a.velocity = velocity;
+    a.noteSequence = m_noteSequence;
     a.releaseRate = vp.releaseRate ? vp.releaseRate : 0x40;
     a.releaseModRate = vp.releaseModRate;
     a.age = ++m_ageCounter;
@@ -1499,8 +1500,10 @@ void Synth::StartFallbackVoice(int voice, uint8_t channel, uint8_t note, uint8_t
 // MIDI interface
 // ---------------------------------------------------------------------------
 
-void Synth::NoteOn(uint8_t channel, uint8_t note, uint8_t velocity)
+void Synth::NoteOn(uint8_t channel, uint8_t note, uint8_t velocity,
+                   uint64_t sequence)
 {
+    m_noteSequence = sequence;
     if (channel >= 16 || note > 127) return;
     if (!((m_channelMask >> channel) & 1)) return;
     if (velocity == 0) { NoteOff(channel, note); return; }
@@ -1583,6 +1586,39 @@ void Synth::NoteOn(uint8_t channel, uint8_t note, uint8_t velocity)
                        : AllocateVoice();
     if (fallback >= 0)
         StartFallbackVoice(fallback, channel, note, velocity);
+}
+
+Synth::HeldNotes Synth::CaptureHeldNotes() const noexcept
+{
+    HeldNotes notes{};
+    size_t count=0;
+    for(int v=0;v<NoteVoices();++v) {
+        const auto& a=m_alloc[v];
+        if(!a.noteSequence||(!a.inUse&&!a.heldBySustain))continue;
+        // One host NoteOn can allocate several SF2 layers. Replay its
+        // identity once; separate NoteOns on the same key remain separate.
+        bool found=false;
+        for(size_t n=0;n<count;++n)
+            found|=notes[n].sequence==a.noteSequence;
+        if(found)continue;
+        notes[count++]={a.noteSequence,a.channel,a.note,a.velocity,a.heldBySustain};
+    }
+    // Restore voice allocation in acceptance order, independent of the
+    // physical voice indices reused by the driver's stealing policy.
+    std::sort(notes.begin(),notes.begin()+count,[](const auto& a,const auto& b) {
+        return a.sequence<b.sequence;
+    });
+    return notes;
+}
+
+void Synth::RestoreHeldNotes(const HeldNotes& notes,uint64_t afterSequence)
+{
+    for(const auto& n:notes)if(n.sequence>afterSequence)
+        NoteOn(n.channel,n.note,n.velocity,n.sequence);
+    // Apply pedal-held NoteOffs after all duplicate-key NoteOns, matching
+    // the Synth contract that NoteOff addresses every layer of that key.
+    for(const auto& n:notes)if(n.sequence>afterSequence&&n.sustained)
+        NoteOff(n.channel,n.note);
 }
 
 void Synth::NoteOff(uint8_t channel, uint8_t note)
