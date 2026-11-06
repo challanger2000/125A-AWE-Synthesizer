@@ -933,9 +933,17 @@ public:
             }
             RealtimeStateVersion::Writer write(
                 rtStateVersion_, RealtimeStateVersion::Domain::Audio,persisted);
-            // Recall has priority; a pending bank event is kept for a later
-            // callback instead of being acknowledged and discarded.
-            if(!write)return;
+            // Recall has priority for the persisted tuple. However, this
+            // sample's accepted program event must still select the sound
+            // BEFORE a later NoteOn in the SAME block. Under contention,
+            // update only the audio-thread-owned Synth; do NOT claim that
+            // the protected persisted state was written. The stamped
+            // change remains pending for a subsequent writer/save.
+            if(!write) {
+                if(id==kProgramID||MidiProgramRouting::Channel(id)>=0)
+                    ApplyAcceptedProgramAudioOnly(id,synth_);
+                return;
+            }
             if(id==kProgramID || MidiProgramRouting::Channel(id)>=0) {
                 // The intent was accepted before try-writer ownership. A
                 // newer recall may have committed in between. Resolve the
@@ -1309,6 +1317,35 @@ private:
             if(target)target->ProgramChange(static_cast<uint8_t>(ch),
                                              static_cast<uint8_t>(program));
             lastAppliedChannelProgramSequence_[ch]=edit>>8;
+        }
+    }
+    void ApplyAcceptedProgramAudioOnly(ParamID id,Synth* target) noexcept {
+        // The Audio thread owns the synth instance; the Control writer only
+        // serializes the V10 snapshot atomics. A denied snapshot writer must
+        // never force subsequent NoteOn events to use a stale program.
+        // The normal pending replay still commits the persisted tuple later.
+        if(!target)return;
+        const uint64_t recalled=bankOrder_.LatestRecall().sequence;
+        const uint64_t global=audioProgramSelection_.load(
+            std::memory_order_acquire);
+        if(id==kProgramID) {
+            if((global>>8)<=recalled)return; // newer project recall won
+            for(int ch=0;ch<16;++ch) {
+                const uint64_t channel=audioChannelSelections_[ch].load(
+                    std::memory_order_acquire);
+                const uint32_t p=(channel>>8)>std::max(recalled,global>>8)
+                    ?static_cast<uint32_t>(channel&0xFFu)
+                    :static_cast<uint32_t>(global&0xFFu);
+                target->ProgramChange(static_cast<uint8_t>(ch),
+                                      static_cast<uint8_t>(p));
+            }
+        } else if(const int ch=MidiProgramRouting::Channel(id);ch>=0) {
+            const uint64_t channel=audioChannelSelections_[ch].load(
+                std::memory_order_acquire);
+            if((channel>>8)<=std::max(recalled,global>>8))
+                return; // stale channel intent superseded by recall/global
+            target->ProgramChange(static_cast<uint8_t>(ch),
+                                  static_cast<uint8_t>(channel&0xFFu));
         }
     }
     void ApplyRtParameters(Synth& target) noexcept {
