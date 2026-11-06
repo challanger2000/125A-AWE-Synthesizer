@@ -217,7 +217,7 @@ def client_size(hwnd):
 
 def screen_pos(hwnd, x, y):
     sz = client_size(hwnd)
-    pt = POINT(round(x*sz[0]/1200), round(y*sz[1]/780))
+    pt = POINT(round(x*sz[0]/1000), round(y*sz[1]/640))
     if not u.ClientToScreen(hwnd, ctypes.byref(pt)):
         raise RuntimeError("ClientToScreen failed")
     return pt.x, pt.y
@@ -225,7 +225,7 @@ def screen_pos(hwnd, x, y):
 def snap(hwnd, filename):
     w,h = client_size(hwnd)
     x,y = screen_pos(hwnd, 0, 0)
-    if w < 1180 or h < 760:
+    if w < 980 or h < 625:
         raise RuntimeError(f"Editor window wrong dimensions {w}x{h}")
     src = u.GetDC(None)
     mem = gdi.CreateCompatibleDC(src)
@@ -261,7 +261,7 @@ def different(before,after,region):
     if (w,h)!=(w2,h2):
         raise RuntimeError("Editor size changed unexpectedly")
     x0,y0,x1,y1 = region
-    scale_x,scale_y = w/1200,h/780
+    scale_x,scale_y = w/1000,h/640
     x0,x1 = round(x0*scale_x),round(x1*scale_x)
     y0,y1 = round(y0*scale_y),round(y1*scale_y)
     changed = 0
@@ -276,8 +276,8 @@ def gold_brand_pixels(frame):
     """P117: the first-stage native VSTGUI '125A' text is gold, not a bitmap."""
     w,h,raw=frame
     count=0
-    for y in range(round(15*h/780),round(65*h/780)):
-        for x in range(round(30*w/1200),round(206*w/1200)):
+    for y in range(round(14*h/640),round(50*h/640)):
+        for x in range(round(27*w/1000),round(156*w/1000)):
             i=(y*w+x)*4
             blue,green,red=raw[i],raw[i+1],raw[i+2]
             if red>=145 and green>=105 and red>=green and blue<green:
