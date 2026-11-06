@@ -24,15 +24,10 @@ struct Result {
 
 Result measureCase(int frames,int controlMode,std::ofstream& csv) {
     const char* mode=controlMode==0?"render":controlMode==1?"save":"save_recall";
-    Rig rig(state(),true,kRate);
-    // Emulate an actual low-buffer host configuration. P128's generic
-    // test Rig starts with maxSamplesPerBlock=1024; override that to match.
-    require(rig.p->setProcessing(false)==kResultOk,"stop processing to resize");
-    ProcessSetup setup{kRealtime,kSample32,frames,double(kRate)};
-    require(rig.p->setupProcessing(setup)==kResultOk,
-            "small buffer host setupProcessing");
-    require(rig.p->setProcessing(true)==kResultOk,
-            "resume small buffer processor");
+    // P128 setupProcessing deliberately invalidates its Engine. Configure
+    // capacity BEFORE setActive(true), exactly as a real VST3 host does.
+    // Reconfiguring after activation would benchmark digital silence.
+    Rig rig(state(),true,kRate,frames);
 
     std::atomic<bool> started{false},stop{false},error{false};
     std::atomic<int> saveCount{0},recallCount{0};
