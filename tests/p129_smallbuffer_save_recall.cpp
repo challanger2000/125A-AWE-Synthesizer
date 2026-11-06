@@ -12,6 +12,9 @@
 #include <iomanip>
 #include <numeric>
 #include <thread>
+#if defined(_WIN32)
+#include <mmsystem.h>
+#endif
 
 using RTClock=std::chrono::steady_clock;
 constexpr int kRate=44100;
@@ -137,6 +140,21 @@ Result measureCase(int frames,int controlMode,std::ofstream& csv) {
 }
 int main(int argc,char** argv) {
     try {
+        // GitHub's Windows runner can have ~15-ms sleep granularity by
+        // default. Request 1-ms process timer resolution for the entire
+        // experiment, preserving distinct measurements for DSP time and
+        // OS scheduling lateness. This is NOT ASIO callback scheduling.
+#if defined(_WIN32)
+        struct TimerResolution {
+            MMRESULT code = timeBeginPeriod(1);
+            TimerResolution() = default;
+            ~TimerResolution() {
+                if(code==TIMERR_NOERROR)timeEndPeriod(1);
+            }
+        } timer;
+        std::cout<<"RT_TIMER_1MS_REQUEST="<<(timer.code==TIMERR_NOERROR
+                    ?"ACCEPTED":"FAILED")<<"\\n";
+#endif
         if(argc!=3) {
             std::cerr<<"usage: p129_smallbuffer_save_recall ASSETS OUTPUT.csv\n";
             return 2;
