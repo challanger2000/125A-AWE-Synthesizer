@@ -499,7 +499,19 @@ public:
         // its multi-parameter updates with independent generation counters.
         // getState must never combine program/mask/channel values from two
         // different program changes. No realtime mutex or heap allocation.
+        // Program intents can be accepted before the audio writer gate.
+        // Therefore a stable RT version alone does not prove that the
+        // reconstructed program/channel tuple came from one intent epoch.
+        const auto captureProgramIntents=[&]() {
+            std::array<uint64_t,17> values{};
+            values[0]=audioProgramSelection_.load(std::memory_order_acquire);
+            for(int ch=0;ch<16;++ch)
+                values[ch+1]=audioChannelSelections_[ch].load(
+                    std::memory_order_acquire);
+            return values;
+        };
         for(int attempt=0;attempt<4096;++attempt) {
+            const auto intentBefore=captureProgramIntents();
             const auto bankBefore=bankOrder_.Latest();
             const auto before=rtStateVersion_.Capture();
             if(!rtStateVersion_.Readable(before)) {
@@ -512,7 +524,9 @@ public:
             }
             fillRealtime(snapshot);
             const auto bankAfter=bankOrder_.Latest();
+            const auto intentAfter=captureProgramIntents();
             if(rtStateVersion_.Unchanged(before) &&
+               intentBefore==intentAfter &&
                bankBefore.sequence==bankAfter.sequence &&
                bankBefore.bank==bankAfter.bank) {
                 // Latest() includes bank edits whose audio writer was refused
@@ -533,8 +547,18 @@ public:
             std::lock_guard<std::mutex> lock(engineMutex_);
             RealtimeStateVersion::Writer readGuard(
                 rtStateVersion_,RealtimeStateVersion::Domain::Control);
-            snapshot=state_;
-            fillRealtime(snapshot);
+            // The audio writer is now excluded, but its intent stamp is
+            // deliberately published BEFORE the gate. Read the complete
+            // intent tuple twice and retry on any intervening publication.
+            // This wait is strictly control-side, never the audio callback.
+            for(;;) {
+                const auto before=captureProgramIntents();
+                snapshot=state_;
+                fillRealtime(snapshot);
+                const auto after=captureProgramIntents();
+                if(before==after)break;
+                std::this_thread::yield();
+            }
             snapshot.bank=bankOrder_.Latest().bank;
         }
         if(!snapshot.pathsSpecified) {
