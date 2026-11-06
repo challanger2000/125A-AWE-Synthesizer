@@ -85,11 +85,250 @@ void deterministic(){
  {Rig r;check(r.p->getTailSamples()==kInfiniteTail&&r.p->setProcessing(false)==kResultOk&&r.p->setProcessing(true)==kResultOk,"kInfiniteTail and setProcessing lifecycle");}
 }
 
+// Audit-only negative control: accepted persistent automation must survive
+// a control-owned state writer gate, without relying on a later host resend.
+void persistentControlWriterCollision() {
+    Rig r;
+    // Positive control first proves that the parameter IDs and state
+    // serialization work in the absence of a control writer.
+    {
+        Block normal(0);
+        normal.param(kVolumeID,0.62);
+        normal.param(kGuiFirstID,0.22);
+        normal.run(*r.p);
+    }
+    const auto before=save(*r.p);
+    check(before.masterVolume==6200&&before.controls[0]==2200,
+          "control: positive baseline V10 master/gui values applied without competition");
+    {
+        RealtimeStateVersion::Writer control(
+            r.p->rtStateVersion_,RealtimeStateVersion::Domain::Control);
+        require(static_cast<bool>(control),"control writer gate acquired");
+        Block concurrent(0);
+        concurrent.param(kVolumeID,0.35);
+        concurrent.param(kGuiFirstID,0.75);
+        concurrent.run(*r.p);
+        std::cout<<"CONTROL_AUDIT accepted parameter points with state writer gate held"<<std::endl;
+    }
+    const auto immediate=save(*r.p);
+    std::cout<<"CONTROL_AUDIT immediate_master="<<immediate.masterVolume
+             <<" immediate_gui0="<<immediate.controls[0]
+             <<" wanted_master=3500 wanted_gui0=7500"<<std::endl;
+    check(immediate.masterVolume==3500,
+          "control: master Volume must not be discarded on RT writer refusal");
+    check(immediate.controls[0]==7500,
+          "control: GUI overlay must not be discarded on RT writer refusal");
+    // A subsequent process() without repeated automation cannot repair
+    // previously discarded events. This rejects a false transient PASS.
+    { Block next(0);next.run(*r.p); }
+    const auto next=save(*r.p);
+    check(next.masterVolume==3500&&next.controls[0]==7500,
+          "control: subsequent idle process preserves accepted master/gui changes");
+    // One input queue per GUI control: prove there are no lost or aliased
+    // 12-control values when the control writer denies every audio update.
+    {
+        Rig matrix;
+        {
+            RealtimeStateVersion::Writer gate(
+                matrix.p->rtStateVersion_,RealtimeStateVersion::Domain::Control);
+            Block all(0);
+            for(int i=0;i<kGuiCount;++i)
+                all.param(kGuiFirstID+i,double(i+1)/20.);
+            all.param(kVolumeID,0.45);
+            all.run(*matrix.p);
+        }
+        const auto saved=save(*matrix.p);
+        bool distinct=saved.masterVolume==4500;
+        for(int i=0;i<kGuiCount;++i)
+            distinct&=saved.controls[i]==uint32_t((i+1)*500);
+        check(distinct,
+              "control: all 12 independent GUI values and master persist without writer");
+        Block following(0);
+        following.run(*matrix.p);
+        check(same(saved,save(*matrix.p)),
+              "control: pending all-controls applied without changing saved snapshot");
+    }
+    // A recall started AFTER accepted parameters must override them, even
+    // though audio could not obtain the realtime state writer on arrival.
+    {
+        Rig newest;
+        {
+            RealtimeStateVersion::Writer gate(
+                newest.p->rtStateVersion_,RealtimeStateVersion::Domain::Control);
+            Block old(0);
+            old.param(kVolumeID,0.35);
+            old.param(kGuiFirstID,0.75);
+            old.run(*newest.p);
+        }
+        require(recall(*newest.p,state(5,7))==kResultOk,
+                "control: newer state recall accepted");
+        check(same(save(*newest.p),state(5,7)),
+              "control: newer recall overrides older pending volume/gui values");
+        {Block following(0);following.run(*newest.p);}
+        check(same(save(*newest.p),state(5,7)),
+              "control: stale pending volume/gui not resurrected next callback");
+    }
+    // Conversely, accepted parameter edits AFTER a recall STARTS must
+    // survive the older project state committing at the end of its reader.
+    {
+        Rig older;
+        CallbackStream read;
+        require(writeState(read,state(5,7)),
+                "control: prepare delayed project recall");
+        read.once=[&] {
+            RealtimeStateVersion::Writer gate(
+                older.p->rtStateVersion_,RealtimeStateVersion::Domain::Control);
+            Block newer(0);
+            newer.param(kVolumeID,0.35);
+            newer.param(kGuiFirstID,0.75);
+            newer.run(*older.p);
+        };
+        require(older.p->setState(&read)==kResultOk,
+                "control: delayed recall with newer accepted controls");
+        auto wanted=state(5,7);
+        wanted.masterVolume=3500;
+        wanted.controls[0]=7500;
+        check(same(save(*older.p),wanted),
+              "control: edits newer than recall START survive its commit");
+        {Block following(0);following.run(*older.p);}
+        check(same(save(*older.p),wanted),
+              "control: newer-than-recall controls survive first subsequent process");
+    }
+}
+
+// Audit-only: accepted program event at sample 32, then NoteOn at sample
+// 64 in SAME audio callback, with the realtime persistent writer refused.
+// State may report the new program while PCM still uses the old one.
+void midblockProgramRace() {
+    const auto capture=[](Rig& r,bool denied) {
+        std::vector<float> result;
+        const auto first=[&] {
+            Block block(1024);
+            block.param(kProgramID,9./127.,32);
+            block.note(0,60,64);
+            const auto output=block.run(*r.p);
+            result.insert(result.end(),output.begin(),output.end());
+        };
+        if(denied) {
+            RealtimeStateVersion::Writer control(
+                r.p->rtStateVersion_,RealtimeStateVersion::Domain::Control);
+            require(static_cast<bool>(control),"midblock: control writer acquired");
+            first();
+        } else first();
+        for(int b=1;b<8;++b) {
+            Block next;
+            const auto output=next.run(*r.p);
+            result.insert(result.end(),output.begin(),output.end());
+        }
+        return result;
+    };
+    Rig good;
+    const auto normal=capture(good,false);
+    check(audible(normal)&&save(*good.p).program==9,
+          "midblock: ordinary program-9 point before NoteOn yields audible audio/save");
+    Rig collided;
+    const auto denied=capture(collided,true);
+    const auto written=save(*collided.p);
+    std::cout<<"MIDBLOCK_PROGRAM_AUDIT written_program="<<written.program
+             <<" pcm_equal="<<(normal==denied)
+             <<" normal_audible="<<audible(normal)
+             <<" denied_audible="<<audible(denied)<<std::endl;
+    check(written.program==9,
+          "midblock: accepted program point persisted even when RT writer refused");
+    check(denied==normal,
+          "midblock: NoteOn after refused program point must use newly accepted program PCM");
+
+    // Same contract for a per-channel VST3 ProgramChange parameter. An
+    // override is not equivalent to setting the global program: check both
+    // PCM and the V10 channel mask/preset.
+    const auto channelCapture=[](Rig& r,bool denied) {
+        std::vector<float> pcm;
+        const auto first=[&] {
+            Block b;
+            b.param(MidiProgramRouting::ParamID(3),9./127.,32);
+            b.note(3,60,64);
+            const auto out=b.run(*r.p);
+            pcm.insert(pcm.end(),out.begin(),out.end());
+        };
+        if(denied) {
+            RealtimeStateVersion::Writer control(
+                r.p->rtStateVersion_,RealtimeStateVersion::Domain::Control);
+            require(static_cast<bool>(control),"midblock: channel control gate");
+            first();
+        } else first();
+        for(int i=1;i<8;++i) {
+            Block next;
+            const auto out=next.run(*r.p);
+            pcm.insert(pcm.end(),out.begin(),out.end());
+        }
+        return pcm;
+    };
+    Rig channelGood;
+    const auto chNormal=channelCapture(channelGood,false);
+    Rig channelCollided;
+    const auto chDenied=channelCapture(channelCollided,true);
+    const auto channelState=save(*channelCollided.p);
+    check(audible(chNormal)&&channelState.program==0&&
+          channelState.channelProgramMask==(1u<<3)&&
+          channelState.channelPrograms[3]==9,
+          "midblock: channel 4 accepted program 9 with exact override mask");
+    check(chNormal==chDenied,
+          "midblock: channel 4 NoteOn PCM identical despite denied writer");
+    std::cout<<"MIDBLOCK_CHANNEL_AUDIT saved_mask="
+             <<channelState.channelProgramMask
+             <<" saved_ch4="<<channelState.channelPrograms[3]
+             <<" pcm_equal="<<(chNormal==chDenied)<<std::endl;
+
+    // Distinct program points and NoteOns in the same block: a later
+    // channel override must not accidentally change the global program
+    // or a different MIDI channel while retrying denied writer updates.
+    const auto mixedCapture=[](Rig& r,bool denied) {
+        std::vector<float> pcm;
+        const auto first=[&] {
+            Block b;
+            b.param(kProgramID,7./127.,16);
+            b.param(MidiProgramRouting::ParamID(3),9./127.,32);
+            b.note(2,60,48);
+            b.note(3,60,64);
+            const auto out=b.run(*r.p);
+            pcm.insert(pcm.end(),out.begin(),out.end());
+        };
+        if(denied) {
+            RealtimeStateVersion::Writer control(
+                r.p->rtStateVersion_,RealtimeStateVersion::Domain::Control);
+            require(static_cast<bool>(control),"midblock: mixed writer gate");
+            first();
+        } else first();
+        for(int i=1;i<8;++i) {
+            Block next;
+            const auto out=next.run(*r.p);
+            pcm.insert(pcm.end(),out.begin(),out.end());
+        }
+        return pcm;
+    };
+    Rig mixedGood;
+    const auto mixedNormal=mixedCapture(mixedGood,false);
+    Rig mixedCollided;
+    const auto mixedDenied=mixedCapture(mixedCollided,true);
+    const auto mixedState=save(*mixedCollided.p);
+    check(audible(mixedNormal)&&mixedState.program==7&&
+          mixedState.channelProgramMask==(1u<<3)&&
+          mixedState.channelPrograms[3]==9,
+          "midblock: global 7 + channel 4 override 9 saved coherently");
+    check(mixedNormal==mixedDenied,
+          "midblock: mixed global/channel NoteOns retain exact PCM during denied writer");
+    std::cout<<"MIDBLOCK_MIXED_AUDIT global="<<mixedState.program
+             <<" mask="<<mixedState.channelProgramMask
+             <<" pcm_equal="<<(mixedNormal==mixedDenied)<<std::endl;
+}
+
 int main(int argc,char** argv) {
     try {
         if(argc!=3)return 2;
         assetsDir=argv[2];
-        if(std::string(argv[1])=="nullswap") {
+        if(std::string(argv[1])=="midblock-program") midblockProgramRace();
+        else if(std::string(argv[1])=="persistent-controls") persistentControlWriterCollision();
+        else if(std::string(argv[1])=="nullswap") {
             Rig r;bool fired=false;
             hook=[&](const char* h){if(!fired&&std::string(h)=="block_pin") {
                 fired=true;require(recall(*r.p,state(0,0,false))==kResultOk,"empty asset recall");

@@ -51,7 +51,15 @@ if(125A_PROCESSOR_SDK_ROOT AND 125A_BUILD_ENGINE_PROBES)
   add_dependencies(awe32_p128_processor_order_test p128_assets)
   add_test(NAME 125A_p128_processor_order COMMAND awe32_p128_processor_order_test deterministic "${p128_assets}")
   add_test(NAME 125A_p128_processor_remove_engine COMMAND awe32_p128_processor_order_test nullswap "${p128_assets}")
-  set_tests_properties(125A_p128_processor_order 125A_p128_processor_remove_engine PROPERTIES TIMEOUT 90)
+  # Deterministic regression of accepted master / all GUI parameters during
+  # an RT writer refusal, including both project recall ordering directions.
+  add_test(NAME 125A_p128_persistent_controls
+    COMMAND awe32_p128_processor_order_test persistent-controls "${p128_assets}")
+  add_test(NAME 125A_p128_sample_accurate_program_pcm
+    COMMAND awe32_p128_processor_order_test midblock-program "${p128_assets}")
+  set_tests_properties(125A_p128_processor_order 125A_p128_processor_remove_engine
+    125A_p128_persistent_controls 125A_p128_sample_accurate_program_pcm
+    PROPERTIES TIMEOUT 90)
 endif()
 
 if(125A_PROCESSOR_SDK_ROOT AND 125A_BUILD_ENGINE_PROBES)
