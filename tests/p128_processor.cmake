@@ -76,6 +76,9 @@ if(125A_PROCESSOR_SDK_ROOT AND 125A_BUILD_ENGINE_PROBES)
   target_link_libraries(awe32_p130_rt_alloc_probe PRIVATE sdk awe32_chip_safety)
   target_compile_features(awe32_p130_rt_alloc_probe PRIVATE cxx_std_23)
   add_dependencies(awe32_p130_rt_alloc_probe p128_assets)
+  add_test(NAME 125A_p130_no_cpp_new_on_audio_thread
+    COMMAND awe32_p130_rt_alloc_probe "${p128_assets}")
+  set_tests_properties(125A_p130_no_cpp_new_on_audio_thread PROPERTIES TIMEOUT 120)
 
 endif()
 
