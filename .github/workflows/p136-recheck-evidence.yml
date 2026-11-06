@@ -1,0 +1,79 @@
+name: P136 recheck P135 complete real VST3 ETW/heap evidence (no rerender)
+on:
+  push:
+    branches: [audit/p136-recheck-p135-windows-evidence]
+    paths: ['tests/p135/assert_complete.py', 'tests/p135/aggregate_p135_evidence.py', '.github/workflows/p136-recheck-evidence.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify-raw-2026-11-06:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: \${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pin exact source and both original Windows-runner results
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          New-Item -ItemType Directory -Force qa | Out-Null
+          $runIds=@(42227962225,42227962363)
+          $head='b249b110f1f0117e25757dc4001dc628d6b57d37'
+          $records=@()
+          for($i=0;$i -lt 2;$i++){
+            $run=$runIds[$i]
+            $details=(gh api "repos/challanger2000/125A-AWE-Synthesizer/actions/runs/$run" | ConvertFrom-Json)
+            if($LASTEXITCODE -ne 0 -or $details.head_sha -ne $head -or
+               $details.status -ne 'completed' -or $details.conclusion -ne 'failure'){
+              throw "Reject unexpected/missing original measurement $run"
+            }
+            $dir="evidence/runner$($i+1)"
+            $name="P135-P134-V11-Windows-$($i+1)-Raw-ETW-Evidence"
+            gh run download $run -n $name -D $dir
+            if($LASTEXITCODE -ne 0) { throw "P135 complete raw artifact unavailable for $run" }
+            if(-not (Test-Path "$dir/traced/callbacks.csv") -or
+               -not (Test-Path "$dir/untraced/callbacks.csv") -or
+               -not (Test-Path "$dir/memory/callbacks.csv") -or
+               -not (Test-Path "$dir/traced/etw/trace-meta.json") -or
+               -not (Test-Path "$dir/memory/etw/trace-meta.json")){
+                throw "Truncated raw ETW/heap/callback evidence for $run"
+            }
+            $records+=@{run=$run;head=$details.head_sha;artifact=$name;
+                        trace_sha256=(Get-FileHash "$dir/traced/callbacks.csv" -Algorithm SHA256).Hash;
+                        no_trace_sha256=(Get-FileHash "$dir/untraced/callbacks.csv" -Algorithm SHA256).Hash}
+          }
+          $records | ConvertTo-Json -Depth 5 | Out-File qa/pinned-measurement-provenance.json -Encoding utf8
+      - name: Re-run fixed complete-matrix ETW/heap qualification on ORIGINAL CSV
+        shell: pwsh
+        run: |
+          python tests/p135/assert_complete.py evidence/runner1 2>&1 | Tee-Object qa/runner1-recheck.log
+          if($LASTEXITCODE -ne 0){throw 'Runner 1 incomplete, not a valid realtime verdict'}
+          python tests/p135/assert_complete.py evidence/runner2 2>&1 | Tee-Object qa/runner2-recheck.log
+          if($LASTEXITCODE -ne 0){throw 'Runner 2 incomplete, not a valid realtime verdict'}
+      - name: Aggregate original P132 load vs added P133 FX load, every miss counted
+        shell: pwsh
+        run: |
+          python tests/p135/aggregate_p135_evidence.py evidence/runner1 evidence/runner2 qa/P136-full-evidence-2026-11-06.json 2>&1 | Tee-Object qa/aggregate-log.txt
+          if($LASTEXITCODE -ne 0){throw 'P135 aggregation failed'}
+          $data=Get-Content qa/P136-full-evidence-2026-11-06.json -Raw | ConvertFrom-Json
+          if($data.total.callbacks -ne 201600 -or $data.original_P132_five_modes.callbacks -ne 172800 -or
+             $data.new_FX_sixth_mode.callbacks -ne 28800 -or
+             $data.target_asio -ne 'NOT RUN' -or $data.release_approved -ne $false){
+              throw 'P136 completeness/release fail-closed guard'
+          }
+          "## P136 independently verified P135 2026-11-06 evidence" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "All real-process callbacks: $($data.total.callbacks)" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "Original five P132 load cases: $($data.original_P132_five_modes.callbacks) callbacks, $($data.original_P132_five_modes.deadline_overruns) misses" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "Added P133 FX case: $($data.new_FX_sixth_mode.callbacks) callbacks, $($data.new_FX_sixth_mode.deadline_overruns) misses" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "TOTAL: $($data.total.deadline_overruns) deadline misses. Real-time verdict: $($data.realtime_lab_verdict). ASIO: NOT RUN. Release: NO-GO." | Add-Content $env:GITHUB_STEP_SUMMARY
+      - name: Upload only aggregate/provenance; original 200+ MB raw traces stay attached to pinned runs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: P136-Verified-P135-P134-V11-RT-Full-201600-Callbacks
+          path: qa/
+          if-no-files-found: warn
+          retention-days: 14
