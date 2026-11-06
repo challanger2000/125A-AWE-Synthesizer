@@ -111,6 +111,9 @@ static void qualify(const fs::path& normal,const fs::path& diagnostic,const fs::
     for(int frames:{128,256,512,1024})for(int n:{1,16,30}){
         Plugin a(normal,model(assets)),b(diagnostic,model(assets));must(!a.census&&b.census,"normal/diagnostic DLL identity");seed(a,n,frames);seed(b,n,frames);
         for(int i=0;i<128;++i){Block x(frames),y(frames);int64_t a0=0,a1=0,b0=0,b1=0;
+            // P135: the ordinary P134 production DLL and instrumented clone
+            // must match even while switching the original eight FX modes.
+            for(auto* b:{&x,&y}){b->parameter(1200,double(i%8)/7.);b->parameter(1201,double((i/8)%8)/7.);b->cc(91,.8);b->cc(93,.7);}
             auto runA=[&]{a0=tick();must(a.audio->process(x.data)==kResultOk,"normal qualify process");a1=tick();};
             auto runB=[&]{b0=tick();must(b.audio->process(y.data)==kResultOk,"diagnostic qualify process");b1=tick();};
             if(i%2){runB();runA();}else{runA();runB();}
@@ -184,7 +187,10 @@ static void matrix(const fs::path& diagnostic,const fs::path& assets,const fs::p
         }
     }
     std::vector<std::array<int,3>> configurations;
-    for(int frames:{128,256,512,1024})for(int n:{1,16,30})for(int mode=0;mode<5;++mode)configurations.push_back({frames,n,mode});
+    // Modes 0..4 stay identical to the P132 workload for longitudinal
+    // comparison. New mode 5 adds heavy *active* Creative FX automation,
+    // MIDI/GUI/Pitchbend and independent concurrent save+recall.
+    for(int frames:{128,256,512,1024})for(int n:{1,16,30})for(int mode=0;mode<6;++mode)configurations.push_back({frames,n,mode});
     if(std::getenv("P135_REVERSE"))std::reverse(configurations.begin(),configurations.end());
     for(auto configuration:configurations){int frames=configuration[0],n=configuration[1],mode=configuration[2];
         if(std::getenv("P135_TARGET_ONLY")&&(frames!=128||n!=30||mode>2))continue;
@@ -197,7 +203,7 @@ static void matrix(const fs::path& diagnostic,const fs::path& assets,const fs::p
         std::thread control;
         if(mode)control=std::thread([&]{try{unsigned iteration=0;while(!stop.load()){
             auto s=p.save();must(s.program<=127&&s.bank<=16383,"saved values");for(int ch=0;ch<16;++ch)if(!(s.channelProgramMask&(1u<<ch)))must(s.channelPrograms[ch]==s.program,"torn saved program tuple");++saves;
-            if((mode==2||mode==4)&&++iteration%10==0&&!stop.load()){
+            if((mode==2||mode==4||mode==5)&&++iteration%10==0&&!stop.load()){
                 DelayedStream stream;stream.stop=&stop;stream.begun=&begun;stream.primed=primed;stream.ticket=recalls.load()+1;encode(stream,model(assets));
                 auto rc=p.component->setState(&stream);must(rc==kResultOk||rc==kResultFalse,"recall result");++recalls;
             }
@@ -217,7 +223,15 @@ static void matrix(const fs::path& diagnostic,const fs::path& assets,const fs::p
             if(!memory)std::this_thread::sleep_until(due);
             Block b(frames);
             if(mode==3){b.parameter(1002,(i%2?5.:0.)/16383.);b.parameter(1000,(i%2?9.:7.)/127.);}
-            if(mode==4){for(int j=0;j<128;++j)b.cc(129,j%2?.6:.4,j*(frames-1)/127);b.cc(10,i%2?.3:.7);b.cc(1,.2);b.parameter(AWE125::MasterOutput::kParamID,.9);b.parameter(1108,.2);}
+            if(mode==4||mode==5){for(int j=0;j<128;++j)b.cc(129,j%2?.6:.4,j*(frames-1)/127);b.cc(10,i%2?.3:.7);b.cc(1,.2);b.parameter(AWE125::MasterOutput::kParamID,.9);b.parameter(1108,.2);}
+            if(mode==5){
+                // Exercise P133 discrete VST3 ParamIDs 1200/1201 under
+                // playback with nonzero chip Rev/Cho sends and a continuing
+                // independent save+recall thread. No post hoc load hiding.
+                b.parameter(1200,double(i%8)/7.);
+                b.parameter(1201,double((i/8)%8)/7.);
+                b.cc(91,i%2?.9:.5);b.cc(93,i%3?.9:.6);
+            }
             base.index=i;base.phase=memory?"memory":"measure";base.due=tick()+int64_t(std::chrono::duration<double>(due-std::chrono::steady_clock::now()).count()*frequency);
             rows.push_back(invoke(p,b,base));
         }
