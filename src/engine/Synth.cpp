@@ -1782,8 +1782,22 @@ void Synth::ControlChange(uint8_t channel, uint8_t controller, uint8_t value)
         break;
 
     case 120:
+        // CC120 must silence the physical chip, not merely mark a voice
+        // free in the allocator. DCYSUSV=OFF stops the 86Box envelope
+        // engine but otherwise leaves its last nonzero VTFT target running
+        // indefinitely (P132 Windows physical voice census / P134 audio
+        // oracle). IFATN attenuation 0xFF makes that target exactly zero;
+        // the existing card-calibrated 1/64 volume slide then finishes the
+        // output without a click or a new DSP shortcut. A subsequent
+        // NoteOn programs its own IFATN normally.
+        // Age!=0 excludes never-assigned channel-zero slots, while still
+        // covering already-released tails of this channel.
         for (int i = 0; i < NoteVoices(); ++i)
-            if (m_alloc[i].channel == channel) KillVoice(i);
+            if (m_alloc[i].age != 0 && m_alloc[i].channel == channel)
+            {
+                KillVoice(i);
+                m_core.Write(Reg::IFATN, i, 0x00FF);
+            }
         break;
 
     case 123:
