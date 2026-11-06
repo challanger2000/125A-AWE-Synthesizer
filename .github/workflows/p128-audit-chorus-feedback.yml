@@ -38,8 +38,8 @@ jobs:
             throw "All feedback presets must converge symmetrically (exit $rc)"
           }
           foreach ($line in $lines) {
-            if (-not ($line -match 'minus1_tail=\\[0,0\\]') -or
-                -not ($line -match 'plus1_tail=\\[0,0\\]')) {
+            if (-not ($line.Contains('minus1_tail=[0,0]')) -or
+                -not ($line.Contains('plus1_tail=[0,0]'))) {
               throw "Chorus preset still has residual after zero input: $line"
             }
           }
