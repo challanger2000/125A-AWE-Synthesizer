@@ -7,6 +7,7 @@
 #include "public.sdk/source/common/memorystream.h"
 #include "AssetState.h"
 #include "MidiControlMapping.h"
+#include "MidiProgramRouting.h"
 #include <windows.h>
 #include <atomic>
 #include <thread>
@@ -383,6 +384,55 @@ int wmain(int argc,wchar_t** argv) {
                           p.bank==5&&p.program==9&&p.channelProgramMask==0&&
                           channels&&again.bank==5&&again.program==9,
                           "P127 complete later preset 5/9 survives earlier recall");
+            }
+            // P128: channel override accepted after an older recall START
+            // must survive its later commit; an accepted program tuple is
+            // authoritative even if the recall finishes afterwards.
+            MemoryStream channelBase;
+            ok&=check(makeRecall(channelBase,0,0) &&
+                      component->setState(&channelBase)==kResultOk &&
+                      audio->process(data)==kResultOk,
+                      "P128 prepare channel-program recall overlap");
+            PausedStateStream oldChannelRecall;
+            const bool channelReady=makeRecall(oldChannelRecall,0,0);
+            ok&=check(channelReady,"P128 serialize paused channel recall");
+            if(channelReady) {
+                oldChannelRecall.pauseOnRead.store(true,std::memory_order_release);
+                std::atomic<tresult> recallResult{kResultFalse};
+                std::thread prior([&] {
+                    recallResult.store(component->setState(&oldChannelRecall),
+                                       std::memory_order_release);
+                });
+                while(!oldChannelRecall.entered.load(std::memory_order_acquire))
+                    std::this_thread::yield();
+                ParameterChanges programEdits(3);
+                int32 ix0=0,ix1=0,ix2=0,pt0=0,pt1=0,pt2=0;
+                auto* global=programEdits.addParameterData(ParamID(1000),ix0);
+                auto* ch1=programEdits.addParameterData(
+                    AWE125::MidiProgramRouting::ParamID(0),ix1);
+                auto* ch2=programEdits.addParameterData(
+                    AWE125::MidiProgramRouting::ParamID(1),ix2);
+                const bool edits=global&&ch1&&ch2 &&
+                    global->addPoint(0,9./127.,pt0)==kResultOk &&
+                    ch1->addPoint(0,11./127.,pt1)==kResultOk &&
+                    ch2->addPoint(0,10./127.,pt2)==kResultOk;
+                ProcessData flush{};
+                flush.processMode=kRealtime;
+                flush.symbolicSampleSize=kSample32;
+                flush.numSamples=0;
+                flush.inputParameterChanges=&programEdits;
+                const bool accepted=edits&&audio->process(flush)==kResultOk;
+                oldChannelRecall.releaseRead.store(true,std::memory_order_release);
+                prior.join();
+                AWE125::AssetState::Data channelState{};
+                const bool recovered=audio->process(data)==kResultOk &&
+                    snapshotState(component,channelState);
+                ok&=check(accepted&&recallResult.load()==kResultOk&&recovered &&
+                          channelState.program==9&&
+                          (channelState.channelProgramMask&3u)==3u&&
+                          channelState.channelPrograms[0]==11&&
+                          channelState.channelPrograms[1]==10,
+                          "P128 later channel program edits survive earlier recall");
             }
             // A true exported VST3 processor concurrently receives rapid
             // program-change parameter queues and getState() calls.
