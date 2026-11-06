@@ -48,6 +48,7 @@
 #include "WinUiDispatch.h"
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
 #include <vector>
@@ -717,9 +718,14 @@ public:
         // A whole-block epoch made ordinary getState() fail during playback.
         // P119: no control mutex is acquired on the audio callback.
         // The guard prevents a live synth being destroyed during this block.
+        uint64_t seenEngineVersion=engines_.PublishedVersion();
         auto engineRead=engines_.Read();
-        Engine* const entry=engineRead.get();
-        Synth* const synth_=entry?entry->synth.get():nullptr;
+        // Only repin when control has published a different engine. The
+        // original guard stays alive until process() returns; optional guards
+        // are constructed in place and require no realtime allocations.
+        std::optional<RealtimeEngineExchange<Engine>::Guard> newerEngineRead;
+        Engine* entry=engineRead.get();
+        Synth* synth_=entry?entry->synth.get():nullptr;
         const uint64_t restore=gainRestoreEpoch_.load(std::memory_order_acquire);
         if(restore!=lastGainRestoreEpoch_) {
             volumeGain_.restore(gainRestoreValue_.load(std::memory_order_acquire));
@@ -735,6 +741,22 @@ public:
         // realtime writer attempt leaves the stamped value pending.
         ApplyPendingGlobalBank(synth_);
         ApplyPendingProgramIntents(synth_);
+        const auto refreshEngineAtEvent=[&]() noexcept {
+            const uint64_t published=engines_.PublishedVersion();
+            if(published==seenEngineVersion)return;
+            newerEngineRead.emplace(engines_);
+            seenEngineVersion=published;
+            entry=newerEngineRead->get();
+            synth_=entry?entry->synth.get():nullptr;
+            SyncCommittedRecall();
+            const uint64_t newRevision=entry?entry->revision:0;
+            if(newRevision!=lastRtRevision_) {
+                if(synth_)ApplyRtParameters(*synth_);
+                lastRtRevision_=newRevision;
+            }
+            ApplyPendingGlobalBank(synth_);
+            ApplyPendingProgramIntents(synth_);
+        };
         // P118: VST3 parameter points carry their own sampleOffset.
         // Keep one cursor per parameter queue and merge them with MIDI events.
         // No allocation or sorting on the audio thread. The number of known
@@ -1041,6 +1063,9 @@ public:
             // Parameter changes at a given sample precede NoteOn at that sample.
             const bool useParameter=which>=0&&(!eventReady||at<=midiAt);
             render(useParameter?at:midiAt);
+            // A recall may publish after the first block-level engine pin
+            // but before this event. Retarget only at a sample boundary.
+            refreshEngineAtEvent();
             if(useParameter) {
                 auto& c=paramCursors_[which];
                 apply(c.id,c.value);
@@ -1094,6 +1119,7 @@ public:
                 [&](uint8_t channel,int16_t bend) {
                     if(synth_)synth_->PitchBendAutomated(channel,bend);
                 });
+        refreshEngineAtEvent();
         render(data.numSamples);
         if(hasOutput)for(int32 i=0;i<data.numSamples;++i)
             if(left[i]!=0.f||(right&&right[i]!=0.f)) {
