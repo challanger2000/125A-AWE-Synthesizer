@@ -15,13 +15,20 @@
 #if defined(_WIN32)
 #include <mmsystem.h>
 #endif
+static double milliseconds(const FILETIME& t) {
+    ULARGE_INTEGER u{};
+    u.LowPart=t.dwLowDateTime;
+    u.HighPart=t.dwHighDateTime;
+    return static_cast<double>(u.QuadPart)/10000.0;
+}
 
 using RTClock=std::chrono::steady_clock;
 constexpr int kRate=44100;
 constexpr int kCallbacks=500;
 
 struct Result {
-    int frames=0,overruns=0,missedOutput=0,audible=0,saves=0,recalls=0;
+    int frames=0,overruns=0,cpuOverruns=0,wallOverrunsCpuBelowBudget=0;
+    int missedOutput=0,audible=0,saves=0,recalls=0,cpuTimeUnavailable=0;
     double avg=0,p95=0,p99=0,max=0,maxSchedulingLate=0;
 };
 
@@ -84,9 +91,21 @@ Result measureCase(int frames,int controlMode,std::ofstream& csv) {
         Block block(frames);
         for(int k=0;k<4;++k)
             block.note(0,48+((i*4+k)%16),0,true);
+        // Thread CPU (user+kernel) excludes time preempted by Windows.
+        // Capture it separately from elapsed process wall-clock. This
+        // diagnostic never alters the production DSP algorithm.
+        FILETIME created{},exited{},kernelBefore{},userBefore{};
+        FILETIME kernelAfter{},userAfter{};
+        const bool cpuBefore=GetThreadTimes(GetCurrentThread(),
+            &created,&exited,&kernelBefore,&userBefore)!=0;
         const auto begin=RTClock::now();
         const tresult rc=rig.p->process(block.data);
         const auto finish=RTClock::now();
+        const bool cpuAfter=GetThreadTimes(GetCurrentThread(),
+            &created,&exited,&kernelAfter,&userAfter)!=0;
+        const double cpuMs=cpuBefore&&cpuAfter?
+            (milliseconds(kernelAfter)+milliseconds(userAfter)-
+             milliseconds(kernelBefore)-milliseconds(userBefore)):-1.;
         if(rc!=kResultOk) {error=true;break;}
         const double processMs=std::chrono::duration<double,std::milli>(
             finish-begin).count();
@@ -100,13 +119,17 @@ Result measureCase(int frames,int controlMode,std::ofstream& csv) {
             heard=block.l[n]!=0.f||block.r[n]!=0.f;
         result.audible+=heard;
         result.overruns+=processMs>budgetMs;
+        result.cpuOverruns+=cpuMs>=0.&&cpuMs>budgetMs;
+        result.wallOverrunsCpuBelowBudget+=processMs>budgetMs&&
+            cpuMs>=0.&&cpuMs<=budgetMs;
+        result.cpuTimeUnavailable+=cpuMs<0.;
         result.missedOutput+=missed;
         result.maxSchedulingLate=std::max(result.maxSchedulingLate,lateMs);
         durations.push_back(processMs);
         csv<<frames<<","<<mode<<","<<i<<","
            <<std::fixed<<std::setprecision(6)
            <<processMs<<","<<lateMs<<","<<int(missed)<<","
-           <<int(heard)<<"\n";
+           <<int(heard)<<","<<cpuMs<<"\n";
     }
     stop.store(true,std::memory_order_release);
     if(worker.joinable())worker.join();
@@ -145,6 +168,9 @@ Result measureCase(int frames,int controlMode,std::ofstream& csv) {
         <<" p99_ms="<<result.p99
         <<" max_ms="<<result.max
         <<" process_overruns="<<result.overruns
+        <<" thread_cpu_overruns="<<result.cpuOverruns
+        <<" wall_overruns_cpu_below_budget="<<result.wallOverrunsCpuBelowBudget
+        <<" cpu_time_unavailable="<<result.cpuTimeUnavailable
         <<" missed_scheduled_deadlines="<<result.missedOutput
         <<" max_scheduling_late_ms="<<result.maxSchedulingLate
         <<" saves="<<result.saves
@@ -177,7 +203,7 @@ int main(int argc,char** argv) {
         std::ofstream csv(argv[2],std::ios::trunc);
         require(csv.good(),"cannot write callback-level CSV");
         csv<<"frames,case,callback,process_ms,scheduling_late_ms,"
-              "missed_scheduled_deadline,audible_pcm\n";
+              "missed_scheduled_deadline,audible_pcm,thread_cpu_ms\n";
         int processOverruns=0,missedOutputs=0;
         for(int frames:{128,256,1024}) {
             for(int mode=0;mode<3;++mode) {
