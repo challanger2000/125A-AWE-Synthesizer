@@ -200,3 +200,7 @@ if(125A_P134_AB)
       "${p128_assets}" "${PROJECT_BINARY_DIR}/p134-ab")
   set_tests_properties(125A_p134_p133_full_pcm_ab PROPERTIES TIMEOUT 180)
 endif()
+
+# P139 audit-only rerun of both full 72-cell ETW/heap matrices after the
+# P137 real-86Box shadow-voice optimization. No production source changes.
+include(tests/p139/audit.cmake)
