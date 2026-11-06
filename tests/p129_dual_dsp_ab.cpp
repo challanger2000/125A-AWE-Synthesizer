@@ -16,6 +16,7 @@
 #include <string>
 #include <vector>
 
+using Emu8000::Reg;
 using Clock=std::chrono::steady_clock;
 constexpr int kSampleRate=44100,kCalls=400;
 constexpr uint64_t kFNVOffset=14695981039346656037ULL;
