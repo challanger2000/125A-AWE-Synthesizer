@@ -196,11 +196,138 @@ void persistentControlWriterCollision() {
     }
 }
 
+// Audit-only: accepted program event at sample 32, then NoteOn at sample
+// 64 in SAME audio callback, with the realtime persistent writer refused.
+// State may report the new program while PCM still uses the old one.
+void midblockProgramRace() {
+    const auto capture=[](Rig& r,bool denied) {
+        std::vector<float> result;
+        const auto first=[&] {
+            Block block(1024);
+            block.param(kProgramID,9./127.,32);
+            block.note(0,60,64);
+            const auto output=block.run(*r.p);
+            result.insert(result.end(),output.begin(),output.end());
+        };
+        if(denied) {
+            RealtimeStateVersion::Writer control(
+                r.p->rtStateVersion_,RealtimeStateVersion::Domain::Control);
+            require(static_cast<bool>(control),"midblock: control writer acquired");
+            first();
+        } else first();
+        for(int b=1;b<8;++b) {
+            Block next;
+            const auto output=next.run(*r.p);
+            result.insert(result.end(),output.begin(),output.end());
+        }
+        return result;
+    };
+    Rig good;
+    const auto normal=capture(good,false);
+    check(audible(normal)&&save(*good.p).program==9,
+          "midblock: ordinary program-9 point before NoteOn yields audible audio/save");
+    Rig collided;
+    const auto denied=capture(collided,true);
+    const auto written=save(*collided.p);
+    std::cout<<"MIDBLOCK_PROGRAM_AUDIT written_program="<<written.program
+             <<" pcm_equal="<<(normal==denied)
+             <<" normal_audible="<<audible(normal)
+             <<" denied_audible="<<audible(denied)<<std::endl;
+    check(written.program==9,
+          "midblock: accepted program point persisted even when RT writer refused");
+    check(denied==normal,
+          "midblock: NoteOn after refused program point must use newly accepted program PCM");
+
+    // Same contract for a per-channel VST3 ProgramChange parameter. An
+    // override is not equivalent to setting the global program: check both
+    // PCM and the V10 channel mask/preset.
+    const auto channelCapture=[](Rig& r,bool denied) {
+        std::vector<float> pcm;
+        const auto first=[&] {
+            Block b;
+            b.param(MidiProgramRouting::ParamID(3),9./127.,32);
+            b.note(3,60,64);
+            const auto out=b.run(*r.p);
+            pcm.insert(pcm.end(),out.begin(),out.end());
+        };
+        if(denied) {
+            RealtimeStateVersion::Writer control(
+                r.p->rtStateVersion_,RealtimeStateVersion::Domain::Control);
+            require(static_cast<bool>(control),"midblock: channel control gate");
+            first();
+        } else first();
+        for(int i=1;i<8;++i) {
+            Block next;
+            const auto out=next.run(*r.p);
+            pcm.insert(pcm.end(),out.begin(),out.end());
+        }
+        return pcm;
+    };
+    Rig channelGood;
+    const auto chNormal=channelCapture(channelGood,false);
+    Rig channelCollided;
+    const auto chDenied=channelCapture(channelCollided,true);
+    const auto channelState=save(*channelCollided.p);
+    check(audible(chNormal)&&channelState.program==0&&
+          channelState.channelProgramMask==(1u<<3)&&
+          channelState.channelPrograms[3]==9,
+          "midblock: channel 4 accepted program 9 with exact override mask");
+    check(chNormal==chDenied,
+          "midblock: channel 4 NoteOn PCM identical despite denied writer");
+    std::cout<<"MIDBLOCK_CHANNEL_AUDIT saved_mask="
+             <<channelState.channelProgramMask
+             <<" saved_ch4="<<channelState.channelPrograms[3]
+             <<" pcm_equal="<<(chNormal==chDenied)<<std::endl;
+
+    // Distinct program points and NoteOns in the same block: a later
+    // channel override must not accidentally change the global program
+    // or a different MIDI channel while retrying denied writer updates.
+    const auto mixedCapture=[](Rig& r,bool denied) {
+        std::vector<float> pcm;
+        const auto first=[&] {
+            Block b;
+            b.param(kProgramID,7./127.,16);
+            b.param(MidiProgramRouting::ParamID(3),9./127.,32);
+            b.note(2,60,48);
+            b.note(3,60,64);
+            const auto out=b.run(*r.p);
+            pcm.insert(pcm.end(),out.begin(),out.end());
+        };
+        if(denied) {
+            RealtimeStateVersion::Writer control(
+                r.p->rtStateVersion_,RealtimeStateVersion::Domain::Control);
+            require(static_cast<bool>(control),"midblock: mixed writer gate");
+            first();
+        } else first();
+        for(int i=1;i<8;++i) {
+            Block next;
+            const auto out=next.run(*r.p);
+            pcm.insert(pcm.end(),out.begin(),out.end());
+        }
+        return pcm;
+    };
+    Rig mixedGood;
+    const auto mixedNormal=mixedCapture(mixedGood,false);
+    Rig mixedCollided;
+    const auto mixedDenied=mixedCapture(mixedCollided,true);
+    const auto mixedState=save(*mixedCollided.p);
+    check(audible(mixedNormal)&&mixedState.program==7&&
+          mixedState.channelProgramMask==(1u<<3)&&
+          mixedState.channelPrograms[3]==9,
+          "midblock: global 7 + channel 4 override 9 saved coherently");
+    check(mixedNormal==mixedDenied,
+          "midblock: mixed global/channel NoteOns retain exact PCM during denied writer");
+    std::cout<<"MIDBLOCK_MIXED_AUDIT global="<<mixedState.program
+             <<" mask="<<mixedState.channelProgramMask
+             <<" pcm_equal="<<(mixedNormal==mixedDenied)<<std::endl;
+}
+
 int main(int argc,char** argv) {
     try {
         if(argc!=3)return 2;
         assetsDir=argv[2];
-        if(std::string(argv[1])=="persistent-controls") persistentControlWriterCollision();
+        if(std::string(argv[1])=="midblock-program") midblockProgramRace();
+        else if(std::string(argv[1])=="persistent-controls") persistentControlWriterCollision();
         else if(std::string(argv[1])=="nullswap") {
             Rig r;bool fired=false;
             hook=[&](const char* h){if(!fired&&std::string(h)=="block_pin") {
