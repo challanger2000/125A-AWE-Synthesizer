@@ -1,5 +1,8 @@
 // Native ETL decoder: raw QPC CSwitch intervals, target-thread heap events and
 // sampled instruction pointers. No conversion of thread cycles into CPU time.
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 #include <evntrace.h>
 #include <evntcons.h>

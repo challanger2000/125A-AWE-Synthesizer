@@ -56,7 +56,7 @@ jobs:
         run: |
           ctest --test-dir build-p132 -C Release --output-on-failure -V --timeout 180 2>&1 | Tee-Object qa/ctest.txt
           if ($LASTEXITCODE -ne 0) { throw 'CTest failed' }
-          Copy-Item build-p132/p132-qualification/qualification.txt qa/qualification.txt
+          Copy-Item build-p132/p132-qualification/qualification* qa/
           $log=Get-Content qa/ctest.txt -Raw
           if ($log -notmatch '100% tests passed' -or $log -notmatch '125A_p132_diagnostic_dll_pcm_census') { throw 'CTest evidence missing' }
           $validator=Get-ChildItem build-p132 -Filter validator.exe -File -Recurse | Where-Object { $_.FullName -match 'Release' } | Select-Object -First 1 -ExpandProperty FullName

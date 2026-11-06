@@ -1,5 +1,8 @@
 // P132 laboratory host for the REAL normal and separately linked diagnostic VST3 DLL.
 // No timing/heap/voice code is inserted in Processor::process().
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 #include <mmsystem.h>
 #include "pluginterfaces/base/ipluginbase.h"
@@ -93,13 +96,18 @@ static void seed(Plugin& p,int n,int frames,std::vector<Row>* rows=nullptr,Row b
 }
 static void qualify(const fs::path& normal,const fs::path& diagnostic,const fs::path& assets,const fs::path& out){
     std::ofstream f(out/"qualification.txt");
+    std::ofstream timing(out/"qualification-timing.csv");timing<<"frames,voices,index,normal_wall_us,diagnostic_wall_us\n";const auto frequency=hz();
     for(int frames:{128,256,512,1024})for(int n:{1,16,30}){
         Plugin a(normal,model(assets)),b(diagnostic,model(assets));must(!a.census&&b.census,"normal/diagnostic DLL identity");seed(a,n,frames);seed(b,n,frames);
-        for(int i=0;i<40;++i){Block x(frames),y(frames);must(a.audio->process(x.data)==kResultOk&&b.audio->process(y.data)==kResultOk,"qualify process");must(x.left==y.left&&x.right==y.right,"diagnostic instrumentation changed PCM");must(std::any_of(x.left.begin(),x.left.begin()+frames,[](float v){return v!=0;}),"qualifier unexpectedly silent");auto v=b.voices();must(v.nonzero==n&&v.allocated==n,"physical voice count changed");}
+        for(int i=0;i<128;++i){Block x(frames),y(frames);int64_t a0=0,a1=0,b0=0,b1=0;
+            auto runA=[&]{a0=tick();must(a.audio->process(x.data)==kResultOk,"normal qualify process");a1=tick();};
+            auto runB=[&]{b0=tick();must(b.audio->process(y.data)==kResultOk,"diagnostic qualify process");b1=tick();};
+            if(i%2){runB();runA();}else{runA();runB();}
+            timing<<frames<<','<<n<<','<<i<<','<<1e6*double(a1-a0)/frequency<<','<<1e6*double(b1-b0)/frequency<<'\n';must(x.left==y.left&&x.right==y.right,"diagnostic instrumentation changed PCM");must(std::any_of(x.left.begin(),x.left.begin()+frames,[](float v){return v!=0;}),"qualifier unexpectedly silent");auto v=b.voices();must(v.nonzero==n&&v.allocated==n,"physical voice count changed");}
         auto sa=a.save(),sb=b.save();MemoryStream ma,mb;encode(ma,sa);encode(mb,sb);must(ma.getSize()==mb.getSize()&&std::memcmp(ma.getData(),mb.getData(),size_t(ma.getSize()))==0,"diagnostic changed V10");
         f<<"PASS frames="<<frames<<" physical_voices="<<n<<" pcm_bit_exact=1 state_v10_equal=1\n";
     }
-    std::cout<<"P132_QUALIFICATION cases=12 pcm_frames_compared=40_each real_dll=1 PASS\n";
+    std::cout<<"P132_QUALIFICATION cases=12 pcm_callbacks_compared=128_each real_dll=1 PASS\n";
 }
 struct DelayedStream:MemoryStream {
     std::atomic<bool>* stop=nullptr;std::atomic<unsigned>* begun=nullptr;HANDLE primed=nullptr;unsigned ticket=0;bool first=true;
@@ -115,6 +123,7 @@ static void matrix(const fs::path& diagnostic,const fs::path& assets,const fs::p
     // Calibration intervals use the same QPC domain but are NEVER real callbacks.
     {
         Plugin p(diagnostic,model(assets));must(p.heapControl,"heap positive control export");
+        for(int i=0;i<2000;++i){Row r;r.phase="calibration_empty";r.pid=GetCurrentProcessId();r.tid=GetCurrentThreadId();r.begin=tick();r.end=tick();rows.push_back(r);}
         for(const char* phase:{"calibration_sleep","calibration_busy","calibration_heap"}){
             Row r;r.phase=phase;r.pid=GetCurrentProcessId();r.tid=GetCurrentThreadId();r.begin=tick();
             if(std::strcmp(phase,"calibration_sleep")==0)Sleep(20);

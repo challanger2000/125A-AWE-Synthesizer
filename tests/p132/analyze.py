@@ -35,6 +35,7 @@ def analyze(folder):
             lo,hi=seq[i];on+=max(0,min(hi,b)-max(lo,a));i+=1
         return on*1e6/h
     calibration={r['phase']:r for r in rows if r['phase'].startswith('calibration_')}
+    empty=[float(r['wall_us']) for r in rows if r['phase']=='calibration_empty']
     clock_ok=meta.get('perf_frequency')==int(rows[0]['qpc_hz'])
     sleep=calibration.get('calibration_sleep');busy=calibration.get('calibration_busy')
     sleep_off=float(sleep['wall_us'])-overlap(sleep) if sleep else None
@@ -86,7 +87,7 @@ def analyze(folder):
         a,b=int(r['qpc_begin']),int(r['qpc_end'])
         for e in samples[bisect.bisect_left(sample_times,a):bisect.bisect_right(sample_times,b)]:
             if e['tid']==r['tid']:top[e['symbol'] or 'UNRESOLVED']+=1
-    result=dict(rows=len(rows),measured=sum(x['all']['n'] for x in summary),cases=summary,etw=meta,etw_context_valid=valid,calibration_sleep_off_us=sleep_off,calibration_busy_on_us=busy_on,clock_ok=clock_ok,heap_positive_sizes=positive_sizes,heap_backend_positive_control_complete=heap_complete,memory_phase_heap_events=len(memory_events),memory_phase_events=memory_events[:100],attributions=dict(collections.Counter(r['attribution'] for r in misses)),worst=sorted(misses,key=lambda r:float(r['wall_us']),reverse=True)[:30],top_sampled_symbols=top.most_common(30),target_asio_tested=False,realtime_verdict='NOT RUN')
+    result=dict(empty_median_us=percentile(empty,.5),empty_p99_us=percentile(empty,.99),empty_max_us=max(empty) if empty else None,rows=len(rows),measured=sum(x['all']['n'] for x in summary),cases=summary,etw=meta,etw_context_valid=valid,calibration_sleep_off_us=sleep_off,calibration_busy_on_us=busy_on,clock_ok=clock_ok,heap_positive_sizes=positive_sizes,heap_backend_positive_control_complete=heap_complete,memory_phase_heap_events=len(memory_events),memory_phase_events=memory_events[:100],attributions=dict(collections.Counter(r['attribution'] for r in misses)),worst=sorted(misses,key=lambda r:float(r['wall_us']),reverse=True)[:30],top_sampled_symbols=top.most_common(30),target_asio_tested=False,realtime_verdict='NOT RUN')
     (folder/'summary.json').write_text(json.dumps(result,indent=2)+'\n')
     if misses:
         with (folder/'deadline-events.csv').open('w',newline='') as f:w=csv.DictWriter(f,fieldnames=list(misses[0]));w.writeheader();w.writerows(misses)
