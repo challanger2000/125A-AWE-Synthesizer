@@ -55,7 +55,7 @@ if not mem["heap_backend_positive_control_complete"]:
 if mem["memory_phase_heap_events"]:
     raise SystemExit("P135 AUDIO THREAD HEAP EVENTS PRESENT: realtime violation")
 results["heap"]={"audio_callback_count":mem["memory_callbacks"],
-                 "heap_events_within_audio_callbacks":len(mem["memory_phase_heap_events"]),
+                 "heap_events_within_audio_callbacks":int(mem["memory_phase_heap_events"]),
                  "heap_positive_controls":mem["heap_positive_sizes"]}
 results["totals"]={"measured_callbacks":sum(results[k]["callbacks"] for k in ("traced","untraced")),
                    "deadline_overruns":sum(results[k]["all_deadline_misses"] for k in ("traced","untraced")),
