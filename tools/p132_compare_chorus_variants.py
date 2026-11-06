@@ -82,7 +82,7 @@ def main():
             if differences or maxdelta or quantized_differences:
                 raise ValueError(f"Feedback-free mode {preset} changed!")
         else:
-            affected += differences > 0
+            affected += int(differences > 0)
         records.append({
             "preset": preset,
             "feedback_byte": feedback,
