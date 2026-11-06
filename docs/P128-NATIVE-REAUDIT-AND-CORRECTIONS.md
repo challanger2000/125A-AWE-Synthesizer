@@ -152,3 +152,21 @@ lesbar. Der vorhandene Push-Workflow auf dem Entwicklungsbranch soll deshalb
 den korrigierten Stand vollständig auf Windows prüfen; bis zum belegten Ergebnis
 ist dieser neue Lauf NOT RUN. Keine GUI- oder Releasefreigabe wird daraus abgeleitet.
 Am Repository `125A-Plugin-Test-Lab` wurde nichts verändert.
+
+## Windows-CI: konkrete Fixture-Korrektur
+
+Die Läufe #42161173900 (`9d97ed9`) und #42162133911 (`e0348fd`) bauten die
+Windows-VST3 erfolgreich, scheiterten aber im Quellausschlusstest: Der
+In-Checkout-CI-Build erzeugte seine synthetischen ROM-/SF2-Dateien innerhalb
+`build-p121/`. Die neue öffentliche Fehlerannotation identifizierte genau
+`125A_source_baseline_contract`, nicht einen DSP- oder PCM-Fehler.
+
+Die Fixtures und PCM-Ausgaben liegen jetzt in einem vom jeweiligen
+Buildverzeichnis abgeleiteten Unterverzeichnis des externen System-Tempordners.
+Native Windows-Pfade werden für CMake normalisiert. Eine Konfiguration mit
+Tempordner innerhalb des Checkouts wird ausdrücklich zurückgewiesen. Positiver
+In-Source-Build-/Assettest und negative TMPDIR-Gegenprobe wurden lokal
+reproduziert. Der strikte Quellausschlusstest wurde unverändert gelassen.
+Die neuen P128-Testdateien sind außerdem in den bestehenden CI-Pfadfiltern
+registriert. Der vollständige neue Windows-Lauf bleibt bis zu seinem Ergebnis
+ausstehend.
