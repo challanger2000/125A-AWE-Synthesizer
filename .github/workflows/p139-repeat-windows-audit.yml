@@ -1,0 +1,14 @@
+name: P139 optimized P137-V11 realtime attribution independent Windows B
+on:
+  push:
+    branches: [audit/p139-p137-v11-full-etw]
+    paths: ['CMakeLists.txt', 'tests/p139/**', '.github/workflows/p139-*.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  independent-runner:
+    uses: ./.github/workflows/p139-windows-audit.yml
+    with:
+      trial: 2
