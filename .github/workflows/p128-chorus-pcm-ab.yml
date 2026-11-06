@@ -1,0 +1,75 @@
+name: P128 native Chorus A-B PCM characterization against unchanged DSP
+on:
+  push:
+    branches: [audit/p128-chorus-quantization-candidate-20261106]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-chorus-a-b:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    steps:
+      - name: Checkout candidate chorus (separate)
+        uses: actions/checkout@v4
+        with:
+          path: candidate
+      - name: Checkout immutable original P128 production chorus
+        uses: actions/checkout@v4
+        with:
+          ref: 4bd9787908b24c5b19d8611efe106f9573b2b79c
+          path: baseline
+      - name: Add audit-only characterization harness to baseline checkout
+        shell: pwsh
+        run: |
+          $actual=(git -C baseline rev-parse HEAD).Trim()
+          if ($actual -ne '4bd9787908b24c5b19d8611efe106f9573b2b79c') {
+            throw 'Original chip source not pinned'
+          }
+          Copy-Item candidate/tests/p128_chorus_characterization.cpp baseline/tests/p128_chorus_characterization.cpp
+          @'
+          add_executable(awe32_p128_chorus_characterization
+            "${PROJECT_SOURCE_DIR}/tests/p128_chorus_characterization.cpp")
+          target_include_directories(awe32_p128_chorus_characterization PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/include" "${UPSTREAM_SRC}/86box/include")
+          target_link_libraries(awe32_p128_chorus_characterization PRIVATE awe32_chip_safety)
+          '@ | Add-Content baseline/src/engine/CMakeLists.txt
+          New-Item -ItemType Directory -Force qa/original,qa/candidate | Out-Null
+          "baseline=$actual" | Set-Content qa/provenance.txt
+          "candidate=$env:GITHUB_SHA" | Add-Content qa/provenance.txt
+          "Hardware_qualification=NOT_TESTED" | Add-Content qa/provenance.txt
+      - name: Build unchanged and modified real 86Box chip chorus separately
+        shell: pwsh
+        run: |
+          cmake -S baseline -B build-baseline -G "Visual Studio 17 2022" -A x64 -D125A_BUILD_VST3=OFF -D125A_BUILD_ENGINE_PROBES=ON
+          if ($LASTEXITCODE -ne 0) { throw 'Original configure failed' }
+          cmake --build build-baseline --config Release --parallel 2 --target awe32_p128_chorus_characterization
+          if ($LASTEXITCODE -ne 0) { throw 'Original DSP build failed' }
+          cmake -S candidate -B build-candidate -G "Visual Studio 17 2022" -A x64 -D125A_BUILD_VST3=OFF -D125A_BUILD_ENGINE_PROBES=ON
+          if ($LASTEXITCODE -ne 0) { throw 'Candidate configure failed' }
+          cmake --build build-candidate --config Release --parallel 2 --target awe32_p128_chorus_characterization
+          if ($LASTEXITCODE -ne 0) { throw 'Candidate DSP build failed' }
+      - name: Compare all eight native chorus PCM streams against original implementation
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $original=@(Get-ChildItem build-baseline -Recurse -File -Filter awe32_p128_chorus_characterization.exe)
+          $candidate=@(Get-ChildItem build-candidate -Recurse -File -Filter awe32_p128_chorus_characterization.exe)
+          if ($original.Count -ne 1 -or $candidate.Count -ne 1) { throw 'Original/candidate executable ambiguous' }
+          & $original[0].FullName (Resolve-Path qa/original).Path 2>&1 | Tee-Object qa/baseline.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Original DSP failed' }
+          & $candidate[0].FullName (Resolve-Path qa/candidate).Path 2>&1 | Tee-Object qa/candidate.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Modified DSP failed' }
+          python candidate/tools/p128_chorus_pcm_compare.py qa/original qa/candidate qa/metrics.csv 2>&1 |
+            Tee-Object qa/comparison.txt
+          if ($LASTEXITCODE -ne 0) { throw 'PCM A-B numeric comparison failed' }
+          'NUMERIC_A_B_ONLY: no physical CT4390 capture. DO NOT MERGE based on this test alone.' |
+            Set-Content qa/verdict.txt
+      - name: Publish numeric evidence and controlled raw stereo PCM
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 125A-P128-Chorus-Original-vs-Candidate-PCM
+          path: qa/
+          if-no-files-found: warn
+          retention-days: 14
