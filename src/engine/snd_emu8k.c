@@ -2182,7 +2182,16 @@ emu8k_work_chorus(int32_t *inbuf, int32_t *outbuf, emu8k_chorus_eng_t *engine, i
         int32_t dat_l = emu8k_chorus_tap(engine->chorus_left_buffer, engine->write, delay_l);
         int32_t dat_r = emu8k_chorus_tap(engine->chorus_left_buffer, engine->write, delay_r);
 
-        engine->chorus_left_buffer[engine->write] = *inbuf + ((dat_l * engine->feedback) >> 8);
+        /* AUDIT-ONLY DSP HYPOTHESIS: C's signed arithmetic right shift
+         * rounds every small negative product toward -infinity, so -1 times
+         * any nonzero feedback byte becomes -1 forever. A signed quotient
+         * truncating toward zero removes that asymmetric fixed point. This
+         * intentionally changes integer quantization and MUST NOT enter
+         * the release without a hardware-recording comparison. The 64-bit
+         * intermediate also avoids signed 32-bit multiplication overflow. */
+        const int32_t fed_back=(int32_t)
+            (((int64_t) dat_l * engine->feedback) / INT64_C(256));
+        engine->chorus_left_buffer[engine->write] = *inbuf + fed_back;
 
         ++engine->write;
         engine->write %= EMU8K_LFOCHORUS_SIZE;
