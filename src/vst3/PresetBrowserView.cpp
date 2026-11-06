@@ -35,19 +35,18 @@ public:
             c->setFrameColor(edge);c->drawRect(r,kDrawStroked);
         };
         const CColor edge(105,89,62), black(15,18,22), dark(24,28,34);
-        // P117 layout is functional, deliberately without final image assets.
-        // Rectangles are the exact future faceplate artwork boundaries.
-        surface({12,8,1188,70},dark,edge);     // branding and card identity
-        surface({14,78,880,188},black,edge);   // hardware LCD
-        surface({891,78,1184,188},dark,edge);  // sample file actions
-        surface({14,198,781,267},dark,edge);  // bank + preset direct selection
-        surface({14,277,781,421},dark,edge);  // four AMP controls
-        surface({14,429,781,570},dark,edge);  // six filter controls
-        surface({14,575,781,746},dark,edge);  // master + sends
-        surface({792,198,1185,746},dark,edge); // always-available browser
-        surface({14,752,1185,778},black,edge); // actual state/errors
+        // P142: one compact 1000 x 640 logical surface. Panel tabs switch
+        // actual VSTGUI child containers; nothing is scaled, rasterized or
+        // positioned outside its host view.
+        surface({12,8,988,55},dark,edge);     // unit identity
+        surface({12,64,666,203},black,edge); // live hardware/LCD status
+        surface({677,64,988,203},dark,edge); // file/ROM operations
+        surface({12,210,988,261},dark,edge); // bank / program / nav
+        surface({12,267,988,305},dark,edge); // MAIN / EDIT / BROWSER
+        surface({12,310,988,604},dark,edge); // active page
+        surface({12,609,988,635},black,edge);// meaningful status/error
         c->setFrameColor(CColor(155,121,69,255));
-        c->drawLine({26,72},{1174,72});
+        c->drawLine({24,57},{976,57});
     }
 };
 // A stylized EMU8000 chip package; pin count is decorative, not a claim
@@ -208,69 +207,82 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
       sf2CatalogRevision_(std::move(sf2CatalogRevision)),
       browserBankReselect_(std::move(browserBankReselect)) {
     setBackgroundColor(kBack);
-    addView(new HardwareFaceplate({0,0,1200,780}));
-    // Functional first pass: gold letterform is native VSTGUI text.
-    // In the artwork phase these labels become the approved custom brand.
-    auto* brand=MakeLabel({30,14,206,65},"125A",false);
-    brand->setFontColor(CColor(218,179,103,255));
-    auto* title=MakeLabel({224,17,780,62},"AWE SYNTHESIZER",false);
-    title->setFontColor(CColor(218,179,103,255));
-    MakeLabel({988,18,1170,40},"EMU8000",false);
-    MakeLabel({945,41,1173,61},"32 VOICES  /  44.1 kHz",true);
+    addView(new HardwareFaceplate({0,0,1000,640}));
 
-    // Genuine live status text: no permanently illuminated fake ROM LEDs.
-    auto* lcd=MakeLabel({30,87,752,112},"EMU8000   /   SOUNDFONT ENGINE",true);
+    // Permanent identity and engine status; all values are supplied by
+    // the real processor, never painted as an unconditional green LED.
+    auto* brand=MakeLabel({27,14,157,49},"125A",false);
+    brand->setFontColor(CColor(218,179,103,255));
+    auto* title=MakeLabel({162,15,718,49},"AWE SYNTHESIZER",false);
+    title->setFontColor(CColor(218,179,103,255));
+    MakeLabel({824,16,976,37},"EMU8000",false);
+    MakeLabel({820,38,978,51},"32 VOICES / 44.1 kHz",true);
+
+    auto* lcd=MakeLabel({28,74,633,96},"EMU8000  |  SOUNDFONT ENGINE",true);
     lcd->setFontColor(CColor(221,174,94,255));
-    programLabel_=MakeLabel({30,115,849,152},"NO PRESET",false);
+    programLabel_=MakeLabel({28,104,640,138},"NO PRESET",false);
     programLabel_->setFontColor(CColor(239,202,114,255));
-    hardwareInfoLabel_=MakeLabel({30,151,849,180},"ROM: ERFORDERLICH",true);
+    hardwareInfoLabel_=MakeLabel({28,151,641,193},"ROM: ERFORDERLICH",true);
     hardwareInfoLabel_->setFontColor(CColor(205,164,94,255));
     hardwareInfoLabel_->setTextTruncateMode(CTextLabel::kTruncateTail);
 
-    MakeLabel({904,84,1165,103},"SOUNDFONT",true);
-    fileLabel_=MakeLabel({905,104,1167,129},"",false);
+    MakeLabel({689,75,973,99},"SOUNDFONT",true);
+    fileLabel_=MakeLabel({688,102,974,136},"",false);
     fileLabel_->setTextTruncateMode(CTextLabel::kTruncateTail);
-    loadRom_=MakeButton({906,139,1033,174},kLoadRom,"ROM LADEN");
-    loadSf2_=MakeButton({1042,139,1174,174},kLoadSf2,"SF2 LADEN");
+    loadRom_=MakeButton({690,151,821,187},kLoadRom,"ROM LADEN");
+    loadSf2_=MakeButton({835,151,974,187},kLoadSf2,"SF2 LADEN");
 
-    // Distinct BANK and PRESET combos. Only actual program entries are listed.
-    MakeLabel({27,213,81,246},"BANK",true);
-    activeBankMenu_=new COptionMenu({85,211,235,252},this,kActiveBank);
+    MakeLabel({24,217,77,250},"BANK",true);
+    activeBankMenu_=new COptionMenu({79,215,251,254},this,kActiveBank);
     activeBankMenu_->setBackColor(kBezel);
     activeBankMenu_->setFontColor(kPaper);
     activeBankMenu_->setFrameColor(kStroke);
     addView(activeBankMenu_);
-    previous_=MakeButton({247,212,294,253},kPrevious,"<");
-    programMenu_=new COptionMenu({303,211,685,252},this,kDirectPreset);
+    previous_=MakeButton({263,215,312,254},kPrevious,"<");
+    programMenu_=new COptionMenu({325,215,823,254},this,kDirectPreset);
     programMenu_->setBackColor(kBezel);
     programMenu_->setFontColor(kPaper);
     programMenu_->setFrameColor(kStroke);
     addView(programMenu_);
-    next_=MakeButton({696,212,744,253},kNext,">");
+    next_=MakeButton({837,215,983,254},kNext,"NEXT >");
 
-    MakeLabel({29,282,543,303},"AMP ENVELOPE",true);
-    AddKnob(0,84,312,"ATTACK");
-    AddKnob(1,260,312,"DECAY");
-    AddKnob(2,436,312,"SUSTAIN -");
-    AddKnob(3,612,312,"RELEASE");
+    // Three mutually exclusive, native VSTGUI child layouts. No modal
+    // dialogs or ghost/offscreen knobs; the host-facing params are shared.
+    pageButtons_[0]=MakeButton({23,271,151,302},kMainPage,"MAIN");
+    pageButtons_[1]=MakeButton({161,271,289,302},kEditPage,"EDIT");
+    toggle_=MakeButton({299,271,443,302},kToggle,"BROWSER");
+    pageButtons_[2]=toggle_;
+    for(auto* tab:pageButtons_)
+        tab->setStyle(CTextButton::kOnOffStyle);
+    MakeLabel({493,273,974,302},"BANK / PRESET / ROM / SF2 BLEIBEN IMMER SICHTBAR",true);
+    for(auto*& page:pages_) {
+        page=new CViewContainer({0,310,1000,604});
+        page->setTransparency(true);
+        addView(page);
+    }
 
-    MakeLabel({29,434,603,455},"FILTER ENVELOPE + TONE",true);
-    AddKnob(4,50,464,"ATTACK");
-    AddKnob(5,171,464,"DECAY");
-    AddKnob(6,292,464,"SUSTAIN -");
-    AddKnob(7,413,464,"RELEASE");
-    AddKnob(8,534,464,"CUTOFF -");
-    AddKnob(9,655,464,"RESONANCE +");
+    // MAIN: essentials only. Master is intentionally independent from the
+    // two non-destructive SF2 SEND boosts. FX types are still eight discrete
+    // original Creative hardware modes per block.
+    buildingPanel_=pages_[0];
+    MakeLabel({29,326,470,349},"PERFORMANCE",false);
+    MakeLabel({522,326,970,348},"MASTER / SENDS / CREATIVE FX",true);
+    masterVolume_=new HardwareKnob(PageRect({139,390,215,466}),
+                                  this,kMasterVolume);
+    masterVolume_->setDefaultValue(1.f);
+    masterVolume_->setValue(1.f);
+    AddToCurrentPage(masterVolume_);
+    auto* masterTitle=MakeLabel({116,468,238,485},"MASTER",true);
+    masterTitle->setHoriAlign(kCenterText);
+    masterVolumeValue_=MakeLabel({116,488,238,512},"100%",false);
+    masterVolumeValue_->setHoriAlign(kCenterText);
+    AddKnob(10,441,395,"HALL SEND");
+    AddKnob(11,711,395,"CHORUS SEND");
 
-    // Native Creative effect choices: 8 Reverb modes and 8 Chorus modes.
-    // These host-automatable discrete parameter menus are separate from
-    // the existing per-note effects send overlays; the menus never modify
-    // SF2 generator sends, MIDI controllers or master volume.
-    MakeLabel({30,601,205,623},"MASTER",true);
-    MakeLabel({268,576,475,590},"REVERB TYPE",true);
-    MakeLabel({513,576,739,590},"CHORUS TYPE",true);
-    reverbMenu_=new COptionMenu({259,591,489,623},this,kReverbType);
-    chorusMenu_=new COptionMenu({504,591,741,623},this,kChorusType);
+    MakeLabel({333,509,564,526},"REVERB TYPE",true);
+    MakeLabel({603,509,835,526},"CHORUS TYPE",true);
+    reverbMenu_=new COptionMenu(PageRect({331,530,570,570}),this,kReverbType);
+    chorusMenu_=new COptionMenu(PageRect({600,530,842,570}),this,kChorusType);
     for(auto* menu:{reverbMenu_,chorusMenu_}) {
         menu->setBackColor(kBezel);
         menu->setFontColor(kPaper);
@@ -282,60 +294,77 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     for(const char* label:{"Chorus 1","Chorus 2","Chorus 3","Chorus 4",
                             "Feedback","Flanger","Short Delay","Short Delay + FB"})
         chorusMenu_->addEntry(label);
-    reverbMenu_->setValue(4.f);  // original Win95 Hall 2 default
-    chorusMenu_->setValue(2.f);  // original Win95 Chorus 3 default
-    addView(reverbMenu_);
-    addView(chorusMenu_);
-    masterVolume_=new HardwareKnob({115,626,177,688},this,kMasterVolume);
-    masterVolume_->setDefaultValue(1.f); // P118: host unity on Ctrl-click
-    masterVolume_->setValue(1.f);
-    addView(masterVolume_);
-    auto* masterTitle=MakeLabel({94,694,197,711},"VOLUME",true);
-    masterTitle->setHoriAlign(kCenterText);
-    masterVolumeValue_=MakeLabel({94,713,197,735},"100%",false);
-    masterVolumeValue_->setHoriAlign(kCenterText);
-    AddKnob(10,352,626,"HALL +");
-    AddKnob(11,559,626,"CHORUS +");
-    reset_=MakeButton({666,695,771,728},kReset,"MOD RESET");
+    reverbMenu_->setValue(4.f);
+    chorusMenu_->setValue(2.f);
+    AddToCurrentPage(reverbMenu_);
+    AddToCurrentPage(chorusMenu_);
+    MakeLabel({35,564,301,586},"SEND = SF2-KLANGOFFSET",true);
 
-    MakeLabel({807,207,1027,239},"SOUND BROWSER",false);
-    toggle_=MakeButton({1020,205,1170,241},kToggle,"BROWSER");
-    toggle_->setStyle(CTextButton::kOnOffStyle);
-    toggle_->setValue(1.f);
-    bankCaption_=MakeLabel({809,261,870,289},"FILTER",true);
-    bankMenu_=new COptionMenu({875,254,1167,291},this,kBankFilter);
+    // EDIT: precisely all ten remaining overlay controls. Two deliberate
+    // rows give envelope and tone families predictable, stable locations.
+    buildingPanel_=pages_[1];
+    MakeLabel({27,322,395,347},"AMP ENVELOPE",false);
+    reset_=MakeButton({840,322,965,357},kReset,"MOD RESET");
+    AddKnob(0,131,363,"ATTACK");
+    AddKnob(1,351,363,"DECAY");
+    AddKnob(2,571,363,"SUSTAIN -");
+    AddKnob(3,791,363,"RELEASE");
+    MakeLabel({27,468,595,486},"FILTER ENVELOPE + TONE",true);
+    AddKnob(4,79,483,"ATTACK");
+    AddKnob(5,229,483,"DECAY");
+    AddKnob(6,379,483,"SUSTAIN -");
+    AddKnob(7,529,483,"RELEASE");
+    AddKnob(8,679,483,"CUTOFF -");
+    AddKnob(9,829,483,"RESONANCE +");
+
+    // BROWSER: no permanent 400px sidebar. It uses the available width,
+    // retains true SF2 bank filtering, search and exact program selection.
+    buildingPanel_=pages_[2];
+    bankCaption_=MakeLabel({27,324,106,354},"FILTER",true);
+    bankMenu_=new COptionMenu(PageRect({107,322,312,358}),this,kBankFilter);
     bankMenu_->setBackColor(kBezel);
     bankMenu_->setFontColor(kPaper);
     bankMenu_->setFrameColor(kStroke);
-    addView(bankMenu_);
-    searchCaption_=MakeLabel({809,308,873,336},"SUCHE",true);
-    search_=new CTextEdit({875,302,1167,341},this,kFilter,"");
+    AddToCurrentPage(bankMenu_);
+    searchCaption_=MakeLabel({332,324,400,354},"SUCHE",true);
+    search_=new CTextEdit(PageRect({404,322,966,358}),this,kFilter,"");
     search_->setPlaceholderString("Instrument suchen...");
     search_->setImmediateTextChange(true);
     search_->setBackColor(kBezel);
     search_->setFontColor(kPaper);
     search_->setFrameColor(kStroke);
-    addView(search_);
-    table_=new CDataBrowser({805,349,1173,732},this,
+    AddToCurrentPage(search_);
+    table_=new CDataBrowser(PageRect({25,373,971,594}),this,
              CScrollView::kVerticalScrollbar|
              CScrollView::kAutoHideScrollbars);
     table_->setBackgroundColor(kRaised);
     table_->setWantsFocus(true);
-    addView(table_);
-    empty_=MakeLabel({818,363,1162,414},"",true);
+    AddToCurrentPage(table_);
+    empty_=MakeLabel({33,398,960,436},"",true);
 
-    hint_=MakeLabel({27,753,1169,776},
+    buildingPanel_=nullptr;
+    hint_=MakeLabel({26,610,972,632},
         "SF2-Audiostatus noch nicht vom Prozessor bestaetigt.",true);
     hint_->setTextTruncateMode(CTextLabel::kTruncateTail);
-    SetExpanded(true);
+    SetPage(0);
     setWantsIdle(true);
     Sync(true);
+}
+VSTGUI::CRect PresetBrowserView::PageRect(const VSTGUI::CRect& r) const {
+    if (!buildingPanel_) return r;
+    // The active page starts at logical Y=310; all named controls continue
+    // to use one stable, explicit desktop coordinate system.
+    return {r.left,r.top-310.,r.right,r.bottom-310.};
+}
+void PresetBrowserView::AddToCurrentPage(VSTGUI::CView* v) {
+    if (buildingPanel_) buildingPanel_->addView(v);
+    else addView(v);
 }
 void PresetBrowserView::AddKnob(int index,int x,int y,const char* title) {
     auto* ctrl=new HardwareKnob({CCoord(x),CCoord(y),CCoord(x+58),CCoord(y+58)},
                                 this,kGuiFirst+index);
     controls_[size_t(index)]=ctrl;
-    addView(ctrl);
+    AddToCurrentPage(ctrl);
     auto* lab=MakeLabel({CCoord(x-20),CCoord(y+61),CCoord(x+82),CCoord(y+81)},title,true);
     lab->setHoriAlign(kCenterText);
     auto* val=MakeLabel({CCoord(x-20),CCoord(y+82),CCoord(x+82),CCoord(y+101)},"0%",false);
@@ -343,17 +372,17 @@ void PresetBrowserView::AddKnob(int index,int x,int y,const char* title) {
     values_[size_t(index)]=val;
 }
 CTextLabel* PresetBrowserView::MakeLabel(const CRect& r,const char* s,bool secondary) {
-    auto* label=new CTextLabel(r,s);
+    auto* label=new CTextLabel(PageRect(r),s);
     label->setTransparency(true);
     label->setFont(secondary?kNormalFontSmall:kNormalFont);
     label->setFontColor(secondary?kMuted:kPaper);
     label->setHoriAlign(kLeftText);
     if(!secondary)label->setTextTruncateMode(CTextLabel::kTruncateTail);
-    addView(label);
+    AddToCurrentPage(label);
     return label;
 }
 CTextButton* PresetBrowserView::MakeButton(const CRect& r,int tag,const char* s) {
-    auto* button=new CTextButton(r,this,tag,s);
+    auto* button=new CTextButton(PageRect(r),this,tag,s);
     button->setFont(kNormalFont);
     button->setTextColor(kPaper);
     button->setTextColorHighlighted(kPaper);
@@ -365,7 +394,7 @@ CTextButton* PresetBrowserView::MakeButton(const CRect& r,int tag,const char* s)
     button->setGradient(base);
     button->setGradientHighlighted(pressed);
     base->forget();pressed->forget();
-    addView(button);
+    AddToCurrentPage(button);
     return button;
 }
 int PresetBrowserView::GestureIndex(int tag) noexcept {
@@ -495,7 +524,7 @@ void PresetBrowserView::RebuildRows() {
         empty_->setText(sf_.Entries().empty()?
             "Keine SF2 geladen. Oben auf SF2 LADEN klicken.":
             "Keine Treffer. Suche oder Bankfilter aendern.");
-        empty_->setVisible(expanded_);
+        empty_->setVisible(currentPage_==2);
     } else empty_->setVisible(false);
     SyncBrowserSelection();
 }
@@ -603,16 +632,16 @@ void PresetBrowserView::SyncHardwareInfo() {
         ? "32 STIMMEN | 44,1 kHz | RAM/ROM: nicht ermittelt"
         : state.c_str());
 }
-void PresetBrowserView::SetExpanded(bool value) {
-    expanded_=value;
-    bankCaption_->setVisible(value);
-    bankMenu_->setVisible(value);
-    searchCaption_->setVisible(value);
-    search_->setVisible(value);
-    table_->setVisible(value);
-    empty_->setVisible(value&&rows_.empty());
-    hint_->setVisible(true);
-    toggle_->setTitle(value?"BROWSER SCHLIESSEN":"BROWSER OEFFNEN");
+void PresetBrowserView::SetPage(int page) {
+    currentPage_=std::clamp(page,0,2);
+    for(size_t i=0;i<pages_.size();++i) {
+        if(pages_[i])pages_[i]->setVisible(int(i)==currentPage_);
+        if(pageButtons_[i]) {
+            pageButtons_[i]->setValue(int(i)==currentPage_?1.f:0.f);
+            pageButtons_[i]->invalid();
+        }
+    }
+    if(empty_)empty_->setVisible(currentPage_==2&&rows_.empty());
 }
 void PresetBrowserView::ChooseSf2() {
     std::string path;
@@ -676,7 +705,9 @@ void PresetBrowserView::valueChanged(CControl* control) {
                 bank_,program_,tag==kNext?1:-1);
             if(target>=0)Select(bank_,static_cast<uint8_t>(target));
         }
-    } else if(tag==kToggle)SetExpanded(control->getValue()>0.5f);
+    } else if(tag==kMainPage)SetPage(0);
+    else if(tag==kEditPage)SetPage(1);
+    else if(tag==kToggle)SetPage(2);
     else if(tag==kFilter) {
         searchText_=search_->getText().data();
         RebuildRows();
@@ -693,7 +724,7 @@ int32_t PresetBrowserView::dbGetNumRows(CDataBrowser*) {
 }
 int32_t PresetBrowserView::dbGetNumColumns(CDataBrowser*) {return 1;}
 CCoord PresetBrowserView::dbGetRowHeight(CDataBrowser*) {return 27.;}
-CCoord PresetBrowserView::dbGetCurrentColumnWidth(int32_t,CDataBrowser*) {return 315.;}
+CCoord PresetBrowserView::dbGetCurrentColumnWidth(int32_t,CDataBrowser*) {return 892.;}
 void PresetBrowserView::dbDrawCell(CDrawContext* ctx,const CRect& r,
                                   int32_t row,int32_t,int32_t flags,CDataBrowser*) {
     if(row<0||size_t(row)>=rows_.size())return;
