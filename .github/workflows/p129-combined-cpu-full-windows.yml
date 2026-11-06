@@ -1,0 +1,62 @@
+name: P129 combined low-overhead Box86 renderer full Windows regression
+on:
+  push:
+    branches: [audit/p129-combined-cpu-optimization-20261106]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: windows-2022
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch verified Steinberg SDK revision
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch v3.8.1_build_84 --recurse-submodules https://github.com/steinbergmedia/vst3sdk.git external/vst3sdk
+          $sha=(git -C external/vst3sdk rev-parse HEAD).Trim()
+          if ($sha -ne '3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96') { throw "Unexpected SDK $sha" }
+      - name: Configure all VST3, engine and EditorHost tests
+        shell: pwsh
+        run: |
+          cmake -S . -B build-p128 -G "Visual Studio 17 2022" -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_EDITORHOST_TEST=ON
+          if ($LASTEXITCODE -ne 0) { throw 'CMake configure failed' }
+      - name: Build all regression targets and production VST3
+        shell: pwsh
+        run: |
+          cmake --build build-p128 --config Release --parallel 2
+          if ($LASTEXITCODE -ne 0) { throw 'Full Windows build failed' }
+      - name: Run entire CTest suite with no skip
+        shell: pwsh
+        timeout-minutes: 12
+        run: |
+          New-Item -ItemType Directory -Force qa | Out-Null
+          ctest --test-dir build-p128 -C Release --output-on-failure --timeout 120 2>&1 |
+            Tee-Object -FilePath qa/ctest.txt
+          if ($LASTEXITCODE -ne 0) { throw 'P128 full regression failed' }
+          $log=Get-Content qa/ctest.txt -Raw
+          if ($log -notmatch '100% tests passed') { throw 'No positive full-test evidence' }
+          if ($log -notmatch '125A_p128_sample_accurate_program_pcm') { throw 'Sample-accurate regression missing' }
+          if ($log -notmatch '125A_p128_persistent_controls') { throw 'Master/GUI writer regression missing' }
+      - name: Exercise VST3 GUI in Windows EditorHost three times
+        shell: pwsh
+        timeout-minutes: 4
+        run: |
+          $editor=Get-ChildItem build-p128 -Filter editorhost.exe -File -Recurse |
+            Where-Object { $_.FullName -match 'Release' } |
+            Select-Object -First 1 -ExpandProperty FullName
+          $plugin=(Resolve-Path 'build-p128/VST3/Release/125A_AWE_Synthesizer.vst3').Path
+          if (-not $editor) { throw 'EditorHost missing' }
+          for ($i=1; $i -le 3; $i++) {
+            python tools/p18_editorhost_smoke.py --editorhost "$editor" --plugin "$plugin" --output "qa/editor-$i"
+            if ($LASTEXITCODE -ne 0) { throw "GUI smoke $i failed" }
+          }
+      - name: Preserve complete evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: P129-Combined-Box86-CPU-Full-Windows-Evidence
+          path: qa/
+          if-no-files-found: warn
+          retention-days: 14
