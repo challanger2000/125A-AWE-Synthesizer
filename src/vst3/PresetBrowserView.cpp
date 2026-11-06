@@ -361,7 +361,7 @@ void PresetBrowserView::AddToCurrentPage(VSTGUI::CView* v) {
     else addView(v);
 }
 void PresetBrowserView::AddKnob(int index,int x,int y,const char* title) {
-    auto* ctrl=new HardwareKnob({CCoord(x),CCoord(y),CCoord(x+58),CCoord(y+58)},
+    auto* ctrl=new HardwareKnob(PageRect({CCoord(x),CCoord(y),CCoord(x+58),CCoord(y+58)}),
                                 this,kGuiFirst+index);
     controls_[size_t(index)]=ctrl;
     AddToCurrentPage(ctrl);
