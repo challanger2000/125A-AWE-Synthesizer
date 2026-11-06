@@ -473,6 +473,26 @@ public:
             for(int i=0;i<kGuiCount;++i)
                 target.controls[i]=rtControls_[i].load(
                     std::memory_order_acquire);
+            // A control writer may prevent an audio parameter flush from
+            // updating the RT atomics. Reconstruct all accepted program
+            // intents after the last committed recall, including channels.
+            const uint64_t recalled=bankOrder_.LatestRecall().sequence;
+            const uint64_t global=audioProgramSelection_.load(
+                std::memory_order_acquire);
+            if((global>>8)>recalled) {
+                target.program=static_cast<uint32_t>(global&0xFFu);
+                target.channelProgramMask=0;
+                target.channelPrograms.fill(target.program);
+            }
+            const uint64_t floor=std::max(recalled,global>>8);
+            for(int ch=0;ch<16;++ch) {
+                const uint64_t edit=audioChannelSelections_[ch].load(
+                    std::memory_order_acquire);
+                if((edit>>8)>floor) {
+                    target.channelProgramMask|=(1u<<ch);
+                    target.channelPrograms[ch]=static_cast<uint32_t>(edit&0xFFu);
+                }
+            }
         };
         // Each audio block and each control-thread project recall brackets
         // its multi-parameter updates with independent generation counters.
@@ -637,6 +657,18 @@ public:
                 candidate.program=static_cast<uint32_t>(liveProgram&0xFFu);
                 candidate.channelProgramMask=0;
                 candidate.channelPrograms.fill(candidate.program);
+            }
+            // Newer per-channel program edits override the recalled/global
+            // program, regardless of whether the audio writer was refused.
+            // An actually newer recall still clears older channel edits.
+            const uint64_t channelFloor=std::max(recallSequence,liveProgram>>8);
+            for(int ch=0;ch<16;++ch) {
+                const uint64_t edit=audioChannelSelections_[ch].load(
+                    std::memory_order_acquire);
+                if((edit>>8)>channelFloor) {
+                    candidate.channelProgramMask|=(1u<<ch);
+                    candidate.channelPrograms[ch]=static_cast<uint32_t>(edit&0xFFu);
+                }
             }
             if(prepared)for(int ch=0;ch<16;++ch)
                 prepared->ProgramChange(static_cast<uint8_t>(ch),
@@ -808,6 +840,20 @@ public:
             const bool persisted = id==kProgramID || id==kBankID ||
                 id==kVolumeID || (id>=kGuiFirstID&&id<kGuiFirstID+kGuiCount) ||
                 MidiProgramRouting::Channel(id)>=0;
+            // Publish persistent program intent BEFORE attempting the RT gate.
+            // A successful parameter flush must survive a simultaneous recall
+            // or control-side save fallback even when audio cannot write now.
+            if(id==kProgramID) {
+                const uint32_t p=static_cast<uint32_t>(std::clamp(
+                    int(std::lround(val*127.)),0,127));
+                audioProgramSelection_.store(
+                    (bankOrder_.Next()<<8)|p,std::memory_order_release);
+            } else if(const int ch=MidiProgramRouting::Channel(id);ch>=0) {
+                const uint32_t p=static_cast<uint32_t>(std::clamp(
+                    int(std::lround(val*127.)),0,127));
+                audioChannelSelections_[ch].store(
+                    (bankOrder_.Next()<<8)|p,std::memory_order_release);
+            }
             // Bank controls are accepted before trying the realtime state
             // gate, so a concurrent recall cannot silently drop the edit.
             if(id==kBankID) {
@@ -835,10 +881,7 @@ public:
                 rtChannelProgramMask_.store(0,std::memory_order_release);
                 for(int ch=0;ch<16;++ch)
                     rtChannelPrograms_[ch].store(program,std::memory_order_release);
-                // Shared event sequence: newer browser program edits can win
-                // over a slow, earlier recall, just as their bank edits do.
-                audioProgramSelection_.store(
-                    (bankOrder_.Next()<<8)|program,std::memory_order_release);
+                // The intent stamp was published BEFORE the writer attempt.
                 if(synth_)for(int ch=0;ch<16;++ch)
                     synth_->ProgramChange(static_cast<uint8_t>(ch),
                         static_cast<uint8_t>(program));
@@ -1091,7 +1134,11 @@ private:
     std::array<std::atomic<uint32_t>,16> rtChannelPrograms_{};
     std::atomic<uint32_t> rtChannelProgramMask_{0};
     BankOrder bankOrder_{};
+    // Each accepted program event has a monotone intent stamp, including
+    // events for which the nonblocking audio writer gate was unavailable.
+    // This is not the RT-applied value: readers must consider both.
     std::atomic<uint64_t> audioProgramSelection_{0};
+    std::array<std::atomic<uint64_t>,16> audioChannelSelections_{};
     uint64_t lastGlobalBankSequence_=0; // audio thread only
     uint64_t lastRecallSequence_=0; // audio thread only
     uint64_t lastHostBankParamSequence_=0; // audio thread only
