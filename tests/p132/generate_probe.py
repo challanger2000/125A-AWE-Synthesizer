@@ -19,6 +19,8 @@ extern "C" void p132PeekChip(void* impl,P132Voices* out) {
         out->envelopes+=v.env_engine_on!=0;
     }
     out->pending=static_cast<uint32_t>(i.pendingCount);
+    out->frameInBlock=static_cast<uint32_t>(i.frameInBlock);
+    out->chipPosition=static_cast<uint32_t>(i.emu.pos);
 }
 ''')
 s=(root/'src/vst3/Factory.cpp').read_text().replace('private:','public:')

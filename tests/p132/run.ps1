@@ -21,7 +21,7 @@ try {
       $capabilities.cpuStart=$LASTEXITCODE;$cpuAvailable=($LASTEXITCODE -eq 0)
     }
     & $hostExe $pass $normal $diag $assets $output 2>&1 | Tee-Object -FilePath "$output/host-log.txt"
-    if($LASTEXITCODE -ne 0){throw "P132 host $pass incomplete"}
+    if($LASTEXITCODE -ne 0){throw "P132_INCOMPLETE host $pass exit=$LASTEXITCODE"}
     if($pass -eq 'traced' -and $cpuAvailable){
       wpr -stop qa/cpu.etl 2>&1 | Out-File qa/cpu-stop.txt
       $capabilities.cpuStop=$LASTEXITCODE;$cpuAvailable=$false

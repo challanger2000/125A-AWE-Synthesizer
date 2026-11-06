@@ -46,6 +46,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
           $paths=Get-Content build-p132/p132-paths-Release.txt
           Get-FileHash $paths[1],$paths[2] -Algorithm SHA256 | Format-List | Out-File qa/dll-sha256.txt
+          # Preserve only our binaries/PDBs needed for offline WPA symbols.
+          New-Item -ItemType Directory -Force qa/symbols | Out-Null
+          Copy-Item $paths[1],$paths[2] qa/symbols/
+          Get-ChildItem build-p132 -Filter '*P132*.pdb' -File -Recurse | Copy-Item -Destination qa/symbols/
           Copy-Item build-p132/p132-source/source-hashes.json qa/source-hashes.json
           $p=Get-Content qa/provenance.json -Raw | ConvertFrom-Json -AsHashtable
           $p['rom_sha256']=(Get-FileHash "$($paths[3])/zero.rom" -Algorithm SHA256).Hash

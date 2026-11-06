@@ -27,11 +27,13 @@
 #include <stdexcept>
 #include <thread>
 #include <vector>
+#include <functional>
 using namespace Steinberg;
 using namespace Steinberg::Vst;
 using State=AWE125::AssetState::Data;
 namespace fs=std::filesystem;
 static void must(bool v,const char* what){if(!v)throw std::runtime_error(what);}
+struct Finally {std::function<void()> action;~Finally(){if(action)action();}};
 static std::ofstream moduleMap;
 static int64_t tick(){LARGE_INTEGER q;QueryPerformanceCounter(&q);return q.QuadPart;}
 static int64_t hz(){LARGE_INTEGER q;must(QueryPerformanceFrequency(&q)!=0,"QPC frequency");return q.QuadPart;}
@@ -82,10 +84,10 @@ static Row invoke(Plugin& p,Block& b,Row row){
 }
 static void writeRows(const fs::path& path,const std::vector<Row>& rows,int64_t frequency){
     std::ofstream f(path);must(bool(f),"CSV open");
-    f<<"case,pass,frames,voices,mode,index,phase,pid,tid,qpc_begin,qpc_end,qpc_due,qpc_hz,wall_us,budget_us,start_late_us,cycles,cycles_valid,core_before,core_after,allocated_before,allocated_after,nonzero_before,nonzero_after,envelopes_before,envelopes_after,generation_before,generation_after,pending_before,pending_after,pcm_fnv64,energy,matched\n";
+    f<<"case,pass,frames,voices,mode,index,phase,pid,tid,qpc_begin,qpc_end,qpc_due,qpc_hz,wall_us,budget_us,start_late_us,cycles,cycles_valid,core_before,core_after,allocated_before,allocated_after,nonzero_before,nonzero_after,envelopes_before,envelopes_after,generation_before,generation_after,pending_before,pending_after,pcm_fnv64,energy,matched,frame_before,frame_after,chip_position_before,chip_position_after\n";
     f<<std::setprecision(17);
     for(const auto& r:rows){bool matched=r.pre.allocated==r.voices&&r.post.allocated==r.voices&&r.pre.nonzero==r.voices&&r.post.nonzero==r.voices&&r.pre.generation==r.post.generation;
-        f<<r.caseId<<','<<r.pass<<','<<r.frames<<','<<r.voices<<','<<r.mode<<','<<r.index<<','<<r.phase<<','<<r.pid<<','<<r.tid<<','<<r.begin<<','<<r.end<<','<<r.due<<','<<frequency<<','<<1e6*double(r.end-r.begin)/frequency<<','<<1e6*r.frames/44100.<<','<<(r.due?1e6*double(r.begin-r.due)/frequency:0)<<','<<r.cycles<<','<<r.clockValid<<','<<r.core0<<','<<r.core1<<','<<r.pre.allocated<<','<<r.post.allocated<<','<<r.pre.nonzero<<','<<r.post.nonzero<<','<<r.pre.envelopes<<','<<r.post.envelopes<<','<<r.pre.generation<<','<<r.post.generation<<','<<r.pre.pending<<','<<r.post.pending<<','<<r.hash<<','<<r.energy<<','<<matched<<'\n';}
+        f<<r.caseId<<','<<r.pass<<','<<r.frames<<','<<r.voices<<','<<r.mode<<','<<r.index<<','<<r.phase<<','<<r.pid<<','<<r.tid<<','<<r.begin<<','<<r.end<<','<<r.due<<','<<frequency<<','<<1e6*double(r.end-r.begin)/frequency<<','<<1e6*r.frames/44100.<<','<<(r.due?1e6*double(r.begin-r.due)/frequency:0)<<','<<r.cycles<<','<<r.clockValid<<','<<r.core0<<','<<r.core1<<','<<r.pre.allocated<<','<<r.post.allocated<<','<<r.pre.nonzero<<','<<r.post.nonzero<<','<<r.pre.envelopes<<','<<r.post.envelopes<<','<<r.pre.generation<<','<<r.post.generation<<','<<r.pre.pending<<','<<r.post.pending<<','<<r.hash<<','<<r.energy<<','<<matched<<','<<r.pre.frameInBlock<<','<<r.post.frameInBlock<<','<<r.pre.chipPosition<<','<<r.post.chipPosition<<'\n';}
     must(bool(f),"CSV write");
 }
 static void seed(Plugin& p,int n,int frames,std::vector<Row>* rows=nullptr,Row base={}){
@@ -120,6 +122,8 @@ static void matrix(const fs::path& diagnostic,const fs::path& assets,const fs::p
     std::vector<Row> rows;rows.reserve(100000);std::ofstream cases(out/"cases.csv");
     cases<<"case,frames,voices,mode,measured_callbacks,saves,recalls,primings,control_error,thread_cpu_100ns,wall_qpc,thread_priority\n";
     const auto frequency=hz();unsigned caseId=0;
+    // Preserve all completed callbacks even when a workload assertion fails.
+    Finally preserve{[&]{writeRows(out/"callbacks.csv",rows,frequency);}};
     // Calibration intervals use the same QPC domain but are NEVER real callbacks.
     {
         Plugin p(diagnostic,model(assets));must(p.heapControl,"heap positive control export");
@@ -150,6 +154,9 @@ static void matrix(const fs::path& diagnostic,const fs::path& assets,const fs::p
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(15));
         }}catch(const std::exception& e){std::cerr<<"P132_CONTROL_ERROR "<<e.what()<<std::endl;error=true;}});
+        bool cleaned=false;
+        auto cleanup=[&]{if(cleaned)return;stop=true;SetEvent(primed);if(control.joinable())control.join();CloseHandle(primed);cleaned=true;};
+        Finally joinControl{cleanup};
         if(mode)while(saves.load()==0&&!error.load())Sleep(1); // host prelude, OUTSIDE process
         unsigned primings=0,seen=0;int count=memory?60:((frames==128&&n==30&&(mode==0||mode==1||mode==2))?3000:600);
         auto schedule=std::chrono::steady_clock::now();FILETIME create{},exit{},k0{},u0{},k1{},u1{};
@@ -166,7 +173,7 @@ static void matrix(const fs::path& diagnostic,const fs::path& assets,const fs::p
             rows.push_back(invoke(p,b,base));
         }
         auto caseEnd=tick();GetThreadTimes(GetCurrentThread(),&create,&exit,&k1,&u1);
-        stop=true;SetEvent(primed);if(control.joinable())control.join();CloseHandle(primed);
+        cleanup();
         auto ft=[](FILETIME t){return (uint64_t(t.dwHighDateTime)<<32)|t.dwLowDateTime;};
         cases<<caseId<<','<<frames<<','<<n<<','<<mode<<','<<count<<','<<saves<<','<<recalls<<','<<primings<<','<<error<<','<<ft(k1)+ft(u1)-ft(k0)-ft(u0)<<','<<caseEnd-caseBegin<<','<<GetThreadPriority(GetCurrentThread())<<'\n';
         if(error.load()||(mode!=0&&saves==0)){writeRows(out/"callbacks.csv",rows,frequency);throw std::runtime_error("control workload incomplete");}
