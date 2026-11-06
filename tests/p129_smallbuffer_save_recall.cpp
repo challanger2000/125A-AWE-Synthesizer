@@ -153,7 +153,7 @@ int main(int argc,char** argv) {
             }
         } timer;
         std::cout<<"RT_TIMER_1MS_REQUEST="<<(timer.code==TIMERR_NOERROR
-                    ?"ACCEPTED":"FAILED")<<"\\n";
+                    ?"ACCEPTED":"FAILED")<<"\n";
 #endif
         if(argc!=3) {
             std::cerr<<"usage: p129_smallbuffer_save_recall ASSETS OUTPUT.csv\n";
