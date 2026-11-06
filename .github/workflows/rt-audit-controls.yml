@@ -1,0 +1,59 @@
+name: P132 natural recall controls against measured DLL
+on:
+  push:
+    branches: [audit/p132-realtime]
+    paths: ['tools/p132_controls/**', '.github/workflows/rt-audit-controls.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  controls:
+    runs-on: windows-2022
+    timeout-minutes: 40
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build only independent host, pinned SDK
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch v3.8.1_build_84 --recurse-submodules https://github.com/steinbergmedia/vst3sdk.git external/vst3sdk
+          if ($LASTEXITCODE -ne 0) { throw 'SDK clone' }
+          if ((git -C external/vst3sdk rev-parse HEAD).Trim() -ne '3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96') { throw 'SDK pin' }
+          cmake -S tools/p132_controls -B build-controls -A x64
+          if ($LASTEXITCODE -ne 0) { throw 'Configure controls' }
+          cmake --build build-controls --config Release --target p132_controls --parallel 2
+          if ($LASTEXITCODE -ne 0) { throw 'Build controls' }
+      - name: Exact preceding long-run DLL and natural recall control
+        shell: pwsh
+        run: |
+          gh run watch 42208362856 --interval 20
+          gh run download 42208362856 -n P132-Windows-1-Raw-ETW-Evidence -D prior
+          if ($LASTEXITCODE -ne 0) { throw 'Exact measured artifact unavailable' }
+          $p=Get-Content prior/provenance.json -Raw | ConvertFrom-Json
+          if ($p.commit -ne '418cc6b580a8cb3fd770b33b3804e0626d3c08f8') { throw 'Wrong measured DLL source' }
+          New-Item -ItemType Directory -Force qa | Out-Null
+          Copy-Item prior/provenance.json qa/measured-dll-provenance.json
+          Copy-Item prior/dll-sha256.txt qa/original-dll-hashes.txt
+          Get-FileHash prior/symbols/*.vst3 -Algorithm SHA256 | Format-List | Out-File qa/loaded-dll-hashes.txt
+          $assets=Join-Path $env:RUNNER_TEMP 'p132-natural-recall-assets'
+          python tests/p128_synthetic_assets.py $assets
+          & build-controls/Release/p132_controls.exe prior/symbols/125A_AWE_Synthesizer.vst3 prior/symbols/125A_P132_Diagnostic.vst3 $assets qa
+          if ($LASTEXITCODE -ne 0) { throw 'Natural recall control incomplete' }
+      - name: Public numeric controls
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path qa/recall-controls.csv) {
+            $payload=@{commit=$env:GITHUB_SHA;run=$env:GITHUB_RUN_ID;measuredCommit='418cc6b580a8cb3fd770b33b3804e0626d3c08f8';recall=@(Import-Csv qa/recall-controls.csv);reset=@(Import-Csv qa/reset-controls.csv)}
+            $payload | ConvertTo-Json -Depth 8 | Set-Content qa/control-summary.json
+            $json=$payload | ConvertTo-Json -Depth 8 -Compress
+            Write-Output "::notice title=P132_NATURAL_RECALL::$json"
+          }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: P132-Natural-Recall-Controls-Exact-418cc6b-DLL
+          path: qa/
+          retention-days: 14
