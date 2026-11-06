@@ -1,0 +1,62 @@
+name: P130 real VST3 Processor audio-thread C++ heap allocation audit
+on:
+  push:
+    branches: [audit/p130-rt-allocation-matrix-20261106]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  real-processor-heap:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout pinned Steinberg VST3 SDK
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch v3.8.1_build_84 --recurse-submodules https://github.com/steinbergmedia/vst3sdk.git external/vst3sdk
+          if ($LASTEXITCODE -ne 0) { throw 'SDK fetch failed' }
+          $sha = (git -C external/vst3sdk rev-parse HEAD).Trim()
+          if ($sha -ne '3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96') { throw "SDK mismatch: $sha" }
+          New-Item -ItemType Directory -Force qa | Out-Null
+          "processor_sha=$env:GITHUB_SHA" | Set-Content qa/provenance.txt
+          "sdk_sha=$sha" | Add-Content qa/provenance.txt
+          "Test calls real Factory.cpp Processor with generated synthetic ROM/SF2" | Add-Content qa/provenance.txt
+      - name: Compile actual P129 Processor with no-heap audit instrumentation
+        shell: pwsh
+        run: |
+          cmake -S . -B build-audit -G "Visual Studio 17 2022" -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON
+          if ($LASTEXITCODE -ne 0) { throw 'Processor configure failed' }
+          cmake --build build-audit --config Release --target awe32_p130_rt_alloc_probe --parallel 2
+          if ($LASTEXITCODE -ne 0) { throw 'Processor heap probe build failed' }
+      - name: Verify all 1200 callbacks do not call operator new on audio thread
+        shell: pwsh
+        timeout-minutes: 10
+        run: |
+          $ErrorActionPreference='Stop'
+          $exe=@(Get-ChildItem build-audit -Recurse -File -Filter 'awe32_p130_rt_alloc_probe.exe')
+          $assets=@(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -Directory -Filter '125a-p128-*' |
+            Where-Object { (Test-Path (Join-Path $_.FullName 'zero.rom')) -and (Test-Path (Join-Path $_.FullName 'bank.sf2')) })
+          if ($exe.Count -ne 1 -or $assets.Count -ne 1) {
+            throw "Probe/fixtures ambiguous, exe=$($exe.Count) assets=$($assets.Count)"
+          }
+          & $exe[0].FullName $assets[0].FullName 2>&1 | Tee-Object qa/audio-heap.txt
+          $rc=$LASTEXITCODE
+          $text=Get-Content qa/audio-heap.txt -Raw
+          $cases=@(Get-Content qa/audio-heap.txt | Where-Object { $_.StartsWith('P130_AUDIO_HEAP case=') })
+          if ($cases.Count -ne 5 -or -not $text.Contains('P130_AUDIO_HEAP_RESULT callbacks=1200')) {
+            throw 'Incomplete audit results'
+          }
+          if ($rc -ne 0 -or -not $text.Contains('new_calls=0 new_bytes=0')) {
+            throw 'Potential C++ heap allocation in audio callback; investigate before merging'
+          }
+          'PASS_CXX_OPERATOR_NEW_ZERO only. CRT malloc, OS allocations and other threads NOT PROVEN' |
+            Set-Content qa/verdict.txt
+      - name: Upload exact test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: P130-Actual-AWE-Processor-CPP-Heap-Audit
+          path: qa/
+          if-no-files-found: warn
+          retention-days: 14
