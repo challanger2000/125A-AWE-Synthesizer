@@ -996,11 +996,14 @@ public:
             if(right)std::fill_n(right,data.numSamples,0.f);
             data.outputs[0].silenceFlags=right?3u:1u;
         }
-        const bool canRender=hasOutput&&bool(synth_);
         int32 position=0;
         const auto render=[&](int32 end) {
             end=std::clamp(end,position,data.numSamples);
-            if(canRender&&end>position) {
+            // P128 audit: a control-side recall can publish a different
+            // engine between MIDI events. The callback refreshes synth_ at
+            // those event boundaries, so a block-entry canRender snapshot
+            // becomes stale and may dereference null after Engine->null.
+            if(hasOutput&&synth_&&end>position) {
                 bool movingPlayingVoices=false;
                 for(int ch=0;ch<16;++ch)
                     if(pitchMoving[ch]&&
