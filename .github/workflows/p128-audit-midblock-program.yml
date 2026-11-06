@@ -1,7 +1,7 @@
 name: Independent P128 accepted in-block program and PCM audit
 on:
   push:
-    branches: [audit/p128-midblock-program-race-20261106]
+    branches: [audit/p128-midblock-program-fix-candidate-20261106]
   workflow_dispatch:
 permissions:
   contents: read
@@ -38,11 +38,11 @@ jobs:
           if ($rc -eq 0 -and
               $log.Contains('PASS midblock: ordinary program-9 point before NoteOn yields audible audio/save') -and
               $log.Contains('PASS midblock: accepted program point persisted even when RT writer refused') -and
-              $log.Contains('FAIL midblock: NoteOn after refused program point must use newly accepted program PCM') -and
-              $log.Contains('MIDBLOCK_PROGRAM_AUDIT written_program=9 pcm_equal=0')) {
-            '[REPRODUCED] accepted program saved correctly, NoteOn PCM incorrectly uses old program in same block' | Set-Content qa/verdict.txt
+              $log.Contains('PASS midblock: NoteOn after refused program point must use newly accepted program PCM') -and
+              $log.Contains('MIDBLOCK_PROGRAM_AUDIT written_program=9 pcm_equal=1')) {
+            '[PASS] sample-offset program selection matches non-contended PCM within the same audio block' | Set-Content qa/verdict.txt
           } else {
-            throw "Independent P128 in-block program mismatch did not reproduce with all controls (rc=$rc)"
+            throw "P128 in-block program PCM regression persists or controls incomplete (rc=$rc)"
           }
           exit 0
       - name: Preserve evidence even on unexpected failure
