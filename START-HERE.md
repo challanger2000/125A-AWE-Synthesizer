@@ -2,6 +2,13 @@
 
 **Stand: 2026-11-06. Entwicklungs-/Prüfstand, keine GUI- oder Releasefreigabe.**
 
+## AKTUELLSTE ENTWICKLUNG – P129 CPU-Optimierung integriert (6. November 2026)
+
+- **Aktueller Entwicklungsstand:** `fix/p122-bank-dirty-audit`, Merge `0838ccd963606d6729b2899c6ad4126faf190621` über [PR #68](https://github.com/challanger2000/125A-AWE-Synthesizer/pull/68). Die beiden unabhängigen P129-CPU-Optimierungen wurden gemeinsam übernommen: (1) unnötige Float-Chorus-/Reverb-/EQ-Berechnung überspringen, wenn die reale 86Box-Chipengine bereits den Output liefert; (2) IP→CPF-Registerspiegel-Konvertierung bei unverändertem Tonhöhenregister wiederverwenden. **Keine Änderung der 86Box-Filter-, Chorus-, Reverb-, Samples oder MIDI-Parameter.**
+- **Direkter A/B-PCM-/Registertest:** [Windows #42177504236](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42177504236), beide P129-Optimierungen gemeinsam, **8/8 Prüfszenarien mit vollständiger PCM-Ausgabe und 32-Stimmen-Registerspiegel bitidentisch**, jede Variante zweimal auf derselben GitHub-VM. Mittlere Renderbeschleunigung: **ca. 47 % bei 1 Stimme, 11–15 % bei 16 Stimmen, 5 % bei 30 Stimmen** (nur die gemessene Testmaschine, keine allgemeine Performancezusage). Details: [P129-Optimierungsnachweis](docs/P129-BOX86-CPU-BITEXACT-OPTIMIZATIONS.md).
+- **P129 nach Merge auf echtem Entwicklungsbranch:** [Windows-Actions #42178140623](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42178140623) **SUCCESS: 40/40 CTests, 47/47 Steinberg VST3-Validatorprüfungen, 3/3 EditorHost-GUI-Smokes**. Getesteter Commit exakt `0838ccd963606d6729b2899c6ad4126faf190621`.
+- **WICHTIGE GRENZE:** Erfolg dieser funktionalen Regression beweist **nicht** lückenlose Hardwaretreue oder garantiertes ASIO-Deadlineverhalten. Die separate [Chorus-Rundungsänderung PR #67](https://github.com/challanger2000/125A-AWE-Synthesizer/pull/67) ist weiterhin **DRAFT/UNMERGED**, da die Emu8000-Hardwareparität offen ist. Kleine Puffer, echte DAW-/ASIO-Last und unabhängiger Gesamt-Releaseaudit weiterhin **OFFEN**. **GUI-/RELEASE-NO-GO.** Bitte in weiteren Chats zuerst diesen Abschnitt lesen; nicht den älteren P128-Status als neuesten Stand ausgeben.
+
 ## AKTUELL – P128 unabhängig behobene Konkurrenzfehler, P129 Effekt-Audit (6. November 2026)
 
 - **Produktions-/Entwicklungsbranch** ist ausschließlich `fix/p122-bank-dirty-audit`, weiterhin **kein Release**. Über [PR #65](https://github.com/challanger2000/125A-AWE-Synthesizer/pull/65), Merge-Commit `ac2cab282b2c1ed89dc9aee82feb4364c6e810c1`, wurden zwei **zuvor unabhängig reproduzierte** Fehler mitsamt Dauer-Regressionen integriert:
