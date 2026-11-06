@@ -146,6 +146,9 @@ static void compareBaseline(const fs::path& before,const fs::path& after,const f
             for(auto* block:{&x,&y}){
                 for(int j=0;j<128;++j)block->cc(129,j%2?.6:.4,j*(frames-1)/127);
                 block->cc(10,i%2?.3:.7);block->cc(1,i%3?.2:0.);
+                // Excite both actual chip FX engines: silent sends cannot
+                // establish PCM invariance under a changed update partition.
+                block->cc(91,i%2?.8:.3);block->cc(93,i%3?.7:.4);
                 block->parameter(1003,i%2?.8:.9);block->parameter(1108,.2);
                 if(i%8==0){block->parameter(1002,(i%16?5.:0.)/16383.);block->parameter(1000,(i%16?9.:7.)/127.);}
                 if(i%13==0)block->parameter(AWE125::MidiProgramRouting::ParamID(i%16),(i%2?7.:9.)/127.);
