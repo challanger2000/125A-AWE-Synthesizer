@@ -8,14 +8,14 @@ permissions:
   contents: read
   actions: read
 concurrency:
-  group: p140-\${{ github.ref }}
+  group: p140-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   paired:
     runs-on: windows-2022
     timeout-minutes: 35
     env:
-      GH_TOKEN: \${{ github.token }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
         with:
