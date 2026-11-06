@@ -1,0 +1,538 @@
+#!/usr/bin/env python3
+"""P18: actual VST3 editor open, Win32 input, screenshots and redraw smoke.
+
+Run on an interactive Windows runner with Steinberg's pinned EditorHost.
+This is a real plug-in view, NOT a synthetic C++ mock, source regex or OCR.
+Do not label it PASS when no interactive desktop/screen capture is present.
+"""
+import argparse
+import ctypes
+from ctypes import wintypes
+import json
+import os
+from pathlib import Path
+import struct
+import subprocess
+import sys
+import tempfile
+import time
+
+if os.name != "nt":
+    raise SystemExit("P18 NOT RUN: Win32 interactive GUI required")
+
+user32 = ctypes.WinDLL("user32", use_last_error=True)
+gdi = ctypes.WinDLL("gdi32", use_last_error=True)
+
+class RECT(ctypes.Structure):
+    _fields_ = [(v, ctypes.c_long) for v in ("left", "top", "right", "bottom")]
+
+class POINT(ctypes.Structure):
+    _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
+
+u = user32
+for name, restype, args in [
+    ("EnumWindows", wintypes.BOOL, [ctypes.c_void_p, ctypes.c_void_p]),
+    ("GetWindowThreadProcessId", wintypes.DWORD, [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]),
+    ("IsWindowVisible", wintypes.BOOL, [wintypes.HWND]),
+    ("GetClassNameW", ctypes.c_int, [wintypes.HWND, ctypes.c_wchar_p, ctypes.c_int]),
+    ("GetClientRect", wintypes.BOOL, [wintypes.HWND, ctypes.POINTER(RECT)]),
+    ("ClientToScreen", wintypes.BOOL, [wintypes.HWND, ctypes.POINTER(POINT)]),
+    ("SetForegroundWindow", wintypes.BOOL, [wintypes.HWND]),
+    ("SetCursorPos", wintypes.BOOL, [ctypes.c_int, ctypes.c_int]),
+    ("mouse_event", None, [wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p]),
+    ("keybd_event", None, [wintypes.BYTE, wintypes.BYTE, wintypes.DWORD, ctypes.c_void_p]),
+    ("PostMessageW", wintypes.BOOL, [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]),
+    ("GetDC", wintypes.HDC, [wintypes.HWND]),
+    ("ReleaseDC", ctypes.c_int, [wintypes.HWND, wintypes.HDC]),
+]:
+    f = getattr(u, name)
+    f.restype, f.argtypes = restype, args
+gdi.CreateCompatibleDC.restype = wintypes.HDC
+gdi.CreateCompatibleDC.argtypes = [wintypes.HDC]
+gdi.CreateCompatibleBitmap.restype = wintypes.HBITMAP
+gdi.CreateCompatibleBitmap.argtypes = [wintypes.HDC, ctypes.c_int, ctypes.c_int]
+gdi.SelectObject.restype = wintypes.HANDLE
+gdi.SelectObject.argtypes = [wintypes.HDC, wintypes.HANDLE]
+gdi.BitBlt.restype = wintypes.BOOL
+gdi.BitBlt.argtypes = [wintypes.HDC, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                       ctypes.c_int, wintypes.HDC, ctypes.c_int, ctypes.c_int, wintypes.DWORD]
+gdi.GetDIBits.restype = ctypes.c_int
+gdi.GetDIBits.argtypes = [wintypes.HDC, wintypes.HBITMAP, wintypes.UINT, wintypes.UINT,
+                         ctypes.c_void_p, ctypes.c_void_p, wintypes.UINT]
+gdi.DeleteObject.restype = wintypes.BOOL
+gdi.DeleteObject.argtypes = [wintypes.HANDLE]
+gdi.DeleteDC.restype = wintypes.BOOL
+gdi.DeleteDC.argtypes = [wintypes.HDC]
+
+class BITMAPINFOHEADER(ctypes.Structure):
+    _fields_ = [("biSize", wintypes.DWORD), ("biWidth", ctypes.c_long),
+                ("biHeight", ctypes.c_long), ("biPlanes", wintypes.WORD),
+                ("biBitCount", wintypes.WORD), ("biCompression", wintypes.DWORD),
+                ("biSizeImage", wintypes.DWORD), ("biXPelsPerMeter", ctypes.c_long),
+                ("biYPelsPerMeter", ctypes.c_long), ("biClrUsed", wintypes.DWORD),
+                ("biClrImportant", wintypes.DWORD)]
+
+def chunk(name, value):
+    return name.encode("ascii") + struct.pack("<I", len(value)) + value + bytes(len(value) % 2)
+
+def phdr(name, bank, program):
+    return name.encode("ascii")[:20].ljust(20, b"\0") + struct.pack("<HHHIII", program, bank, 0, 0, 0, 0)
+
+def make_sf2(path):
+    # A tiny, genuinely playable and redistributable SF2 with three banks:
+    # synthetic sine-family samples only, no Creative copyrighted assets.
+    import math
+    def u16(n): return struct.pack("<H",n&65535)
+    def u32(n): return struct.pack("<I",n)
+    def name(s): return s.encode("ascii")[:20].ljust(20,b"\0")
+    def listchunk(kind,children): return chunk("LIST",kind.encode("ascii")+children)
+    info=chunk("ifil",u16(2)+u16(1))+chunk("INAM",b"125A P106 GUI fixture\0")
+    sample_words=2048
+    periods=(64,37,83)
+    pcm=b"".join(u16(round(math.sin(2*math.pi*(n%k)/k)*11000))
+                 for k in periods for n in range(sample_words))
+    pcm+=b"\0"*(46*2)
+    sdta=chunk("smpl",pcm)
+    phdrdata=b""
+    for display,bank,program,index in (
+        ("125A PIANO",0,0,0),("SYNTH BRASS",0,12,0),
+        ("RETRO LEAD",2,4,1),("ROOM DRUM KIT",128,0,2)):
+        phdrdata+=name(display)+u16(program)+u16(bank)+u16(index)+u32(0)*3
+    phdrdata+=name("EOP")+u16(0)+u16(0)+u16(4)+u32(0)*3
+    pbag=b"".join(u16(i)+u16(0) for i in range(5))
+    pgen=b"".join(u16(41)+u16(i) for i in (0,0,1,2))
+    instdata=b"".join(name(v)+u16(i) for i,v in enumerate(
+        ("125A Wave","125A Wave B","125A Wave C","EOI")))
+    ibag=b"".join(u16(i*2)+u16(0) for i in range(4))
+    igen=b"".join(u16(54)+u16(1)+u16(53)+u16(i) for i in range(3))
+    shdr=b""
+    for i,title in enumerate(("125A Wave","125A Wave B","125A Wave C")):
+        start=i*sample_words
+        end=(i+1)*sample_words
+        shdr+=(name(title)+u32(start)+u32(end)+u32(start+16)+
+               u32(end-16)+u32(44100)+bytes((69,0))+u16(0)+u16(1))
+    shdr+=name("EOS")+u32(0)*5+b"\0\0"+u16(0)+u16(1)
+    pdta=b"".join((
+        chunk("phdr",phdrdata),chunk("pbag",pbag),
+        chunk("pmod",bytes(10)),chunk("pgen",pgen),
+        chunk("inst",instdata),chunk("ibag",ibag),
+        chunk("imod",bytes(10)),chunk("igen",igen),chunk("shdr",shdr)
+    ))
+    body=(b"sfbk"+listchunk("INFO",info)+listchunk("sdta",sdta)+
+          listchunk("pdta",pdta))
+    path.write_bytes(b"RIFF"+u32(len(body))+body)
+
+
+def get_editor(pid):
+    found = []
+    CB = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    def cb(hwnd, _):
+        proc = wintypes.DWORD(0)
+        u.GetWindowThreadProcessId(hwnd, ctypes.byref(proc))
+        if proc.value == pid and u.IsWindowVisible(hwnd):
+            buf = ctypes.create_unicode_buffer(128)
+            u.GetClassNameW(hwnd, buf, 128)
+            if buf.value == "VSTSDK WindowClass":
+                found.append(hwnd)
+        return True
+    callback = CB(cb)
+    u.EnumWindows(callback, 0)
+    return found[0] if found else None
+
+# The Github hosted Windows desktop can start at only 1024x768. A 1200x780
+# plugin view is then clipped by EditorHost before any VSTGUI screenshot
+# or mouse test. Enumerate supported display modes and temporarily switch
+# to a real larger mode; never mark a cropped screen as a GUI PASS.
+class DEVMODEW(ctypes.Structure):
+    _fields_=[
+        ("dmDeviceName",wintypes.WCHAR*32),
+        ("dmSpecVersion",wintypes.WORD),
+        ("dmDriverVersion",wintypes.WORD),
+        ("dmSize",wintypes.WORD),
+        ("dmDriverExtra",wintypes.WORD),
+        ("dmFields",wintypes.DWORD),
+        ("dmPositionX",wintypes.LONG),
+        ("dmPositionY",wintypes.LONG),
+        ("dmDisplayOrientation",wintypes.DWORD),
+        ("dmDisplayFixedOutput",wintypes.DWORD),
+        ("dmColor",wintypes.SHORT),
+        ("dmDuplex",wintypes.SHORT),
+        ("dmYResolution",wintypes.SHORT),
+        ("dmTTOption",wintypes.SHORT),
+        ("dmCollate",wintypes.SHORT),
+        ("dmFormName",wintypes.WCHAR*32),
+        ("dmLogPixels",wintypes.WORD),
+        ("dmBitsPerPel",wintypes.DWORD),
+        ("dmPelsWidth",wintypes.DWORD),
+        ("dmPelsHeight",wintypes.DWORD),
+        ("dmDisplayFlags",wintypes.DWORD),
+        ("dmDisplayFrequency",wintypes.DWORD),
+        ("dmICMMethod",wintypes.DWORD),
+        ("dmICMIntent",wintypes.DWORD),
+        ("dmMediaType",wintypes.DWORD),
+        ("dmDitherType",wintypes.DWORD),
+        ("dmReserved1",wintypes.DWORD),
+        ("dmReserved2",wintypes.DWORD),
+        ("dmPanningWidth",wintypes.DWORD),
+        ("dmPanningHeight",wintypes.DWORD),
+    ]
+
+u.EnumDisplaySettingsW.restype=wintypes.BOOL
+u.EnumDisplaySettingsW.argtypes=[wintypes.LPCWSTR,wintypes.DWORD,ctypes.POINTER(DEVMODEW)]
+u.ChangeDisplaySettingsW.restype=wintypes.LONG
+u.ChangeDisplaySettingsW.argtypes=[ctypes.POINTER(DEVMODEW),wintypes.DWORD]
+u.GetSystemMetrics.restype=ctypes.c_int
+u.GetSystemMetrics.argtypes=[ctypes.c_int]
+
+def ensure_full_desktop():
+    before=(u.GetSystemMetrics(0),u.GetSystemMetrics(1))
+    print(f"P117 desktop before resolution change: {before}",flush=True)
+    if before[0]>=1400 and before[1]>=900:return before
+    supported=[]
+    for index in range(1000):
+        mode=DEVMODEW()
+        mode.dmSize=ctypes.sizeof(DEVMODEW)
+        if not u.EnumDisplaySettingsW(None,index,ctypes.byref(mode)):break
+        if mode.dmPelsWidth>=1400 and mode.dmPelsHeight>=900:
+            supported.append((mode.dmPelsWidth,mode.dmPelsHeight,mode.dmDisplayFrequency,mode))
+    supported.sort(key=lambda x:(abs(x[0]-1600)+abs(x[1]-900),x[0]*x[1]))
+    for width,height,hz,mode in supported:
+        mode.dmFields=0x00080000|0x00100000 # DM_PELSWIDTH | DM_PELSHEIGHT
+        status=u.ChangeDisplaySettingsW(ctypes.byref(mode),0)
+        after=(u.GetSystemMetrics(0),u.GetSystemMetrics(1))
+        print(f"P117 desktop try {width}x{height} @ {hz}Hz: code={status}, got={after}",flush=True)
+        if status==0 and after[0]>=1400 and after[1]>=900:
+            time.sleep(.5)
+            return after
+    raise RuntimeError(
+        f"P117 GUI test BLOCKED: CI desktop {before} cannot fit 1200x780 window; "
+        f"no supported 1400x900 display mode. Available qualifying modes: {len(supported)}. "
+        "Do not approve a cropped editor image.")
+
+def client_size(hwnd):
+    r = RECT()
+    if not u.GetClientRect(hwnd, ctypes.byref(r)):
+        raise RuntimeError("GetClientRect failed")
+    return r.right-r.left, r.bottom-r.top
+
+def screen_pos(hwnd, x, y):
+    sz = client_size(hwnd)
+    pt = POINT(round(x*sz[0]/1200), round(y*sz[1]/780))
+    if not u.ClientToScreen(hwnd, ctypes.byref(pt)):
+        raise RuntimeError("ClientToScreen failed")
+    return pt.x, pt.y
+
+def snap(hwnd, filename):
+    w,h = client_size(hwnd)
+    x,y = screen_pos(hwnd, 0, 0)
+    if w < 1180 or h < 760:
+        raise RuntimeError(f"Editor window wrong dimensions {w}x{h}")
+    src = u.GetDC(None)
+    mem = gdi.CreateCompatibleDC(src)
+    bmp = gdi.CreateCompatibleBitmap(src, w, h)
+    prev = gdi.SelectObject(mem, bmp)
+    try:
+        if not gdi.BitBlt(mem,0,0,w,h,src,x,y,0x00CC0020):
+            raise RuntimeError("Screen capture unavailable (no interactive desktop?)")
+        info = BITMAPINFOHEADER()
+        info.biSize = ctypes.sizeof(info)
+        info.biWidth, info.biHeight = w, -h   # top-down 32-bit pixels
+        info.biPlanes, info.biBitCount = 1,32
+        pixels = (ctypes.c_ubyte*(w*h*4))()
+        if not gdi.GetDIBits(mem,bmp,0,h,ctypes.byref(pixels),ctypes.byref(info),0):
+            raise RuntimeError("GetDIBits failed")
+        raw = bytes(pixels)
+        # BMP byte array is bottom-up while screen pixel array is top-down.
+        path = Path(filename)
+        file_size = 54 + len(raw)
+        header = (b"BM" + struct.pack("<IHHI", file_size, 0, 0, 54)
+                  + struct.pack("<IiiHHIIiiII", 40,w,-h,1,32,0,len(raw),0,0,0,0))
+        path.write_bytes(header+raw)
+        return (w,h,raw)
+    finally:
+        gdi.SelectObject(mem,prev)
+        gdi.DeleteObject(bmp)
+        gdi.DeleteDC(mem)
+        u.ReleaseDC(None,src)
+
+def different(before,after,region):
+    w,h,a = before
+    w2,h2,b = after
+    if (w,h)!=(w2,h2):
+        raise RuntimeError("Editor size changed unexpectedly")
+    x0,y0,x1,y1 = region
+    scale_x,scale_y = w/1200,h/780
+    x0,x1 = round(x0*scale_x),round(x1*scale_x)
+    y0,y1 = round(y0*scale_y),round(y1*scale_y)
+    changed = 0
+    for y in range(y0,y1,2):
+        for x in range(x0,x1,2):
+            off = (y*w+x)*4
+            if any(abs(a[off+c]-b[off+c])>16 for c in range(3)):
+                changed+=1
+    return changed
+
+def gold_brand_pixels(frame):
+    """P117: the first-stage native VSTGUI '125A' text is gold, not a bitmap."""
+    w,h,raw=frame
+    count=0
+    for y in range(round(15*h/780),round(65*h/780)):
+        for x in range(round(30*w/1200),round(206*w/1200)):
+            i=(y*w+x)*4
+            blue,green,red=raw[i],raw[i+1],raw[i+2]
+            if red>=145 and green>=105 and red>=green and blue<green:
+                count+=1
+    return count
+
+def click(hwnd,x,y):
+    sx,sy=screen_pos(hwnd,x,y)
+    if not u.SetForegroundWindow(hwnd):
+        # Windows focus is best effort; SetCursorPos failure is fatal.
+        pass
+    if not u.SetCursorPos(sx,sy):
+        raise RuntimeError("Cannot position mouse: no interactive desktop")
+    time.sleep(.15)
+    u.mouse_event(0x0002,0,0,0,None)
+    time.sleep(.08)
+    u.mouse_event(0x0004,0,0,0,None)
+    time.sleep(.65)
+
+def ctrl_click(hwnd,x,y):
+    u.keybd_event(0x11,0,0,None)
+    try:
+        click(hwnd,x,y)
+    finally:
+        u.keybd_event(0x11,0,2,None)
+    time.sleep(.35)
+
+def key(v):
+    u.keybd_event(v,0,0,None)
+    time.sleep(.05)
+    u.keybd_event(v,0,2,None)
+
+def choose_menu(hwnd,x,y,last=False,debug=None):
+    # VSTGUI COptionMenu::onKeyboardEvent handles VK_UP/VK_DOWN, *not*
+    # VK_HOME/VK_END. Its mouse-down opens a native OS popup, so first
+    # dismiss it with ESC while retaining focus on the menu control.
+    click(hwnd,x,y)
+    if debug is not None:
+        snap(hwnd,debug)
+    key(0x1B)  # escape from native popup; focus returns to COptionMenu
+    time.sleep(.15)
+    for _ in range(2):
+        key(0x28 if last else 0x26)  # VK_DOWN/VK_UP
+        time.sleep(.22)
+    time.sleep(.65)
+
+def text_input(s):
+    # Send unicode via KEYEVENTF_UNICODE, works even without US keyboard layout.
+    class MOUSEINPUT(ctypes.Structure):
+        _fields_=[("dx",wintypes.LONG),("dy",wintypes.LONG),("mouseData",wintypes.DWORD),
+                  ("dwFlags",wintypes.DWORD),("time",wintypes.DWORD),("dwExtraInfo",ctypes.c_void_p)]
+    class KEYBDINPUT(ctypes.Structure):
+        _fields_=[("wVk",wintypes.WORD),("wScan",wintypes.WORD),
+                  ("dwFlags",wintypes.DWORD),("time",wintypes.DWORD),
+                  ("dwExtraInfo",ctypes.c_void_p)]
+    class HARDWAREINPUT(ctypes.Structure):
+        _fields_=[("uMsg",wintypes.DWORD),("wParamL",wintypes.WORD),("wParamH",wintypes.WORD)]
+    class Union(ctypes.Union):
+        _fields_=[("mi",MOUSEINPUT),("ki",KEYBDINPUT),("hi",HARDWAREINPUT)]
+    class INPUT(ctypes.Structure):
+        _fields_=[("type",wintypes.DWORD),("u",Union)]
+    u.SendInput.argtypes=[wintypes.UINT,ctypes.POINTER(INPUT),ctypes.c_int]
+    u.SendInput.restype=wintypes.UINT
+    for c in s:
+        for down in (True,False):
+            item=INPUT()
+            item.type=1
+            item.u.ki=KEYBDINPUT(0,ord(c),4 if down else 6,0,None)
+            if u.SendInput(1,ctypes.byref(item),ctypes.sizeof(INPUT))!=1:
+                raise RuntimeError("SendInput unavailable")
+    time.sleep(.75)
+
+def check(condition, label, results):
+    results.append({"test":label,"pass":bool(condition)})
+    print(("PASS: " if condition else "FAIL: ")+label, flush=True)
+    if not condition: raise AssertionError(label)
+
+def drag(hwnd,x0,y0,x1,y1):
+    sx,sy=screen_pos(hwnd,x0,y0)
+    ex,ey=screen_pos(hwnd,x1,y1)
+    u.SetForegroundWindow(hwnd)
+    if not u.SetCursorPos(sx,sy):
+        raise RuntimeError("P18 cannot position pointer")
+    time.sleep(.15)
+    u.mouse_event(0x0002,0,0,0,None)
+    for step in range(1,9):
+        px=round(sx+(ex-sx)*step/8)
+        py=round(sy+(ey-sy)*step/8)
+        u.SetCursorPos(px,py)
+        time.sleep(.06)
+    u.mouse_event(0x0004,0,0,0,None)
+    time.sleep(.45)
+
+def main():
+    p=argparse.ArgumentParser()
+    p.add_argument("--editorhost",type=Path,required=True)
+    p.add_argument("--plugin",type=Path,required=True)
+    p.add_argument("--output",type=Path,required=True)
+    args=p.parse_args()
+    args.output.mkdir(parents=True,exist_ok=True)
+    if not args.editorhost.is_file() or not args.plugin.is_dir():
+        raise RuntimeError("EditorHost executable / VST3 bundle not found")
+    results=[]
+    ensure_full_desktop()
+    with tempfile.TemporaryDirectory(prefix="125a_p18_") as temp:
+        root=Path(temp)
+        sf2=root/"ui_fixture.sf2"
+        make_sf2(sf2)
+        appdata=root/"AppData"
+        cfg=appdata/"125A"/"AWE Synthesizer"/"assets.cfg"
+        cfg.parent.mkdir(parents=True)
+        cfg.write_text(f'SF2 = "{sf2}"\n',encoding="utf-8")
+        env=os.environ.copy()
+        env["APPDATA"]=str(appdata)
+        proc=subprocess.Popen([str(args.editorhost),"--componentHandler",str(args.plugin)],
+                              cwd=str(args.editorhost.parent),env=env,
+                              stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+        try:
+            hwnd=None
+            for _ in range(90):
+                if proc.poll() is not None:
+                    raise RuntimeError(f"EditorHost exited early: {proc.returncode}")
+                hwnd=get_editor(proc.pid)
+                if hwnd:break
+                time.sleep(.2)
+            check(hwnd is not None,"real AWE-only VST3 window opened",results)
+            time.sleep(1.0)
+            first=snap(hwnd,args.output/"01_initial.bmp")
+            w,h,_=first
+            check(w>=1180 and h>=760,
+                  f"real hardware editor dimensions {w}x{h}",results)
+            distinct=len(set(first[2][0::384]))
+            check(distinct>3,"editor painted nonflat hardware faceplate",results)
+            check(gold_brand_pixels(first)>15,
+                  "P117 gold 125A brand painted using native VSTGUI",results)
+            click(hwnd,1094,224)
+            closed=snap(hwnd,args.output/"02_browser_closed.bmp")
+            check(different(first,closed,(805,253,1173,734))>35,
+                  "browser toggle hides preset table and filter",results)
+            click(hwnd,1094,224)
+            reopened=snap(hwnd,args.output/"03_browser_reopened.bmp")
+            check(different(closed,reopened,(805,253,1173,734))>35,
+                  "browser toggle reopens searchable preset list",results)
+            drag(hwnd,112,345,112,319)
+            moved=snap(hwnd,args.output/"04_knob_dragged.bmp")
+            check(different(reopened,moved,(72,310,175,413))>15,
+                  "amp attack knob responds to physical mouse drag",results)
+            ctrl_click(hwnd,112,339)
+            ctrl_restored=snap(hwnd,args.output/"04_ctrl_click_original.bmp")
+            check(different(moved,ctrl_restored,(72,310,175,413))>15,
+                  "Ctrl-click resets SF2 overlay from changed value",results)
+            check(different(reopened,ctrl_restored,(72,310,175,413))<15,
+                  "Ctrl-click restores exact 0 percent original SoundFont overlay",results)
+            drag(hwnd,112,345,112,319)
+            moved_again=snap(hwnd,args.output/"04_knob_dragged_again.bmp")
+            # P133: RESET moved below the two FX menus to keep all 16
+            # original Creative preset choices clickable without overlap.
+            click(hwnd,709,711)
+            reset=snap(hwnd,args.output/"05_reset_original.bmp")
+            check(different(moved_again,reset,(72,310,175,413))>15,
+                  "reset restores 0-percent original SoundFont value",results)
+            drag(hwnd,146,660,146,708)
+            master_down=snap(hwnd,args.output/"06_master_dragged.bmp")
+            check(different(reset,master_down,(112,623,180,734))>15,
+                  "master-volume responds to physical mouse drag",results)
+            ctrl_click(hwnd,146,654)
+            master_reset=snap(hwnd,args.output/"06_master_ctrl_unity.bmp")
+            check(different(master_down,master_reset,(112,623,180,734))>15,
+                  "Ctrl-click resets master from reduced gain",results)
+            check(different(reset,master_reset,(112,623,180,734))<15,
+                  "Ctrl-click restores 100 percent master unity",results)
+            # P141: every one of the twelve real VSTGUI custom controls,
+            # including the two effect SEND overlays, must physically drag,
+            # reflect the host parameter and reset to the exact neutral zero.
+            # One motor-controlled label is not accepted as evidence for all.
+            knobs=((0,84,312),(1,260,312),(2,436,312),(3,612,312),
+                   (4,50,464),(5,171,464),(6,292,464),
+                   (7,413,464),(8,534,464),(9,655,464),
+                   (10,352,626),(11,559,626))
+            for index,x,y in knobs:
+                before=snap(hwnd,args.output/f"p141_{index:02d}_neutral.bmp")
+                drag(hwnd,x+28,y+37,x+28,y+11)
+                changed=snap(hwnd,args.output/f"p141_{index:02d}_drag.bmp")
+                region=(x-5,y-5,x+66,y+101)
+                check(different(before,changed,region)>15,
+                      f"P141 control {index:02d}/12 responds to physical drag",results)
+                ctrl_click(hwnd,x+28,y+28)
+                restored=snap(hwnd,args.output/f"p141_{index:02d}_reset.bmp")
+                check(different(changed,restored,region)>15,
+                      f"P141 control {index:02d}/12 Ctrl-click restores neutral",results)
+                check(different(before,restored,region)<20,
+                      f"P141 control {index:02d}/12 restores original pixels",results)
+            # The two independent original-Creative effect types are
+            # NOT the two per-preset SoundFont SEND controls.
+            for title,x,area in (
+                ("Reverb",370,(259,590,489,625)),
+                ("Chorus",621,(504,590,741,625))):
+                original=snap(hwnd,args.output/f"p141_{title}_before.bmp")
+                choose_menu(hwnd,x,607,last=True,
+                            debug=args.output/f"p141_{title}_popup.bmp")
+                changed=snap(hwnd,args.output/f"p141_{title}_changed.bmp")
+                check(different(original,changed,area)>15,
+                      f"P141 {title} type selection changes visible preset",results)
+            # Sparse SF2 has bank 0 / programs 000 and 012. A real PREV/NEXT
+            # test verifies the VST3 edits, not merely the existence of arrows.
+            first_program=snap(hwnd,args.output/"p141_prog000.bmp")
+            click(hwnd,718,231)
+            next_program=snap(hwnd,args.output/"p141_prog012.bmp")
+            check(different(first_program,next_program,(30,114,850,155))>10,
+                  "P141 NEXT changes bank 000 to real program 012",results)
+            click(hwnd,270,231)
+            previous_program=snap(hwnd,args.output/"p141_prev000.bmp")
+            check(different(next_program,previous_program,(30,114,850,155))>10,
+                  "P141 PREV returns to program 000",results)
+            check(different(first_program,previous_program,(30,114,850,155))<25,
+                  "P141 PREV restores exact original program label",results)
+            click(hwnd,998,326)
+            text_input("DRUM")
+            searched=snap(hwnd,args.output/"07_search_drum.bmp")
+            check(different(reset,searched,(805,349,1173,731))>10,
+                  "preset search filters SF2 bank 128 rows",results)
+            click(hwnd,851,376)
+            selected=snap(hwnd,args.output/"08_bank128_selected.bmp")
+            check(different(searched,selected,(30,114,850,155))>8,
+                  "bank 128 sound selection updates instrument label",results)
+            # Cancel ROM chooser: do not mutate the running bank or UI.
+            click(hwnd,967,155)
+            key(0x1B)
+            time.sleep(.45)
+            after_rom_cancel=snap(hwnd,args.output/"09_rom_dialog_cancelled.bmp")
+            check(different(selected,after_rom_cancel,(30,114,850,155))<20,
+                  "native ROM chooser cancels without changing selected preset",results)
+            # Canceling the Windows SF2 chooser must be equally harmless.
+            click(hwnd,1110,155)
+            key(0x1B)
+            time.sleep(.65)
+            after_cancel=snap(hwnd,args.output/"09_sf2_dialog_cancelled.bmp")
+            check(different(selected,after_cancel,(30,114,850,155))<20,
+                  "native SF2 chooser cancels without mutating current preset",results)
+            u.PostMessageW(hwnd,0x0010,0,0)
+            proc.wait(timeout=10)
+            check(proc.returncode==0,
+                  f"EditorHost closes normally (exit code {proc.returncode})",results)
+        finally:
+            if proc.poll() is None:
+                proc.terminate()
+                try:proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:proc.kill()
+            (args.output/"result.json").write_text(
+                json.dumps({"results":results,"passed":all(x["pass"] for x in results)},
+                           indent=2),encoding="utf-8")
+    print("P141 COMPLETE NATIVE VSTGUI CONTROLS / FX / PRESET BROWSER ACCEPTANCE PASS",flush=True)
+
+if __name__=="__main__":
+    try:main()
+    except Exception as exc:
+        print(f"P18 FAIL: {type(exc).__name__}: {exc}",file=sys.stderr,flush=True)
+        sys.exit(1)

@@ -61,3 +61,18 @@ if(WIN32)
       COMMAND awe32_p122_vst3_bank_host_test
               "$<TARGET_FILE:125A_AWE_Synthesizer>")
 endif()
+
+# P141: host automation must show named Creative effect modes, not numeric 0..7
+# even when the actual GUI is closed. Verify controller exported by real VST3.
+if(WIN32)
+  add_executable(awe32_p141_vstgui_host_names_test
+      "${PROJECT_SOURCE_DIR}/tests/p141_vstgui_host_fx_names.cpp")
+  target_include_directories(awe32_p141_vstgui_host_names_test PRIVATE
+      "${PROJECT_SOURCE_DIR}/external/vst3sdk")
+  target_link_libraries(awe32_p141_vstgui_host_names_test PRIVATE sdk)
+  target_compile_features(awe32_p141_vstgui_host_names_test PRIVATE cxx_std_23)
+  add_dependencies(awe32_p141_vstgui_host_names_test 125A_AWE_Synthesizer)
+  add_test(NAME 125A_p141_vstgui_host_fx_names
+      COMMAND awe32_p141_vstgui_host_names_test
+              "$<TARGET_FILE:125A_AWE_Synthesizer>")
+endif()
