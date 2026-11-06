@@ -21,10 +21,28 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'SDK clone failed' }
           $sha=(git -C external/vst3sdk rev-parse HEAD).Trim()
           if ($sha -ne '3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96') { throw "Unexpected SDK: $sha" }
+      - name: Fetch fixed, previously verified P133 V11 binary for exact A/B
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference='Stop'
+          $old=Join-Path $env:RUNNER_TEMP 'p134-p133-original-v11'
+          $head=(gh api repos/challanger2000/125A-AWE-Synthesizer/actions/runs/42196456180 --jq .head_sha).Trim()
+          if ($LASTEXITCODE -ne 0 -or $head -ne '66b3dc8277f68efb0eaa4857ab61a5cfd3d637c8') { throw "Incorrect historical P133 baseline source: $head" }
+          gh run download 42196456180 -n P133-AWE-FX-Windows-x64-VST3-PREVIEW -D $old
+          if ($LASTEXITCODE -ne 0) { throw 'Verified P133 VST3 artifact unavailable' }
+          $bins=@(Get-ChildItem $old -Recurse -File -Filter '125A_AWE_Synthesizer.vst3')
+          if($bins.Count -ne 1) { throw "Expected one old P133 V11 binary, found $($bins.Count)" }
+          "P134_P133_BASELINE=$($bins[0].FullName)" | Out-File $env:GITHUB_ENV -Append
+          New-Item -ItemType Directory -Force qa | Out-Null
+          "baseline_run=42196456180" | Set-Content qa/p134-a-b-provenance.txt
+          "baseline_commit=$head" | Add-Content qa/p134-a-b-provenance.txt
+          "baseline_binary_sha256=$((Get-FileHash $bins[0].FullName -Algorithm SHA256).Hash)" | Add-Content qa/p134-a-b-provenance.txt
       - name: Configure full production VST3 and engine tests
         shell: pwsh
         run: |
-          cmake -S . -B build-p133 -G "Visual Studio 17 2022" -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_EDITORHOST_TEST=ON
+          cmake -S . -B build-p133 -G "Visual Studio 17 2022" -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_EDITORHOST_TEST=ON -D125A_P134_AB=ON "-DP134_BASELINE_VST3=$env:P134_P133_BASELINE"
           if ($LASTEXITCODE -ne 0) { throw 'Configure failed' }
       - name: Build all tests and production VST3
         shell: pwsh
@@ -39,10 +57,15 @@ jobs:
           ctest --test-dir build-p133 -C Release --output-on-failure --timeout 120 2>&1 |
             Tee-Object -FilePath qa/ctest.txt
           if ($LASTEXITCODE -ne 0) { throw 'Full CTest failed' }
+          if(Test-Path build-p133/p134-ab/before-after-pcm.txt) {
+            Copy-Item build-p133/p134-ab/before-after-pcm.txt qa/p134-p133-fx-pcm-comparison.txt
+          } else { throw 'Actual P133 V11 versus P134 PCM comparison report missing' }
+          "candidate_git_sha=$env:GITHUB_SHA" | Add-Content qa/p134-a-b-provenance.txt
           $log=Get-Content qa/ctest.txt -Raw
           if ($log -notmatch '100% tests passed' -or
               $log -notmatch '125A_p133_fx_register_modes' -or
               $log -notmatch '125A_p134_cc120_physical_stop' -or
+              $log -notmatch '125A_p134_p133_full_pcm_ab' -or
               $log -notmatch '125A_asset_state') {
               throw 'P133 required tests not evidenced'
           }
