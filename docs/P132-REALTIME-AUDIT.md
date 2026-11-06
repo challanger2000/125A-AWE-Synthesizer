@@ -12,10 +12,11 @@ P131 berichtete in einer Windows-VM keine Deadlinefehler, in älteren Messungen
 jedoch Ausreißer. Sein Save+Recall-Fall hielt deutlich weniger NoteOn-Identitäten
 als Render/Save. Rohzyklen sind keine präzisen CPU-Millisekunden.
 
-P132 verändert zunächst **keine Produktionsdateien unter src/** und insbesondere
-keine Chorusberechnung. Eine Korrektur darf erst einem nachgewiesenen Fehler
-folgen. Der aktuelle Untersuchungsgegenstand ist die Qualität und kausale
-Auswertung der Messung, kein vorweggenommener DSP-Optimierungsauftrag.
+Der erste Messstand `418cc6b580a8cb3fd770b33b3804e0626d3c08f8` veränderte keine
+Produktionsdateien unter src/. Erst nach nachgewiesenen periodischen
+980-Frame-Arbeitsbursts wurde ausschließlich `src/engine/Emu8000Box.cpp`+korrigiert: Zwischenfortschritt des vorhandenen Chiprenderers im
+128-Chipframe-Raster; derselbe 980-Frame-FIFO und dieselbe DSP-/Chorusberechnung.
+Der neue Windows-Vorher-/Nachher-Nachweis steht bis zu seinem Abschluss aus.
 
 ## Tatsächliche DLLs, musikalische Last und Kontrollmessung
 
@@ -61,8 +62,8 @@ jeder Belegung dieselben **8.192 Release-/Drainframes**, außerhalb der normalen
 Messpopulation und vollständig protokolliert. Ein eigener tatsächlicher
 Windows-DLL-Kontrollfall zeichnet den CC120-Befund zusätzlich auf. Das ist ein
 nachgewiesener Fehler der ursprünglichen Testvorbereitung, noch kein Nachweis
-der Ursache der früheren Audio-Deadlineüberschreitungen. Produktcode bleibt
-unverändert; der CC120-Produktbefund wird separat dokumentiert.
+der Ursache der früheren Audio-Deadlineüberschreitungen. Der CC120-Produktcode
+bleibt unverändert; dieser Produktbefund wird separat dokumentiert.
 
 Jede Seed-/Warmup-Ausführung wird ebenfalls als tatsächlicher Prozessaufruf
 protokolliert. Diese Aufrufe, ihre CPU-Arbeit und ein bewusst neu angesetzter
@@ -94,7 +95,9 @@ zwei Populationen ausgegeben:
 - Nachgewiesenes Ready-Off-CPU kann eine Budgetüberschreitung allein erklären.
   Waiting-Off-CPU benötigt zusätzlich Stack-/Wait-Grundprüfung. Geplante
   On-CPU-Zeit ist immer noch **nicht reine DSP-Rechenzeit**: Kernel-/ISR-/DPC-
-  und Bibliotheksanteile können darin verbleiben. Sampling zeigt Hotspots,
+  und Bibliotheksanteile können darin verbleiben. In einer VM kann auch der
+  Hypervisor eine vCPU unterbrechen, ohne dass Windows einen CSwitch sieht.
+  Sampling zeigt Hotspots,
   ersetzt keine exakte Funktionslaufzeit.
 - Separater WPR-Heap-Durchlauf, soweit verfügbar, mit bekannten malloc(37),
   realloc(73), HeapAlloc(91), HeapReAlloc(131) außerhalb von process(). Erst
@@ -105,6 +108,14 @@ zwei Populationen ausgegeben:
   Qualifikationsdaten bleiben im CI-Artefakt. WPA-GUI/ASIO auf dem Zielrechner
   ist NOT RUN. Treiber-/DPC-/CPU-Frequenzursachen sind ohne passenden Nachweis
   ebenfalls keine festgestellten Softwarefehler.
+- Der Laborhost verwendet normale Threadpriorität und kein MMCSS/ASIO. Es gibt
+  keine Prioritäts-/Affinity- oder CPU-Frequenzänderung zum Erzwingen grüner
+  Ergebnisse. Ein echter DAW-Audiothread, dessen Treiber und die private
+  Original-ROM-/SF2-Last müssen gesondert auf dem Zielrechner geprüft werden.
+- Im Stresshost werden die GUI-Parameter über die echte Audio-Parameter-
+  Schnittstelle automatisiert. Die drei realen EditorHost-Fenstertests laufen
+  separat. Gleichzeitiges Win32-Painting und Browserbedienung desselben
+  Plugins in einer echten DAW sind damit nicht abgenommen.
 
 ## Regressionen und Ausführung
 
@@ -120,6 +131,30 @@ CTests, explizit den normalen 47/47-Validator und drei EditorHost-Smokes aus.
 Sie erfassen zwei separate Runner-Zuteilungen mit vertauschter Reihenfolge.
 Ihre Ergebnisse sind bis zur tatsächlichen Auswertung **NOT RUN**, nicht PASS.
 Ein grüner Workflow bedeutet auch danach keine Echtzeitfreigabe.
+
+Reproduktion in einer administrativen Windows-x64-Testsitzung mit dem gepinnten
+Steinberg SDK unter `external/vst3sdk` (synthetische Fixtures werden automatisch
+außerhalb des Checkouts erzeugt):
+
+```powershell
+cmake -S . -B build-p132 -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_EDITORHOST_TEST=ON -D125A_P132_AUDIT=ON
+cmake --build build-p132 --config Release --parallel 2
+ctest --test-dir build-p132 -C Release --output-on-failure -V --timeout 180
+./tests/p132/run.ps1 -Build build-p132 -Trial 1
+# Zweite vollständige Serie auf einer NEUEN Runner-Zuteilung:
+$env:P132_REVERSE='1'
+./tests/p132/run.ps1 -Build build-p132 -Trial 2
+```
+
+Validator und GUI-Schritte sind in der Workflowdatei explizit aufgeführt.
+Der Profilaufruf beendet nur selbst erfolgreich gestartete WPR-Sitzungen.
+`qa/traced`, `qa/untraced` und `qa/memory` enthalten jeweils `callbacks.csv`,
+`cases.csv`, Module und Auswertung; hinzu kommen `cpu.etl`, `heap.etl`,
+TDH-Ereignistabellen, Maschinen-/Build-/Fixture-Hashes und die PDB/DLL-Dateien
+für die Symbolauflösung in WPA. Die CI-Artefakte sind 14 Tage aufbewahrt.
+Kompakte numerische Berichte werden zusätzlich mit SHA256-gesicherten
+Check-Annotationen gespiegelt. Private ROM-/SF2-Dateien werden weder archiviert
+noch für diese öffentlichen CI-Läufe verwendet.
 
 ## Quellcodeprüfung des Echtzeitpfads
 
@@ -146,7 +181,8 @@ verbliebene Registerschreibvorgänge und Chipframes; PortRead kann bereits vorhe
 bis zur aktuellen Position rechnen. P132 protokolliert seine unverändert
 gelesene Phase und Chipposition. Ein Phasenübertritt ist zunächst nur ein
 Quellcode-Merkmal; erst zeitgleiche Messdaten dürfen ihn mit einem Ausreißer
-verbinden. Daraus folgt hier keine spekulative Änderung des Adapters oder DSP.
+verbinden. Die inzwischen tatsächlich gemessene Korrelation wird durch einen
+Vorher-/Nachher-Eingriff überprüft; Chorusformeln werden dabei nicht geändert.
 
 Die Labor-Host-Vorbereitung (Event-/Parameterlisten, PCM-Hash, CSV und Pacing)
 liegt außerhalb der process()-Zeitklammer. Dennoch beeinflusst sie den

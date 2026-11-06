@@ -2,10 +2,11 @@ name: P132 independent realtime attribution B
 on:
   push:
     branches: [audit/p132-realtime]
-    paths: ['CMakeLists.txt', 'tests/**', '.github/workflows/p132-*.yml']
+    paths: ['CMakeLists.txt', 'tests/**', 'src/engine/Emu8000Box.cpp', '.github/workflows/p132-*.yml']
   workflow_dispatch:
 permissions:
   contents: read
+  actions: read
 jobs:
   independent-runner:
     uses: ./.github/workflows/p132-windows-audit.yml

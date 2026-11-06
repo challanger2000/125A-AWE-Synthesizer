@@ -57,6 +57,14 @@ if(125A_P132_AUDIT)
   set_tests_properties(125A_p132_diagnostic_dll_pcm_census PROPERTIES TIMEOUT 180)
   add_test(NAME 125A_p132_measurement_oracle_controls
     COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/p132/test_analysis.py")
+  set(P132_BASELINE_NORMAL "" CACHE FILEPATH "Exact pre-fix Windows DLL artifact")
+  if(P132_BASELINE_NORMAL)
+    add_test(NAME 125A_p132_before_after_actual_dll_pcm
+      COMMAND awe32_p132_dll_host compare-baseline "${P132_BASELINE_NORMAL}"
+        "$<TARGET_FILE:125A_AWE_Synthesizer>" "${p128_assets}"
+        "${PROJECT_BINARY_DIR}/p132-qualification")
+    set_tests_properties(125A_p132_before_after_actual_dll_pcm PROPERTIES TIMEOUT 180)
+  endif()
   file(GENERATE OUTPUT "${PROJECT_BINARY_DIR}/p132-paths-$<CONFIG>.txt" CONTENT
     "$<TARGET_FILE:awe32_p132_dll_host>\n$<TARGET_FILE:125A_AWE_Synthesizer>\n$<TARGET_FILE:125A_P132_Diagnostic>\n${p128_assets}\n$<TARGET_FILE:awe32_p132_etw_reader>\n")
 endif()

@@ -13,6 +13,7 @@
 #include "public.sdk/source/vst/hosting/eventlist.h"
 #include "AssetState.h"
 #include "MidiControlMapping.h"
+#include "MidiProgramRouting.h"
 #include "probe_api.h"
 #include <algorithm>
 #include <array>
@@ -136,6 +137,32 @@ struct DelayedStream:MemoryStream {
         return MemoryStream::read(p,n,r);
     }
 };
+static void compareBaseline(const fs::path& before,const fs::path& after,const fs::path& assets,const fs::path& out){
+    std::ofstream report(out/"before-after-pcm.txt");uint64_t framesCompared=0;
+    for(int frames:{128,256,512,1024})for(int n:{1,16,30}){
+        Plugin a(before,model(assets)),b(after,model(assets));seed(a,n,frames);seed(b,n,frames);
+        for(int i=0;i<256;++i){
+            Block x(frames),y(frames);
+            for(auto* block:{&x,&y}){
+                for(int j=0;j<128;++j)block->cc(129,j%2?.6:.4,j*(frames-1)/127);
+                block->cc(10,i%2?.3:.7);block->cc(1,i%3?.2:0.);
+                block->parameter(1003,i%2?.8:.9);block->parameter(1108,.2);
+                if(i%8==0){block->parameter(1002,(i%16?5.:0.)/16383.);block->parameter(1000,(i%16?9.:7.)/127.);}
+                if(i%13==0)block->parameter(AWE125::MidiProgramRouting::ParamID(i%16),(i%2?7.:9.)/127.);
+                if(i%17==0){block->off(45+i%n);block->note(45+i%n);}
+                if(i==96)block->cc(120,1);
+            }
+            must(a.audio->process(x.data)==kResultOk&&b.audio->process(y.data)==kResultOk,"before/after process");
+            must(x.left==y.left&&x.right==y.right,"bounded adapter changed actual DLL PCM");framesCompared+=frames;
+            MemoryStream sa,sb;encode(sa,a.save());encode(sb,b.save());
+            must(sa.getSize()==sb.getSize()&&std::memcmp(sa.getData(),sb.getData(),size_t(sa.getSize()))==0,"bounded adapter changed V10/MIDI state");
+            if(i%64==63){must(a.component->setState(&sa)==kResultOk&&b.component->setState(&sb)==kResultOk,"before/after recall");}
+        }
+        report<<"PASS frames="<<frames<<" initial_voices="<<n<<" callbacks=256 pcm_bit_exact=1 state_v10_equal=1 dense_midi_program_bank_recall=1\n";
+    }
+    report<<"PASS stereo_frames_compared="<<framesCompared<<" float_bytes_compared="<<framesCompared*8<<'\n';
+    std::cout<<"P132_BASELINE_PCM PASS stereo_frames="<<framesCompared<<" float_bytes="<<framesCompared*8<<std::endl;
+}
 static void matrix(const fs::path& diagnostic,const fs::path& assets,const fs::path& out,int pass,bool memory){
     std::vector<Row> rows;rows.reserve(100000);std::ofstream cases(out/"cases.csv");
     cases<<"case,frames,voices,mode,measured_callbacks,saves,recalls,primings,control_error,thread_cpu_100ns,wall_qpc,thread_priority\n";
@@ -157,6 +184,7 @@ static void matrix(const fs::path& diagnostic,const fs::path& assets,const fs::p
     for(int frames:{128,256,512,1024})for(int n:{1,16,30})for(int mode=0;mode<5;++mode)configurations.push_back({frames,n,mode});
     if(std::getenv("P132_REVERSE"))std::reverse(configurations.begin(),configurations.end());
     for(auto configuration:configurations){int frames=configuration[0],n=configuration[1],mode=configuration[2];
+        if(std::getenv("P132_TARGET_ONLY")&&(frames!=128||n!=30||mode>2))continue;
         if(memory&&mode!=0&&mode!=4)continue;
         Plugin p(diagnostic,model(assets));must(p.census,"diagnostic census export");
         Row base;base.caseId=++caseId;base.pass=pass;base.frames=frames;base.voices=n;base.mode=mode;
@@ -205,6 +233,7 @@ int main(int argc,char** argv){try{
     moduleMap.open(out/"modules.csv");moduleMap<<"base,size,path\n";
     timeBeginPeriod(1);
     std::string mode=argv[1];if(mode=="qualify")qualify(argv[2],argv[3],argv[4],out);
+    else if(mode=="compare-baseline")compareBaseline(argv[2],argv[3],argv[4],out);
     else matrix(argv[3],argv[4],out,mode=="untraced"?1:0,mode=="memory");
     timeEndPeriod(1);return 0;
 }catch(const std::exception& e){std::cerr<<"P132_INCOMPLETE "<<e.what()<<std::endl;timeEndPeriod(1);return 1;}}

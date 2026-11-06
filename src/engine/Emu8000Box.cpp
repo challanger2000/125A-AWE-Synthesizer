@@ -113,6 +113,24 @@ struct Emu8000Box::Impl
     std::array<int32_t, Emu8000Box::kBlockFrames * 2> fifo{};
     size_t fifoPos = 0;
     int frameInBlock = 0;
+    // Bound chip work accumulated between FIFO publications. P132 measured
+    // periodic 980-frame bursts above a 128-frame callback budget. This only
+    // advances the existing renderer; FIFO latency and DSP math are unchanged.
+    void AdvanceChip(int target)
+    {
+        for (size_t index = 0; index < pendingCount; ++index)
+        {
+            const Write& w = pending[index];
+            emu.target_pos = w.offset;
+            if (w.isByte)
+                emu8k_outb(w.port, static_cast<uint8_t>(w.value), &emu);
+            else
+                emu8k_outw(w.port, w.value, &emu);
+        }
+        pendingCount = 0;
+        emu.target_pos = target;
+        emu8k_update(&emu);
+    }
     bool haveBlock = false;
     bool overflowed = false;
 };
@@ -334,6 +352,8 @@ void Emu8000Box::RenderFrame(int32_t& l, int32_t& r)
         FlushBlock();
         I.frameInBlock = 0;
     }
+    else if (!I.overflowed && I.frameInBlock % 128 == 0)
+        I.AdvanceChip(I.frameInBlock);
 }
 
 #endif  // AWE32EMU_WITH_86BOX

@@ -5,7 +5,7 @@
 ## P132 — unabhängiger Echtzeit-Audit läuft separat
 
 - Auditbranch `audit/p132-realtime`, Ausgangs-Produktion `c7d803c1b328166f6f5edcb770aa9c9f8b49ecda`; P131 / PR #70 wurde gelesen, nicht gemergt.
-- [Messmethodik, tatsächliche VST3-DLLs, physische Stimmenkontrolle, ETW/Heap-Kalibrierung und Grenzen](docs/P132-REALTIME-AUDIT.md). Produktions- und Chorusquellen unverändert; keine spekulativen Optimierungen.
+- [Messmethodik, tatsächliche VST3-DLLs, physische Stimmenkontrolle, ETW/Heap-Kalibrierung und Grenzen](docs/P132-REALTIME-AUDIT.md). Der erste Messstand ließ die Produktion unverändert. Nach nachgewiesenen 980-Frame-Arbeitsbursts wird jetzt nur der Adapter in `Emu8000Box.cpp` gezielt korrigiert; Chorusberechnung unverändert. Vorher-/Nachher-Windowsprüfung läuft separat.
 - Vollständige neue Windows-Belege stehen bis zu ihrem Abschluss aus. Kein Echtzeit-, GUI- oder Release-GO. Zielrechner-ASIO: NOT RUN.
 
 ## P131 – Windows-Echtzeitprofil nach P130: Audit separat, NO-GO (6. November 2026)

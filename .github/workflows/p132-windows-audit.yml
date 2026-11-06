@@ -2,7 +2,7 @@ name: P132 independent realtime attribution A
 on:
   push:
     branches: [audit/p132-realtime]
-    paths: ['CMakeLists.txt', 'tests/**', '.github/workflows/p132-*.yml']
+    paths: ['CMakeLists.txt', 'tests/**', 'src/engine/Emu8000Box.cpp', '.github/workflows/p132-*.yml']
   workflow_dispatch:
   workflow_call:
     inputs:
@@ -12,6 +12,7 @@ on:
         default: 1
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: p132-${{ github.ref }}-${{ inputs.trial || 1 }}
   cancel-in-progress: true
@@ -33,14 +34,26 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'SDK clone failed' }
           $sha=(git -C external/vst3sdk rev-parse HEAD).Trim()
           if ($sha -ne '3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96') { throw 'Unexpected SDK' }
-          $src=(git diff c7d803c1b328166f6f5edcb770aa9c9f8b49ecda HEAD -- src)
+          $src=@(git diff --name-only c7d803c1b328166f6f5edcb770aa9c9f8b49ecda HEAD -- src)
           if ($LASTEXITCODE -ne 0) { throw 'Production source comparison failed' }
-          if ($src) { throw 'P132 audit unexpectedly changes production source' }
-          @{commit=$env:GITHUB_SHA;sdk=$sha;trial=$env:P132_TRIAL;run=$env:GITHUB_RUN_ID;runner=$env:RUNNER_NAME;production_changed=$false} | ConvertTo-Json | Set-Content qa/provenance.json
+          if ($src.Count -ne 1 -or $src[0] -ne 'src/engine/Emu8000Box.cpp') { throw 'Unexpected source change beyond proven P132 adapter correction' }
+          @{commit=$env:GITHUB_SHA;sdk=$sha;trial=$env:P132_TRIAL;run=$env:GITHUB_RUN_ID;runner=$env:RUNNER_NAME;production_changed=$true;production_changed_files=$src;baselineCommit='418cc6b580a8cb3fd770b33b3804e0626d3c08f8'} | ConvertTo-Json | Set-Content qa/provenance.json
+      - name: Exact pre-fix DLL artifact for same-runner crossover and PCM
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $baseline=Join-Path $env:RUNNER_TEMP 'p132-before'
+          gh run download 42208362856 -n P132-Windows-1-Raw-ETW-Evidence -D $baseline
+          if ($LASTEXITCODE -ne 0) { throw 'Exact pre-fix DLL artifact unavailable' }
+          $p=Get-Content "$baseline/provenance.json" -Raw | ConvertFrom-Json
+          if ($p.commit -ne '418cc6b580a8cb3fd770b33b3804e0626d3c08f8') { throw 'Wrong baseline DLL source' }
+          Copy-Item "$baseline/dll-sha256.txt" qa/baseline-dll-sha256.txt
+          "P132_BASELINE_DIR=$baseline" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Configure and build unmodified and diagnostic VST3 DLLs
         shell: pwsh
         run: |
-          cmake -S . -B build-p132 -G 'Visual Studio 17 2022' -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_EDITORHOST_TEST=ON -D125A_P132_AUDIT=ON 2>&1 | Tee-Object qa/configure.txt
+          cmake -S . -B build-p132 -G 'Visual Studio 17 2022' -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_EDITORHOST_TEST=ON -D125A_P132_AUDIT=ON "-DP132_BASELINE_NORMAL=$env:P132_BASELINE_DIR/symbols/125A_AWE_Synthesizer.vst3" 2>&1 | Tee-Object qa/configure.txt
           if ($LASTEXITCODE -ne 0) { throw 'Configure failed' }
           cmake --build build-p132 --config Release --parallel 2 2>&1 | Tee-Object qa/build.txt
           if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
@@ -61,8 +74,9 @@ jobs:
           ctest --test-dir build-p132 -C Release --output-on-failure -V --timeout 180 2>&1 | Tee-Object qa/ctest.txt
           if ($LASTEXITCODE -ne 0) { throw 'CTest failed' }
           Copy-Item build-p132/p132-qualification/qualification* qa/
+          Copy-Item build-p132/p132-qualification/before-after-pcm.txt qa/
           $log=Get-Content qa/ctest.txt -Raw
-          if ($log -notmatch '100% tests passed' -or $log -notmatch '125A_p132_diagnostic_dll_pcm_census') { throw 'CTest evidence missing' }
+          if ($log -notmatch '100% tests passed' -or $log -notmatch '125A_p132_diagnostic_dll_pcm_census' -or $log -notmatch '125A_p132_before_after_actual_dll_pcm') { throw 'CTest evidence missing' }
           $validator=Get-ChildItem build-p132 -Filter validator.exe -File -Recurse | Where-Object { $_.FullName -match 'Release' } | Select-Object -First 1 -ExpandProperty FullName
           $plugin=(Resolve-Path 'build-p132/VST3/Release/125A_AWE_Synthesizer.vst3').Path
           & $validator $plugin 2>&1 | Tee-Object qa/validator.txt

@@ -4,7 +4,7 @@ No ETL bytes, process command lines, environment values or credentials are print
 from pathlib import Path
 import base64,hashlib,json,re,sys,zlib,csv,statistics
 root=Path(sys.argv[1]);payload={}
-for name in ['traced','untraced','memory']:
+for name in ['traced','untraced','memory']+sorted(p.name for p in root.glob('paired-*') if p.is_dir()):
  p=root/name/'summary.json'
  if not p.exists():continue
  s=json.loads(p.read_text())
@@ -34,9 +34,10 @@ if q.exists():
  for r in csv.DictReader(q.open()):groups.setdefault((r['frames'],r['voices']),[]).append(r)
  payload['normal_vs_diagnostic_timing']=[dict(frames=k[0],voices=k[1],n=len(v),normal_median_us=statistics.median(float(r['normal_wall_us']) for r in v),diagnostic_median_us=statistics.median(float(r['diagnostic_wall_us']) for r in v)) for k,v in groups.items()]
 payload['diagnostics']=errors[:20]
+payload['baseline_pcm']=(root/'before-after-pcm.txt').read_text() if (root/'before-after-pcm.txt').exists() else None
 payload['host_progress']={str(p.relative_to(root)):p.read_text(errors='replace').splitlines()[-8:] for p in root.rglob('host-log.txt')}
 raw=json.dumps(payload,separators=(',',':')).encode();data=base64.b64encode(zlib.compress(raw,9)).decode()
 (root/'public-summary.json').write_bytes(raw)
-chunks=[data[i:i+4500] for i in range(0,len(data),4500)]
+chunks=[data[i:i+3000] for i in range(0,len(data),3000)]
 print(f'P132_SUMMARY_SHA256={hashlib.sha256(raw).hexdigest()} CHUNKS={len(chunks)}')
 for i,chunk in enumerate(chunks):print(f'::notice title=P132_EVIDENCE_{i+1}_OF_{len(chunks)}::P132_DATA_{i+1}_OF_{len(chunks)}_SHA_{hashlib.sha256(raw).hexdigest()}:{chunk}')
