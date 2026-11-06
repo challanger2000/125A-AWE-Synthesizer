@@ -6,7 +6,7 @@
 
 - Entwicklungsbasis: `105f756f15253001ee1cd49a234c584ea60fca77` auf `fix/p122-bank-dirty-audit`.
 - [Konkrete Reproduktionen, Korrekturen, Testgrenzen und offene Gates](docs/P128-NATIVE-REAUDIT-AND-CORRECTIONS.md): drei Programm-/Recall-Gate-Rennen, verlorene NoteOns beim Enginewechsel und ein Nullpointer-Absturz nach Engine-Entfernung wurden lokal nachgewiesen und mit Regressionen korrigiert. Eine exakt invalidierte Filterkoeffizienten-Ablage vermeidet identische teure Neuberechnungen; PCM-Vergleich gegen die ursprüngliche und eine ungecachte Engine bleibt bytegleich.
-- **Chorus-Reste weiter FAIL (18/24 Tail-Fälle); Windows-Regressionen des korrigierten Stands NOT RUN.** Native Linux-/SDK-Prüfungen sind keine unabhängige vollständige P128-Abnahme. GUI-NO-GO und RELEASE-NO-GO bleiben bestehen.
+- **Neuer Windows-Lauf [#42163215752](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42163215752) auf `7cb23c26c4199091ed1430641c29def168c51757`: SUCCESS** — reale VST3, 38 CTests, Validator im Build und 3 EditorHost-Smokes. Native Linux-/SDK-Prüfungen: 31/31. **Chorus-Reste weiter FAIL (18/24 Tail-Fälle), Echtzeit-Deadlines weiter FAIL.** Die Entwicklerregressionen ersetzen keine vollständige unabhängige P128-/Ziel-DAW-Abnahme. GUI-NO-GO und RELEASE-NO-GO bleiben bestehen.
 
 ## P128 – unabhängige technische Prüfung im 125A Plugin Test Lab (6. November 2026)
 

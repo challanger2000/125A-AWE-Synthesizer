@@ -90,7 +90,8 @@ getrennte Negativkontrollen.
 | Sofortiger Save bei verweigertem RT-Writer, inkl. erzwungenem Fallback | PASS in den gezielten Fällen | PASS in den gezielten Fällen |
 | 500 Saves je neun Lastkonstellationen / frische inaktive Processor-Wiederherstellung | PASS, 4.500/4.500 | PASS, je 4.500/4.500 im Durchsatz- und im gepaceten Lauf |
 | Unterscheidbare (0,0), (0,7), (0,9), (5,0), (5,7), (5,9) | PASS | PASS, außerdem gegen direkten Synth als unabhängiges PCM-Orakel |
-| Original-Windows-DLL, Controller, echter Browser-Select und EditorHost | NOT RUN | NOT RUN |
+| Windows-VST3-Build, 38 CTests, vorhandene DLL-Hosttests, Validator und dreifacher EditorHost-Smoke | NOT RUN im ursprünglichen nativen Audit | PASS, neuer Workflow #42163215752 auf 7cb23c2 |
+| Vollständiges Controller-/PresetBrowserView::Select-SF2-/PCM-Orakel im Zielhost | NOT RUN | NOT RUN |
 | Original-ROM, autorisierte Referenz-SF2, Originalhardware, Studio One / ASIO / Offline-Export | NOT RUN | NOT RUN |
 
 Ein frischer Processor wird im Save-Stresstest wirklich erzeugt, initialisiert,
@@ -142,15 +143,21 @@ ctest --test-dir /tmp/awe-p128-build --output-on-failure --timeout 120
 Auf Windows werden die zusätzlichen Tests automatisch bei
 `-D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON` eingerichtet. Der vorhandene
 Workflow `.github/workflows/p121-pitchbend-windows.yml` baut die echte VST3,
-führt CTests, Validator und dreifache EditorHost-Smokes aus. **Dieser Lauf muss
-für den korrigierten Quellstand neu erfolgen.** Frühere grüne Läufe und der auf
-den alten Build gepinnte Test-Lab-Workflow validieren diese Änderungen nicht.
+führt CTests, Validator und dreifache EditorHost-Smokes aus. **Dieser Lauf wurde für `7cb23c26c4199091ed1430641c29def168c51757` neu ausgeführt:**
+[Actions #42163215752](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42163215752)
+**SUCCESS**, Laufzeit 5 min 39 s. Der vollständige Workflow baut die echte
+Windows-x64-VST3 und den EditorHost, prüft alle 38 CTests, normalisiert und prüft
+Metadaten und absolviert die drei Win32-EditorHost-Smokes. Die Validatorprüfung
+im Build ist Teil dieses erfolgreichen Workflows. Einzelne Validatorzeilen
+werden hier nicht als separat heruntergeladenes Log behauptet. Der auf den
+alten Build gepinnte Test-Lab-Workflow wurde nicht erneut ausgeführt.
 
 Die lokale Maschine ist Linux; Zugriff auf die GitHub-Actions-API über `gh api`
 wird von der Netzwerkpolicy abgewiesen. Die öffentliche Workflow-Webseite ist
 lesbar. Der vorhandene Push-Workflow auf dem Entwicklungsbranch soll deshalb
-den korrigierten Stand vollständig auf Windows prüfen; bis zum belegten Ergebnis
-ist dieser neue Lauf NOT RUN. Keine GUI- oder Releasefreigabe wird daraus abgeleitet.
+den korrigierten Stand vollständig auf Windows prüfen. Dessen erfolgreicher
+Abschluss ist über die öffentliche Workflowseite für den exakten Commit belegt.
+Eine unabhängige GUI- oder Releasefreigabe wird daraus nicht abgeleitet.
 Am Repository `125A-Plugin-Test-Lab` wurde nichts verändert.
 
 ## Windows-CI: konkrete Fixture-Korrektur
@@ -168,5 +175,21 @@ Tempordner innerhalb des Checkouts wird ausdrücklich zurückgewiesen. Positiver
 In-Source-Build-/Assettest und negative TMPDIR-Gegenprobe wurden lokal
 reproduziert. Der strikte Quellausschlusstest wurde unverändert gelassen.
 Die neuen P128-Testdateien sind außerdem in den bestehenden CI-Pfadfiltern
-registriert. Der vollständige neue Windows-Lauf bleibt bis zu seinem Ergebnis
-ausstehend.
+registriert. Der vollständige neue Windows-Lauf #42163215752 ist auf dem
+korrigierten Stand SUCCESS. Die strikte Ressourcenprüfung besteht unverändert.
+
+## Ergänzender Save-Inhaltsnachweis
+
+Ein weiterer Lauf mit 4.500 echten Saves/frischen inaktiven Wiederherstellungen
+prüfte zusätzlich alle nicht überschriebenen Kanalwerte gegen das globale
+Programm. Für 4.109 Saves blieben die angenommenen Intent-Stempel über den
+Save-Aufruf unverändert; deren vollständiges erwartetes Bank-/Global-/
+Kanal-Tupel wurde direkt aus der Ereignisordnung abgeleitet und stimmte jeweils.
+Bei den übrigen 391 Saves gab es gleichzeitig neue Intents: Stream, Roundtrip
+und Tupelkohärenz bestehen, eine eindeutige vollständige Linearizierbarkeits-
+entscheidung jedes konkurrierenden Edits ist dort ausdrücklich NOT RUN.
+
+**Freigabe:** Der korrigierte Stand besteht die beschriebenen nativen und
+Windows-Entwicklerregressionen. Chorusreste und gemessene Callback-Deadlines
+bleiben FAIL; Originalhardware-/Ziel-DAW-/vollständige unabhängige Abnahme bleiben
+NOT RUN. Deshalb weiterhin GUI-NO-GO / RELEASE-NO-GO.
