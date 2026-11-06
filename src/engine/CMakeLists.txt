@@ -122,3 +122,12 @@ add_executable(awe32_p128_note_handoff_test "${PROJECT_SOURCE_DIR}/tests/p128_no
 target_include_directories(awe32_p128_note_handoff_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${UPSTREAM_SRC}")
 target_link_libraries(awe32_p128_note_handoff_test PRIVATE awe32_chip_safety)
 add_test(NAME 125A_p128_note_handoff COMMAND awe32_p128_note_handoff_test)
+
+# P133 original Creative 8x8 Reverb/Chorus selection through EMU8000
+# INIT/HWCF registers, no ROM/SF2 proprietary fixtures required.
+add_executable(awe32_p133_fx_modes_test "${PROJECT_SOURCE_DIR}/tests/p133_fx_modes.cpp")
+target_include_directories(awe32_p133_fx_modes_test PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}" "${UPSTREAM_SRC}")
+target_link_libraries(awe32_p133_fx_modes_test PRIVATE awe32_chip_safety)
+set_target_properties(awe32_p133_fx_modes_test PROPERTIES CXX_STANDARD 23)
+add_test(NAME 125A_p133_fx_register_modes COMMAND awe32_p133_fx_modes_test)
