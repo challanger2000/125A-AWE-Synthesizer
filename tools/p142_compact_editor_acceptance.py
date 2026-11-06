@@ -391,7 +391,7 @@ def main():
         appdata=root/"AppData"
         cfg=appdata/"125A"/"AWE Synthesizer"/"assets.cfg"
         cfg.parent.mkdir(parents=True)
-        cfg.write_text(f'SF2 = "{sf2}"\\n',encoding="utf-8")
+        cfg.write_text(f'SF2 = "{sf2}"\n',encoding="utf-8")
         env=os.environ.copy()
         env["APPDATA"]=str(appdata)
         proc=subprocess.Popen([str(args.editorhost),"--componentHandler",str(args.plugin)],
