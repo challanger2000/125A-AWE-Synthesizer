@@ -170,7 +170,7 @@ void realtimeSaveRecallProfile(const std::string& csvPath) {
 
 int main(int argc,char** argv) {
     try {
-        if(argc!=3)return 2;
+        if(argc!=3 && !(argc==4 && std::string(argv[1])=="perf-recalls"))return 2;
         assetsDir=argv[2];
         if(std::string(argv[1])=="perf-recalls") realtimeSaveRecallProfile(argc>=4?argv[3]:"processor-times.csv");
         else if(std::string(argv[1])=="nullswap") {
