@@ -2,6 +2,8 @@
 // Tests the native production emu8k_work_chorus() with zero input and an
 // initialized signed one-LSB delay line. Does not use ROM, SF2 or a DAW.
 extern "C" {
+#include <86box/86box.h>
+#include <86box/sound.h>
 #include <86box/snd_emu8k.h>
 void emu8k_work_chorus(int32_t*,int32_t*,emu8k_chorus_eng_t*,int);
 }
