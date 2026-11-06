@@ -200,3 +200,14 @@ if(125A_P134_AB)
       "${p128_assets}" "${PROJECT_BINARY_DIR}/p134-ab")
   set_tests_properties(125A_p134_p133_full_pcm_ab PROPERTIES TIMEOUT 180)
 endif()
+
+# P138 strictly separate matched-VST3 steady 128/30 ABBA timing of P134
+# versus P137. Only available when the P134 baseline DLL is pinned; CTest
+# requires exact PCM and V11 after all 4800 compared process callbacks.
+if(125A_P134_AB)
+  add_test(NAME 125A_p138_box86_shadow_abba
+    COMMAND awe32_p134_vst3_pcm_compare benchmark
+      "${P134_BASELINE_VST3}" "$<TARGET_FILE:125A_AWE_Synthesizer>"
+      "${p128_assets}" "${PROJECT_BINARY_DIR}/p138-evidence")
+  set_tests_properties(125A_p138_box86_shadow_abba PROPERTIES TIMEOUT 180)
+endif()
