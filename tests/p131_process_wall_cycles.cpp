@@ -27,6 +27,7 @@ struct P131Sample {
     bool overrun=false;
     uint32_t coreBefore=0;
     uint32_t coreAfter=0;
+    unsigned heldNoteIdentities=0;
 };
 static double p131Percentile(std::vector<double> values,double fraction) {
     if(values.empty())return 0;
@@ -54,9 +55,7 @@ static bool p131Run(int frames,int mode,LONGLONG qpcHz,std::ofstream& csv) {
                     ++iteration;
                     if(mode==2 && (iteration%5)==0) {
                         ++recallAttempts;
-                        const auto response=recall(
-                            *rig.p,state((iteration/5)%2==0?5:0,
-                                         (iteration/5)%2==0?9:0));
+                        const auto response=recall(*rig.p,state(0,0));
                         if(response==kResultOk)++recallSuccesses;
                         // kResultFalse is an allowed superseded control intent.
                         else if(response!=kResultFalse)
@@ -109,20 +108,28 @@ static bool p131Run(int frames,int mode,LONGLONG qpcHz,std::ofstream& csv) {
         for(int j=0;j<frames && !audible;++j)
             audible=block.l[size_t(j)]!=0.f || block.r[size_t(j)]!=0.f;
         audibleBlocks+=audible;
+        // This is a fixed-size read of processor-owned post-block state.
+        // Distinct held NoteOn identities are a workload indicator, NOT
+        // an assertion that the chip has an equal number of active voices.
+        for(const auto& note:rig.p->heldNotes_)
+            sample.heldNoteIdentities+=(note.sequence!=0);
         measurements.push_back(sample);
         csv<<frames<<','<<p131Mode(mode)<<','<<i<<','
             <<std::fixed<<std::setprecision(3)<<sample.wallUs<<','
             <<budgetUs<<','<<(sample.overrun?1:0)<<','
             <<sample.cycles<<','<<(sample.cyclesValid?1:0)<<','
-            <<core0<<','<<core1<<','<<(audible?1:0)<<'\n';
+            <<core0<<','<<core1<<','<<(audible?1:0)<<','
+            <<sample.heldNoteIdentities<<'\n';
     }
     stop.store(true,std::memory_order_release);
     if(control.joinable())control.join();
-    std::vector<double> walls;
+    std::vector<double> walls,held;
     walls.reserve(measurements.size());
+    held.reserve(measurements.size());
     unsigned overruns=0,validCycles=0,migrations=0;
     for(const auto& sample:measurements) {
         walls.push_back(sample.wallUs);
+        held.push_back(double(sample.heldNoteIdentities));
         overruns+=sample.overrun;
         validCycles+=sample.cyclesValid;
         migrations+=(sample.coreBefore!=sample.coreAfter);
@@ -136,6 +143,7 @@ static bool p131Run(int frames,int mode,LONGLONG qpcHz,std::ofstream& csv) {
         <<" wall_median_us="<<p131Percentile(walls,0.5)
         <<" wall_p99_us="<<p131Percentile(walls,0.99)
         <<" wall_max_us="<<p131Percentile(walls,1.)
+        <<" held_identities_median="<<p131Percentile(held,0.5)
         <<" wall_overruns="<<overruns
         <<" qtc_valid="<<validCycles
         <<" core_migrations="<<migrations
@@ -162,7 +170,8 @@ int main(int argc,char** argv) {
         std::ofstream csv(argv[2],std::ios::trunc);
         require(bool(csv),"unable to open P131 CSV");
         csv<<"frames,mode,callback,process_wall_us,budget_us,wall_overrun,"
-              "qtc_raw_cycles,qtc_valid,core_before,core_after,audible\n";
+              "qtc_raw_cycles,qtc_valid,core_before,core_after,audible,"
+              "held_note_identities\n";
         bool valid=true;
         for(int frames:{128,256,1024})
             for(int mode=0;mode<3;++mode)
