@@ -1,0 +1,96 @@
+name: P129 real Processor low-buffer save/recall A-B against P128
+on:
+  push:
+    branches: [audit/p129-p128-process-rt-ab-20261106]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: p129-processor-ab
+  cancel-in-progress: true
+jobs:
+  abba:
+    runs-on: windows-2022
+    timeout-minutes: 35
+    steps:
+      - name: Checkout measured P129 current production code
+        uses: actions/checkout@v4
+        with:
+          path: candidate
+      - name: Checkout exact pre-optimization P128 production code
+        uses: actions/checkout@v4
+        with:
+          path: baseline
+          ref: a897d84c0cdafc91fe4e2e7550e10f88c2455b93
+      - name: Copy identical audit-only harness into both worktrees
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $pin = (git -C baseline rev-parse HEAD).Trim()
+          if ($pin -ne 'a897d84c0cdafc91fe4e2e7550e10f88c2455b93') { throw 'Baseline revision drift' }
+          $code = (git -C candidate rev-parse HEAD).Trim()
+          Copy-Item candidate/tests/p129_smallbuffer_ab.cpp baseline/tests/p129_smallbuffer_ab.cpp
+          Copy-Item candidate/tests/p128_processor_order.cpp baseline/tests/p128_processor_order.cpp
+          Copy-Item candidate/tests/p128_processor.cmake baseline/tests/p128_processor.cmake
+          New-Item -ItemType Directory -Force qa,baseline/external,candidate/external | Out-Null
+          "baseline_sha=$pin" | Set-Content qa/provenance.txt
+          "candidate_sha=$code" | Add-Content qa/provenance.txt
+          'Source-derived VST3 Processor; same ROM/SF2, SDK and harness on same Windows-2022 VM' | Add-Content qa/provenance.txt
+          'NO ASIO OR DAW RELEASE QUALIFICATION' | Add-Content qa/provenance.txt
+      - name: Fetch one verified Steinberg SDK, share via Windows junction
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch v3.8.1_build_84 --recurse-submodules https://github.com/steinbergmedia/vst3sdk.git candidate/external/vst3sdk
+          if ($LASTEXITCODE -ne 0) { throw 'SDK clone failed' }
+          $sdk=(git -C candidate/external/vst3sdk rev-parse HEAD).Trim()
+          if ($sdk -ne '3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96') { throw "SDK mismatch $sdk" }
+          New-Item -ItemType Junction -Path baseline/external/vst3sdk -Target (Resolve-Path candidate/external/vst3sdk).Path | Out-Null
+          "sdk_sha=$sdk" | Add-Content qa/provenance.txt
+      - name: Compile both real VST3 Processor sources using exact same test harness
+        shell: pwsh
+        run: |
+          foreach($name in @('baseline','candidate')) {
+            cmake -S "$name" -B "build-$name" -G 'Visual Studio 17 2022' -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON
+            if ($LASTEXITCODE -ne 0) { throw "CMake configure failed for $name" }
+            cmake --build "build-$name" --config Release --target awe32_p129_smallbuffer_ab --parallel 2
+            if ($LASTEXITCODE -ne 0) { throw "Real Processor compile failed for $name" }
+          }
+      - name: Create one shared synthetic ROM and SF2
+        shell: pwsh
+        run: |
+          $assets=Join-Path $env:RUNNER_TEMP 'p129-shared-ab-assets'
+          python candidate/tests/p128_synthetic_assets.py "$assets"
+          if ($LASTEXITCODE -ne 0) { throw 'Public synthetic assets failed' }
+          "assets_fixture=p128_synthetic_assets.py (identical for both)" | Add-Content qa/provenance.txt
+      - name: Execute B-C-C-B 9000 paced audible callbacks and compare raw times
+        shell: pwsh
+        timeout-minutes: 16
+        run: |
+          $ErrorActionPreference='Stop'
+          $assets=Join-Path $env:RUNNER_TEMP 'p129-shared-ab-assets'
+          $binary=@{}
+          foreach($name in @('baseline','candidate')) {
+            $found=@(Get-ChildItem "build-$name" -Recurse -File -Filter awe32_p129_smallbuffer_ab.exe)
+            if ($found.Count -ne 1) { throw "Expected exactly one $name executable" }
+            $binary[$name]=$found[0].FullName
+          }
+          foreach($run in @('baseline-a','candidate-a','candidate-b','baseline-b')) {
+            $name=if($run.StartsWith('baseline')){'baseline'}else{'candidate'}
+            & $binary[$name] "$assets" "qa/$run.csv" 2>&1 | Tee-Object "qa/$run.log"
+            if ($LASTEXITCODE -ne 0) { throw "Audio or save/recall test failed for $run" }
+            $text=Get-Content "qa/$run.log" -Raw
+            if (-not $text.Contains('RT_P129_AB_RESULT callbacks=2250')) { throw "Incomplete processor test $run" }
+            if (-not $text.Contains('RT_AB_TIMER_1MS_REQUEST=ACCEPTED')) { throw "Windows timer resolution failed $run" }
+            if (@(Get-Content "qa/$run.csv").Count -ne 2251) { throw "Missing samples $run" }
+          }
+          python candidate/tools/p129_compare_processor_ab.py qa qa/comparison.csv 2>&1 | Tee-Object qa/comparison.log
+          if ($LASTEXITCODE -ne 0) { throw 'Invalid A/B Processor evidence' }
+          'SUCCESS means verified measurement completeness, NOT zero overruns or DAW/ASIO GO' | Set-Content qa/verdict.txt
+      - name: Preserve raw timing, comparison and provenance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: P129-Processor-Real-LowBuffer-ABBA-Raw-Evidence
+          path: qa/
+          if-no-files-found: warn
+          retention-days: 14
