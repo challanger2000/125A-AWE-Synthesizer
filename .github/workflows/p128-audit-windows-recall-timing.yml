@@ -1,0 +1,60 @@
+name: P128 Windows actual Processor save-recall timing under load
+on:
+  push:
+    branches: [audit/p128-windows-save-recall-deadline-20261106]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  realtime-concurrent-recall:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Clone exact Steinberg SDK as in production
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch v3.8.1_build_84 --recurse-submodules https://github.com/steinbergmedia/vst3sdk.git external/vst3sdk
+          $sha=(git -C external/vst3sdk rev-parse HEAD).Trim()
+          if ($sha -ne '3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96') { throw "SDK mismatch: $sha" }
+      - name: Configure actual P128 Processor and generated nonproprietary ROM/SF2
+        shell: pwsh
+        run: |
+          cmake -S . -B build-audit -G "Visual Studio 17 2022" -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON
+          if ($LASTEXITCODE -ne 0) { throw 'P128 processor configure failed' }
+      - name: Compile real Factory Processor source and Steinberg host types
+        shell: pwsh
+        run: |
+          cmake --build build-audit --config Release --target awe32_p128_processor_order_test --parallel 2
+          if ($LASTEXITCODE -ne 0) { throw 'P128 processor compile failed' }
+      - name: Measure 1500 paced callbacks and simultaneous getState/setState
+        shell: pwsh
+        timeout-minutes: 18
+        run: |
+          $ErrorActionPreference='Stop'
+          New-Item -ItemType Directory -Force qa | Out-Null
+          $exe=@(Get-ChildItem build-audit -Recurse -Filter 'awe32_p128_processor_order_test.exe' -File)
+          $assets=@(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -Directory -Filter '125a-p128-*' |
+            Where-Object { (Test-Path (Join-Path $_.FullName 'zero.rom')) -and (Test-Path (Join-Path $_.FullName 'bank.sf2')) })
+          if ($exe.Count -ne 1 -or $assets.Count -ne 1) {
+            throw "Expected one Processor and assets folder; exe=$($exe.Count) assets=$($assets.Count)"
+          }
+          $csv=Join-Path (Resolve-Path 'qa').Path 'RT-PROCESSOR-WINDOWS-RAW.csv'
+          & $exe[0].FullName perf-recalls $assets[0].FullName "$csv" 2>&1 | Tee-Object -FilePath qa/RT-PROCESSOR-SUMMARY.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Concurrent save/recall profiling failed' }
+          $lines=@(Get-Content qa/RT-PROCESSOR-SUMMARY.txt | Where-Object { $_.StartsWith('RT_PROCESSOR case=') })
+          if ($lines.Count -ne 3) { throw 'Expected three baseline/save/save+recall timing scenarios' }
+          if ((Get-Content "$csv").Count -ne 1501) { throw 'Expected 1,500 raw callback timings' }
+          if (-not $lines[1].Contains('recalls=0') -or $lines[2] -notmatch 'recalls=[1-9][0-9]*') {
+            throw 'Concurrent recall conditions not met'
+          }
+          'TECHNICAL_PROFILE_ONLY: concurrent Windows source-derived Processor, not standalone exported VST3 or ASIO deadline' |
+            Set-Content qa/VERDICT.txt
+      - name: Publish callback-by-callback performance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 125A-P128-Windows-Concurrent-Save-Recall-Profile
+          path: qa/
+          retention-days: 14
+          if-no-files-found: warn
