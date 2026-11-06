@@ -1,0 +1,111 @@
+name: P128 - Independent Test Lab technical VST3 smoke
+on:
+  push:
+    branches: [fix/p122-bank-dirty-audit]
+    paths:
+      - '.github/workflows/p128-test-lab-integration.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: p128-test-lab-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  awe-test-lab:
+    runs-on: windows-2022
+    timeout-minutes: 40
+    steps:
+      - name: Checkout independently Windows-verified Test Lab source
+        uses: actions/checkout@v4
+        with:
+          repository: challanger2000/125A-Plugin-Test-Lab
+          ref: 70f9e40d081f98e3dde368daddbabd268d74047b
+          path: testlab
+          persist-credentials: false
+
+      - name: Download exact P128 VST3 previously validated on Windows
+        uses: actions/download-artifact@v4
+        with:
+          name: 125A-P122-Windows-x64-VST3
+          repository: challanger2000/125A-AWE-Synthesizer
+          run-id: 42146715681
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: awebuild
+
+      - name: Record pinned source and verify real AWE bundle
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force qa | Out-Null
+          $testLabCommit = (git -C testlab rev-parse HEAD).Trim()
+          if ($testLabCommit -ne '70f9e40d081f98e3dde368daddbabd268d74047b') {
+            throw "Unexpected Test Lab revision $testLabCommit"
+          }
+          $plugin = @(Get-ChildItem awebuild -Recurse -Directory -Filter '125A_AWE_Synthesizer.vst3')
+          if ($plugin.Count -ne 1) { throw 'Expected exactly one complete AWE VST3 bundle' }
+          $module = @(Get-ChildItem $plugin[0].FullName -Recurse -File -Filter '*.vst3')
+          if ($module.Count -ne 1) { throw 'AWE module missing or ambiguous inside bundle' }
+          $hash = (Get-FileHash -LiteralPath $module[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          @(
+            'AWE_CODE_COMMIT=9080fe75e57dd11c8019898ff481ae11839fedc4'
+            'AWE_BUILD_RUN=42146715681'
+            "AWE_BINARY_SHA256=$hash"
+            "TEST_LAB_COMMIT=$testLabCommit"
+            'TEST_LAB_BASELINE_RUN=42147013756'
+            'SYNTHETIC_ROM_OR_PRODUCT_SF2=NOT PROVIDED'
+            'PRODUCT_AWE_SOUND_AND_PRESET_ORACLES=NOT COVERED'
+            'RELEASE_APPROVAL=NO-GO'
+          ) | Set-Content qa/PROVENANCE.txt
+          Write-Host "Real AWE VST3 bundle: $($plugin[0].FullName)"
+
+      - name: Configure and compile pinned native Windows Test Lab hosts
+        shell: pwsh
+        run: |
+          cmake -S testlab -B testlab/build -G "Visual Studio 17 2022" -A x64
+          if ($LASTEXITCODE -ne 0) { throw 'Test Lab configure failed' }
+          cmake --build testlab/build --config Release --parallel 4 --target TestLabHost TestLabStateStress TestLabGUI TestLabInstanceIsolation
+          if ($LASTEXITCODE -ne 0) { throw 'Test Lab native host build failed' }
+
+      - name: Run actual AWE VST3 universal Test Lab quickcheck
+        shell: pwsh
+        timeout-minutes: 22
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $plugin = @(Get-ChildItem awebuild -Recurse -Directory -Filter '125A_AWE_Synthesizer.vst3')
+          $hostExe = @(Get-ChildItem testlab/build -Recurse -File -Filter '125A_Test_Lab_Host.exe')
+          $stressExe = @(Get-ChildItem testlab/build -Recurse -File -Filter '125A_Test_Lab_State_Stress.exe')
+          $guiExe = @(Get-ChildItem testlab/build -Recurse -File -Filter '125A_Test_Lab_GUI.exe')
+          $dualExe = @(Get-ChildItem testlab/build -Recurse -File -Filter '125A_Test_Lab_Instance_Isolation.exe')
+          if ($plugin.Count -ne 1 -or $hostExe.Count -ne 1 -or $stressExe.Count -ne 1 -or $guiExe.Count -ne 1 -or $dualExe.Count -ne 1) {
+            throw 'Missing or ambiguous actual VST3/host binary'
+          }
+          python testlab/tests/run_plugin_quickcheck.py --plugin $plugin[0].FullName --host $hostExe[0].FullName --stress-host $stressExe[0].FullName --gui-host $guiExe[0].FullName --dual-host $dualExe[0].FullName --out qa/AWE-P128 --timeout 120
+          if ($LASTEXITCODE -ne 0) {
+            throw 'AWE Test Lab quickcheck failed; inspect uploaded technical evidence, do not call this a product release PASS'
+          }
+          $report = Get-Content qa/AWE-P128/QUICKCHECK-RESULT.json -Raw | ConvertFrom-Json
+          if ($report.status -ne 'TECHNICAL_PASS' -or $report.release_approved -ne $false) {
+            throw 'AWE Test Lab report has invalid technical/release status'
+          }
+          if ($report.coverage.api_playback_save -ne 'PASS' -or
+              $report.coverage.fresh_process_project_recall -ne 'PASS' -or
+              $report.coverage.native_gui_lifecycle -ne 'PASS' -or
+              $report.coverage.same_process_dual_instance_lifecycle -ne 'PASS') {
+            throw 'Required independent native host coverage missing'
+          }
+          Write-Host '[PASS] AWE P128 technically checked in independently built Test Lab'
+          Write-Host 'NOT COVERED: Bank/program semantics, unique PCM, loaded ROM/SF2, AWE race reproductions, commercial DAW'
+          exit 0
+
+      - name: Publish all evidence even if a host/build step fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 125A-AWE-P128-Test-Lab-Technical-Evidence
+          path: qa/
+          if-no-files-found: warn
+          retention-days: 7
