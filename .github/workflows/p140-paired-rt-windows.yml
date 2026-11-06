@@ -1,0 +1,90 @@
+name: P140 same-runner P134 versus P137 dense automation ABBA VST3
+on:
+  push:
+    branches: [audit/p140-p134-p137-paired-stress]
+    paths: ['tests/p139/**', '.github/workflows/p140-paired-rt-windows.yml', 'CMakeLists.txt']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: p140-\${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  paired:
+    runs-on: windows-2022
+    timeout-minutes: 35
+    env:
+      GH_TOKEN: \${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate P137 source and pin old P134 V11 diagnostic
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          New-Item -ItemType Directory -Force qa | Out-Null
+          $src=@(git diff --name-only f0f397c265db4db145571b89d86676361d8514ae HEAD -- src)
+          if($LASTEXITCODE -ne 0 -or $src.Count -gt 0){throw "Production code differs from verified P137: $src"}
+          $run=42227962225
+          $old=gh api "repos/challanger2000/125A-AWE-Synthesizer/actions/runs/$run" | ConvertFrom-Json
+          if($LASTEXITCODE -ne 0 -or $old.head_sha -ne 'b249b110f1f0117e25757dc4001dc628d6b57d37' -or $old.status -ne 'completed'){
+            throw 'Incorrect archived old P134 diagnostic source'
+          }
+          gh run download $run -n P135-P134-V11-Windows-1-Raw-ETW-Evidence -D evidence/p135-old-diagnostic
+          if($LASTEXITCODE -ne 0){throw 'Archived old diagnostic DLL unavailable'}
+          $binary='evidence/p135-old-diagnostic/symbols/125A_P135_Diagnostic.vst3'
+          if(-not (Test-Path $binary)){throw "No real old P134 diagnostic VST3 $binary"}
+          "old_run_id=$run" | Set-Content qa/p140-sources.txt
+          "old_diagnostic_sha256=$((Get-FileHash $binary -Algorithm SHA256).Hash)" | Add-Content qa/p140-sources.txt
+          "new_verified_source=f0f397c265db4db145571b89d86676361d8514ae" | Add-Content qa/p140-sources.txt
+          "p140_audit_commit=$env:GITHUB_SHA" | Add-Content qa/p140-sources.txt
+      - name: Build current real 86Box VST3 plus passive diagnostic DLL
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch v3.8.1_build_84 --recurse-submodules https://github.com/steinbergmedia/vst3sdk.git external/vst3sdk
+          if($LASTEXITCODE -ne 0){throw 'SDK clone failed'}
+          $sha=(git -C external/vst3sdk rev-parse HEAD).Trim()
+          if($sha -ne '3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96'){throw "Unpinned SDK $sha"}
+          cmake -S . -B build-p140 -G "Visual Studio 17 2022" -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_EDITORHOST_TEST=ON -D125A_P139_AUDIT=ON 2>&1 | Tee-Object qa/configure.txt
+          if($LASTEXITCODE -ne 0){throw 'Configure failed'}
+          cmake --build build-p140 --config Release --parallel 2 2>&1 | Tee-Object qa/build.txt
+          if($LASTEXITCODE -ne 0){throw 'Windows VST3 build failed'}
+      - name: Check complete CTests and real Steinberg VST3 module validator
+        shell: pwsh
+        run: |
+          ctest --test-dir build-p140 -C Release --output-on-failure --timeout 180 2>&1 | Tee-Object qa/ctest.txt
+          if($LASTEXITCODE -ne 0){throw 'Native regression failed'}
+          if((Get-Content qa/ctest.txt -Raw) -notmatch '100% tests passed, 0 tests failed out of 46'){throw 'Incomplete 46-test CTest proof'}
+          $validator=Get-ChildItem build-p140 -Filter validator.exe -File -Recurse | Where-Object {$_.FullName -match 'Release'} | Select-Object -First 1 -ExpandProperty FullName
+          $plugin=(Resolve-Path 'build-p140/VST3/Release/125A_AWE_Synthesizer.vst3').Path
+          if(-not $validator){throw 'Validator missing'}
+          & $validator -e $plugin 2>&1 | Tee-Object qa/module-validator.txt
+          if($LASTEXITCODE -ne 0 -or (Get-Content qa/module-validator.txt -Raw) -notmatch 'Result: 537 tests passed, 0 tests failed'){
+            throw 'VST3 validation 537/537 not proven'
+          }
+      - name: ABBA old P134 versus optimized P137 real VST3 dense RT
+        shell: pwsh
+        timeout-minutes: 15
+        run: |
+          ./tests/p139/run_p140_pairs.ps1 -Build build-p140 -Baseline evidence/p135-old-diagnostic
+          if($LASTEXITCODE -ne 0){throw 'P140 paired VST3 workload failed'}
+          Get-Content qa/p140-paired/P140-FINAL.txt | Write-Host
+          $v=Get-Content qa/p140-paired/p140-paired-128x30-v11.json -Raw | ConvertFrom-Json
+          if($v.before.all_callbacks -ne 20400 -or $v.after.all_callbacks -ne 20400 -or
+             $v.ASIO -ne 'NOT RUN' -or $v.release_go -ne $false){
+            throw 'P140 failed closed: population or ASIO/release statement'
+          }
+          "## P140 same runner P134 vs P137" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "P134 real callbacks: $($v.before.all_callbacks), deadline misses: $($v.before.all_deadline_misses)" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "P137 real callbacks: $($v.after.all_callbacks), deadline misses: $($v.after.all_deadline_misses)" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "Lab: $($v.real_time_verdict). ASIO NOT RUN; Release NO-GO." | Add-Content $env:GITHUB_STEP_SUMMARY
+      - name: Preserve raw ABBA measurements including all missed deadlines
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: P140-P134-P137-ABBA-Same-Runner-128x30-Dense-RT
+          path: qa/
+          if-no-files-found: error
+          retention-days: 14
