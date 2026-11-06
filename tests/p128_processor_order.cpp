@@ -126,6 +126,89 @@ void midblockProgramRace() {
           "midblock: accepted program point persisted even when RT writer refused");
     check(denied==normal,
           "midblock: NoteOn after refused program point must use newly accepted program PCM");
+
+    // Same contract for a per-channel VST3 ProgramChange parameter. An
+    // override is not equivalent to setting the global program: check both
+    // PCM and the V10 channel mask/preset.
+    const auto channelCapture=[](Rig& r,bool denied) {
+        std::vector<float> pcm;
+        const auto first=[&] {
+            Block b;
+            b.param(MidiProgramRouting::ParamID(3),9./127.,32);
+            b.note(3,60,64);
+            const auto out=b.run(*r.p);
+            pcm.insert(pcm.end(),out.begin(),out.end());
+        };
+        if(denied) {
+            RealtimeStateVersion::Writer control(
+                r.p->rtStateVersion_,RealtimeStateVersion::Domain::Control);
+            require(static_cast<bool>(control),"midblock: channel control gate");
+            first();
+        } else first();
+        for(int i=1;i<8;++i) {
+            Block next;
+            const auto out=next.run(*r.p);
+            pcm.insert(pcm.end(),out.begin(),out.end());
+        }
+        return pcm;
+    };
+    Rig channelGood;
+    const auto chNormal=channelCapture(channelGood,false);
+    Rig channelCollided;
+    const auto chDenied=channelCapture(channelCollided,true);
+    const auto channelState=save(*channelCollided.p);
+    check(audible(chNormal)&&channelState.program==0&&
+          channelState.channelProgramMask==(1u<<3)&&
+          channelState.channelPrograms[3]==9,
+          "midblock: channel 4 accepted program 9 with exact override mask");
+    check(chNormal==chDenied,
+          "midblock: channel 4 NoteOn PCM identical despite denied writer");
+    std::cout<<"MIDBLOCK_CHANNEL_AUDIT saved_mask="
+             <<channelState.channelProgramMask
+             <<" saved_ch4="<<channelState.channelPrograms[3]
+             <<" pcm_equal="<<(chNormal==chDenied)<<std::endl;
+
+    // Distinct program points and NoteOns in the same block: a later
+    // channel override must not accidentally change the global program
+    // or a different MIDI channel while retrying denied writer updates.
+    const auto mixedCapture=[](Rig& r,bool denied) {
+        std::vector<float> pcm;
+        const auto first=[&] {
+            Block b;
+            b.param(kProgramID,7./127.,16);
+            b.param(MidiProgramRouting::ParamID(3),9./127.,32);
+            b.note(2,60,48);
+            b.note(3,60,64);
+            const auto out=b.run(*r.p);
+            pcm.insert(pcm.end(),out.begin(),out.end());
+        };
+        if(denied) {
+            RealtimeStateVersion::Writer control(
+                r.p->rtStateVersion_,RealtimeStateVersion::Domain::Control);
+            require(static_cast<bool>(control),"midblock: mixed writer gate");
+            first();
+        } else first();
+        for(int i=1;i<8;++i) {
+            Block next;
+            const auto out=next.run(*r.p);
+            pcm.insert(pcm.end(),out.begin(),out.end());
+        }
+        return pcm;
+    };
+    Rig mixedGood;
+    const auto mixedNormal=mixedCapture(mixedGood,false);
+    Rig mixedCollided;
+    const auto mixedDenied=mixedCapture(mixedCollided,true);
+    const auto mixedState=save(*mixedCollided.p);
+    check(audible(mixedNormal)&&mixedState.program==7&&
+          mixedState.channelProgramMask==(1u<<3)&&
+          mixedState.channelPrograms[3]==9,
+          "midblock: global 7 + channel 4 override 9 saved coherently");
+    check(mixedNormal==mixedDenied,
+          "midblock: mixed global/channel NoteOns retain exact PCM during denied writer");
+    std::cout<<"MIDBLOCK_MIXED_AUDIT global="<<mixedState.program
+             <<" mask="<<mixedState.channelProgramMask
+             <<" pcm_equal="<<(mixedNormal==mixedDenied)<<std::endl;
 }
 
 int main(int argc,char** argv) {
