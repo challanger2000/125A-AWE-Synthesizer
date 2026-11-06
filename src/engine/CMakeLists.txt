@@ -122,3 +122,14 @@ add_executable(awe32_p128_note_handoff_test "${PROJECT_SOURCE_DIR}/tests/p128_no
 target_include_directories(awe32_p128_note_handoff_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${UPSTREAM_SRC}")
 target_link_libraries(awe32_p128_note_handoff_test PRIVATE awe32_chip_safety)
 add_test(NAME 125A_p128_note_handoff COMMAND awe32_p128_note_handoff_test)
+
+# P132 AUDIT BRANCH ONLY. Use the actual currently linked 86Box chorus C
+# implementation. The paired candidate build changes only the feedback
+# arithmetic in an ephemeral CI workspace; never publish modified PCM here.
+add_executable(awe32_p132_chorus_probe
+  "${PROJECT_SOURCE_DIR}/tests/p132_chorus_multi_preset.cpp")
+target_include_directories(awe32_p132_chorus_probe PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/include"
+  "${UPSTREAM_SRC}/86box/include")
+target_link_libraries(awe32_p132_chorus_probe PRIVATE awe32_chip_safety)
+set_target_properties(awe32_p132_chorus_probe PROPERTIES CXX_STANDARD 23)
