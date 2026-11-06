@@ -1,6 +1,16 @@
 # START HERE — 125A AWE Synthesizer
 
-**Stand: 2026-11-05. Entwicklungs-/Prüfstand, keine GUI- oder Releasefreigabe.**
+**Stand: 2026-11-06. Entwicklungs-/Prüfstand, keine GUI- oder Releasefreigabe.**
+
+## AKTUELL – P128 unabhängig behobene Konkurrenzfehler, P129 Effekt-Audit (6. November 2026)
+
+- **Produktions-/Entwicklungsbranch** ist ausschließlich `fix/p122-bank-dirty-audit`, weiterhin **kein Release**. Über [PR #65](https://github.com/challanger2000/125A-AWE-Synthesizer/pull/65), Merge-Commit `ac2cab282b2c1ed89dc9aee82feb4364c6e810c1`, wurden zwei **zuvor unabhängig reproduzierte** Fehler mitsamt Dauer-Regressionen integriert:
+  1. **Master-/GUI-Automation unter RT-Writer-Gate** geht nicht mehr verloren, auch bei verzögertem Projekt-Recall; Test `125A_p128_persistent_controls`.
+  2. **ProgramChange vor NoteOn im selben Audioblock** verwendet auch bei Writer-Gate-Kollision den bereits akzeptierten Sound; globale und kanalbezogene Programme mit PCM-Identität und V10-Override-Masken; Test `125A_p128_sample_accurate_program_pcm`.
+- **[Produktions-Regression nach Merge #42170408839: SUCCESS](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42170408839): 40/40 CTests, 47/47 Steinberg VST3-Validator, 3/3 Windows-EditorHost-GUI-Smokes.** Die Ergebnisse sind echte Windows-Prüfungen, kein unabhängiger Gesamt- oder DAW-Releaseaudit. Siehe [Issue #64](https://github.com/challanger2000/125A-AWE-Synthesizer/issues/64).
+- **P129 Chorus:** die endlose negative Integer-Feedback-Restschleife in `emu8k_work_chorus()` wurde mit direkten Windows-Chiptests reproduziert. Ein mathematisch symmetrischer Quantisierungsfix ist vorbereitet: Original vs Kandidat in acht identischen PCM-Stimuli verglichen, Änderungen bei Feedback-Presets maximal 1–7 Roh-Integer-LSB, zwei Presets ohne Feedback bitidentisch. **[Draft PR #67](https://github.com/challanger2000/125A-AWE-Synthesizer/pull/67)** enthält den neuen dauerhaften DSP-Regressionstest, bleibt **unmerged**, da die genaue Hardware-DSP-Rundung noch nicht unabhängig belegt ist. Siehe [Issue #66](https://github.com/challanger2000/125A-AWE-Synthesizer/issues/66).
+- **Echtzeit:** selbstständige Windows-Quellkern-Tests ([2.000 PCM-Renderblöcke](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42166510626), [1.500 `process()`-Callbacks mit Save/Recall](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42167569125)) zeigen dort keine Deadlineüberschreitungen. **Der frühere Linux-VM-Fail mit 30 Stimmen und der echte Zielrechner-ASIO-/Studio-One-Test bleiben ungeklärt.**
+- **Verbindliche Gates:** Hardware-nahe Chorusklangvalidierung, ASIO/DAW-Abnahme und umfassender unabhängiger Releaseaudit sind **OFFEN**. **GUI: NO-GO; RELEASE: NO-GO; Gumroad-Paket: NICHT ERSTELLEN.** Nicht einzelne erfolgreiche CTests als Freigabe umdeuten.
 
 ## P128 – lokale Nachprüfung und Korrekturen (6. November 2026)
 
