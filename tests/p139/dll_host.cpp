@@ -55,6 +55,10 @@ struct Plugin {
         MemoryStream stream;encode(stream,s);must(component->setState(&stream)==kResultOk,"initial state");
         must(component->setActive(true)==kResultOk&&audio->setProcessing(true)==kResultOk,"activate");
         census=reinterpret_cast<P139ReadVoices>(GetProcAddress(module,"p139ReadVoices"));
+        // P140: load previously recorded P135 diagnostic P134-V11 module
+        // for the OLD arm; its census ABI is unchanged, only the export
+        // symbol differs. Never require a new P135 binary build.
+        if(!census)census=reinterpret_cast<P139ReadVoices>(GetProcAddress(module,"p135ReadVoices"));
         heapControl=reinterpret_cast<P139HeapControl>(GetProcAddress(module,"p139HeapControl"));
     }
     ~Plugin(){if(audio)audio->setProcessing(false);if(component){component->setActive(false);component->terminate();}if(audio)audio->release();if(component)component->release();if(factory)factory->release();if(module)FreeLibrary(module);}
@@ -193,7 +197,8 @@ static void matrix(const fs::path& diagnostic,const fs::path& assets,const fs::p
     for(int frames:{128,256,512,1024})for(int n:{1,16,30})for(int mode=0;mode<6;++mode)configurations.push_back({frames,n,mode});
     if(std::getenv("P139_REVERSE"))std::reverse(configurations.begin(),configurations.end());
     for(auto configuration:configurations){int frames=configuration[0],n=configuration[1],mode=configuration[2];
-        if(std::getenv("P139_TARGET_ONLY")&&(frames!=128||n!=30||mode>2))continue;
+        if(std::getenv("P139_TARGET_ONLY") &&
+            (frames!=128||n!=30||(mode!=0&&mode!=1&&mode!=2&&mode!=4&&mode!=5)))continue;
         if(memory&&mode!=0&&mode!=4)continue;
         Plugin p(diagnostic,model(assets));must(p.census,"diagnostic census export");
         Row base;base.caseId=++caseId;base.pass=pass;base.frames=frames;base.voices=n;base.mode=mode;
