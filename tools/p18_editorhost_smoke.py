@@ -433,7 +433,9 @@ def main():
                   "Ctrl-click restores exact 0 percent original SoundFont overlay",results)
             drag(hwnd,112,345,112,319)
             moved_again=snap(hwnd,args.output/"04_knob_dragged_again.bmp")
-            click(hwnd,709,618)
+            # P133: RESET moved below the two FX menus to keep all 16
+            # original Creative preset choices clickable without overlap.
+            click(hwnd,709,711)
             reset=snap(hwnd,args.output/"05_reset_original.bmp")
             check(different(moved_again,reset,(72,310,175,413))>15,
                   "reset restores 0-percent original SoundFont value",results)

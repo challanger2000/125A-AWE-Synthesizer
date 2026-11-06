@@ -68,6 +68,12 @@ public:
     // docs/re-notes/emu8000_register_map.md.
     void PowerOnInit();
 
+    // Select one of the eight original Creative EMU8000 effects by actual
+    // INIT/HWCF register writes on the active 86Box chip (not the unused
+    // legacy floating-point effect classes). No allocation or lock.
+    void ApplyHardwareReverbPreset(unsigned index) noexcept;
+    void ApplyHardwareChorusPreset(unsigned index) noexcept;
+
     // Which driver family is emulated. Changes eight values in the init
     // arrays INIT3/INIT4 - see Awe32Driver.h. Set before PowerOnInit().
     void SetDriver(Awe32::Driver d) { m_driver = d; }

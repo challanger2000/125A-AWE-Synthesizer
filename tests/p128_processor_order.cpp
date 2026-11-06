@@ -24,7 +24,7 @@ bool writeState(MemoryStream& out,const State& s){auto sink=[&](const void* d,si
 bool readState(MemoryStream& in,State& s){in.seek(0,IBStream::kIBSeekSet,nullptr);auto source=[&](void* d,size_t n){int32 r=0;return in.read(d,n,&r)==kResultOk&&r==int32(n);};return AssetState::Read(source,s);}
 State save(Processor& p){MemoryStream out;require(p.getState(&out)==kResultOk,"getState");State s;require(readState(out,s),"read V10");return s;}
 tresult recall(Processor& p,const State& s){MemoryStream stream;require(writeState(stream,s),"write V10");return p.setState(&stream);}
-bool same(const State& a,const State& b){return a.bank==b.bank&&a.program==b.program&&a.channelPrograms==b.channelPrograms&&a.channelProgramMask==b.channelProgramMask&&a.masterVolume==b.masterVolume&&a.controls==b.controls&&a.pathsSpecified==b.pathsSpecified&&a.romPath==b.romPath&&a.sf2Path==b.sf2Path&&a.engine==b.engine;}
+bool same(const State& a,const State& b){return a.bank==b.bank&&a.program==b.program&&a.channelPrograms==b.channelPrograms&&a.channelProgramMask==b.channelProgramMask&&a.masterVolume==b.masterVolume&&a.controls==b.controls&&a.reverbPreset==b.reverbPreset&&a.chorusPreset==b.chorusPreset&&a.pathsSpecified==b.pathsSpecified&&a.romPath==b.romPath&&a.sf2Path==b.sf2Path&&a.engine==b.engine;}
 struct Rig{
  std::unique_ptr<Processor> p=std::make_unique<Processor>();bool active=false;
  Rig(State s=state(),bool a=true,int rate=44100){require(p->initialize(nullptr)==kResultOk,"initialize");ProcessSetup setup{kRealtime,kSample32,1024,double(rate)};require(p->setupProcessing(setup)==kResultOk,"setup");require(recall(*p,s)==kResultOk,"initial recall");if(a){require(p->setActive(true)==kResultOk,"active");require(p->setProcessing(true)==kResultOk,"processing");active=true;}}
@@ -47,6 +47,8 @@ std::vector<float> referenceSound(const State& wanted,int channel) {
     syn.Core().SetDriver(Awe32::Driver::Win95);
     require(syn.Core().UseBox86Chip(wanted.romPath,error),"reference ROM");
     syn.Core().PowerOnInit();
+    syn.Core().ApplyHardwareReverbPreset(wanted.reverbPreset);
+    syn.Core().ApplyHardwareChorusPreset(wanted.chorusPreset);
     require(RomGmBank::LoadBanks(syn,wanted.romPath,wanted.sf2Path).sf2,"reference SF2");
     for(int k=0;k<kGuiCount;++k)syn.SetGuiControl(k,float(wanted.controls[k])/AssetState::kControlScale);
     syn.SelectBrowserBank(wanted.bank);
@@ -322,11 +324,79 @@ void midblockProgramRace() {
              <<" pcm_equal="<<(mixedNormal==mixedDenied)<<std::endl;
 }
 
+void fxPresetAutomationRecall() {
+    Rig rig;
+    // All 8x8 native Creative choices must survive the host parameter
+    // process path into state and exactly the same live 86Box registers.
+    for(unsigned rev=0;rev<8;++rev)for(unsigned cho=0;cho<8;++cho) {
+        Block update(0);
+        update.param(kReverbPresetID,double(rev)/7.);
+        update.param(kChorusPresetID,double(cho)/7.);
+        update.run(*rig.p);
+        const State saved=save(*rig.p);
+        const auto pin=rig.p->engines_.Read();
+        require(pin.get()&&pin.get()->synth,"no engine to verify FX");
+        const auto& core=pin.get()->synth->Core();
+        const auto& config=Emu8000Fx::kChorusPresets[cho];
+        bool registers=saved.reverbPreset==rev && saved.chorusPreset==cho &&
+            core.Read(Emu8000::Reg::INIT1,3)==Emu8000Fx::kReverbParm[rev][0] &&
+            core.Read(Emu8000::Reg::INIT3,9)==config.feedback &&
+            core.Read(Emu8000::Reg::INIT3,12)==config.delaySamples &&
+            core.Read(Emu8000::Reg::INIT4,3)==config.depth;
+        check(registers,"P133 VST3 FX both modes + live INIT registers rev="+
+                        std::to_string(rev)+" cho="+std::to_string(cho));
+    }
+    // A denied audio state writer must not drop successfully accepted
+    // automation. getState should immediately reconstruct both FX intents.
+    {
+        RealtimeStateVersion::Writer blocked(
+            rig.p->rtStateVersion_,RealtimeStateVersion::Domain::Control);
+        Block update(0);
+        update.param(kReverbPresetID,7./7.);
+        update.param(kChorusPresetID,5./7.);
+        update.run(*rig.p);
+    }
+    // The Control writer has to release before getState can take its own
+    // exclusive fallback writer; the audio edit must still be pending here.
+    const auto pending=save(*rig.p);
+    check(pending.reverbPreset==7&&pending.chorusPreset==5,
+          "P133 denied RT writer: save includes latest accepted FX edits");
+    { Block replay(0);replay.run(*rig.p); }
+    {
+        const auto pin=rig.p->engines_.Read();
+        require(pin.get()&&pin.get()->synth,"no FX engine after writer release");
+        const auto& core=pin.get()->synth->Core();
+        check(core.Read(Emu8000::Reg::INIT3,9)==Emu8000Fx::kChorusPresets[5].feedback &&
+              core.Read(Emu8000::Reg::INIT1,3)==Emu8000Fx::kReverbParm[7][0],
+              "P133 deferred effects replay targets real chip after control writer release");
+    }
+    // All saved FX presets restore when a new ROM/SF2 engine is published.
+    State desired=state();
+    desired.reverbPreset=6;desired.chorusPreset=5;
+    desired.controls[10]=10000;desired.controls[11]=10000;
+    Rig revived(desired);
+    check(same(save(*revived.p),desired),"P133 V11 complete state on fresh engine");
+    const auto actual=sound(*revived.p);
+    const auto expected=referenceSound(desired,0);
+    check(audible(actual)&&actual==expected,
+          "P133 restored FX exact PCM matches independently configured hardware Synth");
+    // A later, different session must restore both parameters and PCM.
+    desired.reverbPreset=3;desired.chorusPreset=0;
+    require(recall(*revived.p,desired)==kResultOk,"P133 effect recall");
+    check(same(save(*revived.p),desired),"P133 new recall overwrites previous FX modes");
+    // Note: the running Synth may retain tails from a previous sound().
+    // Reinitialize for an independent deterministic PCM comparison.
+    Rig fresh(desired);
+    check(audible(sound(*fresh.p))&&same(save(*fresh.p),desired),
+          "P133 post-recall new project opens and renders with saved FX choices");
+}
+
 int main(int argc,char** argv) {
     try {
         if(argc!=3)return 2;
         assetsDir=argv[2];
-        if(std::string(argv[1])=="midblock-program") midblockProgramRace();
+        if(std::string(argv[1])=="fx-presets") fxPresetAutomationRecall();
+        else if(std::string(argv[1])=="midblock-program") midblockProgramRace();
         else if(std::string(argv[1])=="persistent-controls") persistentControlWriterCollision();
         else if(std::string(argv[1])=="nullswap") {
             Rig r;bool fired=false;

@@ -35,9 +35,11 @@ int main() {
     d.controls[0]=7500;
     d.controls[8]=2500;
     d.masterVolume=4300; // 43%, preserved separately from SF2 overlays
-    // Keep the original 9-bytecode fixture coverage: V10 must still read
-    // every historic V1-V9 state without altering its old binary layout.
-    const auto v10=encode(d);
+    // Preserve the unchanged V10 and V9 binary layouts: V11 only appends
+    // two uint32 effect preset indices, never inserts them into old saves.
+    const auto v11=encode(d);
+    Bytes v10(v11.begin(),v11.end()-8u);
+    v10[4]=10;
     Bytes blob(v10.begin(),v10.end()-4u*17u);
     blob[4]=9;
     AssetState::Data out;
@@ -54,13 +56,20 @@ int main() {
     for(uint32_t channel=0;channel<16;++channel)
         multitimbral.channelPrograms[channel]=(channel*7u)%128u;
     auto v10Multi=encode(multitimbral);
+    // V11 is 8 bytes longer, so trim the FX suffix for the V10 fixture.
+    v10Multi.resize(v10Multi.size()-8u);
+    v10Multi[4]=10;
     AssetState::Data v10Restored;
     ok &= ck(decode(v10Multi,v10Restored)&&
+             v10Restored.reverbPreset==AssetState::kDefaultReverbPreset&&
+             v10Restored.chorusPreset==AssetState::kDefaultChorusPreset&&
              v10Restored.channelProgramMask==0xffffu&&
              v10Restored.channelPrograms==multitimbral.channelPrograms &&
              v10Restored.program==d.program,
              "P120 V10 saves and recalls 16 independent MIDI channel programs");
     ok &= ck(decode(blob,v10Restored)&&
+             v10Restored.reverbPreset==AssetState::kDefaultReverbPreset&&
+             v10Restored.chorusPreset==AssetState::kDefaultChorusPreset&&
              v10Restored.channelProgramMask==0u &&
              std::all_of(v10Restored.channelPrograms.begin(),
                          v10Restored.channelPrograms.end(),
@@ -75,6 +84,43 @@ int main() {
     }
     ok &= ck(allV10TruncationsRejected,
              "P120 every truncated V10 state rejected without partial commit");
+    // All eight native modes round-trip in V11, across actual and default
+    // Creative FX selections. Old V1-V10 saves must restore original defaults.
+    AssetState::Data fx=d;
+    fx.reverbPreset=7;fx.chorusPreset=5;
+    AssetState::Data fxRestored;
+    ok &= ck(decode(encode(fx),fxRestored)&&
+             fxRestored.reverbPreset==7&&fxRestored.chorusPreset==5,
+             "FX V11 round-trip: Panning Delay + Flanger");
+    for(uint32_t rev=0;rev<8;++rev)for(uint32_t cho=0;cho<8;++cho) {
+        fx.reverbPreset=rev;fx.chorusPreset=cho;
+        AssetState::Data decoded;
+        if(!decode(encode(fx),decoded)||decoded.reverbPreset!=rev||
+           decoded.chorusPreset!=cho)ok=false;
+    }
+    ok &= ck(ok,"FX V11: all 64 mode combinations round-trip");
+    fx.reverbPreset=AssetState::kDefaultReverbPreset;
+    fx.chorusPreset=AssetState::kDefaultChorusPreset;
+    const auto v11Fx=encode(fx);
+    for(size_t count=0;count<v11Fx.size();++count) {
+        Bytes truncated(v11Fx.begin(),v11Fx.begin()+count);
+        AssetState::Data stable;stable.program=42;stable.reverbPreset=1;
+        if(decode(truncated,stable)||stable.program!=42||stable.reverbPreset!=1)
+            ok=false;
+    }
+    ok &= ck(ok,"FX V11: incomplete saves rejected without partial recall");
+    auto badFx=v11Fx;
+    badFx[badFx.size()-8]=8;
+    AssetState::Data stable;stable.program=42;stable.reverbPreset=1;
+    ok &= ck(!decode(badFx,stable)&&stable.program==42&&stable.reverbPreset==1,
+             "FX V11: invalid Reverb 8 rejected atomically");
+    badFx=v11Fx;badFx[badFx.size()-4]=8;
+    ok &= ck(!decode(badFx,stable)&&stable.program==42&&stable.reverbPreset==1,
+             "FX V11: invalid Chorus 8 rejected atomically");
+    fx.reverbPreset=8;
+    ok &= ck(encode(fx).empty(),"FX V11: prevent invalid Reverb serialization");
+    fx.reverbPreset=4;fx.chorusPreset=8;
+    ok &= ck(encode(fx).empty(),"FX V11: prevent invalid Chorus serialization");
     v10Multi[v10Multi.size()-4]=128; // invalid channel-16 program
     AssetState::Data unchanged=multitimbral;unchanged.program=17;
     ok &= ck(!decode(v10Multi,unchanged)&&unchanged.program==17,

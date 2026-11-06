@@ -63,6 +63,8 @@ inline constexpr ParamID kGuiFirstID=1100;
 inline constexpr int kGuiCount=AssetState::kControlCount;
 inline constexpr ParamID kBankID=1002; // SF2 bank, fixed normalized range 0..16383
 inline constexpr ParamID kVolumeID=MasterOutput::kParamID; // post-chip stereo master volume
+inline constexpr ParamID kReverbPresetID=1200; // original Creative 0..7, automatable
+inline constexpr ParamID kChorusPresetID=1201; // original Creative 0..7, automatable
 // Persistence data contract is in AssetState.h.
 // Factory banks are packaged *inside* the Windows VST3 by CMake. The path
 // is resolved on activation, never from the realtime audio callback.
@@ -176,6 +178,8 @@ public:
                     prepared.reset();
                 } else {
                     prepared->Core().PowerOnInit();
+                    prepared->Core().ApplyHardwareReverbPreset(model.reverbPreset);
+                    prepared->Core().ApplyHardwareChorusPreset(model.chorusPreset);
                     const auto banks=RomGmBank::LoadBanks(
                         *prepared,model.romPath,model.sf2Path);
                     loadedGm=banks.gm;loadedSf2=banks.sf2;
@@ -284,6 +288,8 @@ public:
                     if(error.empty())error="ungueltige EMU8000-Wave-ROM";
                 } else {
                     prepared->Core().PowerOnInit();
+                    prepared->Core().ApplyHardwareReverbPreset(model.reverbPreset);
+                    prepared->Core().ApplyHardwareChorusPreset(model.chorusPreset);
                     for(int i=0;i<kGuiCount;++i)
                         prepared->SetGuiControl(
                             i,float(model.controls[i])/AssetState::kControlScale);
@@ -390,6 +396,8 @@ public:
                     error="Wave ROM: "+(error.empty()?std::string("86Box nicht gestartet"):error);
                 else {
                     replacement->Core().PowerOnInit();
+                    replacement->Core().ApplyHardwareReverbPreset(model.reverbPreset);
+                    replacement->Core().ApplyHardwareChorusPreset(model.chorusPreset);
                     for(int i=0;i<kGuiCount;++i)
                         replacement->SetGuiControl(
                             i,float(model.controls[i])/AssetState::kControlScale);
@@ -468,6 +476,8 @@ public:
             target.program=rtProgram_.load(std::memory_order_acquire);
             target.bank=rtBank_.load(std::memory_order_acquire);
             target.masterVolume=rtMaster_.load(std::memory_order_acquire);
+            target.reverbPreset=rtReverbPreset_.load(std::memory_order_acquire);
+            target.chorusPreset=rtChorusPreset_.load(std::memory_order_acquire);
             target.channelProgramMask=
                 rtChannelProgramMask_.load(std::memory_order_acquire);
             for(int ch=0;ch<16;++ch)
@@ -484,6 +494,12 @@ public:
                 std::memory_order_acquire);
             if((masterIntent>>14)>recalled)
                 target.masterVolume=static_cast<uint32_t>(masterIntent&0x3fffu);
+            const auto reverbIntent=audioFxIntents_[0].load(std::memory_order_acquire);
+            const auto chorusIntent=audioFxIntents_[1].load(std::memory_order_acquire);
+            if((reverbIntent>>4)>recalled)
+                target.reverbPreset=static_cast<uint32_t>(reverbIntent&0xFu);
+            if((chorusIntent>>4)>recalled)
+                target.chorusPreset=static_cast<uint32_t>(chorusIntent&0xFu);
             for(int i=0;i<kGuiCount;++i) {
                 const auto guiIntent=audioGuiIntents_[i].load(
                     std::memory_order_acquire);
@@ -515,7 +531,7 @@ public:
         // Therefore a stable RT version alone does not prove that the
         // reconstructed program/channel tuple came from one intent epoch.
         const auto captureProgramIntents=[&]() {
-            std::array<uint64_t,18+kGuiCount> values{};
+            std::array<uint64_t,20+kGuiCount> values{};
             values[0]=audioProgramSelection_.load(std::memory_order_acquire);
             for(int ch=0;ch<16;++ch)
                 values[ch+1]=audioChannelSelections_[ch].load(
@@ -523,6 +539,8 @@ public:
             values[17]=audioMasterIntent_.load(std::memory_order_acquire);
             for(int i=0;i<kGuiCount;++i)
                 values[18+i]=audioGuiIntents_[i].load(std::memory_order_acquire);
+            values[18+kGuiCount]=audioFxIntents_[0].load(std::memory_order_acquire);
+            values[19+kGuiCount]=audioFxIntents_[1].load(std::memory_order_acquire);
             return values;
         };
         for(int attempt=0;attempt<4096;++attempt) {
@@ -642,6 +660,8 @@ public:
                    prepared->Core().ChipVariant()!=Emu8000Core::Chip::Box86)
                     return kResultFalse; // old playing assets remain coherent
                 prepared->Core().PowerOnInit();
+                prepared->Core().ApplyHardwareReverbPreset(candidate.reverbPreset);
+                prepared->Core().ApplyHardwareChorusPreset(candidate.chorusPreset);
                 const auto banks=RomGmBank::LoadBanks(
                     *prepared,candidate.romPath,candidate.sf2Path);
                 loadedSf2=banks.sf2;
@@ -716,6 +736,17 @@ public:
                 std::memory_order_acquire);
             if((liveMaster>>14)>recallSequence)
                 candidate.masterVolume=static_cast<uint32_t>(liveMaster&0x3fffu);
+            for(int fx=0;fx<2;++fx) {
+                const auto intent=audioFxIntents_[fx].load(std::memory_order_acquire);
+                if((intent>>4)>recallSequence) {
+                    if(fx==0)candidate.reverbPreset=static_cast<uint32_t>(intent&0xFu);
+                    else candidate.chorusPreset=static_cast<uint32_t>(intent&0xFu);
+                }
+            }
+            if(prepared) {
+                prepared->Core().ApplyHardwareReverbPreset(candidate.reverbPreset);
+                prepared->Core().ApplyHardwareChorusPreset(candidate.chorusPreset);
+            }
             for(int i=0;i<kGuiCount;++i) {
                 const auto gui=audioGuiIntents_[i].load(
                     std::memory_order_acquire);
@@ -732,6 +763,8 @@ public:
             rtProgram_.store(candidate.program,std::memory_order_release);
             rtBank_.store(candidate.bank,std::memory_order_release);
             rtMaster_.store(candidate.masterVolume,std::memory_order_release);
+            rtReverbPreset_.store(candidate.reverbPreset,std::memory_order_release);
+            rtChorusPreset_.store(candidate.chorusPreset,std::memory_order_release);
             rtChannelProgramMask_.store(
                 candidate.channelProgramMask,std::memory_order_release);
             for(int ch=0;ch<16;++ch)
@@ -799,6 +832,7 @@ public:
         ApplyPendingGlobalBank(synth_);
         ApplyPendingProgramIntents(synth_);
         ApplyPendingContinuousControls(synth_);
+        ApplyPendingFxIntents(synth_);
         const auto refreshEngineAtEvent=[&]() noexcept {
             const uint64_t published=engines_.PublishedVersion();
             if(published==seenEngineVersion)return;
@@ -824,6 +858,7 @@ public:
             ApplyPendingGlobalBank(synth_);
             ApplyPendingProgramIntents(synth_);
             ApplyPendingContinuousControls(synth_);
+            ApplyPendingFxIntents(synth_);
         };
         // P118: VST3 parameter points carry their own sampleOffset.
         // Keep one cursor per parameter queue and merge them with MIDI events.
@@ -929,6 +964,7 @@ public:
         activeQueues=retainedQueues;
         auto apply=[&](ParamID id,ParamValue val) {
             const bool persisted = id==kProgramID || id==kBankID ||
+                id==kReverbPresetID || id==kChorusPresetID ||
                 id==kVolumeID || (id>=kGuiFirstID&&id<kGuiFirstID+kGuiCount) ||
                 MidiProgramRouting::Channel(id)>=0;
             // Publish persistent program intent BEFORE attempting the RT gate.
@@ -959,6 +995,15 @@ public:
                     val*AssetState::kControlScale));
                 audioGuiIntents_[idx].store(
                     (bankOrder_.Next()<<14)|value,std::memory_order_release);
+            }
+            // Effect preset edits are discrete and independently stamped.
+            // A concurrent save or recall cannot lose the accepted intent.
+            if(id==kReverbPresetID || id==kChorusPresetID) {
+                const int fx=(id==kReverbPresetID)?0:1;
+                const uint32_t value=static_cast<uint32_t>(std::clamp(
+                    int(std::lround(val*7.)),0,7));
+                audioFxIntents_[fx].store((bankOrder_.Next()<<4)|value,
+                    std::memory_order_release);
             }
             // Bank controls are accepted before trying the realtime state
             // gate, so a concurrent recall cannot silently drop the edit.
@@ -994,6 +1039,8 @@ public:
                 ApplyProgramIntentsUnderWriter(synth_);
             } else if(id==kBankID) {
                 ApplyGlobalBankUnderWriter(synth_,bankOrder_.Latest());
+            } else if(id==kReverbPresetID || id==kChorusPresetID) {
+                ApplyFxIntentsUnderWriter(synth_);
             } else if(id==kVolumeID ||
                       (id>=kGuiFirstID&&id<kGuiFirstID+kGuiCount)) {
                 // Reload current accepted stamp inside writer ownership so
@@ -1232,6 +1279,8 @@ private:
     // touch a mutable synth or wait for a reader to release a mutex.
     std::atomic<uint32_t> rtProgram_{0},rtBank_{0};
     std::atomic<uint32_t> rtMaster_{MasterOutput::kDefault};
+    std::atomic<uint32_t> rtReverbPreset_{AssetState::kDefaultReverbPreset};
+    std::atomic<uint32_t> rtChorusPreset_{AssetState::kDefaultChorusPreset};
     std::array<std::atomic<uint32_t>,16> rtChannelPrograms_{};
     std::atomic<uint32_t> rtChannelProgramMask_{0};
     BankOrder bankOrder_{};
@@ -1244,6 +1293,8 @@ private:
     // high 50 bits and a 0..10000 control value into low 14 bits.
     std::atomic<uint64_t> audioMasterIntent_{0};
     std::array<std::atomic<uint64_t>,kGuiCount> audioGuiIntents_{};
+    std::array<std::atomic<uint64_t>,2> audioFxIntents_{};
+    std::array<uint64_t,2> lastAppliedFxSequences_{}; // audio thread only
     uint64_t lastAppliedMasterSequence_=0; // audio thread only
     std::array<uint64_t,kGuiCount> lastAppliedGuiSequences_{}; // audio only
     uint64_t lastAppliedGlobalProgramSequence_=0; // audio thread only
@@ -1292,6 +1343,7 @@ private:
         lastAppliedChannelProgramSequence_.fill(recalled.sequence);
         lastAppliedMasterSequence_=recalled.sequence;
         lastAppliedGuiSequences_.fill(recalled.sequence);
+        lastAppliedFxSequences_.fill(recalled.sequence);
     }
     void ApplyGlobalBankUnderWriter(Synth* target,
                                     BankOrder::Choice bank) noexcept {
@@ -1399,6 +1451,41 @@ private:
             lastAppliedGuiSequences_[i]=intent>>14;
         }
     }
+    // The actual hardware FX writes are emitted only when a new discrete
+    // accepted value is committed. A rejected RT gate leaves its stamped
+    // intent pending for next block; no audio mutex or heap allocation.
+    void ApplyPendingFxIntents(Synth* target) noexcept {
+        const uint64_t recall=bankOrder_.LatestRecall().sequence;
+        bool pending=false;
+        for(int fx=0;fx<2;++fx) {
+            const uint64_t intent=audioFxIntents_[fx].load(std::memory_order_acquire);
+            pending|=(intent>>4)>std::max(recall,lastAppliedFxSequences_[fx]);
+        }
+        if(!pending)return;
+        RealtimeStateVersion::Writer writer(
+            rtStateVersion_,RealtimeStateVersion::Domain::Audio);
+        if(!writer)return;
+        ApplyFxIntentsUnderWriter(target);
+    }
+    void ApplyFxIntentsUnderWriter(Synth* target) noexcept {
+        SyncCommittedRecall();
+        const uint64_t recall=bankOrder_.LatestRecall().sequence;
+        for(int fx=0;fx<2;++fx) {
+            const uint64_t intent=audioFxIntents_[fx].load(std::memory_order_acquire);
+            const uint64_t sequence=intent>>4;
+            if(sequence<=std::max(recall,lastAppliedFxSequences_[fx]))continue;
+            const uint32_t preset=static_cast<uint32_t>(intent&0xFu);
+            if(preset>AssetState::kFxMaxPreset)continue;
+            if(fx==0) {
+                rtReverbPreset_.store(preset,std::memory_order_release);
+                if(target)target->Core().ApplyHardwareReverbPreset(preset);
+            } else {
+                rtChorusPreset_.store(preset,std::memory_order_release);
+                if(target)target->Core().ApplyHardwareChorusPreset(preset);
+            }
+            lastAppliedFxSequences_[fx]=sequence;
+        }
+    }
     void ApplyAcceptedProgramAudioOnly(ParamID id,Synth* target) noexcept {
         // The Audio thread owns the synth instance; the Control writer only
         // serializes the V10 snapshot atomics. A denied snapshot writer must
@@ -1429,6 +1516,10 @@ private:
         }
     }
     void ApplyRtParameters(Synth& target) noexcept {
+        target.Core().ApplyHardwareReverbPreset(
+            rtReverbPreset_.load(std::memory_order_relaxed));
+        target.Core().ApplyHardwareChorusPreset(
+            rtChorusPreset_.load(std::memory_order_relaxed));
         for(int i=0;i<kGuiCount;++i)
             target.SetGuiControl(i,
                 float(rtControls_[i].load(std::memory_order_relaxed))/
@@ -1814,6 +1905,12 @@ public:
         parameters.addParameter(banks);
         parameters.addParameter(new RangeParameter(STR16("Master Volume"),
             kVolumeID,STR16("%"),0.,100.,100.,0));
+        parameters.addParameter(new RangeParameter(STR16("Reverb Type"),
+            kReverbPresetID,nullptr,0.,7.,
+            double(AssetState::kDefaultReverbPreset),7));
+        parameters.addParameter(new RangeParameter(STR16("Chorus Type"),
+            kChorusPresetID,nullptr,0.,7.,
+            double(AssetState::kDefaultChorusPreset),7));
         // Stable automatable host parameters for 16 MIDI channels. VST3
         // kIsHidden would imply read-only and break IMidiMapping. Distinct IDs
         // prevent MIDI sustain or pitch bend on one channel changing another.
@@ -1888,6 +1985,11 @@ public:
             return kResultFalse;
         if(setParamNormalized(kVolumeID,
             static_cast<double>(model.masterVolume)/MasterOutput::kScale)!=kResultOk)
+            return kResultFalse;
+        if(setParamNormalized(kReverbPresetID,
+            static_cast<double>(model.reverbPreset)/7.)!=kResultOk ||
+           setParamNormalized(kChorusPresetID,
+            static_cast<double>(model.chorusPreset)/7.)!=kResultOk)
             return kResultFalse;
         for(unsigned ch=0;ch<16;++ch) {
             const auto program=(model.channelProgramMask&(1u<<ch))

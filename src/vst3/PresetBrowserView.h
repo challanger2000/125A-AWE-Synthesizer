@@ -49,7 +49,8 @@ protected:
 private:
     static constexpr int kPrevious=3101,kNext=3102,kToggle=3103,
                          kFilter=3104,kBankFilter=3105,kLoadSf2=3106,kReset=3107,
-                         kLoadRom=3108,kActiveBank=3109,kDirectPreset=3110;
+                         kLoadRom=3108,kActiveBank=3109,kDirectPreset=3110,
+                         kReverbType=1200,kChorusType=1201;
     static constexpr int kGuiFirst=1100,kGuiCount=12;
     static constexpr int kMasterVolume=static_cast<int>(MasterOutput::kParamID);
     Steinberg::Vst::EditController* controller_;
@@ -80,6 +81,8 @@ private:
     VSTGUI::COptionMenu* bankMenu_=nullptr;
     VSTGUI::COptionMenu* activeBankMenu_=nullptr;
     VSTGUI::COptionMenu* programMenu_=nullptr;
+    VSTGUI::COptionMenu* reverbMenu_=nullptr;
+    VSTGUI::COptionMenu* chorusMenu_=nullptr;
     VSTGUI::CTextEdit* search_=nullptr;
     VSTGUI::CTextButton *previous_=nullptr,*next_=nullptr,*toggle_=nullptr,
                          *loadSf2_=nullptr,*loadRom_=nullptr,*reset_=nullptr;
