@@ -67,6 +67,11 @@ if(125A_PROCESSOR_SDK_ROOT AND 125A_BUILD_ENGINE_PROBES)
   add_test(NAME 125A_p133_fx_processor_modes
     COMMAND awe32_p128_processor_order_test fx-presets "${p128_assets}")
   set_tests_properties(125A_p133_fx_processor_modes PROPERTIES TIMEOUT 120)
+  # P134: read actual audio from the ROM-backed VST3 process() after CC120.
+  # This test is intentionally red against pre-fix hardware-volume handling.
+  add_test(NAME 125A_p134_cc120_physical_stop
+    COMMAND awe32_p128_processor_order_test cc120-stop "${p128_assets}")
+  set_tests_properties(125A_p134_cc120_physical_stop PROPERTIES TIMEOUT 90)
 
   # P130 AUDIT-ONLY allocation instrumentation. The harness overrides
   # scalar/array C++ operator new on the PROCESSING THREAD, not malloc.
