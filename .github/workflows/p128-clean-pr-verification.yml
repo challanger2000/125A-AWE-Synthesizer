@@ -1,0 +1,63 @@
+name: P128 clean PR full Windows code validation
+on:
+  push:
+    branches: [audit/p128-merge-candidate-validation-20261106]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: p128-clean-pr-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: windows-2022
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify exact committed C++ fix and checkout pinned Steinberg SDK
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch v3.8.1_build_84 --recurse-submodules https://github.com/steinbergmedia/vst3sdk.git external/vst3sdk
+          $sdk = (git -C external/vst3sdk rev-parse HEAD).Trim()
+          if ($sdk -ne '3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96') { throw "Unexpected SDK: $sdk" }
+          New-Item -ItemType Directory -Force qa | Out-Null
+          "code_sha=$env:GITHUB_SHA" | Set-Content qa/PROVENANCE.txt
+          "sdk_sha=$sdk" | Add-Content qa/PROVENANCE.txt
+      - name: Configure full production VST3 and EditorHost
+        shell: pwsh
+        run: |
+          cmake -S . -B build-audit -G "Visual Studio 17 2022" -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_EDITORHOST_TEST=ON
+          if ($LASTEXITCODE -ne 0) { throw 'Full merge candidate configure failed' }
+      - name: Compile complete Windows code, real VST3 and Validator
+        shell: pwsh
+        run: |
+          cmake --build build-audit --config Release --parallel 2
+          if ($LASTEXITCODE -ne 0) { throw 'Full merge candidate build/Validator failed' }
+      - name: Execute all registered CTests, including source contract and new control race
+        shell: pwsh
+        timeout-minutes: 12
+        run: |
+          ctest --test-dir build-audit -C Release --output-on-failure --timeout 120 2>&1 |
+            Tee-Object -FilePath qa/CTEST.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Full CTests failed; no exclusion or waiver' }
+      - name: Run actual EditorHost Win32 GUI smoke three times
+        shell: pwsh
+        timeout-minutes: 4
+        run: |
+          $editor = Get-ChildItem build-audit -Filter editorhost.exe -Recurse |
+            Where-Object { $_.FullName -match 'Release' } |
+            Select-Object -First 1 -ExpandProperty FullName
+          $plugin = (Resolve-Path 'build-audit/VST3/Release/125A_AWE_Synthesizer.vst3').Path
+          if (-not $editor) { throw 'EditorHost missing' }
+          for ($attempt=1; $attempt -le 3; $attempt++) {
+            python tools/p18_editorhost_smoke.py --editorhost "$editor" --plugin "$plugin" --output "qa/gui-$attempt"
+            if ($LASTEXITCODE -ne 0) { throw "GUI smoke failed: $attempt" }
+          }
+      - name: Upload evidence even if regression fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 125A-P128-Clean-PR-Full-Windows-Evidence
+          path: qa/
+          if-no-files-found: warn
+          retention-days: 14
