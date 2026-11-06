@@ -12,7 +12,7 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 20
     env:
-      GH_TOKEN: \${{ github.token }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
       - name: Pin exact source and both original Windows-runner results
