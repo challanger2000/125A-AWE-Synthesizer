@@ -60,6 +60,25 @@ if(125A_PROCESSOR_SDK_ROOT AND 125A_BUILD_ENGINE_PROBES)
   set_tests_properties(125A_p128_processor_order 125A_p128_processor_remove_engine
     125A_p128_persistent_controls 125A_p128_sample_accurate_program_pcm
     PROPERTIES TIMEOUT 90)
+
+  # AUDIT ONLY: 250 paced audible callbacks per 128/256/1024-frame scenario.
+  # No automated release GO on GitHub shared runner timing.
+  add_executable(awe32_p129_smallbuffer_ab
+    "${PROJECT_SOURCE_DIR}/tests/p129_smallbuffer_ab.cpp"
+    "${p128_generated}/ProcessorUnderTest.h"
+    "${125A_PROCESSOR_SDK_ROOT}/public.sdk/source/common/memorystream.cpp"
+    "${125A_PROCESSOR_SDK_ROOT}/public.sdk/source/vst/hosting/parameterchanges.cpp"
+    "${125A_PROCESSOR_SDK_ROOT}/public.sdk/source/vst/hosting/eventlist.cpp")
+  target_include_directories(awe32_p129_smallbuffer_ab PRIVATE
+    "${p128_generated}" "${125A_PROCESSOR_SDK_ROOT}" "${PROJECT_SOURCE_DIR}/src/vst3"
+    "${PROJECT_SOURCE_DIR}/src/engine" "${PROJECT_SOURCE_DIR}/src/opl3"
+    "${PROJECT_SOURCE_DIR}/upstream/AWE32Emu/AWE32Emu/src")
+  target_link_libraries(awe32_p129_smallbuffer_ab PRIVATE sdk awe32_chip_safety)
+  if(WIN32)
+    target_link_libraries(awe32_p129_smallbuffer_ab PRIVATE winmm)
+  endif()
+  target_compile_features(awe32_p129_smallbuffer_ab PRIVATE cxx_std_23)
+  add_dependencies(awe32_p129_smallbuffer_ab p128_assets)
 endif()
 
 if(125A_PROCESSOR_SDK_ROOT AND 125A_BUILD_ENGINE_PROBES)
