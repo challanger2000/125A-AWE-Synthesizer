@@ -1351,7 +1351,7 @@ void Emu8000Core::UpdateRegistersFromState(int v)
     // 86Box computes the same values itself.
     const TraceOff noTrace(*this);
 
-    const VoiceState& vs = m_voices[v];
+    VoiceState& vs = m_voices[v];
     const uint32_t ccca = Read(Reg::CCCA, v);
     Write(Reg::CCCA, v, (ccca & ~kCccaAddressMask) | (vs.address & kCccaAddressMask));
 
@@ -1366,11 +1366,19 @@ void Emu8000Core::UpdateRegistersFromState(int v)
     // CPF: the upper half is a LINEAR increment (0x4000 = 1.0), the lower is
     // the fractional part of the address [PG]. IP, by contrast, is
     // logarithmic.
-    const double increment = std::pow(2.0,
-        (static_cast<double>(RegVal(Port::Data3, 0, v)) - kPitchUnity) / kPitchPerOctave);
-    const uint16_t cpfHi = static_cast<uint16_t>(
-        std::clamp(increment * kCpfUnity, 0.0, 65535.0));
-    RegRef(Port::Data0Hi, 0, v) = cpfHi;
+    const uint32_t ip = RegVal(Port::Data3, 0, v);
+    if (vs.mirrorLastIp != ip)
+    {
+        // The original math is preserved bit-for-bit. It only depends on
+        // IP, not on output position or effects, so reuse the result until
+        // a true driver/automation IP write changes the register.
+        const double increment = std::pow(2.0,
+            (static_cast<double>(ip) - kPitchUnity) / kPitchPerOctave);
+        vs.mirrorCpfHi = static_cast<uint16_t>(
+            std::clamp(increment * kCpfUnity, 0.0, 65535.0));
+        vs.mirrorLastIp = ip;
+    }
+    RegRef(Port::Data0Hi, 0, v) = vs.mirrorCpfHi;
     RegRef(Port::Data0,   0, v) = static_cast<uint16_t>(vs.frac);
 }
 
@@ -1395,6 +1403,16 @@ void Emu8000Core::RenderNative(float* outL, float* outR, uint32_t numFrames)
             UpdateRegistersFromState(v);
         }
 
+        // P129 bit-exact native-chip CPU optimization:
+        // In the ROM-required Box86 mode, the real 86Box EMU8000 hardware
+        // renderer performs its own chorus, reverb and EQ. The legacy
+        // floating-point FX pass below is discarded unconditionally by
+        // RenderBlock() after m_box.RenderFrame(). The legacy voice+register
+        // bookkeeping above is intentionally still advanced.
+        // Skipping only this discarded FX computation must be bit-identical
+        // for exported Box86 PCM; verify against the original build in CI.
+        if (m_chip != Chip::Box86)
+        {
         // The send and DSP-return ordering is preserved from upstream:
         // chorus adds to the stereo bus and the mono reverb send.
         UpdateEffectPresets();
@@ -1419,6 +1437,7 @@ void Emu8000Core::RenderNative(float* outL, float* outR, uint32_t numFrames)
             UpdateEqualizer();
             for (uint32_t i = 0; i < n; ++i)
                 m_eq.Process(left[i], right[i]);
+        }
         }
         m_waveCounter += n;
         m_traceFrames += n;
