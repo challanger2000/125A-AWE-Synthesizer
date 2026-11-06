@@ -1,0 +1,93 @@
+name: P132 EMU8000 Chorus signed feedback - 8 mode A/B measurement
+on:
+  push:
+    branches: [audit/p132-chorus-feedback-evidence-20261106]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  chorus-original-vs-candidate:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Establish immutable audit provenance and Windows environment
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          New-Item -ItemType Directory -Force qa | Out-Null
+          "original_git_sha=$env:GITHUB_SHA" | Set-Content qa/provenance.txt
+          "runner=windows-2022" | Add-Content qa/provenance.txt
+          "test_assets=synthetic_pcm_only_no_rom_no_sf2" | Add-Content qa/provenance.txt
+          "historical_CT4390_reference=Chorus1_feedback0_only" | Add-Content qa/provenance.txt
+          "hardware_parity_proven=false" | Add-Content qa/provenance.txt
+      - name: Build ORIGINAL actual EMU8000 chorus kernel on Windows
+        shell: pwsh
+        run: |
+          cmake -S . -B build-p132 -G "Visual Studio 17 2022" -A x64 -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_OPL3_PROBES=OFF -D125A_BUILD_VST3=OFF
+          if ($LASTEXITCODE -ne 0) { throw 'Original configure failed' }
+          cmake --build build-p132 --config Release --target awe32_p132_chorus_probe --parallel 2
+          if ($LASTEXITCODE -ne 0) { throw 'Original real-chip build failed' }
+      - name: Run actual ORIGINAL 8-mode zero tails and synthetic PCM impulse responses
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $exe=(Resolve-Path 'build-p132/src/engine/Release/awe32_p132_chorus_probe.exe').Path
+          $audio=Join-Path $env:RUNNER_TEMP 'p132-real-chip-pcm'
+          New-Item -ItemType Directory -Force $audio | Out-Null
+          & $exe $audio original 2>&1 | Tee-Object qa/original-chorus.log
+          if ($LASTEXITCODE -ne 0) { throw 'Original expected model output failed' }
+          "audio_directory=$audio" | Add-Content qa/provenance.txt
+          Copy-Item (Join-Path $audio 'original-tail.csv') qa/original-tail.csv
+      - name: Apply ONLY P129 candidate feedback arithmetic to disposable CI source
+        shell: pwsh
+        run: |
+          python tools/p132_apply_audit_candidate.py --source src/engine/snd_emu8k.c 2>&1 | Tee-Object qa/one-line-candidate-provenance.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Candidate source patch rejected' }
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { throw 'Diff whitespace issue' }
+          git diff -- src/engine/snd_emu8k.c | Out-File qa/candidate-exact-diff.patch -Encoding utf8
+          $changed=@(git diff --name-only | Where-Object { $_ })
+          if ($changed.Count -ne 1 -or $changed[0] -ne 'src/engine/snd_emu8k.c') {
+            throw "Unexpected source diff count/paths: $($changed -join ',')"
+          }
+      - name: Rebuild CANDIDATE actual chorus kernel from identical tree
+        shell: pwsh
+        run: |
+          cmake --build build-p132 --config Release --target awe32_p132_chorus_probe --parallel 2
+          if ($LASTEXITCODE -ne 0) { throw 'Candidate real-chip build failed' }
+      - name: Run CANDIDATE 8-mode tails and identical synthetic PCM impulse responses
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $exe=(Resolve-Path 'build-p132/src/engine/Release/awe32_p132_chorus_probe.exe').Path
+          $audio=Join-Path $env:RUNNER_TEMP 'p132-real-chip-pcm'
+          & $exe $audio candidate 2>&1 | Tee-Object qa/candidate-chorus.log
+          if ($LASTEXITCODE -ne 0) { throw 'Candidate expected decay model failed' }
+          Copy-Item (Join-Path $audio 'candidate-tail.csv') qa/candidate-tail.csv
+      - name: Compare every 32-bit sample, quantization proxy, and signed-tail gate
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check -q numpy
+          if ($LASTEXITCODE -ne 0) { throw 'numpy unavailable' }
+          $audio=Join-Path $env:RUNNER_TEMP 'p132-real-chip-pcm'
+          python tools/p132_compare_chorus_variants.py --directory $audio --output qa/P132-CHORUS-8-PRESETS-PCM-AB.json 2>&1 | Tee-Object qa/analysis.log
+          if ($LASTEXITCODE -ne 0) { throw 'P132 candidate comparison failed' }
+          $text=Get-Content qa/analysis.log -Raw
+          if (-not $text.Contains('P132_COMPARISON_PASS modes=8')) { throw 'Incomplete 8 preset comparison' }
+          if (-not $text.Contains('hardware_parity_proven=0')) { throw 'Missing physical-reference limitation' }
+          "P132_AUDIT_COMPLETE=1; HARDWARE_PARITY_PROVEN=0; RELEASE_NO_GO=1" | Set-Content qa/verdict.txt
+      - name: Upload ONLY synthetic measurements, SHA, and exact source diff
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: P132-Chorus-8-Mode-A-B-Numerical-Evidence-NO-HARDWARE-GO
+          path: qa/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Destroy ephemeral test PCM
+        if: always()
+        shell: pwsh
+        run: |
+          $audio=Join-Path $env:RUNNER_TEMP 'p132-real-chip-pcm'
+          if (Test-Path $audio) { Remove-Item $audio -Recurse -Force }
