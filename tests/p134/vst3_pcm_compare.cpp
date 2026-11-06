@@ -235,11 +235,107 @@ static void matrix(const fs::path& diagnostic,const fs::path& assets,const fs::p
     writeRows(out/"callbacks.csv",rows,frequency);
     std::ofstream info(out/"host.txt");info<<"pid="<<GetCurrentProcessId()<<"\ntid="<<GetCurrentThreadId()<<"\nqpc_hz="<<frequency<<"\nlogical_processors="<<GetActiveProcessorCount(ALL_PROCESSOR_GROUPS)<<"\nqtc_is_raw_cycles=1\nthread_times_are_case_aggregate_only=1\nasio_tested=0\n";
 }
+
+static void p138SteadyAbba(const fs::path& before,const fs::path& after,
+                           const fs::path& assets,const fs::path& out)
+{
+    // P138: two *actual* full production VST3 DLLs loaded into one process,
+    // 30 seeded held notes and 128 frames. ABBA/BAAB ordering of callback
+    // execution counterbalances hot caches/VM drift. QPC bounds cover
+    // process() only; host setup, PCM comparisons and CSV are outside.
+    // This is offline Windows throughput, not actual ASIO/MMCSS timing.
+    constexpr int frames=128,n=30,rounds=4,perRound=1200,warm=256;
+    const double rate=double(hz());
+    const double budget=double(frames)/44100.0*1e6;
+    Plugin a(before,model(assets)),b(after,model(assets));
+    seed(a,n,frames);seed(b,n,frames);
+    std::vector<double> oldUs,newUs;
+    oldUs.reserve(rounds*perRound);newUs.reserve(rounds*perRound);
+    std::ofstream raw(out/"p138-stable-abba-128x30.csv");
+    must(bool(raw),"P138 raw CSV output open");
+    raw<<"round,block,first,old_wall_us,new_wall_us,budget_us\n";
+    bool heard=false;
+    auto measure=[&](Plugin& p,Block& block,double& us) {
+        const int64_t start=tick();
+        const auto result=p.audio->process(block.data);
+        const int64_t end=tick();
+        must(result==kResultOk&&end>=start,"P138 actual VST3 process failed");
+        us=1e6*double(end-start)/rate;
+    };
+    for(int round=0;round<rounds;++round)
+        for(int i=-warm;i<perRound;++i)
+        {
+            Block oldBlock(frames),newBlock(frames);
+            double oldTime=0.,newTime=0.;
+            const bool oldFirst=round==0||round==3; // ABBA
+            if(oldFirst) {
+                measure(a,oldBlock,oldTime);
+                measure(b,newBlock,newTime);
+            } else {
+                measure(b,newBlock,newTime);
+                measure(a,oldBlock,oldTime);
+            }
+            must(oldBlock.left==newBlock.left&&oldBlock.right==newBlock.right,
+                "P138 steady held-voice old/new audible PCM mismatch");
+            if(i>=0) {
+                oldUs.push_back(oldTime);newUs.push_back(newTime);
+                raw<<round<<','<<i<<','<<(oldFirst?"old":"new")<<','
+                   <<oldTime<<','<<newTime<<','<<budget<<'\n';
+                heard|=std::any_of(oldBlock.left.begin(),
+                   oldBlock.left.begin()+frames,[](float f){return f!=0.f;});
+            }
+        }
+    must(heard,"P138 benchmarking silent plugin rather than held notes");
+    MemoryStream oldState,newState;
+    encode(oldState,a.save());encode(newState,b.save());
+    must(oldState.getSize()==newState.getSize()&&
+         std::memcmp(oldState.getData(),newState.getData(),
+                     size_t(oldState.getSize()))==0,
+         "P138 old/new V11 state mismatch after 4800 ABBA callbacks");
+    must(raw.good(),"P138 raw csv write failed");
+    const auto summarize=[&](std::vector<double> times) {
+        std::sort(times.begin(),times.end());
+        const size_t length=times.size();
+        const double median=times[(length-1)/2];
+        const double p99=times[size_t(std::ceil(double(length)*0.99))-1];
+        const double maxValue=times.back();
+        const unsigned misses=unsigned(std::count_if(times.begin(),times.end(),
+            [&](double us){return us>budget;}));
+        return std::array<double,4>{median,p99,maxValue,double(misses)};
+    };
+    const auto oldStats=summarize(oldUs);
+    const auto newStats=summarize(newUs);
+    std::ofstream summary(out/"p138-performance-summary.txt");
+    must(bool(summary),"P138 summary output open");
+    summary<<std::setprecision(9)
+           <<"P138 SAME-RUNNER VST3 128x30 4800 ABBA callbacks per DLL\n"
+           <<"Old P134: median_us="<<oldStats[0]
+           <<" p99_us="<<oldStats[1]<<" max_us="<<oldStats[2]
+           <<" deadline_overruns="<<oldStats[3]<<"\n"
+           <<"New P137: median_us="<<newStats[0]
+           <<" p99_us="<<newStats[1]<<" max_us="<<newStats[2]
+           <<" deadline_overruns="<<newStats[3]<<"\n"
+           <<"Median time change percent="<<100.*(newStats[0]-oldStats[0])/oldStats[0]
+           <<" P99 time change percent="<<100.*(newStats[1]-oldStats[1])/oldStats[1]
+           <<"\nPCM bitexact=1 V11 state bitexact=1; online ASIO NOT RUN;"
+           <<" RT RELEASE NO-GO\n";
+    must(summary.good(),"P138 summary file write failed");
+    std::cout<<"P138_ABBA_PASS callbacks_per_binary="<<oldUs.size()
+             <<" p134_median_us="<<oldStats[0]
+             <<" p137_median_us="<<newStats[0]
+             <<" p134_p99_us="<<oldStats[1]
+             <<" p137_p99_us="<<newStats[1]
+             <<" p134_deadline_misses="<<oldStats[3]
+             <<" p137_deadline_misses="<<newStats[3]
+             <<" bitexact_pcm=1 state_v11_equal=1 ASIO=NOT_RUN RELEASE=NO_GO\n";
+}
+
 int main(int argc,char** argv){try{
     if(argc!=6)return 2;fs::path out=argv[5];fs::create_directories(out);
     moduleMap.open(out/"modules.csv");moduleMap<<"base,size,path\n";
     timeBeginPeriod(1);
     std::string mode=argv[1];if(mode=="qualify")qualify(argv[2],argv[3],argv[4],out);
+    else if(mode=="benchmark")p138SteadyAbba(argv[2],argv[3],argv[4],out);
     else if(mode=="compare-baseline")compareBaseline(argv[2],argv[3],argv[4],out);
     else matrix(argv[3],argv[4],out,mode=="untraced"?1:0,mode=="memory");
     timeEndPeriod(1);return 0;
