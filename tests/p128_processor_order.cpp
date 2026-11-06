@@ -3,6 +3,10 @@
 #include <iostream>
 #include <fstream>
 #include <chrono>
+#include <cmath>
+#include <numeric>
+#include <thread>
+#include <atomic>
 static thread_local std::function<void(const char*)> hook;
 static thread_local bool inRT=false;
 void auditHook(const char* name){if(hook)hook(name);}
@@ -85,11 +89,91 @@ void deterministic(){
  {Rig r;check(r.p->getTailSamples()==kInfiniteTail&&r.p->setProcessing(false)==kResultOk&&r.p->setProcessing(true)==kResultOk,"kInfiniteTail and setProcessing lifecycle");}
 }
 
+// AUDIT-ONLY: measure actual VST3 Processor::process() wall times while
+// another control thread independently saves and optionally recalls V10.
+// These are shared CI VM times; NOT a genuine ASIO scheduling guarantee.
+void realtimeSaveRecallProfile(const std::string& csvPath) {
+    using Clock=std::chrono::steady_clock;
+    constexpr int N=500;
+    constexpr double budgetMs=1000.0*1024.0/44100.0;
+    std::ofstream csv(csvPath,std::ios::trunc);
+    require(csv.good(),"profile CSV cannot be opened");
+    csv<<"case,callback,wall_ms\n";
+    const auto scenario=[&](const char* name,bool saveThread,bool withRecall) {
+        Rig rig(state(),true,44100);
+        Block notes;
+        for(int n=0;n<30;++n)notes.note(0,45+n,0,true);
+        notes.run(*rig.p);
+        std::atomic<bool> started{false},done{false},fault{false};
+        std::atomic<int> saves{0},recalls{0};
+        std::thread control;
+        if(saveThread)control=std::thread([&] {
+            while(!started.load(std::memory_order_acquire))
+                std::this_thread::yield();
+            while(!done.load(std::memory_order_acquire)) {
+                MemoryStream stream;
+                if(rig.p->getState(&stream)!=kResultOk) {fault=true;break;}
+                const int count=++saves;
+                if(withRecall&&count%12==0) {
+                    MemoryStream restore;
+                    if(!writeState(restore,state())||
+                       rig.p->setState(&restore)!=kResultOk) {fault=true;break;}
+                    ++recalls;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            }
+        });
+        std::vector<double> durations;
+        durations.reserve(N);
+        int exceeded=0;
+        const auto start=Clock::now();
+        started.store(true,std::memory_order_release);
+        for(int i=0;i<N;++i) {
+            const auto ideal=start+std::chrono::duration_cast<Clock::duration>(
+                std::chrono::duration<double>(double(i)*1024./44100.));
+            std::this_thread::sleep_until(ideal);
+            Block buffer;
+            const auto t0=Clock::now();
+            const tresult rc=rig.p->process(buffer.data);
+            const auto t1=Clock::now();
+            require(rc==kResultOk,"realtime process returned error");
+            const double ms=std::chrono::duration<double,std::milli>(t1-t0).count();
+            durations.push_back(ms);
+            csv<<name<<","<<i<<","<<ms<<"\n";
+            exceeded+=(ms>budgetMs);
+        }
+        done.store(true,std::memory_order_release);
+        if(control.joinable())control.join();
+        require(!fault.load(),"control save or recall failed");
+        require(!saveThread||saves.load()>=10,"insufficient concurrent saves");
+        require(!withRecall||recalls.load()>=1,"no actual simultaneous recall tested");
+        std::sort(durations.begin(),durations.end());
+        const auto q=[&](double p) {
+            return durations[static_cast<size_t>(std::ceil(p*N))-1];
+        };
+        const double average=std::accumulate(durations.begin(),durations.end(),0.)/N;
+        std::cout<<"RT_PROCESSOR case="<<name
+                 <<" callbacks="<<N<<" budget_ms="<<budgetMs
+                 <<" mean_ms="<<average<<" p95_ms="<<q(.95)
+                 <<" p99_ms="<<q(.99)<<" max_ms="<<durations.back()
+                 <<" deadline_overruns="<<exceeded
+                 <<" saves="<<saves.load()
+                 <<" recalls="<<recalls.load()
+                 <<" SRC=Factory.cpp_INSTRUMENTED_PROCESSOR"
+                 <<" ENV=WINDOWS_2022_VM_NO_ASIO\n";
+    };
+    scenario("30voices",false,false);
+    scenario("30voices_save",true,false);
+    scenario("30voices_save_recall",true,true);
+    require(csv.good(),"profile CSV failed");
+}
+
 int main(int argc,char** argv) {
     try {
         if(argc!=3)return 2;
         assetsDir=argv[2];
-        if(std::string(argv[1])=="nullswap") {
+        if(std::string(argv[1])=="perf-recalls") realtimeSaveRecallProfile(argc>=4?argv[3]:"processor-times.csv");
+        else if(std::string(argv[1])=="nullswap") {
             Rig r;bool fired=false;
             hook=[&](const char* h){if(!fired&&std::string(h)=="block_pin") {
                 fired=true;require(recall(*r.p,state(0,0,false))==kResultOk,"empty asset recall");
