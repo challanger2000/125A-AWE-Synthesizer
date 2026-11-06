@@ -58,6 +58,9 @@ jobs:
           } else {
             throw "Audit host returned unexpected $rc; see evidence"
           }
+          # The deliberately reproduced failure has already been classified.
+          # PowerShell otherwise propagates the audit executable exit code 100.
+          exit 0
       - name: Upload independent audit evidence
         if: always()
         uses: actions/upload-artifact@v4
