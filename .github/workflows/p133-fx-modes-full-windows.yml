@@ -5,6 +5,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: p133-fx-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   fx-full-windows:
     runs-on: windows-2022
@@ -42,7 +45,7 @@ jobs:
               $log -notmatch '125A_asset_state') {
               throw 'P133 required tests not evidenced'
           }
-      - name: Check Steinberg validator binary and 47 test expectations
+      - name: Validate actual AWE VST3 module with Steinberg validator
         shell: pwsh
         timeout-minutes: 5
         run: |
@@ -53,13 +56,15 @@ jobs:
           if (-not $validator) { throw 'No Steinberg validator executable' }
           & $validator -e $plugin 2>&1 | Tee-Object qa/validator.txt
           if ($LASTEXITCODE -ne 0) { throw 'Steinberg VST3 validator failed' }
-          if ((Get-Content qa/validator.txt -Raw) -notmatch 'Result: 47 tests passed') {
-            # The exact output is detailed in the preserved validator log.
-            $text=Get-Content qa/validator.txt -Raw
-            if ($text -notmatch '47 Tests Passed' -and $text -notmatch 'Tests passed: 47') {
-              throw 'Expected 47 validator checks missing'
-            }
+          $text=Get-Content qa/validator.txt -Raw
+          if ($text -notmatch 'Result: ([0-9]+) tests passed, 0 tests failed') {
+            throw 'Steinberg validator did not report a complete success summary'
           }
+          $passed=[int]$Matches[1]
+          # SDK's 47 internal selftests run during the build; the actual
+          # VST3 module validation typically exercises >500 concrete cases.
+          if ($passed -lt 500) { throw "Incomplete VST3 module validation: $passed" }
+          Write-Host "Steinberg VST3 module validation PASS $passed tests, 0 failed"
       - name: Exercise complete VST3 GUI in native EditorHost three times
         shell: pwsh
         timeout-minutes: 6
