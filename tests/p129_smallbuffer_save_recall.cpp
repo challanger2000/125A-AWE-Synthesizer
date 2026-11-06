@@ -118,7 +118,7 @@ Result measureCase(int frames,int controlMode,std::ofstream& csv) {
              <<" audible_blocks="<<result.audible
              <<" produced_callbacks="<<durations.size()
              <<" saves="<<saveCount.load()
-             <<" recalls="<<recallCount.load()<<"\\n";
+             <<" recalls="<<recallCount.load()<<"\n";
     require(result.audible>=400,
             "inaudible blocks: cannot claim realtime PCM workload");
     result.saves=saveCount.load();
