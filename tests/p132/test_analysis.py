@@ -11,7 +11,7 @@ with tempfile.TemporaryDirectory() as tmp:
  # busy control [30000,50000] entirely on CPU; genuine callback [60000,62000]
  # has only 500 us scheduled runtime and 1500 us preemption, budget 1000 us.
  def row(phase,a,b,matched='1'):
-  return dict(phase=phase,qpc_begin=a,qpc_end=b,qpc_hz=1000000,tid=7,wall_us=b-a,frames=44.1,voices=1,mode=0,case=1,index=0,budget_us=1000,matched=matched,allocated_before=1,allocated_after=1,nonzero_before=1,nonzero_after=1,generation_before=1,generation_after=1)
+  return dict(phase=phase,qpc_begin=a,qpc_end=b,qpc_hz=1000000,tid=7,wall_us=b-a,frames=44,voices=1,mode=0,case=1,index=0,budget_us=1000,matched=matched,allocated_before=1,allocated_after=1,nonzero_before=1,nonzero_after=1,generation_before=1,generation_after=1)
  rows=[row('calibration_sleep',100,20100),row('calibration_busy',30000,50000),row('measure',60000,62000,'0')]
  # frames must be an integer; 44/44100 is near 1ms, budget explicitly 1000.
  for r in rows:r['frames']=44
@@ -26,6 +26,11 @@ with tempfile.TemporaryDirectory() as tmp:
  assert result['etw_context_valid'] and result['attributions']=={'PREEMPTION_SUFFICIENT':1}
  assert result['cases'][0]['all']['overruns']==1 and result['cases'][0]['matched']['n']==0,'underfilled deadline was hidden'
  assert not result['heap_backend_positive_control_complete'],'missing heap evidence was called PASS'
+ # Global calibration must not validate a callback outside reconstructed spans.
+ put(p/'callbacks.csv',rows+[row('measure',200000,202000)])
+ result=m.analyze(p)
+ assert result['etw_rows_with_incomplete_coverage']==1 and result['attributions'].get('NOT_RUN_ETW_COVERAGE')==1
+ put(p/'callbacks.csv',rows)
  metadata['events_lost']=1;(p/'etw/trace-meta.json').write_text(json.dumps(metadata));result=m.analyze(p)
  assert not result['etw_context_valid'] and result['attributions']=={'NOT_RUN_ETW_COVERAGE':1}
  print('PASS independent ETW interval, loss, heap-coverage and unmatched-deadline controls')

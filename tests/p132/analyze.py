@@ -28,12 +28,24 @@ def analyze(folder):
             if t>=start:off[new].append((start,t,state,reason))
         entered[new]=t
     starts={tid:[x[0] for x in intervals] for tid,intervals in running.items()}
+    off_starts={tid:[x[0] for x in intervals] for tid,intervals in off.items()}
     def overlap(r):
         tid=int(r['tid']);a=int(r['qpc_begin']);b=int(r['qpc_end']);h=int(r['qpc_hz'])
         seq=running.get(tid,[]);i=max(0,bisect.bisect_right(starts.get(tid,[]),a)-1);on=0
         while i<len(seq) and seq[i][0]<b:
             lo,hi=seq[i];on+=max(0,min(hi,b)-max(lo,a));i+=1
         return on*1e6/h
+    def absence(r):
+        tid=int(r['tid']);a=int(r['qpc_begin']);b=int(r['qpc_end']);h=int(r['qpc_hz'])
+        seq=off.get(tid,[]);i=max(0,bisect.bisect_right(off_starts.get(tid,[]),a)-1)
+        ready=waiting=total=0.
+        while i<len(seq) and seq[i][0]<b:
+            lo,hi,state,reason=seq[i];duration=max(0,min(hi,b)-max(lo,a))*1e6/h
+            total+=duration
+            if state==1:ready+=duration
+            if state==5:waiting+=duration
+            i+=1
+        return ready,waiting,total
     calibration={r['phase']:r for r in rows if r['phase'].startswith('calibration_')}
     empty=[float(r['wall_us']) for r in rows if r['phase']=='calibration_empty']
     clock_ok=meta.get('perf_frequency')==int(rows[0]['qpc_hz'])
@@ -51,35 +63,37 @@ def analyze(folder):
     for r in rows:
         if r['phase']=='memory':
             for e in heap_in(r):memory_events.append(dict(e,case=r['case'],callback=r['index']))
-    groups=collections.defaultdict(list);misses=[]
+    groups=collections.defaultdict(list);misses=[];coverage_incomplete=0
     for r in rows:
         if r['phase']!='measure':continue
+        on=overlap(r) if valid else None
+        ready,waiting,total=absence(r) if valid else (0.,0.,0.)
+        # A valid global calibration cannot establish coverage of every row.
+        covered=valid and abs(on+total-float(r['wall_us']))<=max(.2,2e6/int(r['qpc_hz']))
+        if valid and not covered:coverage_incomplete+=1
+        r['scheduled_us']=on if covered else None
         key=(int(r['frames']),int(r['voices']),int(r['mode']));groups[key].append(r)
         if float(r['wall_us'])>float(r['budget_us']):
-            attribution='NOT_RUN_ETW_COVERAGE';on=overlap(r) if valid else None
-            ready=waiting=0.0
-            if valid:
-                a,b=int(r['qpc_begin']),int(r['qpc_end']);h=int(r['qpc_hz'])
-                for lo,hi,state,reason in off.get(int(r['tid']),[]):
-                    if hi<a:continue
-                    if lo>b:break
-                    duration=max(0,min(hi,b)-max(lo,a))*1e6/h
-                    if state==1:ready+=duration
-                    if state==5:waiting+=duration
+            attribution='NOT_RUN_ETW_COVERAGE'
+            if covered:
                 excess=float(r['wall_us'])-float(r['budget_us'])
                 if ready>excess and on<float(r['budget_us']):attribution='PREEMPTION_SUFFICIENT'
                 elif waiting>excess and on<float(r['budget_us']):attribution='WAITING_SUFFICIENT_NEEDS_STACK'
                 elif ready+waiting>excess and on<float(r['budget_us']):attribution='MIXED_OFF_CPU_SUFFICIENT'
                 elif on>=float(r['budget_us']):attribution='SCHEDULED_RUNTIME_OVER_BUDGET_NOT_PURE_DSP_PROOF'
                 else:attribution='OFF_CPU_SUFFICIENT_REASON_UNKNOWN'
-            misses.append(dict(r,scheduled_us=on,ready_off_cpu_us=ready,waiting_us=waiting,attribution=attribution))
+            misses.append(dict(r,ready_off_cpu_us=ready,waiting_us=waiting,attribution=attribution))
     summary=[]
     for (frames,n,mode),data in sorted(groups.items()):
         matched=[r for r in data if r['matched']=='1']
         def values(part):
             w=[float(r['wall_us']) for r in part]
-            return dict(n=len(w),median_us=percentile(w,.5),p99_us=percentile(w,.99),max_us=max(w) if w else None,overruns=sum(float(r['wall_us'])>float(r['budget_us']) for r in part))
+            cpu=[r['scheduled_us'] for r in part if r['scheduled_us'] is not None]
+            cycles=[int(r['cycles']) for r in part if r.get('cycles_valid')=='1']
+            return dict(n=len(w),median_us=percentile(w,.5),p99_us=percentile(w,.99),max_us=max(w) if w else None,overruns=sum(float(r['wall_us'])>float(r['budget_us']) for r in part),scheduled_n=len(cpu),scheduled_median_us=percentile(cpu,.5),scheduled_p99_us=percentile(cpu,.99),scheduled_max_us=max(cpu) if cpu else None,cycles_median=percentile(cycles,.5),cycles_p99=percentile(cycles,.99),cycles_max=max(cycles) if cycles else None)
         summary.append(dict(frames=frames,voices=n,mode=mode,all=values(data),matched=values(matched),underfilled=sum(int(r['allocated_before'])<n or int(r['allocated_after'])<n or int(r['nonzero_before'])<n or int(r['nonzero_after'])<n for r in data),generation_transitions=sum(r['generation_before']!=r['generation_after'] for r in data)))
+        if matched and 'frame_before' in matched[0]:
+            summary[-1]['adapter_980_boundary']={str(boundary):values([r for r in matched if ((int(r['frame_before'])+frames)//980>0)==boundary]) for boundary in (False,True)}
     samples=read(folder/'etw/samples.csv');samples.sort(key=lambda r:int(r['qpc']));sample_times=[int(r['qpc']) for r in samples];top=collections.Counter()
     # ETL emits time-ordered events. Only CPU samples falling IN process count.
     for r in rows:
@@ -88,6 +102,9 @@ def analyze(folder):
         for e in samples[bisect.bisect_left(sample_times,a):bisect.bisect_right(sample_times,b)]:
             if e['tid']==r['tid']:top[e['symbol'] or 'UNRESOLVED']+=1
     result=dict(empty_median_us=percentile(empty,.5),empty_p99_us=percentile(empty,.99),empty_max_us=max(empty) if empty else None,rows=len(rows),measured=sum(x['all']['n'] for x in summary),cases=summary,etw=meta,etw_context_valid=valid,calibration_sleep_off_us=sleep_off,calibration_busy_on_us=busy_on,clock_ok=clock_ok,heap_positive_sizes=positive_sizes,heap_backend_positive_control_complete=heap_complete,memory_phase_heap_events=len(memory_events),memory_phase_events=memory_events[:100],attributions=dict(collections.Counter(r['attribution'] for r in misses)),worst=sorted(misses,key=lambda r:float(r['wall_us']),reverse=True)[:30],top_sampled_symbols=top.most_common(30),target_asio_tested=False,realtime_verdict='NOT RUN')
+    result['etw_rows_with_incomplete_coverage']=coverage_incomplete
+    result['memory_callbacks']=sum(r['phase']=='memory' for r in rows)
+    result['control_cases']=read(folder/'cases.csv')
     (folder/'summary.json').write_text(json.dumps(result,indent=2)+'\n')
     if misses:
         with (folder/'deadline-events.csv').open('w',newline='') as f:w=csv.DictWriter(f,fieldnames=list(misses[0]));w.writeheader();w.writerows(misses)

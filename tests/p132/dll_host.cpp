@@ -65,6 +65,7 @@ struct Block {
     AudioBusBuffers bus{};ProcessData data{};ParameterChanges parameters{64};EventList events{64};
     explicit Block(int frames){bus.numChannels=2;bus.channelBuffers32=channels;data.processMode=kRealtime;data.symbolicSampleSize=kSample32;data.numSamples=frames;data.numOutputs=1;data.outputs=&bus;data.inputEvents=&events;data.inputParameterChanges=&parameters;}
     void note(int key){Event e{};e.type=Event::kNoteOnEvent;e.noteOn.channel=0;e.noteOn.pitch=key;e.noteOn.velocity=.85f;e.noteOn.noteId=key;must(events.addEvent(e)==kResultOk,"event");}
+    void off(int key){Event e{};e.type=Event::kNoteOffEvent;e.noteOff.channel=0;e.noteOff.pitch=key;e.noteOff.noteId=key;must(events.addEvent(e)==kResultOk,"note off");}
     void parameter(ParamID id,double value,int at=0){int32 slot=0;auto* q=parameters.addParameterData(id,slot);must(q&&q->addPoint(at,value,slot)==kResultOk,"parameter");}
     void cc(int number,double value,int at=0){auto id=AWE125::MidiControlMapping::ParamID(0,AWE125::MidiControlMapping::Index(number));parameter(id,value,at);}
 };
@@ -91,10 +92,17 @@ static void writeRows(const fs::path& path,const std::vector<Row>& rows,int64_t 
     must(bool(f),"CSV write");
 }
 static void seed(Plugin& p,int n,int frames,std::vector<Row>* rows=nullptr,Row base={}){
+    // CC120 alone switches off envelope engines without clearing all chip
+    // volume targets. Do NOT let stale physical voices contaminate the next
+    // load. Release normally and drain a fixed, identical 8192 host frames.
+    Block release(0);for(int key=45;key<75;++key)release.off(key);
+    base.frames=0;base.phase="drain_noteoff";auto released=invoke(p,release,base);if(rows)rows->push_back(released);
+    for(int i=0;i<8192/frames;++i){Block b(frames);base.frames=frames;base.phase="drain";base.index=i;auto r=invoke(p,b,base);if(rows)rows->push_back(r);}
+    if(p.census){auto v=p.voices();must(v.allocated==0&&v.nonzero==0,"normal release/drain did not silence previous physical voices");}
     Block reset(0);reset.cc(120,1);for(int i=0;i<n;++i)reset.note(45+i);base.frames=0;base.phase="seed";auto row=invoke(p,reset,base);if(rows)rows->push_back(row);
     int warm=(4096+frames-1)/frames;
     for(int i=0;i<warm;++i){Block b(frames);base.frames=frames;base.phase="warmup";base.index=i;auto r=invoke(p,b,base);if(rows)rows->push_back(r);}
-    if(p.census){auto v=p.voices();must(v.allocated==n&&v.nonzero==n,"warmup did not establish requested PHYSICAL voice count");}
+    if(p.census){auto v=p.voices();if(v.allocated!=n||v.nonzero!=n)throw std::runtime_error("warmup physical mismatch requested="+std::to_string(n)+" allocated="+std::to_string(v.allocated)+" nonzero="+std::to_string(v.nonzero));}
 }
 static void qualify(const fs::path& normal,const fs::path& diagnostic,const fs::path& assets,const fs::path& out){
     std::ofstream f(out/"qualification.txt");
@@ -108,6 +116,16 @@ static void qualify(const fs::path& normal,const fs::path& diagnostic,const fs::
             timing<<frames<<','<<n<<','<<i<<','<<1e6*double(a1-a0)/frequency<<','<<1e6*double(b1-b0)/frequency<<'\n';must(x.left==y.left&&x.right==y.right,"diagnostic instrumentation changed PCM");must(std::any_of(x.left.begin(),x.left.begin()+frames,[](float v){return v!=0;}),"qualifier unexpectedly silent");auto v=b.voices();must(v.nonzero==n&&v.allocated==n,"physical voice count changed");}
         auto sa=a.save(),sb=b.save();MemoryStream ma,mb;encode(ma,sa);encode(mb,sb);must(ma.getSize()==mb.getSize()&&std::memcmp(ma.getData(),mb.getData(),size_t(ma.getSize()))==0,"diagnostic changed V10");
         f<<"PASS frames="<<frames<<" physical_voices="<<n<<" pcm_bit_exact=1 state_v10_equal=1\n";
+    }
+    // An independent actual-DLL control records why CC120 cannot serve as
+    // the laboratory reset oracle. No production behavior is changed here.
+    {
+        Plugin p(diagnostic,model(assets));seed(p,1,128);const auto before=p.voices();
+        Block reset(0);reset.cc(120,1);invoke(p,reset,{});
+        for(int i=0;i<32;++i){Block b(128);invoke(p,b,{});}
+        const auto after=p.voices();
+        std::ofstream control(out/"qualification-all-sounds-off.json");
+        control<<"{\"before_allocated\":"<<before.allocated<<",\"before_nonzero\":"<<before.nonzero<<",\"after_allocated\":"<<after.allocated<<",\"after_nonzero\":"<<after.nonzero<<",\"after_envelopes\":"<<after.envelopes<<"}\n";
     }
     std::cout<<"P132_QUALIFICATION cases=12 pcm_callbacks_compared=128_each real_dll=1 PASS\n";
 }

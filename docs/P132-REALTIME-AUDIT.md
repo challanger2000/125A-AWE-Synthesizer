@@ -49,6 +49,21 @@ bevor der Control-Thread mit der Vorbereitung und Veröffentlichung fortfährt.
 Das verhindert den ungeprüften P131-Vergleich von 12 gegen 32 gehaltene Noten.
 Es ist eine **Labor-Lastkontrolle**, kein realer DAW-/ASIO-Callback-Ablauf.
 
+Die ersten Windows-Stressversuche brachen korrekt an der physischen
+Stimmenkontrolle ab, während 43/43 CTests, Validator und GUI-Smokes bestanden.
+Die ursprünglich dafür benutzte CC120/NoteOn-Neubelegung war als Lastreset
+ungeeignet: eine lokale Engine-Gegenprobe zeigte nach erneuter Ein-Stimmen-
+Belegung **zwei** nicht stumme Chip-Stimmen, obwohl nur ein Synth-Slot belegt
+war. Der Chip lässt nach ausgeschalteter Envelope-Engine vorhandene
+Volumenziele bestehen. Normale NoteOffs mit ausgerendertem Release beseitigten
+diesen Effekt bei 1/16/30 Stimmen nach 5.888 Frames. P132 verwendet deshalb vor
+jeder Belegung dieselben **8.192 Release-/Drainframes**, außerhalb der normalen
+Messpopulation und vollständig protokolliert. Ein eigener tatsächlicher
+Windows-DLL-Kontrollfall zeichnet den CC120-Befund zusätzlich auf. Das ist ein
+nachgewiesener Fehler der ursprünglichen Testvorbereitung, noch kein Nachweis
+der Ursache der früheren Audio-Deadlineüberschreitungen. Produktcode bleibt
+unverändert; der CC120-Produktbefund wird separat dokumentiert.
+
 Jede Seed-/Warmup-Ausführung wird ebenfalls als tatsächlicher Prozessaufruf
 protokolliert. Diese Aufrufe, ihre CPU-Arbeit und ein bewusst neu angesetzter
 Host-Pacing-Zeitpunkt dürfen nicht als normale Deadlineabnahme verkauft werden.
@@ -105,6 +120,40 @@ CTests, explizit den normalen 47/47-Validator und drei EditorHost-Smokes aus.
 Sie erfassen zwei separate Runner-Zuteilungen mit vertauschter Reihenfolge.
 Ihre Ergebnisse sind bis zur tatsächlichen Auswertung **NOT RUN**, nicht PASS.
 Ein grüner Workflow bedeutet auch danach keine Echtzeitfreigabe.
+
+## Quellcodeprüfung des Echtzeitpfads
+
+`Processor::process()` pinnt die Engine über `RealtimeEngineExchange::Guard`.
+Die Registrierung und Referenzzähler verwenden atomare fetch_add/fetch_sub;
+der Guard-Destruktor zerstört keine Engine. Veröffentlichung, Collector,
+Mutex/CV und Freigaben liegen auf Control-/Collector-Threads. Das Audio-Gate
+von `RealtimeStateVersion::Writer` versucht genau einen strong-CAS; bei einem
+Control-Writer wird die Audio-Transaktion abgelehnt und ein vorhandener Intent
+später erneut angewandt. Der yield/CAS-Wartekreis gehört zum Control-Pfad.
+Das belegt die Struktur, **keine obere Latenzgrenze** für Cache-Kohärenz,
+Atomics, Page-Faults oder Betriebssystemunterbrechungen.
+
+`scratch_` und 1.024 Parametercursor werden vor dem Prozessaufruf bereitgestellt.
+Ereignisse und Parameterpunkte werden im Audiothread zusammengeführt; eine
+bewegte Pitchkurve auf einem klingenden Kanal kann bewusst einzelbildweises
+Rendern und IP-Registerschreiben auslösen. NoteOn, MIDI-Controller, Pan-Glides
+und das Wiederherstellen gehaltener Noten nach Engineveröffentlichung können
+zusätzliche Arbeit innerhalb eines Callbacks verursachen. Die begrenzten
+Stimmenzahlen ersetzen daher keinen Test der dichten Automation.
+
+Der Adapter hat einen 980-Chipframe-FIFO. `FlushBlock()` verarbeitet am Rand
+verbliebene Registerschreibvorgänge und Chipframes; PortRead kann bereits vorher
+bis zur aktuellen Position rechnen. P132 protokolliert seine unverändert
+gelesene Phase und Chipposition. Ein Phasenübertritt ist zunächst nur ein
+Quellcode-Merkmal; erst zeitgleiche Messdaten dürfen ihn mit einem Ausreißer
+verbinden. Daraus folgt hier keine spekulative Änderung des Adapters oder DSP.
+
+Die Labor-Host-Vorbereitung (Event-/Parameterlisten, PCM-Hash, CSV und Pacing)
+liegt außerhalb der process()-Zeitklammer. Dennoch beeinflusst sie den
+Cachezustand und das Scheduling. Ebenso sind die synthetischen, geloopten
+Einzelregionen kein vollständiges Orakel für jeden autorisierten SF2-Layerstack
+oder das proprietäre Original-ROM. Öffentliche Tests enthalten nur neu erzeugte
+synthetische Assets; das separate Plugin-Test-Lab bleibt unverändert.
 
 **Offene Abschlussentscheidung:** Echtzeit NOT RUN mangels Zielrechnernachweis;
 konkrete Windows-Reproduktionen und ihre belegbaren Ursachen werden nach den

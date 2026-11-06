@@ -7,6 +7,7 @@ $cpuAvailable=$false;$heapEnabled=$false;$heapStarted=$false
 $haveWpr=($null -ne (Get-Command wpr.exe -ErrorAction SilentlyContinue))
 Get-ComputerInfo -Property OsName,OsVersion,WindowsVersion,CsProcessors,HyperVisorPresent | Format-List | Out-File qa/machine.txt
 Get-CimInstance Win32_Processor | Select-Object Name,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed | Format-List | Out-File qa/cpu.txt
+@{cpu=@(Get-CimInstance Win32_Processor | Select-Object Name,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed);os=[Environment]::OSVersion.VersionString;hostLogicalProcessors=[Environment]::ProcessorCount} | ConvertTo-Json -Depth 4 | Set-Content qa/machine.json
 powercfg /getactivescheme | Out-File qa/power.txt
 Get-Command wpr.exe,xperf.exe,wpaexporter.exe -ErrorAction SilentlyContinue | Select-Object Name,Source | Format-List | Out-File qa/profilers.txt
 if($haveWpr){wpr -profiles 2>&1 | Out-File qa/wpr-profiles.txt}

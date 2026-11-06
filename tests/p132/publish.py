@@ -8,9 +8,16 @@ for name in ['traced','untraced','memory']:
  p=root/name/'summary.json'
  if not p.exists():continue
  s=json.loads(p.read_text())
+ # Public annotations have size/count limits. Full raw cycles/phase tables
+ # remain in summary.json and CSV artifacts; retain all walltime populations.
+ for c in s['cases']:
+  for part in ['all','matched']:
+   c[part]={k:v for k,v in c[part].items() if not k.startswith('cycles_')}
+  if c['frames']!=128 or c['voices']!=30 or c['mode']>2:c.pop('adapter_980_boundary',None)
+ s['control_cases']=[{k:v for k,v in r.items() if k in ['case','frames','voices','mode','saves','recalls','primings','control_error']} for r in s.get('control_cases',[])]
  s['worst']=[{k:r[k] for k in ['case','frames','voices','mode','wall_us','budget_us','matched','allocated_before','allocated_after','nonzero_before','nonzero_after','scheduled_us','ready_off_cpu_us','waiting_us','attribution']} for r in s['worst'][:10]]
  s['memory_phase_events']=s['memory_phase_events'][:10];payload[name]=s
-for name in ['capabilities.json','provenance.json','gui-verdict.json']:
+for name in ['capabilities.json','provenance.json','gui-verdict.json','machine.json','qualification-all-sounds-off.json']:
  p=root/name
  if p.exists():payload[name]=json.loads(p.read_text())
 errors=[]
