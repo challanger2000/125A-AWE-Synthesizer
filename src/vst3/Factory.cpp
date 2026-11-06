@@ -65,6 +65,15 @@ inline constexpr ParamID kBankID=1002; // SF2 bank, fixed normalized range 0..16
 inline constexpr ParamID kVolumeID=MasterOutput::kParamID; // post-chip stereo master volume
 inline constexpr ParamID kReverbPresetID=1200; // original Creative 0..7, automatable
 inline constexpr ParamID kChorusPresetID=1201; // original Creative 0..7, automatable
+// The VST3 host must display meaningful hardware effect names for
+// automation, project inspection and accessibility, not just 0..7.
+// Indices are the original Creative EMU8000 coefficient-table order.
+inline constexpr std::array<const char*,8> kReverbDisplayNames{
+    "Room 1","Room 2","Room 3","Hall 1","Hall 2",
+    "Plate","Delay","Panning Delay"};
+inline constexpr std::array<const char*,8> kChorusDisplayNames{
+    "Chorus 1","Chorus 2","Chorus 3","Chorus 4","Feedback",
+    "Flanger","Short Delay","Short Delay + FB"};
 // Persistence data contract is in AssetState.h.
 // Factory banks are packaged *inside* the Windows VST3 by CMake. The path
 // is resolved on activation, never from the realtime audio callback.
@@ -1606,6 +1615,40 @@ public:
         unitId=static_cast<UnitID>(
             MidiProgramRouting::Unit(static_cast<unsigned>(channel)));
         return kResultTrue;
+    }
+    tresult PLUGIN_API getParamStringByValue(
+        ParamID id, ParamValue normalized, String128 output) override {
+        if(id!=kReverbPresetID&&id!=kChorusPresetID)
+            return EditControllerEx1::getParamStringByValue(id,normalized,output);
+        if(!std::isfinite(normalized)||normalized<0.||normalized>1.||!output)
+            return kResultFalse;
+        const int index=std::clamp(int(std::lround(normalized*7.)),0,7);
+        const char* name=(id==kReverbPresetID?
+            kReverbDisplayNames[size_t(index)]:kChorusDisplayNames[size_t(index)]);
+        UString(output,128).fromAscii(name);
+        return kResultOk;
+    }
+    tresult PLUGIN_API getParamValueByString(
+        ParamID id,TChar* input,ParamValue& normalized) override {
+        if(id!=kReverbPresetID&&id!=kChorusPresetID)
+            return EditControllerEx1::getParamValueByString(id,input,normalized);
+        if(!input)return kResultFalse;
+        const auto& choices=(id==kReverbPresetID?
+            kReverbDisplayNames:kChorusDisplayNames);
+        for(int choice=0;choice<8;++choice) {
+            String128 candidate{};
+            UString(candidate,128).fromAscii(choices[size_t(choice)]);
+            bool equals=true;
+            for(int i=0;i<128;++i) {
+                if(candidate[i]!=input[i]) {equals=false;break;}
+                if(candidate[i]==0)break;
+            }
+            if(equals) {
+                normalized=double(choice)/7.;
+                return kResultOk;
+            }
+        }
+        return kResultFalse;
     }
     tresult PLUGIN_API setParamNormalized(
         ParamID id,ParamValue value) override {
