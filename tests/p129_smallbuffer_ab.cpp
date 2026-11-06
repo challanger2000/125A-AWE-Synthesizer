@@ -139,7 +139,7 @@ Result measureCase(int frames,int controlMode,std::ofstream& csv) {
                double(kCallbacks);
     result.p95=pct(.95);result.p99=pct(.99);result.max=durations.back();
     std::cout<<std::fixed<<std::setprecision(4)
-        <<"RT_SMALL_BUFFER frames="<<frames<<" case="<<mode
+        <<"RT_P129_AB frames="<<frames<<" case="<<mode
         <<" budget_ms="<<budgetMs
         <<" callbacks="<<kCallbacks
         <<" audible_blocks="<<result.audible
@@ -192,13 +192,13 @@ int main(int argc,char** argv) {
         }
         csv.flush();
         require(csv.good(),"incomplete output CSV");
-        std::cout<<"RT_SMALL_BUFFER_RESULT callbacks=4500 "
+        std::cout<<"RT_P129_AB_RESULT callbacks=2250 "
             <<"process_overruns="<<processOverruns
             <<" missed_scheduled_deadlines="<<missedOutputs
             <<" NOTE=CI_DIAGNOSTIC_NOT_RELEASE_OR_ASIO_PASS\n";
         return 0;
     } catch(const std::exception& e) {
-        std::cerr<<"RT_SMALL_BUFFER_TEST_ERROR "<<e.what()<<std::endl;
+        std::cerr<<"RT_P129_AB_TEST_ERROR "<<e.what()<<std::endl;
         return 1;
     }
 }
