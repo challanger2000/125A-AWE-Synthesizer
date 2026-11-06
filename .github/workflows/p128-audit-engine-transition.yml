@@ -1,7 +1,7 @@
 name: Independent P128 engine transition live VST3 reproduction
 on:
   push:
-    branches: [audit/p128-independent-repro-20261106]
+    branches: [audit/p128-engine-transition-fix-candidate-20261106]
   workflow_dispatch:
 
 concurrency:
@@ -49,12 +49,11 @@ jobs:
           & $exe[0].FullName $dll[0].FullName 2>&1 | Tee-Object -FilePath artifacts/P128/engine-transition.log
           $rc = $LASTEXITCODE
           "Exit=$rc" | Set-Content artifacts/P128/exit.txt
-          if ($rc -eq 100) {
-            Write-Host '[REPRODUCED] P128 F02: old canRender remains true after engine->null, real process access violation'
-            'P128_ENGINE_TRANSITION_BUG_REPRODUCED' | Set-Content artifacts/P128/verdict.txt
-          } elseif ($rc -eq 0) {
-            Write-Host '[NOT REPRODUCED] Test completed; inspect code+audio semantics separately'
-            'P128_ENGINE_TRANSITION_NOT_REPRODUCED' | Set-Content artifacts/P128/verdict.txt
+          if ($rc -eq 0) {
+            Write-Host '[PASS] Regression candidate survived active-engine to null event-boundary transition'
+            'P128_ENGINE_TRANSITION_FIXED_CANDIDATE_PASS' | Set-Content artifacts/P128/verdict.txt
+          } elseif ($rc -eq 100) {
+            throw 'Regression still present: access violation during process after engine publication'
           } else {
             throw "Audit host returned unexpected $rc; see evidence"
           }
