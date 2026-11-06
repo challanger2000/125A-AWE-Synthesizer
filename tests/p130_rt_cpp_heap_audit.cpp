@@ -43,6 +43,18 @@ int main(int argc,char** argv) {
     try {
         if(argc!=2)return 2;
         assetsDir=std::filesystem::path(argv[1]);
+        // Positive control: fail closed if instrumentation is optimized
+        // away or not linked into the test executable.
+        {
+            CountGuard mark;
+            void* control=::operator new(37);
+            ::operator delete(control);
+        }
+        require(p130NewCalls==1 && p130NewBytes==37,
+                "invalid heap instrument: positive 37-byte control not observed");
+        p130NewCalls=0;
+        p130NewBytes=0;
+        std::cout<<"P130_HEAP_PROBE_POSITIVE_CONTROL=PASS\n";
         constexpr int cases=5, repeats=240;
         uint64_t grandNew=0,grandBytes=0;
         for(int test=0;test<cases;++test) {
