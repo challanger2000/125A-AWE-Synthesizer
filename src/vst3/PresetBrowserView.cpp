@@ -262,7 +262,30 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     AddKnob(8,534,464,"CUTOFF -");
     AddKnob(9,655,464,"RESONANCE +");
 
-    MakeLabel({29,602,599,621},"MASTER / EFFECT SENDS",true);
+    // Native Creative effect choices: 8 Reverb modes and 8 Chorus modes.
+    // These host-automatable discrete parameter menus are separate from
+    // the existing per-note effects send overlays; the menus never modify
+    // SF2 generator sends, MIDI controllers or master volume.
+    MakeLabel({30,601,205,623},"MASTER",true);
+    MakeLabel({268,570,475,589},"REVERB TYPE",true);
+    MakeLabel({513,570,739,589},"CHORUS TYPE",true);
+    reverbMenu_=new COptionMenu({259,591,489,623},this,kReverbType);
+    chorusMenu_=new COptionMenu({504,591,741,623},this,kChorusType);
+    for(auto* menu:{reverbMenu_,chorusMenu_}) {
+        menu->setBackColor(kBezel);
+        menu->setFontColor(kPaper);
+        menu->setFrameColor(kStroke);
+    }
+    for(const char* label:{"Room 1","Room 2","Room 3","Hall 1",
+                            "Hall 2","Plate","Delay","Panning Delay"})
+        reverbMenu_->addEntry(label);
+    for(const char* label:{"Chorus 1","Chorus 2","Chorus 3","Chorus 4",
+                            "Feedback","Flanger","Short Delay","Short Delay + FB"})
+        chorusMenu_->addEntry(label);
+    reverbMenu_->setValue(4.f);  // original Win95 Hall 2 default
+    chorusMenu_->setValue(2.f);  // original Win95 Chorus 3 default
+    addView(reverbMenu_);
+    addView(chorusMenu_);
     masterVolume_=new HardwareKnob({115,626,177,688},this,kMasterVolume);
     masterVolume_->setDefaultValue(1.f); // P118: host unity on Ctrl-click
     masterVolume_->setValue(1.f);
@@ -273,7 +296,7 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     masterVolumeValue_->setHoriAlign(kCenterText);
     AddKnob(10,352,626,"HALL +");
     AddKnob(11,559,626,"CHORUS +");
-    reset_=MakeButton({664,603,762,637},kReset,"RESET");
+    reset_=MakeButton({677,695,771,728},kReset,"RESET");
 
     MakeLabel({807,207,1027,239},"SOUND BROWSER",false);
     toggle_=MakeButton({1020,205,1170,241},kToggle,"BROWSER");
@@ -495,6 +518,20 @@ void PresetBrowserView::Sync(bool force) {
         std::snprintf(label,sizeof(label),"%d%%",int(std::lround(value*100.)));
         values_[size_t(i)]->setText(label);
     }
+    // State/host automation owns the visible selection; never leave a
+    // painted preset different from the actual controller parameter.
+    for(const auto& entry:std::array<std::pair<COptionMenu*,int>,2>{{
+        {reverbMenu_,kReverbType},{chorusMenu_,kChorusType}}}) {
+        if(!entry.first)continue;
+        const int preset=std::clamp(int(std::lround(
+            controller_->getParamNormalized(
+                static_cast<Steinberg::Vst::ParamID>(entry.second))*7.)),0,7);
+        if(!entry.first->isEditing() &&
+           int(std::lround(entry.first->getValue()))!=preset) {
+            entry.first->setValue(static_cast<float>(preset));
+            entry.first->invalid();
+        }
+    }
     const auto master=static_cast<float>(std::clamp(
         controller_->getParamNormalized(kMasterVolume),0.,1.));
     if(masterVolume_ && !masterVolume_->isEditing() &&
@@ -563,6 +600,11 @@ void PresetBrowserView::ChooseRom() {
 void PresetBrowserView::valueChanged(CControl* control) {
     if(!control||syncing_)return;
     const int tag=control->getTag();
+    if(tag==kReverbType || tag==kChorusType) {
+        ChangeParameter(static_cast<Steinberg::Vst::ParamID>(tag),
+            double(std::clamp(int(std::lround(control->getValue())),0,7))/7.);
+        return;
+    }
     if(tag==kMasterVolume) {
         ChangeParameter(static_cast<Steinberg::Vst::ParamID>(tag),
                         std::clamp(double(control->getValue()),0.,1.));
