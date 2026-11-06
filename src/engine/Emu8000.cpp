@@ -190,6 +190,42 @@ Emu8000Core::Emu8000Core(uint32_t outputSampleRate)
     PowerOnInit();
 }
 
+// The Creative driver and Linux emu8000.c program the effects through real
+// EMU8000 registers. The active VST3 audio backend is 86Box, not the separate
+// legacy m_reverb/m_chorus float workalikes. Apply all preset coefficients
+// without allocating, blocking or resetting the chip/voices.
+void Emu8000Core::ApplyHardwareReverbPreset(unsigned index) noexcept
+{
+    if (index >= 8u) return;
+    for (unsigned n=0; n<28; ++n) {
+        const auto slot=Emu8000Fx::kReverbSlots[n];
+        Emu8000::Reg reg=Emu8000::Reg::INIT1;
+        if (slot.init==2) reg=Emu8000::Reg::INIT2;
+        else if (slot.init==3) reg=Emu8000::Reg::INIT3;
+        else if (slot.init==4) reg=Emu8000::Reg::INIT4;
+        Write(reg,slot.slot,Emu8000Fx::kReverbParm[index][n]);
+    }
+}
+void Emu8000Core::ApplyHardwareChorusPreset(unsigned index) noexcept
+{
+    if (index >= 8u) return;
+    const auto& preset=Emu8000Fx::kChorusPresets[index];
+    Write(Emu8000::Reg::INIT3,0x09,preset.feedback);
+    Write(Emu8000::Reg::INIT3,0x0c,preset.delaySamples);
+    Write(Emu8000::Reg::INIT4,0x03,preset.depth);
+    // The two Creative short-delay modes program HWCF4=0x0006E000;
+    // all other presets program zero. The other four words are HWCF5-7.
+    const uint32_t rightDelay=(index>=6u) ? 0x0006E000u : 0u;
+    WriteReg32(Emu8000::MakeSel(1,Emu8000::Port::Data1,
+                                Emu8000::Hwcf::kHWCF4),rightDelay);
+    WriteReg32(Emu8000::MakeSel(1,Emu8000::Port::Data1,
+                                Emu8000::Hwcf::kHWCF5),preset.lfoFreq);
+    WriteReg32(Emu8000::MakeSel(1,Emu8000::Port::Data1,
+                                Emu8000::Hwcf::kHWCF6),0x00008000u);
+    WriteReg32(Emu8000::MakeSel(1,Emu8000::Port::Data1,
+                                Emu8000::Hwcf::kHWCF7),0u);
+}
+
 uint16_t& Emu8000Core::RegRef(Port p, int reg, int voice)
 {
     return m_regs[static_cast<size_t>(p)][reg & 7][voice & 0x1F];
