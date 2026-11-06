@@ -52,6 +52,7 @@ private:
     static constexpr int kPrevious=3101,kNext=3102,kToggle=3103,
                          kFilter=3104,kBankFilter=3105,kLoadSf2=3106,kReset=3107,
                          kLoadRom=3108,kActiveBank=3109,kDirectPreset=3110,
+                         kMainPage=3111,kEditPage=3112,
                          kReverbType=1200,kChorusType=1201;
     static constexpr int kGuiFirst=1100,kGuiCount=12;
     static constexpr int kMasterVolume=static_cast<int>(MasterOutput::kParamID);
@@ -70,7 +71,11 @@ private:
     uint16_t bank_=0;
     uint8_t program_=0;
     int bankFilter_=-1;
-    bool expanded_=true,syncing_=false,selectingRowFromMouse_=false;
+    bool syncing_=false,selectingRowFromMouse_=false;
+    int currentPage_=0;  // MAIN=0, EDIT=1, BROWSER=2 (UI only, no VST state)
+    std::array<VSTGUI::CViewContainer*,3> pages_{};
+    VSTGUI::CViewContainer* buildingPanel_=nullptr;
+    std::array<VSTGUI::CTextButton*,3> pageButtons_{};
     std::string searchText_;
     std::vector<uint16_t> filterBanks_;
     std::vector<uint16_t> activeBanks_;
@@ -109,7 +114,9 @@ private:
     void Sync(bool force=false);
     void SyncSf2Status();
     void SyncHardwareInfo();
-    void SetExpanded(bool);
+    void SetPage(int page);
+    VSTGUI::CRect PageRect(const VSTGUI::CRect& r) const;
+    void AddToCurrentPage(VSTGUI::CView* v);
     void Select(uint16_t bank,uint8_t program);
     void ChangeParameter(Steinberg::Vst::ParamID,double normalized);
     void ChooseSf2();
