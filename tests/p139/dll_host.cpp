@@ -60,6 +60,7 @@ struct Plugin {
         // symbol differs. Never require a new P135 binary build.
         if(!census)census=reinterpret_cast<P139ReadVoices>(GetProcAddress(module,"p135ReadVoices"));
         heapControl=reinterpret_cast<P139HeapControl>(GetProcAddress(module,"p139HeapControl"));
+        if(!heapControl)heapControl=reinterpret_cast<P139HeapControl>(GetProcAddress(module,"p135HeapControl"));
     }
     ~Plugin(){if(audio)audio->setProcessing(false);if(component){component->setActive(false);component->terminate();}if(audio)audio->release();if(component)component->release();if(factory)factory->release();if(module)FreeLibrary(module);}
     P139Voices voices(){P139Voices v{};if(census)must(census(audio,&v)!=0,"voice census");return v;}
