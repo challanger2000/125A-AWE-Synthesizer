@@ -125,7 +125,7 @@ void realtimeSaveRecallProfile(const std::string& csvPath) {
         });
         std::vector<double> durations;
         durations.reserve(N);
-        int exceeded=0;
+        int exceeded=0,audibleBlocks=0;
         const auto start=Clock::now();
         started.store(true,std::memory_order_release);
         for(int i=0;i<N;++i) {
@@ -133,10 +133,20 @@ void realtimeSaveRecallProfile(const std::string& csvPath) {
                 std::chrono::duration<double>(double(i)*1024./44100.));
             std::this_thread::sleep_until(ideal);
             Block buffer;
+            // Keep the DSP genuinely loaded even when a project recall
+            // releases earlier notes. This is a deliberate upper-bound
+            // re-articulation workload: 30 new notes every 1024 frames,
+            // IDENTICAL for all 3 save/recall scenarios.
+            for(int note=0;note<30;++note)
+                buffer.note(0,45+note,0,true);
             const auto t0=Clock::now();
             const tresult rc=rig.p->process(buffer.data);
             const auto t1=Clock::now();
             require(rc==kResultOk,"realtime process returned error");
+            bool heard=false;
+            for(int sample=0;sample<1024&&!heard;++sample)
+                heard=buffer.l[sample]!=0.0f || buffer.r[sample]!=0.0f;
+            audibleBlocks+=heard;
             const double ms=std::chrono::duration<double,std::milli>(t1-t0).count();
             durations.push_back(ms);
             csv<<name<<","<<i<<","<<ms<<"\n";
@@ -145,6 +155,8 @@ void realtimeSaveRecallProfile(const std::string& csvPath) {
         done.store(true,std::memory_order_release);
         if(control.joinable())control.join();
         require(!fault.load(),"control save or recall failed");
+        require(audibleBlocks>=300,
+                "fewer than 300 real audio-producing blocks: deadline timing would be misleading");
         require(!saveThread||saves.load()>=10,"insufficient concurrent saves");
         require(!withRecall||recalls.load()>=1,"no actual simultaneous recall tested");
         std::sort(durations.begin(),durations.end());
@@ -157,6 +169,8 @@ void realtimeSaveRecallProfile(const std::string& csvPath) {
                  <<" mean_ms="<<average<<" p95_ms="<<q(.95)
                  <<" p99_ms="<<q(.99)<<" max_ms="<<durations.back()
                  <<" deadline_overruns="<<exceeded
+                 <<" audible_blocks="<<audibleBlocks
+                 <<" noteons_per_block=30"
                  <<" saves="<<saves.load()
                  <<" recalls="<<recalls.load()
                  <<" SRC=Factory.cpp_INSTRUMENTED_PROCESSOR"
