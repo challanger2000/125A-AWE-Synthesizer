@@ -29,9 +29,9 @@ jobs:
           $ErrorActionPreference='Stop'
           $old=Join-Path $env:RUNNER_TEMP 'p137-p134-original-v11'
           $head=(gh api repos/challanger2000/125A-AWE-Synthesizer/actions/runs/42221403709 --jq .head_sha).Trim()
-          if ($LASTEXITCODE -ne 0 -or $head -ne 'f4eb2a699122d70f3dd889fd747de20022064ab4') { throw "Incorrect historical P133 baseline source: $head" }
-          gh run download 42221403709 -n P137-Box86-ShadowDSP-Windows-x64-VST3-TEST-ONLY -D $old
-          if ($LASTEXITCODE -ne 0) { throw 'Verified P133 VST3 artifact unavailable' }
+          if ($LASTEXITCODE -ne 0 -or $head -ne 'f4eb2a699122d70f3dd889fd747de20022064ab4') { throw "Incorrect historical P134 baseline source: $head" }
+          gh run download 42221403709 -n P134-AWE-CC120-FX-RT-Windows-x64-VST3-PREVIEW -D $old
+          if ($LASTEXITCODE -ne 0) { throw 'Verified P134 VST3 artifact unavailable' }
           $bins=@(Get-ChildItem $old -Recurse -File -Filter '125A_AWE_Synthesizer.vst3')
           if($bins.Count -ne 1) { throw "Expected one old P134 V11 binary, found $($bins.Count)" }
           "P137_P134_BASELINE=$($bins[0].FullName)" | Out-File $env:GITHUB_ENV -Append
