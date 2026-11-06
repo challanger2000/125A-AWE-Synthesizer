@@ -1,0 +1,64 @@
+name: P128 independent EMU8000 chorus feedback root-cause reproduction
+on:
+  push:
+    branches: [audit/p128-chorus-fractional-feedback-20261106]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  chorus-fixed-point:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure native real EMU8000 audio core (no ROM needed)
+        shell: pwsh
+        run: |
+          cmake -S . -B build-chorus -G "Visual Studio 17 2022" -A x64 -D125A_BUILD_VST3=OFF -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_OPL3_PROBES=OFF
+          if ($LASTEXITCODE -ne 0) { throw 'Chorus configure failed' }
+      - name: Build actual production chorus object and isolated test
+        shell: pwsh
+        run: |
+          cmake --build build-chorus --config Release --target awe32_p128_chorus_feedback_test --parallel 2
+          if ($LASTEXITCODE -ne 0) { throw 'Chorus test compile failed' }
+      - name: Confirm sign-dependent non-decaying feedback on all eight presets
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force qa | Out-Null
+          $exe = @(Get-ChildItem build-chorus -Recurse -Filter 'awe32_p128_chorus_feedback_test.exe' -File)
+          if ($exe.Count -ne 1) { throw 'Chorus audit executable missing/ambiguous' }
+          & $exe[0].FullName 2>&1 | Tee-Object qa/chorus-core.txt
+          $rc=$LASTEXITCODE
+          $log=Get-Content qa/chorus-core.txt -Raw
+          $lines=@(Get-Content qa/chorus-core.txt | Where-Object { $_.StartsWith('CHORUS_CORE preset=') })
+          if ($rc -ne 1 -or $lines.Count -ne 8 -or
+              -not $log.Contains('CHORUS_CORE checks=16 failures=6')) {
+            throw "Expected six sign-dependent feedback floor failures (exit $rc)"
+          }
+          foreach ($preset in @(0,6)) {
+            $match=$lines[$preset]
+            if (-not ($match -match 'minus1_tail=\[0,0\]') -or
+                -not ($match -match 'plus1_tail=\[0,0\]')) {
+              throw "Expected preset $preset with no feedback to decay fully"
+            }
+          }
+          foreach ($preset in @(1,2,3,4,5,7)) {
+            $match=$lines[$preset]
+            if (-not ($match -match 'minus1_tail=\[-1,-1\]') -or
+                -not ($match -match 'plus1_tail=\[0,0\]')) {
+              throw "Unexpected persistent negative tail in preset $preset"
+            }
+          }
+          'CONFIRMED: negative one-LSB signed shift feedback is absorbing while positive decays' |
+            Set-Content qa/verdict.txt
+          exit 0
+      - name: Preserve DSP evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 125A-P128-Chorus-Feedback-Root-Cause-Evidence
+          path: qa/
+          if-no-files-found: warn
+          retention-days: 14
