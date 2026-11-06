@@ -1,0 +1,55 @@
+name: Independent P128 accepted in-block program and PCM audit
+on:
+  push:
+    branches: [audit/p128-midblock-program-race-20261106]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: p128-midblock-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  real-processor-midblock:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch exact Steinberg 3.8.1 SDK
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch v3.8.1_build_84 --recurse-submodules https://github.com/steinbergmedia/vst3sdk.git external/vst3sdk
+          $sha = (git -C external/vst3sdk rev-parse HEAD).Trim()
+          if ($sha -ne '3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96') { throw "SDK mismatch $sha" }
+      - name: Build production Processor source against real Windows SDK
+        shell: pwsh
+        run: |
+          cmake -S . -B build-audit -G "Visual Studio 17 2022" -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON
+          if ($LASTEXITCODE -ne 0) { throw 'P128 audit configure failed' }
+          cmake --build build-audit --config Release --target awe32_p128_processor_order_test --parallel 2
+          if ($LASTEXITCODE -ne 0) { throw 'P128 audit processor build failed' }
+      - name: Prove accepted in-block program yields wrong original PCM under control writer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force qa | Out-Null
+          ctest --test-dir build-audit -C Release -V -R '^125A_p128_midblock_program_audit$' --timeout 120 2>&1 |
+            Tee-Object -FilePath qa/midblock.log
+          $rc = $LASTEXITCODE
+          $log = Get-Content qa/midblock.log -Raw
+          if ($rc -eq 0 -and
+              $log.Contains('PASS midblock: ordinary program-9 point before NoteOn yields audible audio/save') -and
+              $log.Contains('PASS midblock: accepted program point persisted even when RT writer refused') -and
+              $log.Contains('FAIL midblock: NoteOn after refused program point must use newly accepted program PCM') -and
+              $log.Contains('MIDBLOCK_PROGRAM_AUDIT written_program=9 pcm_equal=0')) {
+            '[REPRODUCED] accepted program saved correctly, NoteOn PCM incorrectly uses old program in same block' | Set-Content qa/verdict.txt
+          } else {
+            throw "Independent P128 in-block program mismatch did not reproduce with all controls (rc=$rc)"
+          }
+          exit 0
+      - name: Preserve evidence even on unexpected failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 125A-P128-Midblock-Program-Audit
+          path: qa/
+          if-no-files-found: warn
+          retention-days: 14
