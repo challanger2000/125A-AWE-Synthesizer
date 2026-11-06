@@ -1,6 +1,16 @@
 # START HERE — 125A AWE Synthesizer
 
-**Stand: 2026-11-06. Entwicklungs-/Prüfstand, keine GUI- oder Releasefreigabe.**
+**Stand: 2026-11-06. P133 FX-GUI-Funktion erfolgreich geprüft und im Entwicklungsbranch integriert; KEINE Gesamt-ASIO-/DAW- oder Releasefreigabe.**
+
+## NEUESTER STAND – P133 alle originalen Creative Reverb-/Chorus-Typen wählbar (6. November 2026)
+
+- **[PR #72 in den Entwicklungsbranch gemergt](https://github.com/challanger2000/125A-AWE-Synthesizer/pull/72)**, Merge-Commit **`d6756c964aa7c8ea1bd5994b6d9ecf92a7051e33`**. Die tatsächlich neuen Funktionen sind jetzt im **`fix/p122-bank-dirty-audit`**, nicht nur in einem separaten Audit-Branch. **Keine Veränderung der Signed-Feedback-Chorus-DSP-Rechenregel aus [Draft PR #67](https://github.com/challanger2000/125A-AWE-Synthesizer/pull/67).**
+- **Echte auswählbare VSTGUI-Dropdowns:** **REVERB TYPE** (Room 1/2/3, Hall 1/2, Plate, Delay, Panning Delay) und **CHORUS TYPE** (Chorus 1/2/3/4, Feedback, Flanger, Short Delay, Short Delay + FB). Die Parameter **1200/1201** sind diskret und DAW-automatisierbar; die bisherigen Regler **HALL + / CHORUS +** für Sendanteile und alle anderen Funktionen bleiben bestehen. Der RESET-Button und die Abschnittslinien wurden für die neuen Menüs versetzt; tatsächliche Windows-GUI-Bilder wurden geprüft.
+- **Die Auswahl wirkt auf die reale 86Box-EMU8000-Engine**, via originalen Creative-INIT1..INIT4- und HWCF4..HWCF7-Registerwerten. Kein generischer DAW-Effekt hinzugefügt. **Projektformat V11** ergänzt nur zwei 32-bit-FX-Indexwörter am Ende der V10-Payload. V1–V10 bleiben lesbar und starten wie bisher mit Hall 2 / Chorus 3. Save/Recall samt paralleler Automations-Writer-Kollision wird durch gestempelte FX-Intents ohne RT-Mutex geschützt.
+- **[ABGESCHLOSSENE Windows-P133-Vollregression #42196456180: SUCCESS](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42196456180)** auf Quellstand `66b3dc8277f68efb0eaa4857ab61a5cfd3d637c8`: **43/43 CTests (inkl. V11-Asset-Roundtrip, 64/64 Moduspaare und echtem VST3-Processor-Register-/Save-/Recall-Test), Steinberg SDK-Selbsttest 47/47, echter VST3-Modulvalidator 537/537, EditorHost-GUI-Smokes 3/3 PASS**. Es liegt ein aus demselben geprüften Stand kompiliertes Windows-x64-VST3-Testpaket im Actions-Artefakt **`P133-AWE-FX-Windows-x64-VST3-PREVIEW`**; **NICHT** als Gumroad-/Releasepaket ausgeben.
+- Reproduzierbare Tests, Registerdetails und Upgrade-Migration: [docs/P133-ORIGINAL-CREATIVE-FX-PRESETS.md](https://github.com/challanger2000/125A-AWE-Synthesizer/blob/fix/p122-bank-dirty-audit/docs/P133-ORIGINAL-CREATIVE-FX-PRESETS.md). **Codex P132 Echtzeit-Audit bleibt separat/offen**, ebenso der physische Chorus-Nachweis [C01 PR #71](https://github.com/challanger2000/125A-AWE-Synthesizer/pull/71). **RELEASE-NO-GO** ohne Zielrechner-ASIO/DAW-Prüfung und unabhängigen Gesamtaudit.
+
+
 
 ## P131 – Windows-Echtzeitprofil nach P130: Audit separat, NO-GO (6. November 2026)
 
