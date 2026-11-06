@@ -2182,7 +2182,16 @@ emu8k_work_chorus(int32_t *inbuf, int32_t *outbuf, emu8k_chorus_eng_t *engine, i
         int32_t dat_l = emu8k_chorus_tap(engine->chorus_left_buffer, engine->write, delay_l);
         int32_t dat_r = emu8k_chorus_tap(engine->chorus_left_buffer, engine->write, delay_r);
 
-        engine->chorus_left_buffer[engine->write] = *inbuf + ((dat_l * engine->feedback) >> 8);
+        /* P129: arithmetic right shift of a negative feedback product
+         * rounds downward. An input of -1 LSB is consequently an absorbing
+         * fixed point for any nonzero feedback byte, producing an infinite
+         * negative tail after the excitation ends. Use symmetric signed
+         * truncation, with a 64-bit intermediate, to let sub-LSB feedback
+         * decay rather than creating a DC floor. Hardware DSP rounding
+         * parity still requires an independent physical-card recording. */
+        const int32_t fed_back = (int32_t)
+            (((int64_t) dat_l * engine->feedback) / INT64_C(256));
+        engine->chorus_left_buffer[engine->write] = *inbuf + fed_back;
 
         ++engine->write;
         engine->write %= EMU8K_LFOCHORUS_SIZE;

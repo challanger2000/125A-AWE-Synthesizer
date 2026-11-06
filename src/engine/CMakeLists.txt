@@ -122,3 +122,13 @@ add_executable(awe32_p128_note_handoff_test "${PROJECT_SOURCE_DIR}/tests/p128_no
 target_include_directories(awe32_p128_note_handoff_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${UPSTREAM_SRC}")
 target_link_libraries(awe32_p128_note_handoff_test PRIVATE awe32_chip_safety)
 add_test(NAME 125A_p128_note_handoff COMMAND awe32_p128_note_handoff_test)
+
+# P129 direct production-chorus regression: zero input with positive/negative
+# one-LSB delay-line state must converge to exact zero for all eight presets.
+add_executable(awe32_p129_chorus_signed_decay_test
+  "${PROJECT_SOURCE_DIR}/tests/p129_chorus_signed_decay.cpp")
+target_include_directories(awe32_p129_chorus_signed_decay_test PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}/include" "${UPSTREAM_SRC}/86box/include")
+target_link_libraries(awe32_p129_chorus_signed_decay_test PRIVATE awe32_chip_safety)
+add_test(NAME 125A_p129_chorus_signed_decay
+  COMMAND awe32_p129_chorus_signed_decay_test)
