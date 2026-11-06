@@ -60,20 +60,13 @@ jobs:
         run: |
           cmake --build build-audit --config Release --parallel 2
           if ($LASTEXITCODE -ne 0) { throw 'Complete P128 candidate build/Validator failed' }
-      - name: Run full registered Windows regression suite except known generated-file false positive
+      - name: Run all Windows CTests except generated-file source contract false positive
         shell: pwsh
         timeout-minutes: 10
         run: |
           $ErrorActionPreference = 'Stop'
-          "Exclude only 125A_source_baseline_contract because it scans generated build-audit/p128-generated/assets/{zero.rom,bank.sf2} as if committed assets." | Set-Content artifacts/controls/ctest-exception.txt
-          ctest --test-dir build-audit -C Release --output-on-failure --timeout 120 -E '^125A_source_baseline_contract
-        uses: actions/upload-artifact@v4
-        with:
-          name: 125A-P128-Persistent-Controls-Independent-Audit
-          path: artifacts/controls/
-          if-no-files-found: warn
-          retention-days: 14
- 2>&1 | Tee-Object artifacts/controls/ctest.txt
+          "Excluded source contract scans generated, noncommitted build files; not a project release waiver" | Set-Content artifacts/controls/ctest-exception.txt
+          ctest --test-dir build-audit -C Release --output-on-failure --timeout 120 -E '^125A_source_baseline_contract$' 2>&1 | Tee-Object artifacts/controls/ctest.txt
           if ($LASTEXITCODE -ne 0) { throw 'Other CTests failed on P128 candidate' }
       - name: Actual Windows EditorHost GUI attach-input-close smoke
         shell: pwsh
