@@ -85,11 +85,53 @@ void deterministic(){
  {Rig r;check(r.p->getTailSamples()==kInfiniteTail&&r.p->setProcessing(false)==kResultOk&&r.p->setProcessing(true)==kResultOk,"kInfiniteTail and setProcessing lifecycle");}
 }
 
+// Audit-only negative control: accepted persistent automation must survive
+// a control-owned state writer gate, without relying on a later host resend.
+void persistentControlWriterCollision() {
+    Rig r;
+    // Positive control first proves that the parameter IDs and state
+    // serialization work in the absence of a control writer.
+    {
+        Block normal(0);
+        normal.param(kVolumeID,0.62);
+        normal.param(kGuiFirstID,0.22);
+        normal.run(*r.p);
+    }
+    const auto before=save(*r.p);
+    check(before.masterVolume==6200&&before.controls[0]==2200,
+          "control: positive baseline V10 master/gui values applied without competition");
+    {
+        RealtimeStateVersion::Writer control(
+            r.p->rtStateVersion_,RealtimeStateVersion::Domain::Control);
+        require(static_cast<bool>(control),"control writer gate acquired");
+        Block concurrent(0);
+        concurrent.param(kVolumeID,0.35);
+        concurrent.param(kGuiFirstID,0.75);
+        concurrent.run(*r.p);
+        std::cout<<"CONTROL_AUDIT accepted parameter points with state writer gate held"<<std::endl;
+    }
+    const auto immediate=save(*r.p);
+    std::cout<<"CONTROL_AUDIT immediate_master="<<immediate.masterVolume
+             <<" immediate_gui0="<<immediate.controls[0]
+             <<" wanted_master=3500 wanted_gui0=7500"<<std::endl;
+    check(immediate.masterVolume==3500,
+          "control: master Volume must not be discarded on RT writer refusal");
+    check(immediate.controls[0]==7500,
+          "control: GUI overlay must not be discarded on RT writer refusal");
+    // A subsequent process() without repeated automation cannot repair
+    // previously discarded events. This rejects a false transient PASS.
+    { Block next(0);next.run(*r.p); }
+    const auto next=save(*r.p);
+    check(next.masterVolume==3500&&next.controls[0]==7500,
+          "control: subsequent idle process preserves accepted master/gui changes");
+}
+
 int main(int argc,char** argv) {
     try {
         if(argc!=3)return 2;
         assetsDir=argv[2];
-        if(std::string(argv[1])=="nullswap") {
+        if(std::string(argv[1])=="persistent-controls") persistentControlWriterCollision();
+        else if(std::string(argv[1])=="nullswap") {
             Rig r;bool fired=false;
             hook=[&](const char* h){if(!fired&&std::string(h)=="block_pin") {
                 fired=true;require(recall(*r.p,state(0,0,false))==kResultOk,"empty asset recall");
