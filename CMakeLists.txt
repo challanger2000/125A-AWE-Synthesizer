@@ -200,3 +200,6 @@ if(125A_P134_AB)
       "${p128_assets}" "${PROJECT_BINARY_DIR}/p134-ab")
   set_tests_properties(125A_p134_p133_full_pcm_ab PROPERTIES TIMEOUT 180)
 endif()
+
+# P139 full P135-replicated ETW real-VST3 stress on isolated P137 shadow-DSP optimization.
+include(tests/p139/audit.cmake)
