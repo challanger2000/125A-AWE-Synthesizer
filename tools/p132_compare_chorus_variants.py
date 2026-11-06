@@ -86,7 +86,7 @@ def main():
         records.append({
             "preset": preset,
             "feedback_byte": feedback,
-            "reference_hardware_capture_available": feedback == 0,
+            "historical_ct4390_reference_available_for_this_mode": preset == 0,
             "original_negative_1_lsb_ring_stuck": bool(feedback),
             "candidate_negative_1_lsb_ring_silent": True,
             "original_sha256_pcm32": digest(before_file),
@@ -106,7 +106,7 @@ def main():
         print(f"P132_DIFF preset={preset} feedback={feedback} "
               f"changed_pcm32_samples={differences} max_delta_lsb32={maxdelta} "
               f"proxy_changed_pcm16={quantized_differences} "
-              f"hardware_reference_present={int(feedback==0)}")
+              f"historical_ct4390_reference_present={int(preset==0)}")
     if affected < 1:
         raise ValueError("Candidate made no positive-feedback impulse-PCM changes")
     data = {
