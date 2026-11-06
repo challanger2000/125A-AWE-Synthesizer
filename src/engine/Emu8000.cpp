@@ -1351,7 +1351,7 @@ void Emu8000Core::UpdateRegistersFromState(int v)
     // 86Box computes the same values itself.
     const TraceOff noTrace(*this);
 
-    const VoiceState& vs = m_voices[v];
+    VoiceState& vs = m_voices[v];
     const uint32_t ccca = Read(Reg::CCCA, v);
     Write(Reg::CCCA, v, (ccca & ~kCccaAddressMask) | (vs.address & kCccaAddressMask));
 
@@ -1366,11 +1366,19 @@ void Emu8000Core::UpdateRegistersFromState(int v)
     // CPF: the upper half is a LINEAR increment (0x4000 = 1.0), the lower is
     // the fractional part of the address [PG]. IP, by contrast, is
     // logarithmic.
-    const double increment = std::pow(2.0,
-        (static_cast<double>(RegVal(Port::Data3, 0, v)) - kPitchUnity) / kPitchPerOctave);
-    const uint16_t cpfHi = static_cast<uint16_t>(
-        std::clamp(increment * kCpfUnity, 0.0, 65535.0));
-    RegRef(Port::Data0Hi, 0, v) = cpfHi;
+    const uint32_t ip = RegVal(Port::Data3, 0, v);
+    if (vs.mirrorLastIp != ip)
+    {
+        // The original math is preserved bit-for-bit. It only depends on
+        // IP, not on output position or effects, so reuse the result until
+        // a true driver/automation IP write changes the register.
+        const double increment = std::pow(2.0,
+            (static_cast<double>(ip) - kPitchUnity) / kPitchPerOctave);
+        vs.mirrorCpfHi = static_cast<uint16_t>(
+            std::clamp(increment * kCpfUnity, 0.0, 65535.0));
+        vs.mirrorLastIp = ip;
+    }
+    RegRef(Port::Data0Hi, 0, v) = vs.mirrorCpfHi;
     RegRef(Port::Data0,   0, v) = static_cast<uint16_t>(vs.frac);
 }
 
