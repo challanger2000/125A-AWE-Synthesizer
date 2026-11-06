@@ -126,6 +126,7 @@ public:
             reportedLatency_=0;
             hardwareStatus_="RAM --  |  ROM: ERFORDERLICH  |  CORE: INAKTIV";
             ++assetGeneration_;
+            ++nonRecallAssetGeneration_;
         }
         return kResultOk;
     }
@@ -137,6 +138,7 @@ public:
                 std::lock_guard<std::mutex> lock(engineMutex_);
                 hostActive_=false;
                 ++assetGeneration_;
+            ++nonRecallAssetGeneration_;
                 engines_.Publish({});
                 activeRomReady_=false;
                 reportedLatency_=0;
@@ -204,6 +206,7 @@ public:
             reportedLatency_=latency;
             hardwareStatus_=info;
             ++assetGeneration_;
+            ++nonRecallAssetGeneration_;
             assetError_=error;
             hardware=hardwareStatus_;
         }
@@ -322,6 +325,7 @@ public:
                     state_.romPath=path;
                     state_.pathsSpecified=true;
                     ++assetGeneration_;
+            ++nonRecallAssetGeneration_;
                     info=HardwareDescriptor();
                 }
             }
@@ -422,6 +426,7 @@ public:
                 state_.sf2Path=path;
                 state_.pathsSpecified=true;
                 ++assetGeneration_;
+            ++nonRecallAssetGeneration_;
             }
         }
         if(stale) {
@@ -558,12 +563,13 @@ public:
         }
         uint32_t sampleRate=44100;
         bool active=false;
-        uint64_t epoch=0;
+        uint64_t epoch=0, nonRecallEpoch=0;
         {
             std::lock_guard<std::mutex> lock(engineMutex_);
             sampleRate=rate_;
             active=hostActive_;
             epoch=assetGeneration_;
+            nonRecallEpoch=nonRecallAssetGeneration_;
         }
         std::unique_ptr<Synth> prepared;
         bool loadedSf2=false,loadedGm=false;
@@ -596,7 +602,15 @@ public:
         const uint32_t latency=prepared?prepared->Core().ChipLatencyFrames():0u;
         {
             std::lock_guard<std::mutex> lock(engineMutex_);
-            if(epoch!=assetGeneration_||active!=hostActive_||rate_!=sampleRate)
+            // Older recalls may commit while this newer intent prepares its
+            // assets. Only newer recalls or independent asset/lifecycle edits
+            // invalidate this prepared instance; do not let an older recall
+            // cancel a newer project selection solely by changing the epoch.
+            const auto committedRecall=bankOrder_.LatestRecall();
+            if(active!=hostActive_||rate_!=sampleRate||
+               nonRecallEpoch!=nonRecallAssetGeneration_||
+               (epoch!=assetGeneration_ &&
+                committedRecall.sequence>=recallSequence))
                 return kResultFalse;
             // Publish control values before the new engine is visible to the
             // audio callback; that callback restores MIDI state itself.
@@ -1065,6 +1079,9 @@ private:
     uint32_t reportedLatency_=0;
     std::string hardwareStatus_="RAM --  |  ROM: ERFORDERLICH  |  CORE: INAKTIV";
     uint64_t assetGeneration_=0;
+    // Separately track lifecycle/asset changes. An older recall can alter
+    // assetGeneration_ without invalidating a newer prepared recall.
+    uint64_t nonRecallAssetGeneration_=0;
     MidiLiveState liveMidi_{}; // exclusively audio-thread owned
     RealtimeStateVersion rtStateVersion_{};
     // Real-time parameters are single-word atomics; getState/load paths never
