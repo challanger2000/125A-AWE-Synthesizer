@@ -434,6 +434,22 @@ int wmain(int argc,wchar_t** argv) {
                           channelState.channelPrograms[1]==10,
                           "P128 later channel program edits survive earlier recall");
             }
+            // P128 isolation: the preceding channel-override test intentionally
+            // leaves programs 11/10 active. Reset through a real V10 recall so
+            // the following *global-only* automation oracle starts with no
+            // channel overrides. Otherwise its first save correctly contains
+            // mask 3 and the test produces a false failure.
+            MemoryStream globalOnlyBase;
+            AWE125::AssetState::Data globalOnlyState{};
+            ok&=check(makeRecall(globalOnlyBase,0,0) &&
+                      component->setState(&globalOnlyBase)==kResultOk &&
+                      audio->process(data)==kResultOk &&
+                      snapshotState(component,globalOnlyState) &&
+                      globalOnlyState.program==0 &&
+                      globalOnlyState.channelProgramMask==0 &&
+                      globalOnlyState.channelPrograms[0]==0 &&
+                      globalOnlyState.channelPrograms[1]==0,
+                      "P128 reset channel overrides before global-only automation test");
             // A true exported VST3 processor concurrently receives rapid
             // program-change parameter queues and getState() calls.
             // The host must never serialize a mixture of two programs.
