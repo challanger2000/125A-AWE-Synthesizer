@@ -25,7 +25,7 @@ jobs:
       - name: Configure native P128 processor harness
         shell: pwsh
         run: |
-          cmake -S . -B build-audit -G "Visual Studio 17 2022" -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON
+          cmake -S . -B build-audit -G "Visual Studio 17 2022" -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_EDITORHOST_TEST=ON
           if ($LASTEXITCODE -ne 0) { throw 'P128 audit configure failed' }
       - name: Build production-derived processor race test
         shell: pwsh
@@ -55,6 +55,40 @@ jobs:
             throw "P128 control writer regression remains or evidence is incomplete (rc=$rc)"
           }
           exit 0
+      - name: Build complete P128 native VST3, regression suite and EditorHost
+        shell: pwsh
+        run: |
+          cmake --build build-audit --config Release --parallel 2
+          if ($LASTEXITCODE -ne 0) { throw 'Complete P128 candidate build/Validator failed' }
+      - name: Run full registered Windows regression suite except known generated-file false positive
+        shell: pwsh
+        timeout-minutes: 10
+        run: |
+          $ErrorActionPreference = 'Stop'
+          "Exclude only 125A_source_baseline_contract because it scans generated build-audit/p128-generated/assets/{zero.rom,bank.sf2} as if committed assets." | Set-Content artifacts/controls/ctest-exception.txt
+          ctest --test-dir build-audit -C Release --output-on-failure --timeout 120 -E '^125A_source_baseline_contract
+        uses: actions/upload-artifact@v4
+        with:
+          name: 125A-P128-Persistent-Controls-Independent-Audit
+          path: artifacts/controls/
+          if-no-files-found: warn
+          retention-days: 14
+ 2>&1 | Tee-Object artifacts/controls/ctest.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Other CTests failed on P128 candidate' }
+      - name: Actual Windows EditorHost GUI attach-input-close smoke
+        shell: pwsh
+        timeout-minutes: 4
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $editor = Get-ChildItem build-audit -Filter editorhost.exe -Recurse |
+            Where-Object { $_.FullName -match 'Release' } |
+            Select-Object -First 1 -ExpandProperty FullName
+          $plugin = (Resolve-Path 'build-audit/VST3/Release/125A_AWE_Synthesizer.vst3').Path
+          if (-not $editor) { throw 'EditorHost executable not built' }
+          for ($attempt=1; $attempt -le 3; $attempt++) {
+            python tools/p18_editorhost_smoke.py --editorhost "$editor" --plugin "$plugin" --output "artifacts/controls/gui-$attempt"
+            if ($LASTEXITCODE -ne 0) { throw "P128 EditorHost smoke failed $attempt" }
+          }
       - name: Upload P128 controls audit evidence
         if: always()
         uses: actions/upload-artifact@v4
