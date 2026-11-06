@@ -2,7 +2,7 @@
 
 **Datum:** 2026-11-06  
 **Implementierung:** isolierter Branch `feature/awe-fx-preset-selection-v11-20261106`  
-**PR:** [#72](https://github.com/challanger2000/125A-AWE-Synthesizer/pull/72) (DRAFT, nicht gemergt)  
+**PR:** [#72](https://github.com/challanger2000/125A-AWE-Synthesizer/pull/72) (gemergt in Entwicklungsbranch: `d6756c964aa7c8ea1bd5994b6d9ecf92a7051e33`)  
 **Basis:** produktiver Entwicklungsbranch `fix/p122-bank-dirty-audit`, Start `c7d803c1`.
 
 ## Funktionsumfang
@@ -35,6 +35,6 @@ Die vorhandenen 12 SoundFont-Overlay-Regler, Masterlautstärke, SF2-Browser, Ban
 - `p14_vstgui_contract.py`: statische Integration der beiden hostgebundenen Dropdowns; `p18_editorhost_smoke.py`: echter Win32 EditorHost, auch physischer RESET-Klick.
 - Komplettworkflow: `.github/workflows/p133-fx-modes-full-windows.yml`, Windows 2022 / VS 2022 / x64 / C++23 / Steinberg SDK 3.8.1, **volle CTest-Suite**, vollständiger Steinberg VST3-Validator, drei GUI-Smokes. Erst nach vollständigem grünen Lauf wird ein **VST3 PREVIEW**-Artefakt hochgeladen, ausdrücklich **kein Gumroad-Release**.
 
-**Vorläufiger P133-Gate-Stand:** Der Windows-Build auf `7720393f` bestand 43/43 CTests und 537/537 VST3-Validatorprüfungen. Der EditorHost scheiterte am alten RESET-Testkoordinatenwert, nicht an einem gecrashten Plugin; GUI-Testkoordinate und Faceplate sind daraufhin geändert worden. **Für den letzten Branch-Commit den aktuellen Windows-Actions-Lauf erneut nachsehen; ohne diesen Nachweis keine endgültige GUI-Abnahme.**
+**P133-Gate abgeschlossen:** [Windows #42196456180](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42196456180) **SUCCESS** auf Quellstand `66b3dc8277f68efb0eaa4857ab61a5cfd3d637c8`: 43/43 CTests, 47/47 SDK-Validator-Selbsttests, **537/537 vollständige echte VST3-Modulprüfungen**, **3/3 Windows-EditorHost-GUI-Smokes**, geprüftes PREVIEW-VST3-Artefakt im selben Lauf. Der anfänglich falsche RESET-Klick nach Layoutänderung wurde als veraltete Testkoordinate erkannt und im erfolgreichen Endlauf korrigiert. P133 ist im Entwicklungsbranch integriert, nicht in einem Release.
 
 **Weiterhin offener Release-NO-GO:** Physische ASIO-/DAW-Deadlineprüfung (Codex P132 ist eine *andere* Untersuchung), Chorus-Hardwareparität C01, unabhängiger Gesamtaudit. Keine automatische Fusion von PR #72 oder Releasefreigabe.
