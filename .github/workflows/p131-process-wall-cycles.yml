@@ -1,0 +1,75 @@
+name: P131 actual AWE Processor low-buffer wall and thread-cycle profile
+on:
+  push:
+    branches: [audit/p131-process-wall-cycles-20261106]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  p131-real-processor-windows:
+    runs-on: windows-2022
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch verified Steinberg SDK
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch v3.8.1_build_84 --recurse-submodules https://github.com/steinbergmedia/vst3sdk.git external/vst3sdk
+          if ($LASTEXITCODE -ne 0) { throw 'SDK clone failed' }
+          $sha=(git -C external/vst3sdk rev-parse HEAD).Trim()
+          if ($sha -ne '3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96') { throw "SDK unexpected: $sha" }
+          New-Item -ItemType Directory -Force qa | Out-Null
+          "processor_sha=$env:GITHUB_SHA" | Set-Content qa/provenance.txt
+          "sdk_sha=$sha" | Add-Content qa/provenance.txt
+      - name: Configure and build entire Windows test and VST3 suite
+        shell: pwsh
+        run: |
+          cmake -S . -B build-p131 -G "Visual Studio 17 2022" -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_EDITORHOST_TEST=ON
+          if ($LASTEXITCODE -ne 0) { throw 'CMake configure failed' }
+          cmake --build build-p131 --config Release --parallel 2
+          if ($LASTEXITCODE -ne 0) { throw 'Windows build failed' }
+      - name: Run P131 and all previous native CTest regressions
+        shell: pwsh
+        timeout-minutes: 15
+        run: |
+          ctest --test-dir build-p131 -C Release --output-on-failure -V --timeout 240 2>&1 | Tee-Object -FilePath qa/ctest-complete.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Full Windows CTest regression failed' }
+          $log=Get-Content qa/ctest-complete.txt -Raw
+          if ($log -notmatch '100% tests passed') { throw 'Full pass marker missing' }
+          if ($log -notmatch '125A_p130_no_cpp_new_on_audio_thread') { throw 'P130 regression missing' }
+          if ($log -notmatch '125A_p131_processor_timing_profile') { throw 'P131 profile missing' }
+          $profiles=@(Get-Content qa/ctest-complete.txt | Where-Object { $_ -match 'P131_PROFILE frames=' })
+          if ($profiles.Count -ne 9) { throw "Expected 9 actual Processor scenarios, got $($profiles.Count)" }
+          if (-not $log.Contains('P131_VERDICT measurement_complete=1 deadline_release_approved=0')) {
+            throw 'P131 completed non-release verdict missing'
+          }
+          $raw='build-p131/p131-process-raw.csv'
+          if (-not (Test-Path $raw)) { throw 'P131 callback-level CSV missing' }
+          $rows=@(Get-Content $raw)
+          if ($rows.Count -ne 4501) { throw "Expected 4500 callback rows + header; got $($rows.Count)" }
+          Copy-Item $raw qa/p131-process-raw.csv
+          $profiles | Set-Content qa/p131-scenario-summary.txt
+          'DATA_COLLECTION_PASS_ONLY; ASIO_DEADLINE_NO_GO; CHORUS_HARDWARE_NO_GO' | Set-Content qa/p131-verdict.txt
+      - name: Exercise actual VST3 UI with EditorHost three times
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          $editor=Get-ChildItem build-p131 -Filter editorhost.exe -File -Recurse |
+            Where-Object { $_.FullName -match 'Release' } |
+            Select-Object -First 1 -ExpandProperty FullName
+          $plugin=(Resolve-Path 'build-p131/VST3/Release/125A_AWE_Synthesizer.vst3').Path
+          if (-not $editor) { throw 'EditorHost missing' }
+          for ($i=1; $i -le 3; $i++) {
+            python tools/p18_editorhost_smoke.py --editorhost "$editor" --plugin "$plugin" --output "qa/editor-$i"
+            if ($LASTEXITCODE -ne 0) { throw "EditorHost GUI smoke $i failed" }
+          }
+      - name: Upload original raw evidence and provenance even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: P131-Actual-Processor-4500-Callback-RT-Cycle-Evidence
+          path: |
+            qa/
+            build-p131/p131-process-raw.csv
+          if-no-files-found: warn
+          retention-days: 14
