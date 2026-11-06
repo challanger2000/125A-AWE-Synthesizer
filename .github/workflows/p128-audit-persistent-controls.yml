@@ -1,7 +1,7 @@
 name: Independent P128 persistent controls state-writer gate audit
 on:
   push:
-    branches: [audit/p128-persistent-parameter-race-20261106]
+    branches: [audit/p128-continuous-controls-fix-candidate-20261106]
   workflow_dispatch:
 
 permissions:
@@ -44,14 +44,15 @@ jobs:
           $rc = $LASTEXITCODE
           "Exit=$rc" | Set-Content artifacts/controls/exit.txt
           $log = Get-Content artifacts/controls/log.txt -Raw
-          if ($rc -eq 1 -and
+          if ($rc -eq 0 -and
               $log.Contains('PASS control: positive baseline V10 master/gui values applied without competition') -and
-              $log.Contains('CONTROL_AUDIT immediate_master=6200 immediate_gui0=2200') -and
-              $log.Contains('FAIL control: master Volume must not be discarded on RT writer refusal') -and
-              $log.Contains('FAIL control: GUI overlay must not be discarded on RT writer refusal')) {
-            '[REPRODUCED] master/gui writer-gate state loss (control race)' | Tee-Object artifacts/controls/verdict.txt
+              $log.Contains('CONTROL_AUDIT immediate_master=3500 immediate_gui0=7500') -and
+              $log.Contains('PASS control: master Volume must not be discarded on RT writer refusal') -and
+              $log.Contains('PASS control: GUI overlay must not be discarded on RT writer refusal') -and
+              $log.Contains('PASS control: subsequent idle process preserves accepted master/gui changes')) {
+            '[PASS] candidate preserves accepted master/GUI state across control writer gate' | Tee-Object artifacts/controls/verdict.txt
           } else {
-            throw "P128 control race did not produce expected positive and negative controls (rc=$rc)"
+            throw "P128 control writer regression remains or evidence is incomplete (rc=$rc)"
           }
           exit 0
       - name: Upload P128 controls audit evidence
