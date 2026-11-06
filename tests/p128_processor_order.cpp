@@ -85,11 +85,123 @@ void deterministic(){
  {Rig r;check(r.p->getTailSamples()==kInfiniteTail&&r.p->setProcessing(false)==kResultOk&&r.p->setProcessing(true)==kResultOk,"kInfiniteTail and setProcessing lifecycle");}
 }
 
+// Audit-only negative control: accepted persistent automation must survive
+// a control-owned state writer gate, without relying on a later host resend.
+void persistentControlWriterCollision() {
+    Rig r;
+    // Positive control first proves that the parameter IDs and state
+    // serialization work in the absence of a control writer.
+    {
+        Block normal(0);
+        normal.param(kVolumeID,0.62);
+        normal.param(kGuiFirstID,0.22);
+        normal.run(*r.p);
+    }
+    const auto before=save(*r.p);
+    check(before.masterVolume==6200&&before.controls[0]==2200,
+          "control: positive baseline V10 master/gui values applied without competition");
+    {
+        RealtimeStateVersion::Writer control(
+            r.p->rtStateVersion_,RealtimeStateVersion::Domain::Control);
+        require(static_cast<bool>(control),"control writer gate acquired");
+        Block concurrent(0);
+        concurrent.param(kVolumeID,0.35);
+        concurrent.param(kGuiFirstID,0.75);
+        concurrent.run(*r.p);
+        std::cout<<"CONTROL_AUDIT accepted parameter points with state writer gate held"<<std::endl;
+    }
+    const auto immediate=save(*r.p);
+    std::cout<<"CONTROL_AUDIT immediate_master="<<immediate.masterVolume
+             <<" immediate_gui0="<<immediate.controls[0]
+             <<" wanted_master=3500 wanted_gui0=7500"<<std::endl;
+    check(immediate.masterVolume==3500,
+          "control: master Volume must not be discarded on RT writer refusal");
+    check(immediate.controls[0]==7500,
+          "control: GUI overlay must not be discarded on RT writer refusal");
+    // A subsequent process() without repeated automation cannot repair
+    // previously discarded events. This rejects a false transient PASS.
+    { Block next(0);next.run(*r.p); }
+    const auto next=save(*r.p);
+    check(next.masterVolume==3500&&next.controls[0]==7500,
+          "control: subsequent idle process preserves accepted master/gui changes");
+    // One input queue per GUI control: prove there are no lost or aliased
+    // 12-control values when the control writer denies every audio update.
+    {
+        Rig matrix;
+        {
+            RealtimeStateVersion::Writer gate(
+                matrix.p->rtStateVersion_,RealtimeStateVersion::Domain::Control);
+            Block all(0);
+            for(int i=0;i<kGuiCount;++i)
+                all.param(kGuiFirstID+i,double(i+1)/20.);
+            all.param(kVolumeID,0.45);
+            all.run(*matrix.p);
+        }
+        const auto saved=save(*matrix.p);
+        bool distinct=saved.masterVolume==4500;
+        for(int i=0;i<kGuiCount;++i)
+            distinct&=saved.controls[i]==uint32_t((i+1)*500);
+        check(distinct,
+              "control: all 12 independent GUI values and master persist without writer");
+        Block following(0);
+        following.run(*matrix.p);
+        check(same(saved,save(*matrix.p)),
+              "control: pending all-controls applied without changing saved snapshot");
+    }
+    // A recall started AFTER accepted parameters must override them, even
+    // though audio could not obtain the realtime state writer on arrival.
+    {
+        Rig newest;
+        {
+            RealtimeStateVersion::Writer gate(
+                newest.p->rtStateVersion_,RealtimeStateVersion::Domain::Control);
+            Block old(0);
+            old.param(kVolumeID,0.35);
+            old.param(kGuiFirstID,0.75);
+            old.run(*newest.p);
+        }
+        require(recall(*newest.p,state(5,7))==kResultOk,
+                "control: newer state recall accepted");
+        check(same(save(*newest.p),state(5,7)),
+              "control: newer recall overrides older pending volume/gui values");
+        {Block following(0);following.run(*newest.p);}
+        check(same(save(*newest.p),state(5,7)),
+              "control: stale pending volume/gui not resurrected next callback");
+    }
+    // Conversely, accepted parameter edits AFTER a recall STARTS must
+    // survive the older project state committing at the end of its reader.
+    {
+        Rig older;
+        CallbackStream read;
+        require(writeState(read,state(5,7)),
+                "control: prepare delayed project recall");
+        read.once=[&] {
+            RealtimeStateVersion::Writer gate(
+                older.p->rtStateVersion_,RealtimeStateVersion::Domain::Control);
+            Block newer(0);
+            newer.param(kVolumeID,0.35);
+            newer.param(kGuiFirstID,0.75);
+            newer.run(*older.p);
+        };
+        require(older.p->setState(&read)==kResultOk,
+                "control: delayed recall with newer accepted controls");
+        auto wanted=state(5,7);
+        wanted.masterVolume=3500;
+        wanted.controls[0]=7500;
+        check(same(save(*older.p),wanted),
+              "control: edits newer than recall START survive its commit");
+        {Block following(0);following.run(*older.p);}
+        check(same(save(*older.p),wanted),
+              "control: newer-than-recall controls survive first subsequent process");
+    }
+}
+
 int main(int argc,char** argv) {
     try {
         if(argc!=3)return 2;
         assetsDir=argv[2];
-        if(std::string(argv[1])=="nullswap") {
+        if(std::string(argv[1])=="persistent-controls") persistentControlWriterCollision();
+        else if(std::string(argv[1])=="nullswap") {
             Rig r;bool fired=false;
             hook=[&](const char* h){if(!fired&&std::string(h)=="block_pin") {
                 fired=true;require(recall(*r.p,state(0,0,false))==kResultOk,"empty asset recall");
