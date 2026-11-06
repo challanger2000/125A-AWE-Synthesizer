@@ -1,0 +1,83 @@
+name: P129 combined mirror pitch cache and redundant FX bypass A-B
+on:
+  push:
+    branches: [audit/p129-combined-cpu-optimization-20261106]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: p129-dsp-ab-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  actual-86box-a-b:
+    runs-on: windows-2022
+    timeout-minutes: 35
+    steps:
+      - name: Checkout candidate in separate directory
+        uses: actions/checkout@v4
+        with:
+          path: candidate
+      - name: Checkout immutable original P128 DSP in separate directory
+        uses: actions/checkout@v4
+        with:
+          ref: a897d84c0cdafc91fe4e2e7550e10f88c2455b93
+          path: baseline
+      - name: Copy audit test-only harness into unchanged DSP checkout
+        shell: pwsh
+        run: |
+          $actual=(git -C baseline rev-parse HEAD).Trim()
+          if ($actual -ne 'a897d84c0cdafc91fe4e2e7550e10f88c2455b93') {
+            throw "Original code checksum is not pinned to P128: $actual"
+          }
+          Copy-Item candidate/tests/p129_dual_dsp_ab.cpp baseline/tests/p129_dual_dsp_ab.cpp
+          @'
+          add_executable(awe32_p129_dual_dsp_ab
+            "${PROJECT_SOURCE_DIR}/tests/p129_dual_dsp_ab.cpp")
+          target_include_directories(awe32_p129_dual_dsp_ab PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}" "${UPSTREAM_SRC}")
+          target_link_libraries(awe32_p129_dual_dsp_ab PRIVATE awe32_chip_safety)
+          target_compile_features(awe32_p129_dual_dsp_ab PRIVATE cxx_std_23)
+          '@ | Add-Content baseline/src/engine/CMakeLists.txt
+          New-Item -ItemType Directory -Force qa | Out-Null
+          "original=$actual" | Set-Content qa/provenance.txt
+          "candidate=$env:GITHUB_SHA" | Add-Content qa/provenance.txt
+          "hardware_capture=NONE; benchmark_host=Windows2022SharedVM" | Add-Content qa/provenance.txt
+          $assets=Join-Path $env:RUNNER_TEMP 'p129-audit-rom-sf2'
+          python candidate/tests/p128_synthetic_assets.py "$assets"
+          if ($LASTEXITCODE -ne 0) { throw 'Synthetic public ROM/SF2 generation failed' }
+      - name: Build actual unmodified and optimized Emu8000Core separately
+        shell: pwsh
+        run: |
+          cmake -S baseline -B build-baseline -G "Visual Studio 17 2022" -A x64 -D125A_BUILD_VST3=OFF -D125A_BUILD_ENGINE_PROBES=ON
+          if ($LASTEXITCODE -ne 0) { throw 'Original configure failed' }
+          cmake --build build-baseline --config Release --parallel 2 --target awe32_p129_dual_dsp_ab
+          if ($LASTEXITCODE -ne 0) { throw 'Original code build failed' }
+          cmake -S candidate -B build-candidate -G "Visual Studio 17 2022" -A x64 -D125A_BUILD_VST3=OFF -D125A_BUILD_ENGINE_PROBES=ON
+          if ($LASTEXITCODE -ne 0) { throw 'Candidate configure failed' }
+          cmake --build build-candidate --config Release --parallel 2 --target awe32_p129_dual_dsp_ab
+          if ($LASTEXITCODE -ne 0) { throw 'Candidate build failed' }
+      - name: Interleaved original-candidate-candidate-original performance and PCM
+        shell: pwsh
+        timeout-minutes: 12
+        run: |
+          $ErrorActionPreference='Stop'
+          $orig=@(Get-ChildItem build-baseline -Recurse -File -Filter awe32_p129_dual_dsp_ab.exe)
+          $cand=@(Get-ChildItem build-candidate -Recurse -File -Filter awe32_p129_dual_dsp_ab.exe)
+          if ($orig.Count -ne 1 -or $cand.Count -ne 1) { throw 'Audit binary ambiguous' }
+          $assets=Join-Path $env:RUNNER_TEMP 'p129-audit-rom-sf2'
+          foreach($item in @('baseline-a','candidate-a','candidate-b','baseline-b')) {
+            $exe=if($item.StartsWith('baseline')){$orig[0].FullName}else{$cand[0].FullName}
+            & $exe "$assets" "qa/$item.csv" 2>&1 | Tee-Object "qa/$item.txt"
+            if ($LASTEXITCODE -ne 0) { throw "Actual 86Box benchmark failed: $item" }
+          }
+          python candidate/tools/p129_compare_box86_ab.py qa qa/comparison.csv qa/verdict.txt 2>&1 |
+            Tee-Object qa/comparison.log
+          if ($LASTEXITCODE -ne 0) { throw 'A/B PCM-register compatibility FAILED; candidate not safe' }
+      - name: Preserve benchmark source SHA and callback-level evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: P129-Combined-CPU-Box86-A-B-PCM-Registers
+          path: qa/
+          if-no-files-found: warn
+          retention-days: 14
