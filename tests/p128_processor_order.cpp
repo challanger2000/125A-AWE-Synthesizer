@@ -355,10 +355,12 @@ void fxPresetAutomationRecall() {
         update.param(kReverbPresetID,7./7.);
         update.param(kChorusPresetID,5./7.);
         update.run(*rig.p);
-        const auto pending=save(*rig.p);
-        check(pending.reverbPreset==7&&pending.chorusPreset==5,
-              "P133 denied RT writer: save includes latest accepted FX edits");
     }
+    // The Control writer has to release before getState can take its own
+    // exclusive fallback writer; the audio edit must still be pending here.
+    const auto pending=save(*rig.p);
+    check(pending.reverbPreset==7&&pending.chorusPreset==5,
+          "P133 denied RT writer: save includes latest accepted FX edits");
     { Block replay(0);replay.run(*rig.p); }
     {
         const auto pin=rig.p->engines_.Read();
