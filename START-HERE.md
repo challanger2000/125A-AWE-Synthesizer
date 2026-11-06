@@ -2,11 +2,14 @@
 
 **Stand: 2026-11-06. Entwicklungs-/Prüfstand, keine GUI- oder Releasefreigabe.**
 
-## P132 — unabhängiger Echtzeit-Audit läuft separat
+## P132 — Adapterkorrektur bestätigt; Echtzeit FAIL, separater Branch
 
-- Auditbranch `audit/p132-realtime`, Ausgangs-Produktion `c7d803c1b328166f6f5edcb770aa9c9f8b49ecda`; P131 / PR #70 wurde gelesen, nicht gemergt.
-- [Messmethodik, tatsächliche VST3-DLLs, physische Stimmenkontrolle, ETW/Heap-Kalibrierung und Grenzen](docs/P132-REALTIME-AUDIT.md). Der erste Messstand ließ die Produktion unverändert. Nach nachgewiesenen 980-Frame-Arbeitsbursts wird jetzt nur der Adapter in `Emu8000Box.cpp` gezielt korrigiert; Chorusberechnung unverändert. Vorher-/Nachher-Windowsprüfung läuft separat.
-- Vollständige neue Windows-Belege stehen bis zu ihrem Abschluss aus. Kein Echtzeit-, GUI- oder Release-GO. Zielrechner-ASIO: NOT RUN.
+- **Branch `audit/p132-realtime`, kein Merge in `fix/p122-bank-dirty-audit`.** Produktionsbasis `c7d803c1b328166f6f5edcb770aa9c9f8b49ecda`; P131 / PR #70 gelesen, nicht gemergt. [Vollständiger P132-Bericht mit Messmethodik, Rohdatenverweisen, Einzelstatistiken und Grenzen](docs/P132-REALTIME-AUDIT.md).
+- **Nachgewiesener Fehler P132-F01:** 980-Frame-Arbeitsbursts bei konstant 30 aktiven Stimmen. Nur `src/engine/Emu8000Box.cpp` wird korrigiert: bestehende Chiprechnung im 128-Frame-Raster vorziehen, 980-Frame-FIFO und DSP-/Chorusformeln erhalten. Korrekturcommit `e1d2b64a06228496d53716e34b250902c4afd115`, Windows-geprüfter Stand **`45df2931e75e54b53e32352ffa45573943dca85d`**.
+- **[Windows A #42213516747 SUCCESS](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42213516747) und [Windows B #42213516842 SUCCESS](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42213516842): jeweils 44/44 CTests, 47/47 Validator und 3/3 GUI-Smokes.** Je Runner 11.796.480 Byte tatsächliches Float-PCM gegen die alte DLL bitgleich, inklusive dichter MIDI-/Bank-/Programm-/FX-Automation und V10-Recalls. WPR-Heap mit vier Positivkontrollen: zusammen 0 Heap-Ereignisse innerhalb von 2.880 markierten Audioaufrufen.
+- **Crossover auf denselben Maschinen:** 128 Frames / 30 konstant aktive Stimmen / Render: **90/12.000 → 2/12.000** Deadlinefehler; p99 beispielsweise **2,889 → 2,096 ms**. Die periodische Spitze wird abgeflacht; der Median steigt durch die verteilte Arbeit. Alle Einzelserien einschließlich schlechter Wiederholungen sind dokumentiert.
+- **Echtzeit gesamt FAIL:** Nachher-Vollmatrix noch **796/172.800** Überschreitungen, darunter lastgleiche Fälle. ETW belegt 9 ausreichend lange Ready-Off-CPU-Unterbrechungen; zahlreiche weitere Fälle überschreiten bereits die Windows-On-CPU-Zeit, ohne vollständig getrennten DSP-/Kernel-/VM-Ursachennachweis. Diese Restfehler sind nicht als behoben freigegeben. **Zielrechner-/ASIO-/WPA-GUI-Abnahme NOT RUN; GUI-/Release-NO-GO.**
+- **Weitere Auditfunde:** Natürlicher Recall reduziert ohne neuere Noten die Stimmenzahl in 12/12 Fällen auf 0; deshalb getrennte lastgleiche Statistik. CC120 kann trotz 0 belegter Slots physische Stimmen weiterlaufen lassen; nach Neubelegung 1 Slot / 2 Chip-Stimmen. Dieser separate Stoppfehler bleibt offen. Keine zusätzliche spekulative DSP- oder Chorusänderung. Das separate Test-Lab-Repository bleibt unverändert.
 
 ## P131 – Windows-Echtzeitprofil nach P130: Audit separat, NO-GO (6. November 2026)
 
