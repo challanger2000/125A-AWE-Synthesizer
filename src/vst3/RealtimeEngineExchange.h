@@ -74,6 +74,12 @@ public:
         retired_.clear();
     }
     [[nodiscard]] Guard Read() noexcept {return Guard(*this);}
+    // A cheap realtime hint that a different envelope may have appeared.
+    // Readers pin a fresh envelope before dereferencing it; the generation
+    // itself is never treated as an ownership or state synchronization gate.
+    uint64_t PublishedVersion() const noexcept {
+        return publishedVersion_.load(std::memory_order_seq_cst);
+    }
 
     void Publish(std::unique_ptr<T> next) {
         // Construct the envelope on the control thread, before publication.
@@ -87,6 +93,7 @@ public:
         }
         Envelope* old=active_.exchange(replacement.release(),
                                        std::memory_order_seq_cst);
+        publishedVersion_.fetch_add(1,std::memory_order_seq_cst);
         if(old) {
             retired_.emplace_back(old);
             if(!collector_.joinable())
@@ -126,6 +133,7 @@ private:
         }
     }
     std::atomic<Envelope*> active_{nullptr};
+    std::atomic<uint64_t> publishedVersion_{0};
     std::atomic<unsigned> registering_{0};
     mutable std::mutex mutex_;
     std::condition_variable changed_;
