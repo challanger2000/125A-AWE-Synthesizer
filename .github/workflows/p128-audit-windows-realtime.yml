@@ -1,0 +1,56 @@
+name: P128 independent real 86Box Windows callback performance profile
+on:
+  push:
+    branches: [audit/p128-windows-realtime-profile-20261106]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-86box-load:
+    runs-on: windows-2022
+    timeout-minutes: 23
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate original mathematical public synthetic SF2 and ROM in runner TEMP
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force qa | Out-Null
+          $assets = Join-Path $env:RUNNER_TEMP "p128-profiler-assets"
+          python tests/p128_synthetic_assets.py "$assets"
+          if ($LASTEXITCODE -ne 0) { throw 'Synthetic assets failed' }
+          "assets=$assets" | Set-Content qa/PROVENANCE.txt
+          "commit=$env:GITHUB_SHA" | Add-Content qa/PROVENANCE.txt
+      - name: Configure native engine, not VST3 GUI and not ASIO
+        shell: pwsh
+        run: |
+          cmake -S . -B build-profiler -G "Visual Studio 17 2022" -A x64 -D125A_BUILD_VST3=OFF -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_OPL3_PROBES=OFF
+          if ($LASTEXITCODE -ne 0) { throw 'Configure failed' }
+      - name: Compile production 86Box chip + profiling wrapper
+        shell: pwsh
+        run: |
+          cmake --build build-profiler --config Release --parallel 2 --target awe32_p128_windows_realtime_profile
+          if ($LASTEXITCODE -ne 0) { throw 'Profiler compile failed' }
+      - name: Measure 2000 real DSP callbacks under four loads
+        shell: pwsh
+        timeout-minutes: 13
+        run: |
+          $ErrorActionPreference='Stop'
+          $binary = @(Get-ChildItem build-profiler -Recurse -Filter 'awe32_p128_windows_realtime_profile.exe' -File)
+          if ($binary.Count -ne 1) { throw 'Profile executable missing or ambiguous' }
+          $assets = Join-Path $env:RUNNER_TEMP "p128-profiler-assets"
+          & $binary[0].FullName "$assets" "qa/RT-WINDOWS-RAW.csv" 2>&1 | Tee-Object qa/RT-WINDOWS-SUMMARY.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Profiler failed to run actual voice loads' }
+          $records = @(Get-Content qa/RT-WINDOWS-RAW.csv)
+          if ($records.Count -ne 2001) { throw "Expected 2000 callback records, got $($records.Count)" }
+          $summaries = @(Get-Content qa/RT-WINDOWS-SUMMARY.txt | Where-Object { $_.StartsWith('RT_PROFILE case=') })
+          if ($summaries.Count -ne 4) { throw 'Expected four separate real 86Box load cases' }
+          'TECHNICAL_BENCHMARK_ONLY: recorded actual callback timing on shared Windows CI VM, no ASIO/hardware deadline guarantee' |
+            Set-Content qa/VERDICT.txt
+      - name: Publish raw timing series and CPU model context
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 125A-P128-Windows-Callback-Profile
+          path: qa/
+          retention-days: 14
+          if-no-files-found: warn
