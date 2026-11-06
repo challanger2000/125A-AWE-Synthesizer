@@ -122,3 +122,14 @@ add_executable(awe32_p128_note_handoff_test "${PROJECT_SOURCE_DIR}/tests/p128_no
 target_include_directories(awe32_p128_note_handoff_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${UPSTREAM_SRC}")
 target_link_libraries(awe32_p128_note_handoff_test PRIVATE awe32_chip_safety)
 add_test(NAME 125A_p128_note_handoff COMMAND awe32_p128_note_handoff_test)
+
+
+# AUDIT ONLY: call the *real* EMU8000 chorus DSP with zero audio input.
+# Detect a persistent negative one-LSB fixed point under fractional feedback.
+add_executable(awe32_p128_chorus_feedback_test
+  "${PROJECT_SOURCE_DIR}/tests/p128_chorus_feedback.cpp")
+target_include_directories(awe32_p128_chorus_feedback_test PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_link_libraries(awe32_p128_chorus_feedback_test PRIVATE awe32_chip_safety)
+add_test(NAME 125A_p128_chorus_feedback_zero_tail
+  COMMAND awe32_p128_chorus_feedback_test)
