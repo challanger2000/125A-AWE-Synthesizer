@@ -250,6 +250,11 @@ private:
         // sample playback
         uint32_t address = 0;      // integer part (samples)
         uint32_t frac = 0;         // 16-bit fractional part
+        // AUDIT-ONLY: avoid recomputing the same pow(2,pitch) for all
+        // 32 legacy register mirrors at each individual native frame.
+        // The actual Box86 renderer still owns live audio and chip writes.
+        uint32_t mirrorLastIp = 0xFFFFFFFFu;
+        uint16_t mirrorCpfHi = 0;
         bool     playing = false;
         // Envelope generator engine on (DCYSUSV bit 7 clear), tracked like
         // 86Box env_engine_on: a note starts only on the off -> on transition.
