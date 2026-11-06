@@ -734,6 +734,7 @@ public:
         // Apply only the latest global bank decision. An unsuccessful
         // realtime writer attempt leaves the stamped value pending.
         ApplyPendingGlobalBank(synth_);
+        ApplyPendingProgramIntents(synth_);
         // P118: VST3 parameter points carry their own sampleOffset.
         // Keep one cursor per parameter queue and merge them with MIDI events.
         // No allocation or sorting on the audio thread. The number of known
@@ -878,6 +879,10 @@ public:
                 const auto program=static_cast<uint32_t>(std::clamp(
                     int(std::lround(val*127.)),0,127));
                 rtProgram_.store(program,std::memory_order_release);
+                lastAppliedGlobalProgramSequence_=
+                    audioProgramSelection_.load(std::memory_order_acquire)>>8;
+                lastAppliedChannelProgramSequence_.fill(
+                    lastAppliedGlobalProgramSequence_);
                 rtChannelProgramMask_.store(0,std::memory_order_release);
                 for(int ch=0;ch<16;++ch)
                     rtChannelPrograms_[ch].store(program,std::memory_order_release);
@@ -891,6 +896,8 @@ public:
                 const auto program=static_cast<uint32_t>(
                     std::clamp(int(std::lround(val*127.)),0,127));
                 rtChannelPrograms_[ch].store(program,std::memory_order_release);
+                lastAppliedChannelProgramSequence_[ch]=
+                    audioChannelSelections_[ch].load(std::memory_order_acquire)>>8;
                 rtChannelProgramMask_.fetch_or(1u<<ch,std::memory_order_acq_rel);
                 if(synth_)synth_->ProgramChange(static_cast<uint8_t>(ch),
                                                 static_cast<uint8_t>(program));
@@ -1139,6 +1146,8 @@ private:
     // This is not the RT-applied value: readers must consider both.
     std::atomic<uint64_t> audioProgramSelection_{0};
     std::array<std::atomic<uint64_t>,16> audioChannelSelections_{};
+    uint64_t lastAppliedGlobalProgramSequence_=0; // audio thread only
+    std::array<uint64_t,16> lastAppliedChannelProgramSequence_{}; // audio only
     uint64_t lastGlobalBankSequence_=0; // audio thread only
     uint64_t lastRecallSequence_=0; // audio thread only
     uint64_t lastHostBankParamSequence_=0; // audio thread only
@@ -1170,6 +1179,10 @@ private:
             lastHostBankParamSequence_=recalled.sequence;
         }
         lastRecallSequence_=recalled.sequence;
+        // Newer program intents can survive a recall, but an older event
+        // must never reappear as pending on the next audio block.
+        lastAppliedGlobalProgramSequence_=recalled.sequence;
+        lastAppliedChannelProgramSequence_.fill(recalled.sequence);
     }
     void ApplyGlobalBankUnderWriter(Synth* target,
                                     BankOrder::Choice bank) noexcept {
@@ -1191,6 +1204,47 @@ private:
         // A newer recall may have committed while this callback was parked.
         SyncCommittedRecall();
         ApplyGlobalBankUnderWriter(target,bankOrder_.Latest());
+    }
+    void ApplyPendingProgramIntents(Synth* target) noexcept {
+        const uint64_t recall=bankOrder_.LatestRecall().sequence;
+        const uint64_t global=audioProgramSelection_.load(
+            std::memory_order_acquire);
+        bool pending=(global>>8)>std::max(recall,lastAppliedGlobalProgramSequence_);
+        for(int ch=0;ch<16;++ch) {
+            const uint64_t edit=audioChannelSelections_[ch].load(
+                std::memory_order_acquire);
+            pending|=(edit>>8)>std::max({recall,global>>8,
+                                      lastAppliedChannelProgramSequence_[ch]});
+        }
+        if(!pending)return;
+        RealtimeStateVersion::Writer write(
+            rtStateVersion_,RealtimeStateVersion::Domain::Audio);
+        if(!write)return; // retained as atomic intent for later callback/save
+        if((global>>8)>std::max(recall,lastAppliedGlobalProgramSequence_)) {
+            const uint32_t program=static_cast<uint32_t>(global&0xFFu);
+            rtProgram_.store(program,std::memory_order_release);
+            rtChannelProgramMask_.store(0,std::memory_order_release);
+            for(int ch=0;ch<16;++ch) {
+                rtChannelPrograms_[ch].store(program,std::memory_order_release);
+                if(target)target->ProgramChange(static_cast<uint8_t>(ch),
+                                                 static_cast<uint8_t>(program));
+            }
+            lastAppliedGlobalProgramSequence_=global>>8;
+            lastAppliedChannelProgramSequence_.fill(global>>8);
+        }
+        for(int ch=0;ch<16;++ch) {
+            const uint64_t edit=audioChannelSelections_[ch].load(
+                std::memory_order_acquire);
+            if((edit>>8)<=std::max({recall,global>>8,
+                                    lastAppliedChannelProgramSequence_[ch]}))
+                continue;
+            const uint32_t program=static_cast<uint32_t>(edit&0xFFu);
+            rtChannelPrograms_[ch].store(program,std::memory_order_release);
+            rtChannelProgramMask_.fetch_or(1u<<ch,std::memory_order_acq_rel);
+            if(target)target->ProgramChange(static_cast<uint8_t>(ch),
+                                             static_cast<uint8_t>(program));
+            lastAppliedChannelProgramSequence_[ch]=edit>>8;
+        }
     }
     void ApplyRtParameters(Synth& target) noexcept {
         for(int i=0;i<kGuiCount;++i)
