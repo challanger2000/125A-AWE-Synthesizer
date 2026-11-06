@@ -61,3 +61,19 @@ if(WIN32)
       COMMAND awe32_p122_vst3_bank_host_test
               "$<TARGET_FILE:125A_AWE_Synthesizer>")
 endif()
+
+
+# AUDIT-ONLY: executable reproduces an engine->null transition while the
+# real exported VST3 audio callback is already inside the same host block.
+# Never include this target or a synthetic ROM in a commercial release.
+if(WIN32)
+  add_executable(awe32_p128_engine_transition_audit
+      "${PROJECT_SOURCE_DIR}/tests/p128_audit_engine_transition.cpp"
+      "${PROJECT_SOURCE_DIR}/external/vst3sdk/public.sdk/source/common/memorystream.cpp")
+  target_include_directories(awe32_p128_engine_transition_audit PRIVATE
+      "${PROJECT_SOURCE_DIR}/external/vst3sdk"
+      "${PROJECT_SOURCE_DIR}/src/vst3")
+  target_link_libraries(awe32_p128_engine_transition_audit PRIVATE sdk sdk_hosting)
+  target_compile_features(awe32_p128_engine_transition_audit PRIVATE cxx_std_23)
+  add_dependencies(awe32_p128_engine_transition_audit 125A_AWE_Synthesizer)
+endif()
