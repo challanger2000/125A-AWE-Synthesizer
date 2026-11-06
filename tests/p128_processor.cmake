@@ -51,6 +51,10 @@ if(125A_PROCESSOR_SDK_ROOT AND 125A_BUILD_ENGINE_PROBES)
   add_dependencies(awe32_p128_processor_order_test p128_assets)
   add_test(NAME 125A_p128_processor_order COMMAND awe32_p128_processor_order_test deterministic "${p128_assets}")
   add_test(NAME 125A_p128_processor_remove_engine COMMAND awe32_p128_processor_order_test nullswap "${p128_assets}")
+  # Persistent regression: accepted program at sample 32 must affect NoteOn at sample 64 even if state writer is denied.
+  add_test(NAME 125A_p128_midblock_program
+    COMMAND awe32_p128_processor_order_test midblock-program "${p128_assets}")
+  set_tests_properties(125A_p128_midblock_program PROPERTIES TIMEOUT 90)
   set_tests_properties(125A_p128_processor_order 125A_p128_processor_remove_engine PROPERTIES TIMEOUT 90)
 endif()
 
