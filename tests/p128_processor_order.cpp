@@ -85,11 +85,55 @@ void deterministic(){
  {Rig r;check(r.p->getTailSamples()==kInfiniteTail&&r.p->setProcessing(false)==kResultOk&&r.p->setProcessing(true)==kResultOk,"kInfiniteTail and setProcessing lifecycle");}
 }
 
+// Audit-only: accepted program event at sample 32, then NoteOn at sample
+// 64 in SAME audio callback, with the realtime persistent writer refused.
+// State may report the new program while PCM still uses the old one.
+void midblockProgramRace() {
+    const auto capture=[](Rig& r,bool denied) {
+        std::vector<float> result;
+        const auto first=[&] {
+            Block block(1024);
+            block.param(kProgramID,9./127.,32);
+            block.note(0,60,64);
+            const auto output=block.run(*r.p);
+            result.insert(result.end(),output.begin(),output.end());
+        };
+        if(denied) {
+            RealtimeStateVersion::Writer control(
+                r.p->rtStateVersion_,RealtimeStateVersion::Domain::Control);
+            require(static_cast<bool>(control),"midblock: control writer acquired");
+            first();
+        } else first();
+        for(int b=1;b<8;++b) {
+            Block next;
+            const auto output=next.run(*r.p);
+            result.insert(result.end(),output.begin(),output.end());
+        }
+        return result;
+    };
+    Rig good;
+    const auto normal=capture(good,false);
+    check(audible(normal)&&save(*good.p).program==9,
+          "midblock: ordinary program-9 point before NoteOn yields audible audio/save");
+    Rig collided;
+    const auto denied=capture(collided,true);
+    const auto written=save(*collided.p);
+    std::cout<<"MIDBLOCK_PROGRAM_AUDIT written_program="<<written.program
+             <<" pcm_equal="<<(normal==denied)
+             <<" normal_audible="<<audible(normal)
+             <<" denied_audible="<<audible(denied)<<std::endl;
+    check(written.program==9,
+          "midblock: accepted program point persisted even when RT writer refused");
+    check(denied==normal,
+          "midblock: NoteOn after refused program point must use newly accepted program PCM");
+}
+
 int main(int argc,char** argv) {
     try {
         if(argc!=3)return 2;
         assetsDir=argv[2];
-        if(std::string(argv[1])=="nullswap") {
+        if(std::string(argv[1])=="midblock-program") midblockProgramRace();
+        else if(std::string(argv[1])=="nullswap") {
             Rig r;bool fired=false;
             hook=[&](const char* h){if(!fired&&std::string(h)=="block_pin") {
                 fired=true;require(recall(*r.p,state(0,0,false))==kResultOk,"empty asset recall");
