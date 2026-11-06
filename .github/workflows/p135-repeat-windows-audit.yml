@@ -1,0 +1,14 @@
+name: P135 P134-V11 realtime attribution independent Windows B
+on:
+  push:
+    branches: [audit/p135-p134-v11-realtime]
+    paths: ['CMakeLists.txt', 'tests/p135/**', '.github/workflows/p135-*.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  independent-runner:
+    uses: ./.github/workflows/p135-windows-audit.yml
+    with:
+      trial: 2

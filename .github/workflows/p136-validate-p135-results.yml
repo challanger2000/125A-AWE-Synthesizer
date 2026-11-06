@@ -1,0 +1,81 @@
+name: P136 independent postvalidate existing P135 raw ETW and heap evidence
+on:
+  push:
+    branches: [audit/p135-p134-v11-realtime]
+    paths: ['tools/p135_postprocess.py', '.github/workflows/p136-validate-p135-results.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify-existing-p135-immutable-artifacts:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify exact P135 source commit and original completed jobs
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference='Stop'
+          foreach($run in @(42227962225,42227962363)){
+            $result=gh api "repos/challanger2000/125A-AWE-Synthesizer/actions/runs/$run" | ConvertFrom-Json
+            if($LASTEXITCODE -ne 0 -or $result.head_sha -ne 'b249b110f1f0117e25757dc4001dc628d6b57d37') {
+              throw "Historical P135 source mismatch $run"
+            }
+            if($result.status -ne 'completed') { throw "Historical run $run still incomplete" }
+            if($result.conclusion -ne 'failure') { throw "Expected failed checker-only P135 result, found $($result.conclusion)" }
+          }
+          New-Item -ItemType Directory -Force qa | Out-Null
+      - name: Download original complete ETL/callback/heap evidence, no remeasurement
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference='Stop'
+          $a=Join-Path $env:RUNNER_TEMP 'P135-runner-A-raw'
+          $b=Join-Path $env:RUNNER_TEMP 'P135-runner-B-raw'
+          gh run download 42227962225 -n P135-P134-V11-Windows-1-Raw-ETW-Evidence -D "$a"
+          if($LASTEXITCODE -ne 0) { throw 'Original Windows A evidence unavailable' }
+          gh run download 42227962363 -n P135-P134-V11-Windows-2-Raw-ETW-Evidence -D "$b"
+          if($LASTEXITCODE -ne 0) { throw 'Original Windows B evidence unavailable' }
+          if(-not (Test-Path "$a/traced/callbacks.csv") -or
+             -not (Test-Path "$a/cpu.etl") -or
+             -not (Test-Path "$b/traced/callbacks.csv") -or
+             -not (Test-Path "$b/cpu.etl") -or
+             -not (Test-Path "$a/heap.etl") -or
+             -not (Test-Path "$b/heap.etl")) {
+            throw 'Raw CSV/ETL evidence missing; refuse numerically isolated summary'
+          }
+          "P135_RAW_A=$a" | Out-File $env:GITHUB_ENV -Append
+          "P135_RAW_B=$b" | Out-File $env:GITHUB_ENV -Append
+      - name: Correct historical count-type gate and independently verify every existing measurement
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          python tools/p135_postprocess.py --first "$env:P135_RAW_A" --second "$env:P135_RAW_B" --out qa/p135-two-run-verdict.json 2>&1 | Tee-Object qa/postvalidate-log.txt
+          if($LASTEXITCODE -ne 0) { throw 'P135 full raw evidence did not satisfy complete independent post-validation' }
+          $v=Get-Content qa/p135-two-run-verdict.json -Raw | ConvertFrom-Json
+          if($v.summary.callbacks -ne 201600 -or
+             $v.summary.p132_original_five_modes_callbacks -ne 172800 -or
+             $v.summary.p133_new_fx_mode_callbacks -ne 28800 -or
+             $v.summary.heap_events_in_process -ne 0 -or
+             $v.summary.physical_asio -ne 'NOT RUN' -or $v.summary.release_approved) {
+             throw 'P135 unsafe/partial/incorrect results'
+          }
+          Copy-Item "$env:P135_RAW_A/traced/summary.json" qa/runnerA-traced.json
+          Copy-Item "$env:P135_RAW_A/untraced/summary.json" qa/runnerA-untraced.json
+          Copy-Item "$env:P135_RAW_B/traced/summary.json" qa/runnerB-traced.json
+          Copy-Item "$env:P135_RAW_B/untraced/summary.json" qa/runnerB-untraced.json
+          Copy-Item "$env:P135_RAW_A/memory/summary.json" qa/runnerA-heap.json
+          Copy-Item "$env:P135_RAW_B/memory/summary.json" qa/runnerB-heap.json
+          "P135 ORIGINAL RAW EVIDENCE RE-VALIDATED, NO AUDIO RE-RUN, REALTIME GATE SEPARATE" | Set-Content qa/README.txt
+      - name: Preserve small source-pinned validated summaries
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: P135-P134-V11-2-Runner-Numeric-PostValidation-NO-RELEASE
+          path: qa/
+          if-no-files-found: warn
+          retention-days: 30
