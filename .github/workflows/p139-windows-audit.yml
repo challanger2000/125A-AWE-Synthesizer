@@ -38,7 +38,7 @@ jobs:
           $src=@(git diff --name-only $base HEAD -- src)
           if ($LASTEXITCODE -ne 0) { throw 'Production source comparison failed' }
           if ($src.Count -gt 0) { throw "P139 diagnostics unexpectedly changed P137 production source: $($src -join ',')" }
-          @{commit=$env:GITHUB_SHA;sdk=$sha;trial=$env:P139_TRIAL;run=$env:GITHUB_RUN_ID;runner=$env:RUNNER_NAME;production_changed=$false;production_changed_files=@();baselineCommit=$base;currentStateVersion='V11';originalP132Workloads=5;newP139FXWorkload=1;source=P137-verified-ABBA} | ConvertTo-Json | Set-Content qa/provenance.json
+          @{commit=$env:GITHUB_SHA;sdk=$sha;trial=$env:P139_TRIAL;run=$env:GITHUB_RUN_ID;runner=$env:RUNNER_NAME;production_changed=$false;production_changed_files=@();baselineCommit=$base;currentStateVersion='V11';originalP132Workloads=5;newP139FXWorkload=1;source='P137-verified-ABBA'} | ConvertTo-Json | Set-Content qa/provenance.json
       - name: Configure and build unmodified and diagnostic VST3 DLLs
         shell: pwsh
         run: |
