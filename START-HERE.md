@@ -2,6 +2,12 @@
 
 **Stand: 2026-11-06. Entwicklungs-/Prüfstand, keine GUI- oder Releasefreigabe.**
 
+## P132 — unabhängiger Echtzeit-Audit läuft separat
+
+- Auditbranch `audit/p132-realtime`, Ausgangs-Produktion `c7d803c1b328166f6f5edcb770aa9c9f8b49ecda`; P131 / PR #70 wurde gelesen, nicht gemergt.
+- [Messmethodik, tatsächliche VST3-DLLs, physische Stimmenkontrolle, ETW/Heap-Kalibrierung und Grenzen](docs/P132-REALTIME-AUDIT.md). Produktions- und Chorusquellen unverändert; keine spekulativen Optimierungen.
+- Vollständige neue Windows-Belege stehen bis zu ihrem Abschluss aus. Kein Echtzeit-, GUI- oder Release-GO. Zielrechner-ASIO: NOT RUN.
+
 ## P131 – Windows-Echtzeitprofil nach P130: Audit separat, NO-GO (6. November 2026)
 
 - **Aktiver Produktions-/Entwicklungsbranch bleibt `fix/p122-bank-dirty-audit`. P131 wurde NICHT gemergt und verändert keinen produktiven Audio-/EMU8000-Code.** Auditbranch: `audit/p131-process-wall-cycles-20261106`, [Draft PR #70](https://github.com/challanger2000/125A-AWE-Synthesizer/pull/70), derzeitiger geprüfter P131-Auditcommit `8fe01428741cb74070fe8b387e24b4b7e60613b5`.

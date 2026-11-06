@@ -1,0 +1,96 @@
+name: P132 independent realtime attribution A
+on:
+  push:
+    branches: [audit/p132-realtime]
+    paths: ['CMakeLists.txt', 'tests/**', '.github/workflows/p132-*.yml']
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      trial:
+        type: number
+        required: false
+        default: 1
+permissions:
+  contents: read
+concurrency:
+  group: p132-${{ github.ref }}-${{ inputs.trial || 1 }}
+  cancel-in-progress: true
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    env:
+      P132_TRIAL: ${{ inputs.trial || 1 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Pinned SDK and provenance
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force qa | Out-Null
+          git clone --depth 1 --branch v3.8.1_build_84 --recurse-submodules https://github.com/steinbergmedia/vst3sdk.git external/vst3sdk
+          if ($LASTEXITCODE -ne 0) { throw 'SDK clone failed' }
+          $sha=(git -C external/vst3sdk rev-parse HEAD).Trim()
+          if ($sha -ne '3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96') { throw 'Unexpected SDK' }
+          $src=(git diff c7d803c1b328166f6f5edcb770aa9c9f8b49ecda HEAD -- src)
+          if ($LASTEXITCODE -ne 0) { throw 'Production source comparison failed' }
+          if ($src) { throw 'P132 audit unexpectedly changes production source' }
+          @{commit=$env:GITHUB_SHA;sdk=$sha;trial=$env:P132_TRIAL;run=$env:GITHUB_RUN_ID;runner=$env:RUNNER_NAME;production_changed=$false} | ConvertTo-Json | Set-Content qa/provenance.json
+      - name: Configure and build unmodified and diagnostic VST3 DLLs
+        shell: pwsh
+        run: |
+          cmake -S . -B build-p132 -G 'Visual Studio 17 2022' -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_EDITORHOST_TEST=ON -D125A_P132_AUDIT=ON 2>&1 | Tee-Object qa/configure.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Configure failed' }
+          cmake --build build-p132 --config Release --parallel 2 2>&1 | Tee-Object qa/build.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
+          $paths=Get-Content build-p132/p132-paths-Release.txt
+          Get-FileHash $paths[1],$paths[2] -Algorithm SHA256 | Format-List | Out-File qa/dll-sha256.txt
+          Copy-Item build-p132/p132-source/source-hashes.json qa/source-hashes.json
+          $p=Get-Content qa/provenance.json -Raw | ConvertFrom-Json -AsHashtable
+          $p['rom_sha256']=(Get-FileHash "$($paths[3])/zero.rom" -Algorithm SHA256).Hash
+          $p['sf2_sha256']=(Get-FileHash "$($paths[3])/bank.sf2" -Algorithm SHA256).Hash
+          $p | ConvertTo-Json | Set-Content qa/provenance.json
+      - name: Full CTest suite and independent 47-test Validator
+        shell: pwsh
+        run: |
+          ctest --test-dir build-p132 -C Release --output-on-failure -V --timeout 180 2>&1 | Tee-Object qa/ctest.txt
+          if ($LASTEXITCODE -ne 0) { throw 'CTest failed' }
+          Copy-Item build-p132/p132-qualification/qualification.txt qa/qualification.txt
+          $log=Get-Content qa/ctest.txt -Raw
+          if ($log -notmatch '100% tests passed' -or $log -notmatch '125A_p132_diagnostic_dll_pcm_census') { throw 'CTest evidence missing' }
+          $validator=Get-ChildItem build-p132 -Filter validator.exe -File -Recurse | Where-Object { $_.FullName -match 'Release' } | Select-Object -First 1 -ExpandProperty FullName
+          $plugin=(Resolve-Path 'build-p132/VST3/Release/125A_AWE_Synthesizer.vst3').Path
+          & $validator $plugin 2>&1 | Tee-Object qa/validator.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Validator failed' }
+          if ((Get-Content qa/validator.txt -Raw) -notmatch 'Result:\s+47 tests passed,\s+0 tests failed') { throw '47/47 Validator evidence missing' }
+      - name: Three actual EditorHost GUI smokes
+        shell: pwsh
+        run: |
+          $editor=Get-ChildItem build-p132 -Filter editorhost.exe -File -Recurse | Where-Object { $_.FullName -match 'Release' } | Select-Object -First 1 -ExpandProperty FullName
+          $plugin=(Resolve-Path 'build-p132/VST3/Release/125A_AWE_Synthesizer.vst3').Path
+          for ($i=1;$i -le 3;$i++) {
+            python tools/p18_editorhost_smoke.py --editorhost "$editor" --plugin "$plugin" --output "qa/editor-$i"
+            if ($LASTEXITCODE -ne 0) { throw "GUI smoke $i failed" }
+          }
+          '{"completed":3}' | Set-Content qa/gui-verdict.json
+      - name: Paired fixed-load matrix and ETW CPU and heap capture
+        shell: pwsh
+        timeout-minutes: 32
+        run: |
+          if ($env:P132_TRIAL -eq '2') { $env:P132_REVERSE='1' }
+          ./tests/p132/run.ps1 -Build build-p132 -Trial $env:P132_TRIAL
+      - name: Public numeric evidence and build failures
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path build-p132/Testing/Temporary/LastTest.log) { Copy-Item build-p132/Testing/Temporary/LastTest.log qa/last-test.txt }
+          python tests/p132/publish.py qa
+      - name: Preserve raw measurements and ETL for WPA
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: P132-Windows-${{ inputs.trial || 1 }}-Raw-ETW-Evidence
+          path: qa/
+          if-no-files-found: error
+          retention-days: 14

@@ -34,12 +34,13 @@ if(125A_PROCESSOR_SDK_ROOT AND 125A_BUILD_ENGINE_PROBES)
     COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/p128_extract_processor.py"
       "${PROJECT_SOURCE_DIR}/src/vst3/Factory.cpp" "${p128_generated}/ProcessorUnderTest.h"
     DEPENDS "${PROJECT_SOURCE_DIR}/src/vst3/Factory.cpp" "${PROJECT_SOURCE_DIR}/tests/p128_extract_processor.py")
+  add_custom_target(p128_processor_header DEPENDS "${p128_generated}/ProcessorUnderTest.h")
   add_custom_command(OUTPUT "${p128_assets}/bank.sf2" "${p128_assets}/zero.rom"
     COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/p128_synthetic_assets.py" "${p128_assets}"
     DEPENDS "${PROJECT_SOURCE_DIR}/tests/p128_synthetic_assets.py")
   add_custom_target(p128_assets DEPENDS "${p128_assets}/bank.sf2" "${p128_assets}/zero.rom")
   add_executable(awe32_p128_processor_order_test
-    "${PROJECT_SOURCE_DIR}/tests/p128_processor_order.cpp" "${p128_generated}/ProcessorUnderTest.h"
+    "${PROJECT_SOURCE_DIR}/tests/p128_processor_order.cpp"
     "${125A_PROCESSOR_SDK_ROOT}/public.sdk/source/common/memorystream.cpp"
     "${125A_PROCESSOR_SDK_ROOT}/public.sdk/source/vst/hosting/parameterchanges.cpp"
     "${125A_PROCESSOR_SDK_ROOT}/public.sdk/source/vst/hosting/eventlist.cpp")
@@ -48,7 +49,7 @@ if(125A_PROCESSOR_SDK_ROOT AND 125A_BUILD_ENGINE_PROBES)
     "${PROJECT_SOURCE_DIR}/src/engine" "${PROJECT_SOURCE_DIR}/src/opl3"
     "${PROJECT_SOURCE_DIR}/upstream/AWE32Emu/AWE32Emu/src")
   target_link_libraries(awe32_p128_processor_order_test PRIVATE sdk awe32_chip_safety)
-  add_dependencies(awe32_p128_processor_order_test p128_assets)
+  add_dependencies(awe32_p128_processor_order_test p128_assets p128_processor_header)
   add_test(NAME 125A_p128_processor_order COMMAND awe32_p128_processor_order_test deterministic "${p128_assets}")
   add_test(NAME 125A_p128_processor_remove_engine COMMAND awe32_p128_processor_order_test nullswap "${p128_assets}")
   # Deterministic regression of accepted master / all GUI parameters during
@@ -65,7 +66,6 @@ if(125A_PROCESSOR_SDK_ROOT AND 125A_BUILD_ENGINE_PROBES)
   # scalar/array C++ operator new on the PROCESSING THREAD, not malloc.
   add_executable(awe32_p130_rt_alloc_probe
     "${PROJECT_SOURCE_DIR}/tests/p130_rt_cpp_heap_audit.cpp"
-    "${p128_generated}/ProcessorUnderTest.h"
     "${125A_PROCESSOR_SDK_ROOT}/public.sdk/source/common/memorystream.cpp"
     "${125A_PROCESSOR_SDK_ROOT}/public.sdk/source/vst/hosting/parameterchanges.cpp"
     "${125A_PROCESSOR_SDK_ROOT}/public.sdk/source/vst/hosting/eventlist.cpp")
@@ -75,7 +75,7 @@ if(125A_PROCESSOR_SDK_ROOT AND 125A_BUILD_ENGINE_PROBES)
     "${PROJECT_SOURCE_DIR}/upstream/AWE32Emu/AWE32Emu/src")
   target_link_libraries(awe32_p130_rt_alloc_probe PRIVATE sdk awe32_chip_safety)
   target_compile_features(awe32_p130_rt_alloc_probe PRIVATE cxx_std_23)
-  add_dependencies(awe32_p130_rt_alloc_probe p128_assets)
+  add_dependencies(awe32_p130_rt_alloc_probe p128_assets p128_processor_header)
   add_test(NAME 125A_p130_no_cpp_new_on_audio_thread
     COMMAND awe32_p130_rt_alloc_probe "${p128_assets}")
   set_tests_properties(125A_p130_no_cpp_new_on_audio_thread PROPERTIES TIMEOUT 120)
