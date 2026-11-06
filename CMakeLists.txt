@@ -200,3 +200,7 @@ if(125A_P134_AB)
       "${p128_assets}" "${PROJECT_BINARY_DIR}/p134-ab")
   set_tests_properties(125A_p134_p133_full_pcm_ab PROPERTIES TIMEOUT 180)
 endif()
+
+# Independent P135 real-time measurement of merged P134/P133-V11 audio DLL.
+# Opt-in: no production source changes, no release or ASIO approval.
+include(tests/p135/audit.cmake)
