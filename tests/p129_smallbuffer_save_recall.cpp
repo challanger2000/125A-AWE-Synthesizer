@@ -39,6 +39,11 @@ Result measureCase(int frames,int controlMode,std::ofstream& csv) {
         worker=std::thread([&] {
             while(!started.load(std::memory_order_acquire))
                 std::this_thread::yield();
+            // Fixed ~15-ms control-event cadence independent of the
+            // Windows timer granularity. Previously, sleep_for(2ms) meant
+            // about 15ms without timeBeginPeriod but ~2ms with it, causing
+            // an unfair ~5x difference in concurrent Save/Recall load.
+            auto nextControl=RTClock::now();
             while(!stop.load(std::memory_order_acquire)) {
                 MemoryStream snap;
                 if(rig.p->getState(&snap)!=kResultOk) {
@@ -54,7 +59,10 @@ Result measureCase(int frames,int controlMode,std::ofstream& csv) {
                     }
                     recallCount.fetch_add(1);
                 }
-                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                nextControl+=std::chrono::milliseconds(15);
+                const auto now=RTClock::now();
+                if(nextControl<now)nextControl=now;
+                std::this_thread::sleep_until(nextControl);
             }
         });
     }
@@ -105,6 +113,12 @@ Result measureCase(int frames,int controlMode,std::ofstream& csv) {
     require(!error.load(std::memory_order_acquire) &&
             durations.size()==kCallbacks,
             "processor failed during low-buffer stress test");
+    std::cout<<"RT_SMALL_BUFFER_VALIDATION frames="<<frames
+             <<" case="<<mode
+             <<" audible_blocks="<<result.audible
+             <<" produced_callbacks="<<durations.size()
+             <<" saves="<<saveCount.load()
+             <<" recalls="<<recallCount.load()<<"\\n";
     require(result.audible>=400,
             "inaudible blocks: cannot claim realtime PCM workload");
     result.saves=saveCount.load();
