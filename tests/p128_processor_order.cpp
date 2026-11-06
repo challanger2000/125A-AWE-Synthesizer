@@ -27,7 +27,7 @@ tresult recall(Processor& p,const State& s){MemoryStream stream;require(writeSta
 bool same(const State& a,const State& b){return a.bank==b.bank&&a.program==b.program&&a.channelPrograms==b.channelPrograms&&a.channelProgramMask==b.channelProgramMask&&a.masterVolume==b.masterVolume&&a.controls==b.controls&&a.pathsSpecified==b.pathsSpecified&&a.romPath==b.romPath&&a.sf2Path==b.sf2Path&&a.engine==b.engine;}
 struct Rig{
  std::unique_ptr<Processor> p=std::make_unique<Processor>();bool active=false;
- Rig(State s=state(),bool a=true,int rate=44100){require(p->initialize(nullptr)==kResultOk,"initialize");ProcessSetup setup{kRealtime,kSample32,1024,double(rate)};require(p->setupProcessing(setup)==kResultOk,"setup");require(recall(*p,s)==kResultOk,"initial recall");if(a){require(p->setActive(true)==kResultOk,"active");require(p->setProcessing(true)==kResultOk,"processing");active=true;}}
+ Rig(State s=state(),bool a=true,int rate=44100,int frameCapacity=1024){require(p->initialize(nullptr)==kResultOk,"initialize");ProcessSetup setup{kRealtime,kSample32,frameCapacity,double(rate)};require(p->setupProcessing(setup)==kResultOk,"setup");require(recall(*p,s)==kResultOk,"initial recall");if(a){require(p->setActive(true)==kResultOk,"active");require(p->setProcessing(true)==kResultOk,"processing");active=true;}}
  ~Rig(){hook={};if(active){p->setProcessing(false);p->setActive(false);}p->terminate();}
 };
 struct Block {
