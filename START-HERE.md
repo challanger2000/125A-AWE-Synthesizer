@@ -2,6 +2,14 @@
 
 **Stand: 2026-11-05. Entwicklungs-/Prüfstand, keine GUI- oder Releasefreigabe.**
 
+## P128 – unabhängige technische Prüfung im 125A Plugin Test Lab (6. November 2026)
+
+- **Geprüfter AWE-Code/Binärbuild:** P128 `9080fe75e57dd11c8019898ff481ae11839fedc4`, Windows-Artefakt aus [Actions #42146715681](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42146715681).
+- **Unabhängiges Test-Lab:** öffentliche Quellen aus `challanger2000/125A-Plugin-Test-Lab` auf **`70f9e40d081f98e3dde368daddbabd268d74047b`** gepinnt. Eigenständiger nativer Windows-x64-Build der vier Testhosts.
+- **[Test-Lab-Integration #42150123608: SUCCESS](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42150123608)** mit technischem Evidenzartefakt `125A-AWE-P128-Test-Lab-Technical-Evidence`: echte VST3-Stressmatrix (6 Raten/Puffer-Kombinationen, 15.000 Callbacks und 3.000 Saves), frische Processor-Recalls, zwei Instanzen in einem Hostprozess, echte GUI-Lifecycle-Prüfung; technische Quickcheck-Entscheidung **TECHNICAL_PASS**, `release_approved=false`.
+- **WICHTIGE GRENZE:** Ohne Original-ROM und produktspezifische synthetische SF2-/PCM-Orakel wurden **keine AWE-spezifischen Bank-/Programm-/Recall-Rennen**, keine musikalische Klangrichtigkeit, keine getrennten Presetklänge, keine echte DAW-Session und keine Hardwareparität nachgewiesen. Der unabhängige **P128-Nachaudit der P127-F01 bis F06 ist hierdurch NICHT ersetzt**. **GUI-NO-GO und RELEASE-NO-GO** bleiben.
+- **Wiederholbarer technischer Workflow:** `.github/workflows/p128-test-lab-integration.yml`; verwendet vorerst die auf sieben Tage begrenzten Artefakte des gepinnten Windows-Builds. Für spätere Wiederholungen muss der Build-Artefaktbezug auf einen noch verfügbaren, exakt identifizierten Build aktualisiert oder der VST3 neu gebaut werden. Am Repository des Test Labs wurde nichts verändert.
+
 ## Verbindlicher aktueller Projektstand
 
 - Repository: `challanger2000/125A-AWE-Synthesizer`.
