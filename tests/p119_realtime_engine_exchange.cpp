@@ -19,7 +19,10 @@ int main() {
         AWE125::RealtimeEngineExchange<Engine> slot;
         auto initial=std::make_unique<Engine>();
         initial->id=1;initial->destroyed=&destroyed;
+        const auto beforeFirst=slot.PublishedVersion();
         slot.Publish(std::move(initial));
+        ok&=check(slot.PublishedVersion()==beforeFirst+1,
+            "P128 publication generation advances after first engine swap");
         std::atomic<bool> readerStarted{false};
         std::atomic<bool> readerDone{false};
         std::atomic<bool> allowReaderExit{false};
@@ -38,7 +41,10 @@ int main() {
             std::this_thread::yield();
         auto next=std::make_unique<Engine>();next->id=2;next->destroyed=&destroyed;
         const auto start=std::chrono::steady_clock::now();
+        const auto beforeSecond=slot.PublishedVersion();
         slot.Publish(std::move(next));
+        ok&=check(slot.PublishedVersion()==beforeSecond+1,
+            "P128 engine refresh observes newer publication");
         const auto elapsed=std::chrono::steady_clock::now()-start;
         ok&=check(elapsed<std::chrono::milliseconds(20),
            "control thread publishes engine without waiting 80 ms for audio read");
@@ -59,7 +65,10 @@ int main() {
         slot.Collect();
         ok&=check(destroyed.load()==1&&slot.RetiredCountForTest()==0,
             "old engine destroyed on control thread after audio callback exits");
+        const auto beforeEmpty=slot.PublishedVersion();
         slot.Publish(nullptr);
+        ok&=check(slot.PublishedVersion()==beforeEmpty+1,
+            "P128 removal of active engine is also visible");
         // P120 reclamation is intentionally asynchronous and occurs off the
         // audio callback. Never assert synchronous destruction at Publish().
         const auto deadline=std::chrono::steady_clock::now()+
