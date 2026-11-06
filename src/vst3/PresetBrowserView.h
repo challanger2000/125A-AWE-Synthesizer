@@ -35,6 +35,8 @@ public:
                       std::function<bool(uint16_t)> browserBankReselect);
     void onIdle() override;
     void valueChanged(VSTGUI::CControl*) override;
+    void controlBeginEdit(VSTGUI::CControl*) override;
+    void controlEndEdit(VSTGUI::CControl*) override;
     int32_t dbGetNumRows(VSTGUI::CDataBrowser*) override;
     int32_t dbGetNumColumns(VSTGUI::CDataBrowser*) override;
     VSTGUI::CCoord dbGetRowHeight(VSTGUI::CDataBrowser*) override;
@@ -76,6 +78,10 @@ private:
     std::vector<PresetBrowserModel::Row> rows_;
     VSTGUI::CControl* masterVolume_=nullptr;
     VSTGUI::CTextLabel* masterVolumeValue_=nullptr;
+    // A continuous pointer gesture is exactly one host automation edit;
+    // not a begin/end pair for every mouse-movement value change.
+    std::array<bool,kGuiCount+3> activeHostGestures_{};
+    static int GestureIndex(int tag) noexcept;
     std::array<VSTGUI::CControl*,kGuiCount> controls_{};
     std::array<VSTGUI::CTextLabel*,kGuiCount> values_{};
     VSTGUI::COptionMenu* bankMenu_=nullptr;
