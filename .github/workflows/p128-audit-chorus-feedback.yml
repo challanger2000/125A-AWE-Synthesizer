@@ -1,7 +1,7 @@
 name: P128 independent EMU8000 chorus feedback root-cause reproduction
 on:
   push:
-    branches: [audit/p128-chorus-fractional-feedback-20261106]
+    branches: [audit/p128-chorus-quantization-candidate-20261106]
   workflow_dispatch:
 
 permissions:
@@ -23,7 +23,7 @@ jobs:
         run: |
           cmake --build build-chorus --config Release --target awe32_p128_chorus_feedback_test --parallel 2
           if ($LASTEXITCODE -ne 0) { throw 'Chorus test compile failed' }
-      - name: Confirm sign-dependent non-decaying feedback on all eight presets
+      - name: Confirm proposed sign-symmetric quantization extinguishes all eight tails
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force qa | Out-Null
@@ -33,25 +33,17 @@ jobs:
           $rc=$LASTEXITCODE
           $log=Get-Content qa/chorus-core.txt -Raw
           $lines=@(Get-Content qa/chorus-core.txt | Where-Object { $_.StartsWith('CHORUS_CORE preset=') })
-          if ($rc -ne 1 -or $lines.Count -ne 8 -or
-              -not $log.Contains('CHORUS_CORE checks=16 failures=6')) {
-            throw "Expected six sign-dependent feedback floor failures (exit $rc)"
+          if ($rc -ne 0 -or $lines.Count -ne 8 -or
+              -not $log.Contains('CHORUS_CORE checks=16 failures=0')) {
+            throw "All feedback presets must converge symmetrically (exit $rc)"
           }
-          foreach ($preset in @(0,6)) {
-            $match=$lines[$preset]
-            if (-not ($match -match 'minus1_tail=\[0,0\]') -or
-                -not ($match -match 'plus1_tail=\[0,0\]')) {
-              throw "Expected preset $preset with no feedback to decay fully"
+          foreach ($line in $lines) {
+            if (-not ($line -match 'minus1_tail=\\[0,0\\]') -or
+                -not ($line -match 'plus1_tail=\\[0,0\\]')) {
+              throw "Chorus preset still has residual after zero input: $line"
             }
           }
-          foreach ($preset in @(1,2,3,4,5,7)) {
-            $match=$lines[$preset]
-            if (-not ($match -match 'minus1_tail=\[-1,-1\]') -or
-                -not ($match -match 'plus1_tail=\[0,0\]')) {
-              throw "Unexpected persistent negative tail in preset $preset"
-            }
-          }
-          'CONFIRMED: negative one-LSB signed shift feedback is absorbing while positive decays' |
+          'AUDIT HYPOTHESIS PASS: signed truncation toward zero eliminates fractional negative feedback fixed point; NOT hardware-qualified' |
             Set-Content qa/verdict.txt
           exit 0
       - name: Preserve DSP evidence
