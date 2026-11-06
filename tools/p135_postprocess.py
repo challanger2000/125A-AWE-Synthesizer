@@ -42,7 +42,15 @@ def validate(root, trial):
     if load(root / "gui-verdict.json").get("completed") != 3:
         raise ValueError("GUI smoke tests not completed")
     qualification = (root / "qualification.txt").read_text(errors="replace").strip().splitlines()
-    if len(qualification) != 12 or not all("pcm_bit_exact=1" in line and "state_v11_equal=1" in line for line in qualification):
+    # The copied P132 host prints its historical lower-case metric label
+    # state_v10_equal even though it serializes CURRENT AssetState V11 from
+    # the P134 header. The tested bytes are V11; do not confuse labels with
+    # wire-format version or silently skip the 12 real-DLL comparisons.
+    if len(qualification) != 12 or not all(
+        "pcm_bit_exact=1" in line and
+        ("state_v10_equal=1" in line or "state_v11_equal=1" in line)
+        for line in qualification
+    ):
         raise ValueError("normal vs diagnostic P134 V11 chip/PCM qualification is incomplete")
     mem = load(root / "memory" / "summary.json")
     if mem.get("memory_callbacks") != 1440:
