@@ -13,14 +13,30 @@ if(125A_PROCESSOR_SDK_ROOT AND 125A_BUILD_ENGINE_PROBES)
   find_package(Python3 COMPONENTS Interpreter REQUIRED)
   set(p128_generated "${PROJECT_BINARY_DIR}/p128-generated")
   file(MAKE_DIRECTORY "${p128_generated}")
+  # CI builds below the checkout, whose protected-resource contract scans
+  # every directory. Synthetic ROM/SF2 fixtures must still live OUTSIDE it.
+  execute_process(COMMAND "${Python3_EXECUTABLE}" -c
+    "import pathlib,tempfile; print(pathlib.Path(tempfile.gettempdir()).resolve())"
+    OUTPUT_VARIABLE p128_temp_root OUTPUT_STRIP_TRAILING_WHITESPACE
+    RESULT_VARIABLE p128_temp_result)
+  if(NOT p128_temp_result EQUAL 0 OR NOT p128_temp_root)
+    message(FATAL_ERROR "Cannot locate an external temporary directory for P128 assets")
+  endif()
+  string(SHA256 p128_build_key "${PROJECT_BINARY_DIR}")
+  string(SUBSTRING "${p128_build_key}" 0 16 p128_build_key)
+  set(p128_assets "${p128_temp_root}/125a-p128-${p128_build_key}")
+  cmake_path(IS_PREFIX PROJECT_SOURCE_DIR "${p128_assets}" NORMALIZE p128_assets_in_source)
+  if(p128_assets_in_source)
+    message(FATAL_ERROR "P128 synthetic assets require a temporary directory outside the checkout")
+  endif()
   add_custom_command(OUTPUT "${p128_generated}/ProcessorUnderTest.h"
     COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/p128_extract_processor.py"
       "${PROJECT_SOURCE_DIR}/src/vst3/Factory.cpp" "${p128_generated}/ProcessorUnderTest.h"
     DEPENDS "${PROJECT_SOURCE_DIR}/src/vst3/Factory.cpp" "${PROJECT_SOURCE_DIR}/tests/p128_extract_processor.py")
-  add_custom_command(OUTPUT "${p128_generated}/assets/bank.sf2" "${p128_generated}/assets/zero.rom"
-    COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/p128_synthetic_assets.py" "${p128_generated}/assets"
+  add_custom_command(OUTPUT "${p128_assets}/bank.sf2" "${p128_assets}/zero.rom"
+    COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/p128_synthetic_assets.py" "${p128_assets}"
     DEPENDS "${PROJECT_SOURCE_DIR}/tests/p128_synthetic_assets.py")
-  add_custom_target(p128_assets DEPENDS "${p128_generated}/assets/bank.sf2" "${p128_generated}/assets/zero.rom")
+  add_custom_target(p128_assets DEPENDS "${p128_assets}/bank.sf2" "${p128_assets}/zero.rom")
   add_executable(awe32_p128_processor_order_test
     "${PROJECT_SOURCE_DIR}/tests/p128_processor_order.cpp" "${p128_generated}/ProcessorUnderTest.h"
     "${125A_PROCESSOR_SDK_ROOT}/public.sdk/source/common/memorystream.cpp"
@@ -32,8 +48,8 @@ if(125A_PROCESSOR_SDK_ROOT AND 125A_BUILD_ENGINE_PROBES)
     "${PROJECT_SOURCE_DIR}/upstream/AWE32Emu/AWE32Emu/src")
   target_link_libraries(awe32_p128_processor_order_test PRIVATE sdk awe32_chip_safety)
   add_dependencies(awe32_p128_processor_order_test p128_assets)
-  add_test(NAME 125A_p128_processor_order COMMAND awe32_p128_processor_order_test deterministic "${p128_generated}/assets")
-  add_test(NAME 125A_p128_processor_remove_engine COMMAND awe32_p128_processor_order_test nullswap "${p128_generated}/assets")
+  add_test(NAME 125A_p128_processor_order COMMAND awe32_p128_processor_order_test deterministic "${p128_assets}")
+  add_test(NAME 125A_p128_processor_remove_engine COMMAND awe32_p128_processor_order_test nullswap "${p128_assets}")
   set_tests_properties(125A_p128_processor_order 125A_p128_processor_remove_engine PROPERTIES TIMEOUT 90)
 endif()
 
@@ -61,5 +77,5 @@ if(125A_PROCESSOR_SDK_ROOT AND 125A_BUILD_ENGINE_PROBES)
   add_test(NAME 125A_p128_filter_cache_pcm
     COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/p128_compare_filter.py"
       "$<TARGET_FILE:awe32_p128_filter_cached>" "$<TARGET_FILE:awe32_p128_filter_uncached>"
-      "${p128_generated}/assets" "${p128_generated}/filter-pcm")
+      "${p128_assets}" "${p128_assets}/filter-pcm")
 endif()

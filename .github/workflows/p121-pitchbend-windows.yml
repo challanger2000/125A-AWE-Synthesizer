@@ -8,6 +8,7 @@ on:
       - 'src/vst3/**'
       - 'src/engine/**'
       - 'tests/asset_state.cpp'
+      - 'tests/p128_*'
       - 'src/vst3/AssetConfig.h'
       - 'tests/p14_vstgui_contract.py'
       - '.github/workflows/p121-pitchbend-windows.yml'
