@@ -1,0 +1,83 @@
+name: P133 original Creative FX presets - full Windows regression
+on:
+  push:
+    branches: [feature/awe-fx-preset-selection-v11-20261106]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  fx-full-windows:
+    runs-on: windows-2022
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned Steinberg SDK
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch v3.8.1_build_84 --recurse-submodules https://github.com/steinbergmedia/vst3sdk.git external/vst3sdk
+          if ($LASTEXITCODE -ne 0) { throw 'SDK clone failed' }
+          $sha=(git -C external/vst3sdk rev-parse HEAD).Trim()
+          if ($sha -ne '3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96') { throw "Unexpected SDK: $sha" }
+      - name: Configure full production VST3 and engine tests
+        shell: pwsh
+        run: |
+          cmake -S . -B build-p133 -G "Visual Studio 17 2022" -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_EDITORHOST_TEST=ON
+          if ($LASTEXITCODE -ne 0) { throw 'Configure failed' }
+      - name: Build all tests and production VST3
+        shell: pwsh
+        run: |
+          cmake --build build-p133 --config Release --parallel 2
+          if ($LASTEXITCODE -ne 0) { throw 'Production Windows VST3 build failed' }
+      - name: Run entire CTest suite including V11 migration and 8x8 hardware FX modes
+        shell: pwsh
+        timeout-minutes: 15
+        run: |
+          New-Item -ItemType Directory -Force qa | Out-Null
+          ctest --test-dir build-p133 -C Release --output-on-failure --timeout 120 2>&1 |
+            Tee-Object -FilePath qa/ctest.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Full CTest failed' }
+          $log=Get-Content qa/ctest.txt -Raw
+          if ($log -notmatch '100% tests passed' -or
+              $log -notmatch '125A_p133_fx_register_modes' -or
+              $log -notmatch '125A_asset_state') {
+              throw 'P133 required tests not evidenced'
+          }
+      - name: Check Steinberg validator binary and 47 test expectations
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          $validator=(Get-ChildItem build-p133 -Filter validator.exe -File -Recurse |
+            Where-Object {$_.FullName -match 'Release'} |
+            Select-Object -First 1 -ExpandProperty FullName)
+          $plugin=(Resolve-Path 'build-p133/VST3/Release/125A_AWE_Synthesizer.vst3').Path
+          if (-not $validator) { throw 'No Steinberg validator executable' }
+          & $validator -e $plugin 2>&1 | Tee-Object qa/validator.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Steinberg VST3 validator failed' }
+          if ((Get-Content qa/validator.txt -Raw) -notmatch 'Result: 47 tests passed') {
+            # The exact output is detailed in the preserved validator log.
+            $text=Get-Content qa/validator.txt -Raw
+            if ($text -notmatch '47 Tests Passed' -and $text -notmatch 'Tests passed: 47') {
+              throw 'Expected 47 validator checks missing'
+            }
+          }
+      - name: Exercise complete VST3 GUI in native EditorHost three times
+        shell: pwsh
+        timeout-minutes: 6
+        run: |
+          $editor=(Get-ChildItem build-p133 -Filter editorhost.exe -File -Recurse |
+            Where-Object {$_.FullName -match 'Release'} |
+            Select-Object -First 1 -ExpandProperty FullName)
+          $plugin=(Resolve-Path 'build-p133/VST3/Release/125A_AWE_Synthesizer.vst3').Path
+          if (-not $editor) { throw 'EditorHost missing' }
+          for($i=1;$i -le 3;$i++) {
+            python tools/p18_editorhost_smoke.py --editorhost "$editor" --plugin "$plugin" --output "qa/editor-$i"
+            if($LASTEXITCODE -ne 0) { throw "EditorHost GUI smoke $i failed" }
+          }
+      - name: Preserve independent numerical evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: P133-FX-16-Original-Modes-Windows-V11-Regression
+          path: qa/
+          if-no-files-found: warn
+          retention-days: 14
