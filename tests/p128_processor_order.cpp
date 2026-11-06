@@ -391,11 +391,61 @@ void fxPresetAutomationRecall() {
           "P133 post-recall new project opens and renders with saved FX choices");
 }
 
+// P134: CC120 All Sounds Off must not leave the 86Box voice ringing with
+// an envelope engine already off but its output volume target still nonzero.
+// Unlike CC123 NoteOff, this is channel-specific immediate stop (apart from
+// the existing 980-frame FIFO and the hardware 1/64 volume slide).
+void cc120PhysicalStopRegression() {
+    const auto cc120=AWE125::MidiControlMapping::ParamID(
+        0,AWE125::MidiControlMapping::Index(120));
+    require(AWE125::MidiControlMapping::Index(120)>=0,"CC120 mapping");
+    Rig rig;
+    bool started=false;
+    {
+        Block on;on.note(0,60);
+        started|=audible(on.run(*rig.p));
+    }
+    for(int i=0;i<8;++i) {
+        Block b;started|=audible(b.run(*rig.p));
+    }
+    check(started,"P134: test soundfont voice really plays before CC120");
+    {
+        Block kill(0);kill.param(cc120,1.);
+        kill.run(*rig.p);
+    }
+    // Consume substantially more than one hardware FIFO publication and
+    // the 1/64 volume slide. This is outside the performance measurement.
+    double lateEnergy=0.0;
+    for(int i=0;i<16;++i) {
+        Block b;const auto pcm=b.run(*rig.p);
+        if(i>=12)for(float v:pcm)lateEnergy+=double(v)*double(v);
+    }
+    check(lateEnergy<=1e-8,
+          "P134: CC120 leaves no late stuck waveform or ghost chip voice");
+    std::cout<<"P134_CC120_LATE_ENERGY "<<lateEnergy<<std::endl;
+    // A new note must still play normally after stop. A stuck old 86Box
+    // voice may cause a second nonzero chip voice and wrong overlay.
+    bool reattacked=false;
+    {Block on;on.note(0,61);reattacked|=audible(on.run(*rig.p));}
+    for(int i=0;i<4;++i) {Block b;reattacked|=audible(b.run(*rig.p));}
+    check(reattacked,"P134: same channel can sound again after CC120");
+    // CC120 for channel 1 must not stop an unrelated channel 2 voice.
+    Rig isolated;
+    {Block start;start.note(0,60);start.note(1,64);start.run(*isolated.p);}
+    for(int i=0;i<4;++i){Block b;b.run(*isolated.p);}
+    {Block stop(0);stop.param(cc120,1.);stop.run(*isolated.p);}
+    bool otherChannelSounds=false;
+    for(int i=0;i<8;++i) {
+        Block b;otherChannelSounds|=audible(b.run(*isolated.p));
+    }
+    check(otherChannelSounds,"P134: channel 1 CC120 does not silence channel 2");
+}
 int main(int argc,char** argv) {
     try {
         if(argc!=3)return 2;
         assetsDir=argv[2];
-        if(std::string(argv[1])=="fx-presets") fxPresetAutomationRecall();
+        if(std::string(argv[1])=="cc120-stop") cc120PhysicalStopRegression();
+        else if(std::string(argv[1])=="fx-presets") fxPresetAutomationRecall();
         else if(std::string(argv[1])=="midblock-program") midblockProgramRace();
         else if(std::string(argv[1])=="persistent-controls") persistentControlWriterCollision();
         else if(std::string(argv[1])=="nullswap") {
