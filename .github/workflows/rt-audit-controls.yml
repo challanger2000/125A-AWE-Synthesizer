@@ -36,6 +36,7 @@ jobs:
           New-Item -ItemType Directory -Force qa | Out-Null
           Copy-Item prior/provenance.json qa/measured-dll-provenance.json
           Copy-Item prior/dll-sha256.txt qa/original-dll-hashes.txt
+          Copy-Item prior/public-summary.json qa/windows-1-summary.json
           Get-FileHash prior/symbols/*.vst3 -Algorithm SHA256 | Format-List | Out-File qa/loaded-dll-hashes.txt
           $assets=Join-Path $env:RUNNER_TEMP 'p132-natural-recall-assets'
           python tests/p128_synthetic_assets.py $assets
@@ -48,12 +49,26 @@ jobs:
           if (Test-Path qa/recall-controls.csv) {
             $payload=@{commit=$env:GITHUB_SHA;run=$env:GITHUB_RUN_ID;measuredCommit='418cc6b580a8cb3fd770b33b3804e0626d3c08f8';recall=@(Import-Csv qa/recall-controls.csv);reset=@(Import-Csv qa/reset-controls.csv)}
             $payload | ConvertTo-Json -Depth 8 | Set-Content qa/control-summary.json
-            $json=$payload | ConvertTo-Json -Depth 8 -Compress
-            Write-Output "::notice title=P132_NATURAL_RECALL::$json"
+            python tools/p132_controls/mirror.py qa/control-summary.json
           }
+          if (Test-Path qa/windows-1-summary.json) { python tools/p132_controls/mirror.py qa/windows-1-summary.json }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: P132-Natural-Recall-Controls-Exact-418cc6b-DLL
           path: qa/
           retention-days: 14
+  mirror-second-run:
+    runs-on: windows-2022
+    timeout-minutes: 35
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preserve complete public numbers from second independent runner
+        shell: pwsh
+        run: |
+          gh run watch 42208362915 --interval 20
+          gh run download 42208362915 -n P132-Windows-2-Raw-ETW-Evidence -D prior
+          if ($LASTEXITCODE -ne 0) { throw 'Second measured artifact unavailable' }
+          python tools/p132_controls/mirror.py prior/public-summary.json
