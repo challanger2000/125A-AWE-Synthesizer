@@ -1076,6 +1076,28 @@ void Emu8000Core::RenderVoice(int v, float* outL, float* outR,
         const double increment = std::pow(2.0,
             (pitch - static_cast<double>(kPitchUnity)) / static_cast<double>(kPitchPerOctave));
 
+        // P137: in authentic 86Box mode, the legacy floating-point sample,
+        // filter, gain, pan and send outputs are *never* used: RenderBlock()
+        // overwrites them with the real chip's int32 PCM. Retain the old
+        // envelope, modulation, LFO, pitch, sample-position and register
+        // mirror bookkeeping, including the original increment rounding and
+        // one-step loop wrap. Only skip the discarded floating-point DSP.
+        // Legacy-only mode below remains byte-for-byte unchanged.
+        if (m_chip == Chip::Box86)
+        {
+            if (vs.playing)
+            {
+                const uint64_t step = static_cast<uint64_t>(increment * 65536.0);
+                uint64_t pos = (static_cast<uint64_t>(vs.address) << 16) | vs.frac;
+                pos += step;
+                vs.address = static_cast<uint32_t>(pos >> 16);
+                vs.frac = static_cast<uint32_t>(pos & 0xFFFF);
+                if (loopEnd > loopStart && vs.address >= loopEnd)
+                    vs.address -= (loopEnd - loopStart);
+            }
+            continue;
+        }
+
         // ---- sample ----------------------------------------------------
         float sample = 0.0f;
         if (vs.playing)
