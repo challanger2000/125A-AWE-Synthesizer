@@ -1,0 +1,115 @@
+name: P135 P134-V11 realtime attribution independent Windows A
+on:
+  push:
+    branches: [audit/p135-p134-v11-realtime]
+    paths: ['CMakeLists.txt', 'tests/p135/**', '.github/workflows/p135-*.yml']
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      trial:
+        type: number
+        required: false
+        default: 1
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: p135-${{ github.ref }}-${{ inputs.trial || 1 }}
+  cancel-in-progress: true
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 70
+    env:
+      P135_TRIAL: ${{ inputs.trial || 1 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Pinned SDK and provenance
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force qa | Out-Null
+          git clone --depth 1 --branch v3.8.1_build_84 --recurse-submodules https://github.com/steinbergmedia/vst3sdk.git external/vst3sdk
+          if ($LASTEXITCODE -ne 0) { throw 'SDK clone failed' }
+          $sha=(git -C external/vst3sdk rev-parse HEAD).Trim()
+          if ($sha -ne '3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96') { throw 'Unexpected SDK' }
+          $base='e6a60ed154ee5a119b68a5ecd29d3f37961b9c4c'
+          $src=@(git diff --name-only $base HEAD -- src)
+          if ($LASTEXITCODE -ne 0) { throw 'Production source comparison failed' }
+          if ($src.Count -gt 0) { throw "P135 diagnostics unexpectedly changed P134 production source: $($src -join ',')" }
+          @{commit=$env:GITHUB_SHA;sdk=$sha;trial=$env:P135_TRIAL;run=$env:GITHUB_RUN_ID;runner=$env:RUNNER_NAME;production_changed=$false;production_changed_files=@();baselineCommit=$base;currentStateVersion='V11';originalP132Workloads=5;newP135FXWorkload=1} | ConvertTo-Json | Set-Content qa/provenance.json
+      - name: Configure and build unmodified and diagnostic VST3 DLLs
+        shell: pwsh
+        run: |
+          cmake -S . -B build-p135 -G 'Visual Studio 17 2022' -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_EDITORHOST_TEST=ON -D125A_P135_AUDIT=ON 2>&1 | Tee-Object qa/configure.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Configure failed' }
+          cmake --build build-p135 --config Release --parallel 2 2>&1 | Tee-Object qa/build.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
+          $paths=Get-Content build-p135/p135-paths-Release.txt
+          Get-FileHash $paths[1],$paths[2] -Algorithm SHA256 | Format-List | Out-File qa/dll-sha256.txt
+          # Preserve only our binaries/PDBs needed for offline WPA symbols.
+          New-Item -ItemType Directory -Force qa/symbols | Out-Null
+          Copy-Item $paths[1],$paths[2] qa/symbols/
+          Get-ChildItem build-p135 -Filter '*P135*.pdb' -File -Recurse | Copy-Item -Destination qa/symbols/
+          Copy-Item build-p135/p135-source/source-hashes.json qa/source-hashes.json
+          $p=Get-Content qa/provenance.json -Raw | ConvertFrom-Json -AsHashtable
+          $p['rom_sha256']=(Get-FileHash "$($paths[3])/zero.rom" -Algorithm SHA256).Hash
+          $p['sf2_sha256']=(Get-FileHash "$($paths[3])/bank.sf2" -Algorithm SHA256).Hash
+          $p | ConvertTo-Json | Set-Content qa/provenance.json
+      - name: Full CTest suite and independent 47-test Validator
+        shell: pwsh
+        run: |
+          ctest --test-dir build-p135 -C Release --output-on-failure -V --timeout 180 2>&1 | Tee-Object qa/ctest.txt
+          if ($LASTEXITCODE -ne 0) { throw 'CTest failed' }
+          Copy-Item build-p135/p135-qualification/qualification* qa/
+          $log=Get-Content qa/ctest.txt -Raw
+          if ($log -notmatch '100% tests passed' -or
+              $log -notmatch '125A_p135_diagnostic_dll_pcm_census' -or
+              $log -notmatch '125A_p135_measurement_oracle_controls' -or
+              $log -notmatch '125A_p134_cc120_physical_stop' -or
+              $log -notmatch '125A_p133_fx_processor_modes') {
+            throw 'Required P134/P133/P135 CTest evidence missing'
+          }
+          $validator=Get-ChildItem build-p135 -Filter validator.exe -File -Recurse | Where-Object { $_.FullName -match 'Release' } | Select-Object -First 1 -ExpandProperty FullName
+          $plugin=(Resolve-Path 'build-p135/VST3/Release/125A_AWE_Synthesizer.vst3').Path
+          & $validator $plugin 2>&1 | Tee-Object qa/validator.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Steinberg SDK selftests failed' }
+          if ((Get-Content qa/validator.txt -Raw) -notmatch 'Result:\s+47 tests passed,\s+0 tests failed') { throw 'SDK 47/47 evidence missing' }
+          & $validator -e $plugin 2>&1 | Tee-Object qa/vst3-module-validator.txt
+          if ($LASTEXITCODE -ne 0) { throw 'VST3 module validation failed' }
+          if ((Get-Content qa/vst3-module-validator.txt -Raw) -notmatch 'Result:\s+([0-9]+) tests passed,\s+0 tests failed') { throw 'Steinberg module result missing' }
+          if ([int]$Matches[1] -lt 500) { throw 'Full actual VST3 module validation incomplete' }
+      - name: Three actual EditorHost GUI smokes
+        shell: pwsh
+        run: |
+          $editor=Get-ChildItem build-p135 -Filter editorhost.exe -File -Recurse | Where-Object { $_.FullName -match 'Release' } | Select-Object -First 1 -ExpandProperty FullName
+          $plugin=(Resolve-Path 'build-p135/VST3/Release/125A_AWE_Synthesizer.vst3').Path
+          for ($i=1;$i -le 3;$i++) {
+            python tools/p18_editorhost_smoke.py --editorhost "$editor" --plugin "$plugin" --output "qa/editor-$i"
+            if ($LASTEXITCODE -ne 0) { throw "GUI smoke $i failed" }
+          }
+          '{"completed":3}' | Set-Content qa/gui-verdict.json
+      - name: Paired fixed-load matrix and ETW CPU and heap capture
+        shell: pwsh
+        timeout-minutes: 32
+        run: |
+          if ($env:P135_TRIAL -eq '2') { $env:P135_REVERSE='1' }
+          ./tests/p135/run.ps1 -Build build-p135 -Trial $env:P135_TRIAL
+          if ($LASTEXITCODE -ne 0) { throw 'P135 full timed/ETW/heap measurement failed' }
+          python tests/p135/assert_complete.py qa 2>&1 | Tee-Object qa/final-verdict.txt
+          if ($LASTEXITCODE -ne 0) { throw 'P135 incomplete 72-cell / ETW / heap qualification' }
+      - name: Public numeric evidence and build failures
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path build-p135/Testing/Temporary/LastTest.log) { Copy-Item build-p135/Testing/Temporary/LastTest.log qa/last-test.txt }
+          python tests/p135/publish.py qa
+      - name: Preserve raw measurements and ETL for WPA
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: P135-P134-V11-Windows-${{ inputs.trial || 1 }}-Raw-ETW-Evidence
+          path: qa/
+          if-no-files-found: error
+          retention-days: 14
