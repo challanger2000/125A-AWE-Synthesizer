@@ -461,13 +461,25 @@ int wmain(int argc,wchar_t** argv) {
             });
             bool coherent=true;
             int successfulReads=0;
+            int mixedMask=0,mixedPrograms=0;
+            int firstMixedRead=-1;
+            uint32_t firstMask=0,firstGlobal=0,firstChannel=0;
             for(int i=0;i<3000;++i) {
                 AWE125::AssetState::Data state;
                 if(snapshotState(component,state)) {
                     ++successfulReads;
-                    if(state.channelProgramMask!=0)coherent=false;
+                    if(state.channelProgramMask!=0) {
+                        coherent=false;++mixedMask;
+                        if(firstMixedRead<0) {firstMixedRead=i;firstMask=state.channelProgramMask;
+                            firstGlobal=state.program;firstChannel=state.channelPrograms[0];}
+                    }
                     for(const auto program:state.channelPrograms)
-                        if(program!=state.program)coherent=false;
+                        if(program!=state.program) {
+                            coherent=false;++mixedPrograms;
+                            if(firstMixedRead<0) {firstMixedRead=i;firstMask=state.channelProgramMask;
+                                firstGlobal=state.program;firstChannel=program;}
+                            break;
+                        }
                 }
                 if(finished.load(std::memory_order_acquire)&&i>=100)
                     break;
@@ -479,6 +491,19 @@ int wmain(int argc,wchar_t** argv) {
                 final.program==1499%128;
             if(finalOk)for(const auto program:final.channelPrograms)
                 if(program!=final.program)coherent=false;
+            if(!coherent||!finalOk||!writerOk.load())
+                std::cout<<"P128_DIAG mixedMask="<<mixedMask
+                         <<" mixedPrograms="<<mixedPrograms
+                         <<" firstRead="<<firstMixedRead
+                         <<" firstMask="<<firstMask
+                         <<" firstGlobal="<<firstGlobal
+                         <<" firstChannel="<<firstChannel
+                         <<" writerOk="<<writerOk.load()
+                         <<" finalOk="<<finalOk
+                         <<" finalMask="<<final.channelProgramMask
+                         <<" finalGlobal="<<final.program
+                         <<" finalChannel0="<<final.channelPrograms[0]
+                         <<" expected="<<(1499%128)<<"\n";
             ok&=check(writerOk.load()&&finalOk&&coherent,
                 "real VST3 getState never combines distinct program automation states");
             ok&=check(successfulReads>0,
