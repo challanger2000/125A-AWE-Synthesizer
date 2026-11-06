@@ -171,3 +171,32 @@ target_compile_features(awe32_p122_state_snapshot_test PRIVATE cxx_std_23)
 add_test(NAME 125A_p122_state_snapshot COMMAND awe32_p122_state_snapshot_test)
 
 include(tests/p128_processor.cmake)
+
+# P134 A/B: execute previous, clean P133-V11 VST3 and current P134-V11 VST3
+# side by side using actual SDK Processor with synthetic ROM/SF2, identical
+# active FX switching, MIDI automation and per-block state snapshots.
+# Kept opt-in because the independently pinned P133 binary is not a package
+# dependency; the GitHub audit workflow fetches it by exact Actions run.
+option(125A_P134_AB "Enable actual P133-vs-P134 VST3 bitexact A/B" OFF)
+set(P134_BASELINE_VST3 "" CACHE FILEPATH "P133 V11 VST3 binary from verified run 42196456180")
+if(125A_P134_AB)
+  if(NOT WIN32 OR NOT 125A_BUILD_VST3 OR NOT EXISTS "${P134_BASELINE_VST3}")
+    message(FATAL_ERROR "P134 bitexact A/B requires real Windows VST3 and verified P133 baseline binary")
+  endif()
+  add_executable(awe32_p134_vst3_pcm_compare
+    "${PROJECT_SOURCE_DIR}/tests/p134/vst3_pcm_compare.cpp"
+    "${PROJECT_SOURCE_DIR}/external/vst3sdk/public.sdk/source/common/memorystream.cpp"
+    "${PROJECT_SOURCE_DIR}/external/vst3sdk/public.sdk/source/vst/hosting/parameterchanges.cpp"
+    "${PROJECT_SOURCE_DIR}/external/vst3sdk/public.sdk/source/vst/hosting/eventlist.cpp")
+  target_include_directories(awe32_p134_vst3_pcm_compare PRIVATE
+    "${PROJECT_SOURCE_DIR}/external/vst3sdk"
+    "${PROJECT_SOURCE_DIR}/src/vst3" "${PROJECT_SOURCE_DIR}/tests/p134")
+  target_link_libraries(awe32_p134_vst3_pcm_compare PRIVATE sdk winmm)
+  target_compile_features(awe32_p134_vst3_pcm_compare PRIVATE cxx_std_23)
+  add_dependencies(awe32_p134_vst3_pcm_compare 125A_AWE_Synthesizer p128_assets)
+  add_test(NAME 125A_p134_p133_full_pcm_ab
+    COMMAND awe32_p134_vst3_pcm_compare compare-baseline
+      "${P134_BASELINE_VST3}" "$<TARGET_FILE:125A_AWE_Synthesizer>"
+      "${p128_assets}" "${PROJECT_BINARY_DIR}/p134-ab")
+  set_tests_properties(125A_p134_p133_full_pcm_ab PROPERTIES TIMEOUT 180)
+endif()
