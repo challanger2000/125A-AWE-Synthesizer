@@ -1,0 +1,87 @@
+name: P129 low-buffer P128 Processor concurrent save-recall timing
+on:
+  push:
+    branches: [audit/p129-smallbuffer-save-recall-20261106]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p129-low-buffer-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  real-processor-source-lowbuffer:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned Steinberg SDK with VSTGUI
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch v3.8.1_build_84 --recurse-submodules https://github.com/steinbergmedia/vst3sdk.git external/vst3sdk
+          $sha = (git -C external/vst3sdk rev-parse HEAD).Trim()
+          if ($sha -ne '3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96') { throw "SDK changed: $sha" }
+          New-Item -ItemType Directory -Force qa | Out-Null
+          "processor_source=$env:GITHUB_SHA" | Set-Content qa/provenance.txt
+          "sdk=$sha" | Add-Content qa/provenance.txt
+          "host=windows-2022-shared-vm;ASIO=not-running" | Add-Content qa/provenance.txt
+      - name: Configure actual product Processor + generated public ROM/SF2
+        shell: pwsh
+        run: |
+          cmake -S . -B build-lowbuffer -G "Visual Studio 17 2022" -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON
+          if ($LASTEXITCODE -ne 0) { throw 'Native processor setup failed' }
+      - name: Compile 128/256/1024-frame profile harness against production Factory.cpp
+        shell: pwsh
+        run: |
+          cmake --build build-lowbuffer --config Release --target awe32_p129_smallbuffer_rt_test --parallel 2
+          if ($LASTEXITCODE -ne 0) { throw 'Low-buffer profile compile failed' }
+      - name: Measure 4500 paced audible callbacks while saving and recalling V10
+        shell: pwsh
+        timeout-minutes: 16
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exes = @(Get-ChildItem build-lowbuffer -Recurse -File -Filter 'awe32_p129_smallbuffer_rt_test.exe')
+          $assets = @(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -Directory -Filter '125a-p128-*' |
+            Where-Object { (Test-Path (Join-Path $_.FullName 'zero.rom')) -and (Test-Path (Join-Path $_.FullName 'bank.sf2')) })
+          if ($exes.Count -ne 1 -or $assets.Count -ne 1) {
+            throw "Expected one EXE + generated ROM/SF2 directory; exes=$($exes.Count), assets=$($assets.Count)"
+          }
+          $csv = Join-Path (Resolve-Path 'qa').Path 'callback-by-callback.csv'
+          & $exes[0].FullName $assets[0].FullName "$csv" 2>&1 |
+            Tee-Object -FilePath qa/timing-summary.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Product-specific low-buffer benchmark did not complete' }
+          $rows = @(Get-Content "$csv")
+          $cases = @(Get-Content qa/timing-summary.txt | Where-Object { $_.StartsWith('RT_SMALL_BUFFER frames=') })
+          if ($rows.Count -ne 4501 -or $cases.Count -ne 9) {
+            throw "Evidence is incomplete: $($rows.Count) CSV rows, $($cases.Count) cases"
+          }
+          foreach ($frames in @(128,256,1024)) {
+            foreach ($mode in @('render','save','save_recall')) {
+              if (@($cases | Where-Object { $_ -match "frames=$frames case=$mode " }).Count -ne 1) {
+                throw "Missing frame/mode timing case: $frames/$mode"
+              }
+            }
+          }
+          $overrunCount = 0
+          $scheduleMissCount = 0
+          foreach ($line in $cases) {
+            if ($line -notmatch 'audible_blocks=([0-9]+)') { throw 'Missing audio evidence' }
+            if ([int]$Matches[1] -lt 400) { throw 'Inaudible timing scenario not valid' }
+            if ($line -notmatch 'process_overruns=([0-9]+)') { throw 'Missing overrun measure' }
+            $overrunCount += [int]$Matches[1]
+            if ($line -notmatch 'missed_scheduled_deadlines=([0-9]+)') { throw 'Missing host scheduling measure' }
+            $scheduleMissCount += [int]$Matches[1]
+          }
+          "PROCESS_OVERRUNS=$overrunCount" | Set-Content qa/verdict.txt
+          "SHARED_VM_SCHEDULING_MISSES=$scheduleMissCount" | Add-Content qa/verdict.txt
+          'TECHNICAL_BENCHMARK_ONLY. ASIO/DAW release acceptance explicitly NOT RUN.' | Add-Content qa/verdict.txt
+      - name: Preserve exact callback timing and signs of weak real-time behavior
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: P129-128-256-1024-Processor-Save-Recall-Profiling
+          path: qa/
+          if-no-files-found: warn
+          retention-days: 14
