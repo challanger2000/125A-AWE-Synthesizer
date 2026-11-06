@@ -133,3 +133,11 @@ target_include_directories(awe32_p128_chorus_feedback_test PRIVATE
 target_link_libraries(awe32_p128_chorus_feedback_test PRIVATE awe32_chip_safety)
 add_test(NAME 125A_p128_chorus_feedback_zero_tail
   COMMAND awe32_p128_chorus_feedback_test)
+
+
+# AUDIT ONLY: raw stereo PCM of the native production chorus in both A/B builds.
+add_executable(awe32_p128_chorus_characterization
+  "${PROJECT_SOURCE_DIR}/tests/p128_chorus_characterization.cpp")
+target_include_directories(awe32_p128_chorus_characterization PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}/include" "${UPSTREAM_SRC}/86box/include")
+target_link_libraries(awe32_p128_chorus_characterization PRIVATE awe32_chip_safety)
