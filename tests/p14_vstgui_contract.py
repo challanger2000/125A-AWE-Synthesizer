@@ -76,7 +76,7 @@ assert 'PresetBrowserModel::Filter(0,sf_,fm_' in b
 assert 'PresetBrowserModel::Neighbor(0,sf_,fm_' in b
 assert 'toggle_->setStyle(CTextButton::kOnOffStyle)' in b
 assert 'if(control->getValue()>0.5f)' in b
-assert 'kVersion = 10u' in state and 'kControlCount = 12' in state
+assert 'kVersion = 11u' in state and 'kControlCount = 12' in state
 assert 'candidate.channelPrograms.fill(program)' in state
 assert 'kVolumeID=MasterOutput::kParamID' in f
 assert 'rtMaster_' in f and 'volumeGain_.setTarget(' in f
@@ -101,4 +101,10 @@ assert "ChangeParameter(kBankParam,double(bank)/16383.)" in b
 assert "controller_->getParamNormalized(kBankParam)*16383." in b
 assert "this,kBankFilter" in b and "tag==kBankFilter" in b
 assert "this,kBank)" not in b and "getParamNormalized(kBank)" not in b
-print("P117 STATIC PASS: AWE-only VST3, SF2 picker IPC, browser, 12 overlay knobs, master volume, V10 recall (V1-V9 migration)")
+assert 'kReverbPresetID=1200' in f and 'kChorusPresetID=1201' in f
+assert 'kReverbType=1200,kChorusType=1201' in h
+assert 'reverbMenu_=new COptionMenu' in b and 'chorusMenu_=new COptionMenu' in b
+assert 'ApplyPendingFxIntents(synth_)' in f
+assert 'ApplyHardwareReverbPreset(' in f and 'ApplyHardwareChorusPreset(' in f
+assert 'reverbPreset' in state and 'chorusPreset' in state
+print("P133 STATIC PASS: VST3 FX type menus, 12 overlays, master, V11 effect project recall (V1-V10 migration)")
