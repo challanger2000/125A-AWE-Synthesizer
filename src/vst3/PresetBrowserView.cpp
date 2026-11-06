@@ -296,13 +296,13 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     masterVolumeValue_->setHoriAlign(kCenterText);
     AddKnob(10,352,626,"HALL +");
     AddKnob(11,559,626,"CHORUS +");
-    reset_=MakeButton({677,695,771,728},kReset,"RESET");
+    reset_=MakeButton({666,695,771,728},kReset,"MOD RESET");
 
     MakeLabel({807,207,1027,239},"SOUND BROWSER",false);
     toggle_=MakeButton({1020,205,1170,241},kToggle,"BROWSER");
     toggle_->setStyle(CTextButton::kOnOffStyle);
     toggle_->setValue(1.f);
-    bankCaption_=MakeLabel({809,261,870,289},"BANK",true);
+    bankCaption_=MakeLabel({809,261,870,289},"FILTER",true);
     bankMenu_=new COptionMenu({875,254,1167,291},this,kBankFilter);
     bankMenu_->setBackColor(kBezel);
     bankMenu_->setFontColor(kPaper);
@@ -368,13 +368,40 @@ CTextButton* PresetBrowserView::MakeButton(const CRect& r,int tag,const char* s)
     addView(button);
     return button;
 }
+int PresetBrowserView::GestureIndex(int tag) noexcept {
+    if(tag>=kGuiFirst&&tag<kGuiFirst+kGuiCount)return tag-kGuiFirst;
+    if(tag==kMasterVolume)return kGuiCount;
+    if(tag==kReverbType)return kGuiCount+1;
+    if(tag==kChorusType)return kGuiCount+2;
+    return -1;
+}
+void PresetBrowserView::controlBeginEdit(CControl* control) {
+    if(!control||!controller_)return;
+    const int index=GestureIndex(control->getTag());
+    if(index<0||activeHostGestures_[size_t(index)])return;
+    activeHostGestures_[size_t(index)]=true;
+    controller_->beginEdit(static_cast<Steinberg::Vst::ParamID>(control->getTag()));
+}
+void PresetBrowserView::controlEndEdit(CControl* control) {
+    if(!control||!controller_)return;
+    const int index=GestureIndex(control->getTag());
+    if(index<0||!activeHostGestures_[size_t(index)])return;
+    activeHostGestures_[size_t(index)]=false;
+    controller_->endEdit(static_cast<Steinberg::Vst::ParamID>(control->getTag()));
+}
 void PresetBrowserView::ChangeParameter(Steinberg::Vst::ParamID tag,double norm) {
     if(!controller_)return;
     norm=std::clamp(norm,0.,1.);
-    controller_->beginEdit(tag);
-    controller_->setParamNormalized(tag,norm);
-    controller_->performEdit(tag,norm);
-    controller_->endEdit(tag);
+    // CControl::beginEdit/endEdit already own the host gesture during a
+    // knob drag, Ctrl-click or COptionMenu selection. Opening another host
+    // gesture for *every* valueChanged() event splits DAW automation into
+    // dozens of disconnected touches, and some hosts reject nested edits.
+    const int index=GestureIndex(static_cast<int>(tag));
+    const bool alreadyEditing=index>=0&&activeHostGestures_[size_t(index)];
+    if(!alreadyEditing)controller_->beginEdit(tag);
+    if(controller_->setParamNormalized(tag,norm)==Steinberg::kResultOk)
+        controller_->performEdit(tag,norm);
+    if(!alreadyEditing)controller_->endEdit(tag);
 }
 void PresetBrowserView::Select(uint16_t bank,uint8_t program) {
     // Host automation may coalesce an edit when the normalized bank value is
