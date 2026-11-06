@@ -78,6 +78,13 @@ jobs:
             python tools/p18_editorhost_smoke.py --editorhost "$editor" --plugin "$plugin" --output "qa/editor-$i"
             if($LASTEXITCODE -ne 0) { throw "EditorHost GUI smoke $i failed" }
           }
+      - name: Package validated Windows x64 VST3 preview (NOT a release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: P133-AWE-FX-Windows-x64-VST3-PREVIEW
+          path: build-p133/VST3/Release/
+          if-no-files-found: error
+          retention-days: 7
       - name: Preserve independent numerical evidence
         if: always()
         uses: actions/upload-artifact@v4
