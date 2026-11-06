@@ -480,6 +480,16 @@ public:
             // updating the RT atomics. Reconstruct all accepted program
             // intents after the last committed recall, including channels.
             const uint64_t recalled=bankOrder_.LatestRecall().sequence;
+            const auto masterIntent=audioMasterIntent_.load(
+                std::memory_order_acquire);
+            if((masterIntent>>14)>recalled)
+                target.masterVolume=static_cast<uint32_t>(masterIntent&0x3fffu);
+            for(int i=0;i<kGuiCount;++i) {
+                const auto guiIntent=audioGuiIntents_[i].load(
+                    std::memory_order_acquire);
+                if((guiIntent>>14)>recalled)
+                    target.controls[i]=static_cast<uint32_t>(guiIntent&0x3fffu);
+            }
             const uint64_t global=audioProgramSelection_.load(
                 std::memory_order_acquire);
             if((global>>8)>recalled) {
@@ -505,11 +515,14 @@ public:
         // Therefore a stable RT version alone does not prove that the
         // reconstructed program/channel tuple came from one intent epoch.
         const auto captureProgramIntents=[&]() {
-            std::array<uint64_t,17> values{};
+            std::array<uint64_t,18+kGuiCount> values{};
             values[0]=audioProgramSelection_.load(std::memory_order_acquire);
             for(int ch=0;ch<16;++ch)
                 values[ch+1]=audioChannelSelections_[ch].load(
                     std::memory_order_acquire);
+            values[17]=audioMasterIntent_.load(std::memory_order_acquire);
+            for(int i=0;i<kGuiCount;++i)
+                values[18+i]=audioGuiIntents_[i].load(std::memory_order_acquire);
             return values;
         };
         for(int attempt=0;attempt<4096;++attempt) {
@@ -697,6 +710,20 @@ public:
                     candidate.channelPrograms[ch]=static_cast<uint32_t>(edit&0xFFu);
                 }
             }
+            // Accepted master/GUI events newer than this recall START must
+            // survive even when the RT writer gate rejected their application.
+            const auto liveMaster=audioMasterIntent_.load(
+                std::memory_order_acquire);
+            if((liveMaster>>14)>recallSequence)
+                candidate.masterVolume=static_cast<uint32_t>(liveMaster&0x3fffu);
+            for(int i=0;i<kGuiCount;++i) {
+                const auto gui=audioGuiIntents_[i].load(
+                    std::memory_order_acquire);
+                if((gui>>14)>recallSequence)
+                    candidate.controls[i]=static_cast<uint32_t>(gui&0x3fffu);
+                if(prepared)prepared->SetGuiControl(
+                    i,float(candidate.controls[i])/AssetState::kControlScale);
+            }
             if(prepared)for(int ch=0;ch<16;++ch)
                 prepared->ProgramChange(static_cast<uint8_t>(ch),
                     static_cast<uint8_t>(
@@ -771,6 +798,7 @@ public:
         // realtime writer attempt leaves the stamped value pending.
         ApplyPendingGlobalBank(synth_);
         ApplyPendingProgramIntents(synth_);
+        ApplyPendingContinuousControls(synth_);
         const auto refreshEngineAtEvent=[&]() noexcept {
             const uint64_t published=engines_.PublishedVersion();
             if(published==seenEngineVersion)return;
@@ -795,6 +823,7 @@ public:
             }
             ApplyPendingGlobalBank(synth_);
             ApplyPendingProgramIntents(synth_);
+            ApplyPendingContinuousControls(synth_);
         };
         // P118: VST3 parameter points carry their own sampleOffset.
         // Keep one cursor per parameter queue and merge them with MIDI events.
@@ -916,6 +945,21 @@ public:
                 audioChannelSelections_[ch].store(
                     (bankOrder_.Next()<<8)|p,std::memory_order_release);
             }
+            // Persist the actual accepted value before the RT try-writer:
+            // control recalls may hold the gate while the audio callback
+            // receives valid master/GUI automation.
+            if(id==kVolumeID) {
+                const uint32_t value=static_cast<uint32_t>(std::lround(
+                    val*MasterOutput::kScale));
+                audioMasterIntent_.store(
+                    (bankOrder_.Next()<<14)|value,std::memory_order_release);
+            } else if(id>=kGuiFirstID&&id<kGuiFirstID+kGuiCount) {
+                const int idx=int(id-kGuiFirstID);
+                const uint32_t value=static_cast<uint32_t>(std::lround(
+                    val*AssetState::kControlScale));
+                audioGuiIntents_[idx].store(
+                    (bankOrder_.Next()<<14)|value,std::memory_order_release);
+            }
             // Bank controls are accepted before trying the realtime state
             // gate, so a concurrent recall cannot silently drop the edit.
             if(id==kBankID) {
@@ -943,17 +987,11 @@ public:
                 ApplyProgramIntentsUnderWriter(synth_);
             } else if(id==kBankID) {
                 ApplyGlobalBankUnderWriter(synth_,bankOrder_.Latest());
-            } else if(id==kVolumeID) {
-                const auto gain=static_cast<uint32_t>(std::lround(
-                    val*MasterOutput::kScale));
-                rtMaster_.store(gain,std::memory_order_release);
-                volumeGain_.setTarget(gain);
-            } else if(id>=kGuiFirstID && id<kGuiFirstID+kGuiCount) {
-                const int idx=int(id-kGuiFirstID);
-                rtControls_[idx].store(static_cast<uint32_t>(
-                    std::lround(val*AssetState::kControlScale)),
-                    std::memory_order_release);
-                if(synth_)synth_->SetGuiControl(idx,static_cast<float>(val));
+            } else if(id==kVolumeID ||
+                      (id>=kGuiFirstID&&id<kGuiFirstID+kGuiCount)) {
+                // Reload current accepted stamp inside writer ownership so
+                // a newer recall cannot be undone by an old queued point.
+                ApplyContinuousControlsUnderWriter(synth_);
             } else {
                 const auto midi=MidiControlMapping::Decode(id);
                 if(!midi.valid)return;
@@ -1195,6 +1233,12 @@ private:
     // This is not the RT-applied value: readers must consider both.
     std::atomic<uint64_t> audioProgramSelection_{0};
     std::array<std::atomic<uint64_t>,16> audioChannelSelections_{};
+    // Each 64-bit control intent packs monotone transaction stamp into
+    // high 50 bits and a 0..10000 control value into low 14 bits.
+    std::atomic<uint64_t> audioMasterIntent_{0};
+    std::array<std::atomic<uint64_t>,kGuiCount> audioGuiIntents_{};
+    uint64_t lastAppliedMasterSequence_=0; // audio thread only
+    std::array<uint64_t,kGuiCount> lastAppliedGuiSequences_{}; // audio only
     uint64_t lastAppliedGlobalProgramSequence_=0; // audio thread only
     std::array<uint64_t,16> lastAppliedChannelProgramSequence_{}; // audio only
     uint64_t lastGlobalBankSequence_=0; // audio thread only
@@ -1239,6 +1283,8 @@ private:
         // must never reappear as pending on the next audio block.
         lastAppliedGlobalProgramSequence_=recalled.sequence;
         lastAppliedChannelProgramSequence_.fill(recalled.sequence);
+        lastAppliedMasterSequence_=recalled.sequence;
+        lastAppliedGuiSequences_.fill(recalled.sequence);
     }
     void ApplyGlobalBankUnderWriter(Synth* target,
                                     BankOrder::Choice bank) noexcept {
@@ -1309,6 +1355,41 @@ private:
             if(target)target->ProgramChange(static_cast<uint8_t>(ch),
                                              static_cast<uint8_t>(program));
             lastAppliedChannelProgramSequence_[ch]=edit>>8;
+        }
+    }
+    void ApplyPendingContinuousControls(Synth* target) noexcept {
+        const auto recall=bankOrder_.LatestRecall().sequence;
+        const auto master=audioMasterIntent_.load(std::memory_order_acquire);
+        bool pending=(master>>14)>std::max(recall,lastAppliedMasterSequence_);
+        for(int i=0;i<kGuiCount;++i) {
+            const auto intent=audioGuiIntents_[i].load(std::memory_order_acquire);
+            pending|=(intent>>14)>std::max(recall,lastAppliedGuiSequences_[i]);
+        }
+        if(!pending)return;
+        RealtimeStateVersion::Writer write(
+            rtStateVersion_,RealtimeStateVersion::Domain::Audio);
+        if(!write)return;
+        ApplyContinuousControlsUnderWriter(target);
+    }
+    void ApplyContinuousControlsUnderWriter(Synth* target) noexcept {
+        SyncCommittedRecall();
+        const auto recall=bankOrder_.LatestRecall().sequence;
+        const auto master=audioMasterIntent_.load(std::memory_order_acquire);
+        if((master>>14)>std::max(recall,lastAppliedMasterSequence_)) {
+            const uint32_t value=static_cast<uint32_t>(master&0x3fffu);
+            rtMaster_.store(value,std::memory_order_release);
+            volumeGain_.setTarget(value);
+            lastAppliedMasterSequence_=master>>14;
+        }
+        for(int i=0;i<kGuiCount;++i) {
+            const auto intent=audioGuiIntents_[i].load(std::memory_order_acquire);
+            if((intent>>14)<=std::max(recall,lastAppliedGuiSequences_[i]))
+                continue;
+            const uint32_t value=static_cast<uint32_t>(intent&0x3fffu);
+            rtControls_[i].store(value,std::memory_order_release);
+            if(target)target->SetGuiControl(
+                i,float(value)/AssetState::kControlScale);
+            lastAppliedGuiSequences_[i]=intent>>14;
         }
     }
     void ApplyRtParameters(Synth& target) noexcept {
