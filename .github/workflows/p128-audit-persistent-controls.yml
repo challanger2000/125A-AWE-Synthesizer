@@ -1,0 +1,64 @@
+name: Independent P128 persistent controls state-writer gate audit
+on:
+  push:
+    branches: [audit/p128-persistent-parameter-race-20261106]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: p128-audit-controls-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  real-processor-state-race:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned Steinberg 3.8.1 SDK
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch v3.8.1_build_84 --recurse-submodules https://github.com/steinbergmedia/vst3sdk.git external/vst3sdk
+          $sha = (git -C external/vst3sdk rev-parse HEAD).Trim()
+          if ($sha -ne '3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96') { throw "wrong SDK: $sha" }
+      - name: Configure native P128 processor harness
+        shell: pwsh
+        run: |
+          cmake -S . -B build-audit -G "Visual Studio 17 2022" -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON
+          if ($LASTEXITCODE -ne 0) { throw 'P128 audit configure failed' }
+      - name: Build production-derived processor race test
+        shell: pwsh
+        run: |
+          cmake --build build-audit --config Release --target awe32_p128_processor_order_test --parallel 2
+          if ($LASTEXITCODE -ne 0) { throw 'P128 audit binary build failed' }
+      - name: Prove writer-gate master/GUI loss on real processor code
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force artifacts/controls | Out-Null
+          $exe = @(Get-ChildItem build-audit -Recurse -File -Filter 'awe32_p128_processor_order_test.exe')
+          $assets = (Resolve-Path 'build-audit/p128-generated/assets').Path
+          if ($exe.Count -ne 1) { throw 'Real P128 processor harness missing/ambiguous' }
+          & $exe[0].FullName persistent-controls $assets 2>&1 | Tee-Object artifacts/controls/log.txt
+          $rc = $LASTEXITCODE
+          "Exit=$rc" | Set-Content artifacts/controls/exit.txt
+          $log = Get-Content artifacts/controls/log.txt -Raw
+          if ($rc -eq 1 -and
+              $log.Contains('PASS control: positive baseline V10 master/gui values applied without competition') -and
+              $log.Contains('CONTROL_AUDIT immediate_master=6200 immediate_gui0=2200') -and
+              $log.Contains('FAIL control: master Volume must not be discarded on RT writer refusal') -and
+              $log.Contains('FAIL control: GUI overlay must not be discarded on RT writer refusal')) {
+            '[REPRODUCED] master/gui writer-gate state loss (control race)' | Tee-Object artifacts/controls/verdict.txt
+          } else {
+            throw "P128 control race did not produce expected positive and negative controls (rc=$rc)"
+          }
+          exit 0
+      - name: Upload P128 controls audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 125A-P128-Persistent-Controls-Independent-Audit
+          path: artifacts/controls/
+          if-no-files-found: warn
+          retention-days: 14
