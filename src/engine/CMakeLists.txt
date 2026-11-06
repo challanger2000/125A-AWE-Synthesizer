@@ -122,3 +122,13 @@ add_executable(awe32_p128_note_handoff_test "${PROJECT_SOURCE_DIR}/tests/p128_no
 target_include_directories(awe32_p128_note_handoff_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${UPSTREAM_SRC}")
 target_link_libraries(awe32_p128_note_handoff_test PRIVATE awe32_chip_safety)
 add_test(NAME 125A_p128_note_handoff COMMAND awe32_p128_note_handoff_test)
+
+
+# AUDIT ONLY: measures 2,000 actual Synth->86Box audio blocks on Windows.
+# Hardware/DAW timing remains a separate release gate.
+add_executable(awe32_p128_windows_realtime_profile
+  "${PROJECT_SOURCE_DIR}/tests/p128_windows_realtime_profile.cpp")
+target_include_directories(awe32_p128_windows_realtime_profile PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}" "${UPSTREAM_SRC}")
+target_link_libraries(awe32_p128_windows_realtime_profile PRIVATE awe32_chip_safety)
+target_compile_features(awe32_p128_windows_realtime_profile PRIVATE cxx_std_23)
