@@ -27,35 +27,45 @@ constexpr CColor kBack(22,27,34,255), kRaised(42,52,63,255),
                  kBezel(11,16,22,255), kStroke(85,100,113,255),
                  kOrange(220,151,87,255);
 constexpr Steinberg::Vst::ParamID kProgram=1000,kBankParam=1002;
-// P147 neutral functional canvas. The eventual photographed PCB artwork must
-// be constructed AROUND the approved control geometry, never the other way.
-// Functional-only grid. The future PCB art must preserve every hitbox.
-// Nothing here is a painted faceplate or a raised electronic component.
+// P156: PCB image is a pure noninteractive BACK layer. The exact 1000x640
+// resource is allowed to have dense raised parts everywhere; half-opaque
+// control islands on a separate VSTGUI layer protect labels and input hitboxes.
 class FunctionalLayoutBackground final : public CView {
 public:
-    explicit FunctionalLayoutBackground(const CRect& r):CView(r) {
+    explicit FunctionalLayoutBackground(const CRect& r)
+        : CView(r), pcb_(new CBitmap("125A_PCB_Shared_1000x640.png")) {
         setMouseEnabled(false);
     }
+    ~FunctionalLayoutBackground() noexcept override {
+        if(pcb_)pcb_->forget();
+    }
     void draw(CDrawContext* c) override {
-        c->setFillColor(CColor(13,17,23,255));
-        c->drawRect(getViewSize(),kDrawFilled);
-        const auto panel=[&](CRect r,CColor fill,CColor edge) {
-            c->setFillColor(fill);c->drawRect(r,kDrawFilled);
-            c->setFrameColor(edge);c->drawRect(r,kDrawStroked);
-        };
-        const CColor edge(58,66,73,255);
-        const CColor panelColor(26,31,38,255);
-        const CColor lcdColor(11,16,21,255);
-        panel({16,16,252,163},panelColor,edge); // branding
-        panel({264,16,776,163},lcdColor,edge);   // amber program display
-        panel({788,16,984,163},panelColor,edge); // reserved EMU8000 chip
-        panel({16,173,984,224},panelColor,edge); // all navigation
-        panel({16,232,984,592},lcdColor,edge);   // page canvas
-        // The bottom 37 px stays clear for gold ISA edge connectors on the final artwork.
+        if(pcb_ && pcb_->isLoaded())
+            pcb_->draw(c,getViewSize());
+        else {
+            c->setFillColor(CColor(13,17,23,255));
+            c->drawRect(getViewSize(),kDrawFilled);
+        }
+        // The established gold logo and animated amber LCD are independent
+        // images above this back layer, never permanently printed on a PCB.
+        // Keep those compartments dark to prevent double-looking typography
+        // if an imported reference image already contains mockup lettering.
+        c->setFillColor(CColor(9,12,14,240));
+        c->drawRect({16,16,252,163},kDrawFilled);
+        c->setFillColor(CColor(9,12,14,252));
+        c->drawRect({264,16,776,163},kDrawFilled);
+        // Navigation may have opaque brass buttons, but its backing should
+        // still allow a faint hint of the printed traces to show through.
+        c->setFillColor(CColor(9,12,16,218));
+        c->drawRect({16,173,984,224},kDrawFilled);
+        c->setFrameColor(CColor(159,109,47,217));
+        c->setLineWidth(1.);
+        c->drawRect({16,173,984,224},kDrawStroked);
         setDirty(false);
     }
+private:
+    CBitmap* pcb_{nullptr};
 };
-
 
 // P154: exact gold wordmark extracted from the approved soundcard reference.
 // The image stays separate and has an alpha channel; no live text is baked
@@ -100,24 +110,52 @@ private:
 
 // Only on the SYNTH page; the BROWSER receives one undivided canvas.
 // All group boundaries align to a deliberately fixed spacing grid.
+// These groups render ABOVE the photographic PCB and BELOW every real
+// control. The fill is 80 percent opaque (alpha 204/255), not flat black.
 class SynthPanelGroups final : public CView {
 public:
-    explicit SynthPanelGroups(const CRect& r):CView(r) {
-        setMouseEnabled(false);
-    }
+    explicit SynthPanelGroups(const CRect& r):CView(r) {setMouseEnabled(false);}
     void draw(CDrawContext* c) override {
-        const auto group=[&](CRect r) {
-            c->setFillColor(CColor(20,26,33,255));
-            c->drawRect(r,kDrawFilled);
-            c->setFrameColor(CColor(77,72,61,255));
-            c->drawRect(r,kDrawStroked);
+        const auto island=[&](CRect r) {
+            auto* border=c->createRoundRectGraphicsPath(r,8.);
+            if(!border)return;
+            c->setFillColor(CColor(7,11,16,204)); // P156 80% experimental.
+            c->drawGraphicsPath(border,CDrawContext::kPathFilled);
+            c->setLineWidth(1.);
+            c->setFrameColor(CColor(190,131,55,226));
+            c->drawGraphicsPath(border,CDrawContext::kPathStroked);
+            border->forget();
+            // Thin reflected edge, without solid rectangular helper boxes.
+            c->setFrameColor(CColor(240,181,92,100));
+            c->drawLine({r.left+13.,r.top+2.},
+                        {r.right-13.,r.top+2.});
         };
-        group({16,2,190,177});   // Reverb
-        group({200,2,374,177});  // Chorus
-        group({384,2,774,177});  // Amp ADSR
-        group({784,2,984,358});  // Large independent master
-        group({16,187,518,358}); // Filter ADSR
-        group({528,187,774,358});// Cutoff / Resonance
+        island({16,2,190,177});   // REVERB
+        island({200,2,374,177});  // CHORUS
+        island({384,2,774,177});  // AMP ADSR
+        island({784,2,984,358});  // MASTER / RESET
+        island({16,187,518,358}); // FILTER ADSR
+        island({528,187,774,358});// CUTOFF / RESONANCE
+        setDirty(false);
+    }
+};
+
+// BROWSER is intentionally different: a single translucent dark sheet
+// behind the existing search/table so the native selected rows remain legible.
+class BrowserPanelBacking final : public CView {
+public:
+    explicit BrowserPanelBacking(const CRect& r):CView(r) {setMouseEnabled(false);}
+    void draw(CDrawContext* c) override {
+        const CRect r={16,2,984,356};
+        auto* border=c->createRoundRectGraphicsPath(r,8.);
+        if(border) {
+            c->setFillColor(CColor(7,11,16,224));
+            c->drawGraphicsPath(border,CDrawContext::kPathFilled);
+            c->setFrameColor(CColor(190,131,55,207));
+            c->setLineWidth(1.);
+            c->drawGraphicsPath(border,CDrawContext::kPathStroked);
+            border->forget();
+        }
         setDirty(false);
     }
 };
@@ -517,6 +555,7 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     // BROWSER: no permanent 400px sidebar. It uses the available width,
     // retains true SF2 bank filtering, search and exact program selection.
     buildingPanel_=pages_[1];
+    AddToCurrentPage(new BrowserPanelBacking(PageRect({0,232,1000,592})));
     bankCaption_=MakeLabel({28,247,92,282},"FILTER",true);
     bankMenu_=new GoldHardwareMenu(PageRect({96,247,320,284}),this,kBankFilter);
     StyleGoldMenu(bankMenu_);
