@@ -248,7 +248,7 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     lcd->setFontColor(CColor(219,169,70,255));
     programLabel_=MakeLabel({310,82,744,125},"NO PRESET",false);
     programLabel_->setFontColor(CColor(245,193,78,255));
-    hardwareInfoLabel_=MakeLabel({306,132,752,157},"ROM: ERFORDERLICH",true);
+    hardwareInfoLabel_=MakeLabel({306,120,752,140},"ROM: ERFORDERLICH",true);
     hardwareInfoLabel_->setFontColor(CColor(221,174,91,255));
     hardwareInfoLabel_->setTextTruncateMode(CTextLabel::kTruncateTail);
 
@@ -372,7 +372,7 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     empty_=MakeLabel({33,398,960,436},"",true);
 
     buildingPanel_=nullptr;
-    hint_=MakeLabel({26,610,972,632},
+    hint_=MakeLabel({26,605,972,625},
         "SF2-Audiostatus noch nicht vom Prozessor bestaetigt.",true);
     hint_->setTextTruncateMode(CTextLabel::kTruncateTail);
     SetPage(0);
