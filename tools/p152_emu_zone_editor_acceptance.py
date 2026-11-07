@@ -476,6 +476,8 @@ def main():
                   "P152 blank photographic amber LCD visible beneath live text",results)
             check(gold_knob_pixels(first,(808,78,963,146))<10,
                   "P152 top-right EMU8000 zone is free of live gold controls",results)
+            check(gold_knob_pixels(first,(30,608,965,633))<10,
+                  "P152 bottom connector strip contains no live controls",results)
             # All sound controls stay visible on SYNTH; BROWSER is separate.
             click(hwnd,747,198)
             browser=snap(hwnd,args.output/"02_browser.bmp")
