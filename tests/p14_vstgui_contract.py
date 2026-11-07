@@ -8,7 +8,7 @@ uidesc=ET.parse(root/"src/vst3/resource/awe_test_panel.uidesc").getroot()
 assert uidesc.tag=="vstgui-ui-description"
 templates=uidesc.findall("template")
 assert len(templates)==1
-assert templates[0].attrib["size"]=="1000, 640"
+assert templates[0].attrib["size"]=="1000, 708"
 tags={it.attrib["name"]:int(it.attrib["tag"])
       for it in uidesc.findall("./control-tags/control-tag")}
 assert tags=={"Program":1000,"SF2Bank":1002},tags
@@ -24,7 +24,7 @@ assert 'kGuiFirstID=1100' in f
 assert 'new RangeParameter(labels[i],kGuiFirstID+i' in f
 assert "kEngineID" not in f and 'STR16("Hardware")' not in f
 assert "opl_->" not in f and "cqm_->" not in f
-assert "new PresetBrowserView({0,0,1000,640},this,sfCatalog_,fmCatalog_," in f
+assert "new PresetBrowserView({0,0,1000,708},this,sfCatalog_,fmCatalog_," in f
 assert 'new VSTGUI::VST3Editor(this,"view","awe_test_panel.uidesc")' in f
 assert 'sendTextMessage(("125A_SF2_STATUS:"+status).c_str())' in f
 assert 'AllowEmuNoteOn(entry&&(entry->sf2Configured||entry->gmLoaded),' in f
@@ -44,7 +44,7 @@ assert 'msg->setMessageID("125A_ROM_LOAD")' in f
 assert 'FIDStringsEqual(msg->getMessageID(),"125A_ROM_LOAD")' in f
 assert 'romAck("OK")' in f
 assert 'romLoadRequest_' in h and 'kLoadRom=3108' in h
-assert 'MakeButton({819,177,896,218},kLoadRom,"ROM")' in b
+assert 'MakeButton({819,234,896,273},kLoadRom,"ROM")' in b
 assert 'NativeChooseFile(path,true)' in b and 'NativeChooseFile(path,false)' in b
 assert 'GetOpenFileNameW(&ofn)' in b
 assert 'getBinary("Path",bytes,bytesCount)' in f
@@ -54,7 +54,7 @@ assert 'core.ChipVariant()!=Emu8000Core::Chip::Box86' in f
 assert 'CORE: INAKTIV' in f and 'ROM: ERFORDERLICH' in f
 assert 'core.ChipRamWords()' in f and 'BankAt(i).sampleData.size()' in f
 assert 'hardwareInfoProvider_' in h and 'hardwareInfoLabel_' in h
-assert 'auto* photo=new FunctionalLayoutBackground({0,0,1000,640});' in b
+assert 'auto* photo=new FunctionalLayoutBackground({0,0,1000,708});' in b
 assert 'addView(photo);' in b
 assert 'new CBitmap("125A_PCB_Shared_1000x640.png")' in b  # P156 photo is a separate background bitmap
 assert 'new CBitmap(isMaster' in b
@@ -92,21 +92,19 @@ assert 'rtMaster_' in f and 'volumeGain_.setTarget(' in f
 assert 'masterVolume_' in h and 'masterVolumeValue_' in h
 assert 'new HardwareKnob(PageRect({817,298,951,432})' in b
 assert 'controller_->getParamNormalized(kMasterVolume)' in b
-assert 'activeBankMenu_=new GoldHardwareMenu({26,179,203,218},this,kActiveBank)' in b
-assert 'programMenu_=new GoldHardwareMenu({261,179,552,218},this,kDirectPreset)' in b
+assert 'activeBankMenu_=new GoldHardwareMenu({26,234,203,273},this,kActiveBank)' in b
+assert 'programMenu_=new GoldHardwareMenu({261,234,552,273},this,kDirectPreset)' in b
 assert 'RebuildActiveMenus();' in b and 'SyncActiveMenuSelection();' in b
 assert 'sf_.Find(bank_,id)' in b
 assert 'ChooseExistingProgram(' in b
 assert 'kActiveBank=3109,kDirectPreset=3110' in h
 assert 'm_guiControls[11]' in syn
-assert 'addView(new GoldLogoArtwork({16,16,252,163}))' in b
 assert 'new CBitmap("125A_AWE_Gold_Logo_236x147.png")' in b
 assert 'brand=MakeLabel({30,25,237,69},"125A",false)' not in b
 assert 'model=MakeLabel({30,76,238,105}' not in b
 assert 'engine=MakeLabel({30,118,239,141}' not in b
-assert 'programLabel_=MakeLabel({310,66,737,94},"NO PRESET",false)' in b
-assert 'hardwareInfoLabel_=MakeLabel({310,96,737,113},"ROM: ERFORDERLICH",true)' in b
-assert 'addView(new AmberLcdArtwork({264,16,776,163}))' in b
+assert 'programLabel_=MakeLabel({350,118,728,145},"NO PRESET",false)' in b
+assert 'hardwareInfoLabel_=MakeLabel({350,145,728,163},"ROM: ERFORDERLICH",true)' in b
 assert 'new CBitmap("125A_Lcd_Amber_Blank_512x147.png")' in b
 assert (root/"src/vst3/resource/125A_Logo_Master_FINAL.svg").is_file()
 assert 'resource/125A_Logo_Master_FINAL.svg' in cmake
@@ -193,16 +191,16 @@ assert 'resource/125A_Lcd_Amber_Blank_512x147.png' in cmake
 assert '"125A_Lcd_Amber_Blank_512x147.png" PNG DISCARDABLE' in (root/"src/vst3/resource/awe_gold_knobs.rc.in").read_text(encoding="utf-8")
 # P152 exact-size navigation and collision-free real EMU8000 module area:
 # the chip will occupy (788,16)..(984,163), so no input may intersect it.
-assert 'fileLabel_=MakeLabel({546,48,737,64},"",false)' in b
-assert 'auto* lcd=MakeLabel({310,48,534,64}' in b
-assert 'loadSf2_=MakeButton({904,177,979,218},kLoadSf2,"SF2")' in b
-assert 'previous_=MakeButton({212,179,252,218},kPrevious,"<")' in b
-assert 'next_=MakeButton({561,179,601,218},kNext,">")' in b
-assert 'pageButtons_[0]=MakeButton({610,179,703,218}' in b
-assert 'toggle_=MakeButton({712,179,811,218}' in b
+assert 'fileLabel_=MakeLabel({575,96,728,112},"",false)' in b
+assert 'auto* lcd=MakeLabel({350,96,570,112}' in b
+assert 'loadSf2_=MakeButton({904,234,979,273},kLoadSf2,"SF2")' in b
+assert 'previous_=MakeButton({212,234,252,273},kPrevious,"<")' in b
+assert 'next_=MakeButton({561,234,601,273},kNext,">")' in b
+assert 'pageButtons_[0]=MakeButton({610,234,703,273}' in b
+assert 'toggle_=MakeButton({712,234,811,273}' in b
 assert 'MakeLabel({805,30,968,51},"SOUNDFONT / ROM",true)' not in b
 assert 'loadRom_=MakeButton({805,103,882,144}' not in b
-assert 'hint_=MakeLabel({310,114,737,131}' in b
+assert 'hint_=MakeLabel({350,166,728,184}' in b
 assert 'panel({16,603,984,634},panelColor,edge);' not in b
 # The approved logo is real transparent artwork at its exact native size.
 gold_logo=root/"src/vst3/resource/125A_AWE_Gold_Logo_236x147.png"
@@ -225,7 +223,6 @@ assert b.count('new GoldHardwareMenu(')==5
 assert 'bankMenu_=new GoldHardwareMenu(PageRect({100,247,494,284})' in b
 # P156: photo and half-opaque VSTGUI control islands are purely visual.
 # Parameter rectangles and host editing remain exactly P155.
-assert 'new CBitmap("125A_PCB_Shared_1000x640.png")' in b
 assert 'class SynthPanelGroups final : public CView' in b
 assert 'CColor(7,11,16,153)' in b
 assert 'createRoundRectGraphicsPath(r,8.)' in b
@@ -236,14 +233,9 @@ assert 'panel({16,232,984,592},lcdColor,edge);' not in b
 assert 'resource/125A_PCB_Shared_1000x640.png' in cmake
 assert '"125A_PCB_Shared_1000x640.png" PNG DISCARDABLE' in (root/"src/vst3/resource/awe_gold_knobs.rc.in").read_text(encoding="utf-8")
 # P160: physically protected corner screws and a shorter Reset row.
-assert 'new CBitmap("125A_P160_PCB_1000x640.png")' in b
-assert 'new CBitmap("125A_P160_Lcd_Complete_512x147.png")' in b
-assert 'CGraphicsTransform t;' in b and 't.scale(193./236.,120./147.)' in b
 assert 'notched({{784,2},{984,2},{984,319},{969,318},{957,321},{948,329},{944,341},{944,358},{784,358}})' in b
 assert 'notched({{16,187},{518,187},{518,358},{58,358},{58,343},{55,332},{47,324},{32,318},{20,321},{16,326}})' in b
 assert 'border->beginSubpath({16,2})' in b
-assert '125A_P160_PCB_1000x640.png' in cmake
-assert '125A_P160_Lcd_Complete_512x147.png' in cmake
 # Compatibility builds may omit the two PNGs; make absence explicit, never
 # mistake a green runtime/validator for image-specific proof.
 # P161: browser-only gold theme; no changes to bank/program mapping.
@@ -267,38 +259,37 @@ assert 'dbGetCurrentColumnWidth(int32_t,CDataBrowser* browser)' in b
 assert 'browser->getVisibleClientRect().getWidth()' in b
 assert 'return 892.;' not in b
 # P162 the full header rail is balanced and the redundant BANK label is gone.
-assert 'const CRect rail{16,173,984,224};' in b
+assert 'const CRect rail{16,228,984,279};' in b
 assert 'createRoundRectGraphicsPath(rail,7.)' in b
 assert 'MakeLabel({23,184,65,214},"BANK",true)' not in b
-assert 'activeBankMenu_=new GoldHardwareMenu({26,179,203,218}' in b
-assert 'previous_=MakeButton({212,179,252,218}' in b
-assert 'programMenu_=new GoldHardwareMenu({261,179,552,218}' in b
-assert 'next_=MakeButton({561,179,601,218}' in b
-assert 'pageButtons_[0]=MakeButton({610,179,703,218}' in b
-assert 'toggle_=MakeButton({712,179,811,218}' in b
-assert 'loadRom_=MakeButton({819,177,896,218}' in b
-assert 'loadSf2_=MakeButton({904,177,979,218}' in b
+assert 'activeBankMenu_=new GoldHardwareMenu({26,234,203,273}' in b
+assert 'previous_=MakeButton({212,234,252,273}' in b
+assert 'programMenu_=new GoldHardwareMenu({261,234,552,273}' in b
+assert 'next_=MakeButton({561,234,601,273}' in b
+assert 'pageButtons_[0]=MakeButton({610,234,703,273}' in b
+assert 'toggle_=MakeButton({712,234,811,273}' in b
+assert 'loadRom_=MakeButton({819,234,896,273}' in b
+assert 'loadSf2_=MakeButton({904,234,979,273}' in b
 # P163 right-edge design contracts: three visual gold borders must
 # converge at x=974; upper SF2 bitmap contains 5px transparent right margin.
-assert 'loadSf2_=MakeButton({904,177,979,218}' in b
+assert 'loadSf2_=MakeButton({904,234,979,273}' in b
 assert 'recessed({580,15,974,52},6.' in b
 assert 'recessed({24,63,974,349},7.' in b
 assert 'search_=new CTextEdit(PageRect({586,249,968,282})' in b
 assert 'table_=new CDataBrowser(PageRect({28,299,970,576})' in b
-assert 'activeBankMenu_=new GoldHardwareMenu({26,179,203,218}' in b
+assert 'activeBankMenu_=new GoldHardwareMenu({26,234,203,273}' in b
 # Each bank, search, and header element keeps its own original input type.
 assert b.count('new GoldHardwareMenu(')==5
 assert 'getVisibleClientRect().getWidth()' in b
 # P164: approved photographic PCB contains the LCD frame, logo and IC exactly
 # once. Neither the old LCD nor logo CView may be instantiated over P164.
-assert 'p164_(new CBitmap("125A_P164_PCB_Single_Header_1000x640.png"))' in b
-assert 'bool hasSingleHeader() const noexcept' in b
-assert 'if(singleHeader)' in b and 'p164_->draw(c,getViewSize())' in b
-assert 'if(!photo->hasSingleHeader()) {' in b
-assert 'addView(new AmberLcdArtwork({264,16,776,163}))' in b
-assert 'addView(new GoldLogoArtwork({16,16,252,163}))' in b
-assert 'compose_p164_faceplate.py' in cmake
-assert 'resource/125A_P164_PCB_Single_Header_1000x640.png' in cmake
-assert '125A_P164_PCB_Single_Header_1000x640.png' in cmake
-assert 'make' not in ''  # keep test semantics free of mock GUI substitutions
-print("P164 STATIC PASS: EMU8000 keepout, amber LCD dynamic file status, 7 gold buttons and 12 host knobs")
+# P165: no duplicate photographic LCD, logo or chip layers.
+assert 'photo_(new CBitmap("125A_P165_Original_Faceplate_1000x708.png"))' in b
+assert '125A_P165_Original_Faceplate_1000x708.png' in cmake
+assert 'new AmberLcdArtwork' not in b and 'new GoldLogoArtwork' not in b
+assert 'compose_p164_faceplate.py' not in cmake
+assert 'new CBitmap("125A_P160' not in b and 'new CBitmap("125A_PCB_Shared' not in b
+assert 'page=new CViewContainer({0,287,1000,647});' in b
+assert 'const CRect rail{16,228,984,279};' in b
+assert 'make' not in ''  # no mock GUI substitutions
+print("P165 STATIC PASS: original faceplate, 8 aligned gold buttons and 12 host knobs")
