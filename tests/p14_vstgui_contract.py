@@ -154,4 +154,24 @@ for filename,size in (
     assert data[25]==6 or b"tRNS" in data, filename
     assert "resource/"+filename in cmake,filename
     assert 'new CBitmap(isMaster' in b,filename
-print("P149 STATIC PASS: exact 33-frame gold standard/master PNGs, true alpha, original host-bound controls, no PCB faceplate")
+# P150: the button atlas is one exact-size PNG with seven native rectangles;
+# button text and mouse hit targets remain real VSTGUI controls.
+atlas_name="125A_Button_Atlas_Normal_Pressed.png"
+atlas=(root/"src/vst3/resource"/atlas_name).read_bytes()
+assert atlas.startswith(b"\\x89PNG\\r\\n\\x1a\\n")
+assert struct.unpack_from(">II",atlas,16)==(596,88)
+assert atlas[25]==6 or b"tRNS" in atlas
+assert ("resource/"+atlas_name) in cmake
+assert ('"'+atlas_name+'" PNG DISCARDABLE') in (root/"src/vst3/resource/awe_gold_knobs.rc.in").read_text(encoding="utf-8")
+assert 'new CBitmap("125A_Button_Atlas_Normal_Pressed.png")' in b
+assert 'atlas_->draw(c,getViewSize(),{sourceX_,active?44.:0.})' in b
+assert 'auto* button=new GoldButton(PageRect(r),this,tag,s,x);' in b
+assert 'StyleGoldMenu(activeBankMenu_)' in b
+assert 'StyleGoldMenu(programMenu_)' in b
+assert 'StyleGoldMenu(bankMenu_)' in b
+assert 'StyleGoldMenu(menu)' in b
+for tag,x in [('kLoadRom','0.'),('kLoadSf2','80.'),('kPrevious','158.'),
+              ('kNext','201.'),('kMainPage','246.'),('kToggle','342.'),
+              ('kReset','444.')]:
+    assert ('case '+tag+':') in b
+print("P150 STATIC PASS: native 7-button gold atlas, live VSTGUI text and pressed states, styled four native menus, unchanged knobs")
