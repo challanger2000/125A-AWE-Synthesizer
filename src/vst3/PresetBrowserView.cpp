@@ -78,6 +78,47 @@ public:
         setDirty(false);
     }
 };
+// P150: one rigorously laid-out PNG atlas. Each button uses a native-size
+// rectangle (no scaling), with a second 44px-spaced frame for pressed/active.
+// The text remains a live VSTGUI label; the image provides the real bevel.
+class GoldButton final : public CTextButton {
+public:
+    GoldButton(const CRect& r,IControlListener* listener,int tag,
+               const char* caption,CCoord sourceX)
+        :CTextButton(r,listener,tag,caption),
+         caption_(caption),sourceX_(sourceX),
+         atlas_(new CBitmap("125A_Button_Atlas_Normal_Pressed.png")) {}
+    ~GoldButton() noexcept override {
+        if(atlas_)atlas_->forget();
+    }
+    void draw(CDrawContext* c) override {
+        if(!atlas_ || !atlas_->isLoaded()) {
+            // Keep the controls usable even if a resource is missing;
+            // GUI acceptance will explicitly reject this fallback.
+            CTextButton::draw(c);
+            return;
+        }
+        const bool active=getValue()>0.5f;
+        atlas_->draw(c,getViewSize(),{sourceX_,active?44.:0.});
+        c->setFont(getFont());
+        c->setFontColor(active?CColor(255,232,173,255):
+                              CColor(241,201,127,255));
+        c->drawString(caption_.c_str(),getViewSize(),kCenterText);
+        setDirty(false);
+    }
+private:
+    std::string caption_;
+    CCoord sourceX_;
+    CBitmap* atlas_{nullptr};
+};
+
+static void StyleGoldMenu(COptionMenu* menu) {
+    if(!menu)return;
+    menu->setBackColor(CColor(23,21,20,255));
+    menu->setFontColor(CColor(244,198,112,255));
+    menu->setFrameColor(CColor(157,112,52,255));
+    menu->setFont(kNormalFont);
+}
 // Mouse-driven, modern hardware-like knob. Uses native VSTGUI controls,
 // never paints values that differ from the host's normalized parameters.
 class HardwareKnob final : public CControl {
@@ -268,15 +309,11 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
 
     MakeLabel({27,184,73,214},"BANK",true);
     activeBankMenu_=new COptionMenu({75,179,232,218},this,kActiveBank);
-    activeBankMenu_->setBackColor(kBezel);
-    activeBankMenu_->setFontColor(kPaper);
-    activeBankMenu_->setFrameColor(kStroke);
+    StyleGoldMenu(activeBankMenu_);
     addView(activeBankMenu_);
     previous_=MakeButton({242,179,282,218},kPrevious,"<");
     programMenu_=new COptionMenu({292,179,710,218},this,kDirectPreset);
-    programMenu_->setBackColor(kBezel);
-    programMenu_->setFontColor(kPaper);
-    programMenu_->setFrameColor(kStroke);
+    StyleGoldMenu(programMenu_);
     addView(programMenu_);
     next_=MakeButton({720,179,762,218},kNext,">");
 
@@ -317,11 +354,8 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
 
     reverbMenu_=new COptionMenu(PageRect({32,382,174,405}),this,kReverbType);
     chorusMenu_=new COptionMenu(PageRect({216,382,358,405}),this,kChorusType);
-    for(auto* menu:{reverbMenu_,chorusMenu_}) {
-        menu->setBackColor(kBezel);
-        menu->setFontColor(kPaper);
-        menu->setFrameColor(kStroke);
-    }
+    for(auto* menu:{reverbMenu_,chorusMenu_})
+        StyleGoldMenu(menu);
     for(const char* label:{"Room 1","Room 2","Room 3","Hall 1",
                             "Hall 2","Plate","Delay","Panning Delay"})
         reverbMenu_->addEntry(label);
@@ -362,17 +396,15 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     buildingPanel_=pages_[1];
     bankCaption_=MakeLabel({28,247,92,282},"FILTER",true);
     bankMenu_=new COptionMenu(PageRect({96,247,320,284}),this,kBankFilter);
-    bankMenu_->setBackColor(kBezel);
-    bankMenu_->setFontColor(kPaper);
-    bankMenu_->setFrameColor(kStroke);
+    StyleGoldMenu(bankMenu_);
     AddToCurrentPage(bankMenu_);
     searchCaption_=MakeLabel({336,247,396,282},"SUCHE",true);
     search_=new CTextEdit(PageRect({401,247,966,284}),this,kFilter,"");
     search_->setPlaceholderString("Instrument suchen...");
     search_->setImmediateTextChange(true);
-    search_->setBackColor(kBezel);
-    search_->setFontColor(kPaper);
-    search_->setFrameColor(kStroke);
+    search_->setBackColor(CColor(23,21,20,255));
+    search_->setFontColor(CColor(244,198,112,255));
+    search_->setFrameColor(CColor(157,112,52,255));
     AddToCurrentPage(search_);
     table_=new CDataBrowser(PageRect({28,299,972,576}),this,
              CScrollView::kVerticalScrollbar|
@@ -422,15 +454,31 @@ CTextLabel* PresetBrowserView::MakeLabel(const CRect& r,const char* s,bool secon
     return label;
 }
 CTextButton* PresetBrowserView::MakeButton(const CRect& r,int tag,const char* s) {
-    auto* button=new CTextButton(PageRect(r),this,tag,s);
+    // Source X is the first pixel of the exact-size atlas column.
+    // Read-only bitmap is shared by resource name, not resampled.
+    CCoord x=0.;
+    switch(tag) {
+        case kLoadRom:  x=0.;   break; // 77 x 41
+        case kLoadSf2:  x=80.;  break; // 75 x 41
+        case kPrevious: x=158.; break; // 40 x 39
+        case kNext:     x=201.; break; // 42 x 39
+        case kMainPage: x=246.; break; // 93 x 39
+        case kToggle:   x=342.; break; // 99 x 39
+        case kReset:    x=444.; break; // 152 x 36
+        default:        x=0.;   break;
+    }
+    auto* button=new GoldButton(PageRect(r),this,tag,s,x);
     button->setFont(kNormalFont);
-    button->setTextColor(kPaper);
-    button->setTextColorHighlighted(kPaper);
-    button->setFrameColor(kStroke);
-    button->setFrameColorHighlighted(CColor(132,155,172));
-    button->setRoundRadius(4.);
-    auto* base=CGradient::create(0.,1.,CColor(66,79,92),CColor(33,44,56));
-    auto* pressed=CGradient::create(0.,1.,CColor(89,113,132),CColor(55,75,91));
+    // Gold fallback if the PNG resource is temporarily unavailable.
+    button->setTextColor(CColor(241,201,127,255));
+    button->setTextColorHighlighted(CColor(255,232,173,255));
+    button->setFrameColor(CColor(157,112,52,255));
+    button->setFrameColorHighlighted(CColor(235,182,82,255));
+    button->setRoundRadius(6.);
+    auto* base=CGradient::create(0.,1.,
+        CColor(56,44,29,255),CColor(24,23,22,255));
+    auto* pressed=CGradient::create(0.,1.,
+        CColor(112,75,33,255),CColor(55,41,25,255));
     button->setGradient(base);
     button->setGradientHighlighted(pressed);
     base->forget();pressed->forget();
