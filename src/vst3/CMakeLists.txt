@@ -61,7 +61,7 @@ if(WIN32)
       125A_P160_Lcd_Complete_512x147.png)
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/resource/${p160_image}")
       file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/awe_gold_knobs.rc"
-           "\"\${p160_image}\" PNG DISCARDABLE \"${CMAKE_CURRENT_SOURCE_DIR}/resource/${p160_image}\"\n")
+           "\"${p160_image}\" PNG DISCARDABLE \"${CMAKE_CURRENT_SOURCE_DIR}/resource/${p160_image}\"\n")
     endif()
   endforeach()
   target_sources(125A_AWE_Synthesizer PRIVATE
