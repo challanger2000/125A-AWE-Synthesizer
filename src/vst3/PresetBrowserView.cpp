@@ -1,5 +1,6 @@
 #include "PresetBrowserView.h"
 #include "vstgui/lib/cgradient.h"
+#include "vstgui/lib/cbitmap.h"
 #include "vstgui/lib/cdrawcontext.h"
 #include "vstgui/lib/cfont.h"
 #include <algorithm>
@@ -84,9 +85,29 @@ public:
     HardwareKnob(const CRect& r,IControlListener* listener,int tag)
         :CControl(r,listener,tag,nullptr) {
         setMin(0.f);setMax(1.f);
-        setDefaultValue(0.f); // P118: neutral for all 12 SF2 overlays
+        setDefaultValue(0.f);
+        // Exactly 33 equal-size vertical frames. The larger master receives
+        // a separate 134px PNG; no runtime image scaling or frame rotation.
+        const bool isMaster=r.getWidth()>90.;
+        frameSize_=isMaster?134.:58.;
+        frames_=new CBitmap(isMaster
+            ? "125A_Knob_Master_33frames_134px.png"
+            : "125A_Knob_Standard_33frames_58px.png");
+    }
+    ~HardwareKnob() noexcept override {
+        if(frames_)frames_->forget();
     }
     void draw(CDrawContext* ctx) override {
+        if(frames_&&frames_->isLoaded()) {
+            const int index=std::clamp(
+                int(std::lround(double(getValue())*32.)),0,32);
+            // VSTGUI source offset selects exactly one square frame.
+            frames_->draw(ctx,getViewSize(),{0.,frameSize_*index});
+            setDirty(false);
+            return;
+        }
+        // Visible, functional fallback if a PNG resource is unavailable.
+        // The Windows GUI acceptance explicitly rejects this fallback.
         const CRect outer=getViewSize();
         CRect inner=outer;inner.inset(4,4);
         CRect core=inner;core.inset(5,5);
@@ -106,11 +127,11 @@ public:
         const double cx=(outer.left+outer.right)*.5;
         const double cy=(outer.top+outer.bottom)*.5;
         const double angle=(135.0+270.0*getValue())*3.141592653589793/180.;
-        const double dx=std::cos(angle),dy=std::sin(angle);
-        const double rad=(outer.getWidth()-9)*.5;
         ctx->setLineWidth(3);
         ctx->setFrameColor(getValue()>0.0001f?kOrange:kMuted);
-        ctx->drawLine({cx+dx*8,cy+dy*8},{cx+dx*rad,cy+dy*rad});
+        ctx->drawLine({cx+std::cos(angle)*8,cy+std::sin(angle)*8},
+                      {cx+std::cos(angle)*(outer.getWidth()-9)*.5,
+                       cy+std::sin(angle)*(outer.getHeight()-9)*.5});
         ctx->setLineWidth(1);
         setDirty(false);
     }
@@ -150,6 +171,8 @@ public:
     }
     CLASS_METHODS_NOCOPY(HardwareKnob,CControl)
 private:
+    CBitmap* frames_{nullptr};
+    CCoord frameSize_{0.};
     bool dragging_=false;
     CCoord lastX_=0.,lastY_=0.;
 };
