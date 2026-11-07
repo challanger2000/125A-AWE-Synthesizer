@@ -1,5 +1,19 @@
 # START HERE — 125A AWE Synthesizer
 
+
+## P165 — Original-Faceplate und professionelles Raster (7. November 2026, NO-GO BIS WINDOWS-TEST)
+
+**Branch:** `fix/p165-original-faceplate-layout`; Ausgangspunkt P164 `e89942ed8ec7d398c164ef1ad0a22aee81ddcc21`. Dies ist ein **GUI-Layout-Patch**, kein DSP-, MIDI-, Bank- oder ROM-Patch. **P165 ist noch nicht als VST3 gebaut/validiert.**
+
+- Vom Nutzer freigegebene Original-Faceplate: 1491 × 1055 Pixel; vollständiges gelbes Display inklusive Rahmen, Goldlogo, EMU8000-Chip samt Pins, Schrauben und ISA-Kontakte. **Weder neue KI-Grafiken noch zusätzliche LCD-/Chip-/Logo-Ebenen sind erlaubt.**
+- Fertige vorbereitete Ressource: `src/vst3/resource/125A_P165_Original_Faceplate_1000x708.png`, in der Chat-Lieferung `P165_Original_Faceplate_Import.zip` enthalten. **ACHTUNG: Die Binärdatei ist noch NICHT im GitHub-Branch.** Vor jedem P165-Windows-Build muss sie in genau diesen Repo-Pfad importiert werden; CMake bricht sonst bewusst ab. Kein P164-Fallback.
+- `PresetBrowserView.cpp`: unverändertes unteres Regelgruppenraster (nur gemeinsam +55px nach unten); Original-LCD verwendet dynamischen transparenten VSTGUI-Text; Chip und Logo bleiben fotografisch unberührt; die obere Bank-/Preset-/Nav-Leiste hat durchgehend 39px Höhe, 8–9px Gutter, Browser bleibt eigener VSTGUI-Inhalt.
+- `Factory.cpp`/`awe_test_panel.uidesc`: Editor 1000 × 708, proportional zur Original-Faceplate. Untere Regelgrößen und Positionen zueinander bleiben unverändert.
+- Automatische Guards: `tools/p165_layout_contract.py` (Ressource, Geometrie, Abstände, Unterbereich), `tools/p165_original_faceplate_editor_acceptance.py` (Win32-EditorHost, pixelgenaue Vergleichsflächen für Logo/Chip/LCD-Rahmen auf SYNTH und BROWSER, bestehende funktionale GUI-Regression).
+- Workflow: `.github/workflows/p165-original-faceplate-windows.yml`; startet bei Push der originalen PNG-Datei auf den P165-Branch. Danach erst Windows-CTests, Validator, GUI-Smokes und reale Screenshots prüfen. **Weder 45/45 CTests noch 537/537 Validator noch 89/89 GUI dürfen für P165 aus den P164-Ergebnissen übernommen werden.**
+- P164 und `main` nicht verändern oder pauschal freigeben. Ziel: P165 nur bei nachgewiesener optischer, funktionaler und visueller Abnahme als Test-VST3 anbieten.
+
+
 **Stand: 2026-11-06. Aktuelle P141-VSTGUI funktional ABGENOMMEN (59/59 echte UI-Interaktionen, 45/45 CTests, 537/537 VST3-Validator, 3/3 GUI-Smokes) und in Entwicklungsbranch gemergt. Nächster Schritt ist die schwarz/goldene Hardware-Gestaltung aus der Nutzer-Bildreferenz, ohne Verlust der echten Bedienelemente. P137-P139 Windows-RT: 0/201.600 Deadlinefehler; P53 unabhängiges Plugin Test Lab: PASS. Physisches ASIO/kommerzielle DAW NOT RUN, Release NO-GO.**
 
 ## NEUESTE VSTGUI – P141 funktional ABGENOMMEN, Designbild danach (6. November 2026)
