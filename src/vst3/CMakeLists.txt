@@ -30,6 +30,20 @@ foreach(p160_image IN ITEMS
     message(STATUS "P160 approved image is NOT in this source tree: ${p160_image} (compatibility photo used)")
   endif()
 endforeach()
+# P164: deterministic photographic composition of EXISTING checked-in P160
+# PNGs. Generate the single-header bitmap before the resource build; no AI
+# image generation and no extra LCD/brand VSTGUI bitmap overlays are involved.
+# Pillow is required only when building the plugin from source, not when
+# installing the resulting VST3 on a DAW machine.
+execute_process(
+  COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/compose_p164_faceplate.py"
+          "${CMAKE_CURRENT_SOURCE_DIR}/resource"
+  RESULT_VARIABLE P164_COMPOSE_RESULT
+)
+if(NOT P164_COMPOSE_RESULT EQUAL 0)
+  message(FATAL_ERROR "P164 single-display PCB composition failed; install Python Pillow")
+endif()
+set(P164_SINGLE_HEADER "resource/125A_P164_PCB_Single_Header_1000x640.png")
 smtg_target_add_plugin_resources(125A_AWE_Synthesizer
   RESOURCES resource/awe_test_panel.uidesc
                         resource/125A_Logo_Master_FINAL.svg
@@ -40,6 +54,7 @@ smtg_target_add_plugin_resources(125A_AWE_Synthesizer
                         resource/125A_AWE_Gold_Logo_236x147.png
                         resource/125A_PCB_Shared_1000x640.png
                         ${P160_ARTWORK_RESOURCES}
+                        ${P164_SINGLE_HEADER}
 )
 target_include_directories(125A_AWE_Synthesizer PRIVATE
     ../engine ../engine/include
@@ -64,6 +79,10 @@ if(WIN32)
            "\"${p160_image}\" PNG DISCARDABLE \"${CMAKE_CURRENT_SOURCE_DIR}/resource/${p160_image}\"\n")
     endif()
   endforeach()
+  # The single-header PNG MUST also be an embedded Windows resource:
+  # VSTGUI's CBitmap(name) on Windows uses the DLL's native PNG table.
+  file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/awe_gold_knobs.rc"
+       "\"125A_P164_PCB_Single_Header_1000x640.png\" PNG DISCARDABLE \"${CMAKE_CURRENT_SOURCE_DIR}/resource/125A_P164_PCB_Single_Header_1000x640.png\"\\n")
   target_sources(125A_AWE_Synthesizer PRIVATE
     "${CMAKE_CURRENT_BINARY_DIR}/awe_gold_knobs.rc")
   target_link_libraries(125A_AWE_Synthesizer PRIVATE comdlg32)
