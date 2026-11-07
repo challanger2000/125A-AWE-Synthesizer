@@ -1,0 +1,5 @@
+// P145: Windows resources for the two photographic PCB PNG layers.
+// Paths are absolute at configure time to avoid RC include-dir differences.
+// PNG source artwork is shipped in the VST3 Contents/Resources as well.
+"125A_PCB_Shared_1000x640.png" PNG DISCARDABLE "@CMAKE_CURRENT_SOURCE_DIR@/resource/125A_PCB_Shared_1000x640.png"
+"125A_PCB_MAIN_1000x640.png" PNG DISCARDABLE "@CMAKE_CURRENT_SOURCE_DIR@/resource/125A_PCB_MAIN_1000x640.png"
