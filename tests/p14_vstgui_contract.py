@@ -91,8 +91,8 @@ assert 'rtMaster_' in f and 'volumeGain_.setTarget(' in f
 assert 'masterVolume_' in h and 'masterVolumeValue_' in h
 assert 'new HardwareKnob(PageRect({817,298,951,432})' in b
 assert 'controller_->getParamNormalized(kMasterVolume)' in b
-assert 'activeBankMenu_=new COptionMenu({67,179,193,218},this,kActiveBank)' in b
-assert 'programMenu_=new COptionMenu({250,179,537,218},this,kDirectPreset)' in b
+assert 'activeBankMenu_=new GoldHardwareMenu({67,179,193,218},this,kActiveBank)' in b
+assert 'programMenu_=new GoldHardwareMenu({250,179,537,218},this,kDirectPreset)' in b
 assert 'RebuildActiveMenus();' in b and 'SyncActiveMenuSelection();' in b
 assert 'sf_.Find(bank_,id)' in b
 assert 'ChooseExistingProgram(' in b
@@ -119,7 +119,7 @@ assert "this,kBankFilter" in b and "tag==kBankFilter" in b
 assert "this,kBank)" not in b and "getParamNormalized(kBank)" not in b
 assert 'kReverbPresetID=1200' in f and 'kChorusPresetID=1201' in f
 assert 'kReverbType=1200,kChorusType=1201' in h
-assert 'reverbMenu_=new COptionMenu' in b and 'chorusMenu_=new COptionMenu' in b
+assert 'reverbMenu_=new GoldHardwareMenu' in b and 'chorusMenu_=new GoldHardwareMenu' in b
 assert 'ApplyPendingFxIntents(synth_)' in f
 assert 'ApplyHardwareReverbPreset(' in f and 'ApplyHardwareChorusPreset(' in f
 assert 'reverbPreset' in state and 'chorusPreset' in state
@@ -136,8 +136,8 @@ assert 'AddKnob(0,408,278,"ATTACK")' in b
 assert 'AddKnob(9,687,464,"RESONANCE")' in b
 assert 'AddKnob(10,74,278,"SEND")' in b
 assert 'AddKnob(11,258,278,"SEND")' in b
-assert 'reverbMenu_=new COptionMenu(PageRect({32,382,174,405})' in b
-assert 'chorusMenu_=new COptionMenu(PageRect({216,382,358,405})' in b
+assert 'reverbMenu_=new GoldHardwareMenu(PageRect({32,382,174,405})' in b
+assert 'chorusMenu_=new GoldHardwareMenu(PageRect({216,382,358,405})' in b
 assert 'MakeLabel({25,430,508,452},"FILTER ENVELOPE",false)' in b
 assert 'MakeLabel({537,430,766,452},"FILTER",false)' in b
 assert 'reset_=MakeButton({808,535,960,571},kReset,"MOD RESET")' in b
@@ -213,4 +213,13 @@ assert gold_logo_data[25] in (3,6)
 assert gold_logo_data[25]==6 or b"tRNS" in gold_logo_data
 assert 'resource/125A_AWE_Gold_Logo_236x147.png' in cmake
 assert '"125A_AWE_Gold_Logo_236x147.png" PNG DISCARDABLE' in (root/"src/vst3/resource/awe_gold_knobs.rc.in").read_text(encoding="utf-8")
-print("P154 STATIC PASS: EMU8000 keepout, amber LCD dynamic file status, 7 gold buttons and 12 host knobs")
+# All five hardware selectors must be real COptionMenu subclasses;
+# neither native popup handling nor selected-item binding is replaced.
+assert 'class GoldHardwareMenu final : public COptionMenu' in b
+assert 'const CMenuItem* item=getCurrent();' in b
+assert 'ctx->drawString(item->getTitle().data(),textRect,kLeftText);' in b
+assert 'ctx->setClipRect(textRect);' in b
+assert 'inPopup?CColor(8,8,9)' in b
+assert b.count('new GoldHardwareMenu(')==5
+assert 'bankMenu_=new GoldHardwareMenu(PageRect({96,247,320,284})' in b
+print("P155 STATIC PASS: EMU8000 keepout, amber LCD dynamic file status, 7 gold buttons and 12 host knobs")
