@@ -98,7 +98,11 @@ assert 'sf_.Find(bank_,id)' in b
 assert 'ChooseExistingProgram(' in b
 assert 'kActiveBank=3109,kDirectPreset=3110' in h
 assert 'm_guiControls[11]' in syn
-assert 'brand=MakeLabel({30,25,237,69},"125A",false)' in b
+assert 'addView(new GoldLogoArtwork({16,16,252,163}))' in b
+assert 'new CBitmap("125A_AWE_Gold_Logo_236x147.png")' in b
+assert 'brand=MakeLabel({30,25,237,69},"125A",false)' not in b
+assert 'model=MakeLabel({30,76,238,105}' not in b
+assert 'engine=MakeLabel({30,118,239,141}' not in b
 assert 'programLabel_=MakeLabel({310,66,737,94},"NO PRESET",false)' in b
 assert 'hardwareInfoLabel_=MakeLabel({310,96,737,113},"ROM: ERFORDERLICH",true)' in b
 assert 'addView(new AmberLcdArtwork({264,16,776,163}))' in b
@@ -199,4 +203,14 @@ assert 'MakeLabel({805,30,968,51},"SOUNDFONT / ROM",true)' not in b
 assert 'loadRom_=MakeButton({805,103,882,144}' not in b
 assert 'hint_=MakeLabel({310,114,737,131}' in b
 assert 'panel({16,603,984,634},panelColor,edge);' not in b
-print("P153 STATIC PASS: EMU8000 keepout, amber LCD dynamic file status, 7 gold buttons and 12 host knobs")
+# The approved logo is real transparent artwork at its exact native size.
+gold_logo=root/"src/vst3/resource/125A_AWE_Gold_Logo_236x147.png"
+assert gold_logo.is_file() and gold_logo.stat().st_size>2500
+gold_logo_data=gold_logo.read_bytes()
+assert gold_logo_data.startswith(b"\\x89PNG\\r\\n\\x1a\\n")
+assert struct.unpack_from(">II",gold_logo_data,16)==(236,147)
+assert gold_logo_data[25] in (3,6)
+assert gold_logo_data[25]==6 or b"tRNS" in gold_logo_data
+assert 'resource/125A_AWE_Gold_Logo_236x147.png' in cmake
+assert '"125A_AWE_Gold_Logo_236x147.png" PNG DISCARDABLE' in (root/"src/vst3/resource/awe_gold_knobs.rc.in").read_text(encoding="utf-8")
+print("P154 STATIC PASS: EMU8000 keepout, amber LCD dynamic file status, 7 gold buttons and 12 host knobs")
