@@ -1,7 +1,5 @@
 #include "PresetBrowserView.h"
-#include "MasterLogoView.h"
 #include "vstgui/lib/cgradient.h"
-#include "vstgui/lib/cbitmap.h"
 #include "vstgui/lib/cdrawcontext.h"
 #include "vstgui/lib/cfont.h"
 #include <algorithm>
@@ -27,78 +25,34 @@ constexpr CColor kBack(22,27,34,255), kRaised(42,52,63,255),
                  kBezel(11,16,22,255), kStroke(85,100,113,255),
                  kOrange(220,151,87,255);
 constexpr Steinberg::Vst::ParamID kProgram=1000,kBankParam=1002;
-class HardwareFaceplate final : public CView {
+// P147 neutral functional canvas. The eventual photographed PCB artwork must
+// be constructed AROUND the approved control geometry, never the other way.
+class FunctionalLayoutBackground final : public CView {
 public:
-    explicit HardwareFaceplate(const CRect& r):CView(r),
-        pcb_(new CBitmap("125A_PCB_Shared_1000x640.png")) {
+    explicit FunctionalLayoutBackground(const CRect& r):CView(r) {
         setMouseEnabled(false);
     }
-    ~HardwareFaceplate() noexcept override {if(pcb_)pcb_->forget();}
     void draw(CDrawContext* c) override {
-        if(pcb_ && pcb_->isLoaded()) {
-            pcb_->draw(c,getViewSize());
-            setDirty(false);
-            return;
-        }
-        // Fail visibly to the previous native faceplate when a resource is
-        // missing. Never blank the host UI or disable interactive controls.
-        const auto surface=[&](CRect r,CColor fill,CColor edge) {
-            c->setFillColor(fill);c->drawRect(r,kDrawFilled);
-            c->setFrameColor(edge);c->drawRect(r,kDrawStroked);
+        c->setFillColor(CColor(16,20,26,255));
+        c->drawRect(getViewSize(),kDrawFilled);
+        const auto panel=[&](CRect r,CColor fill) {
+            c->setFillColor(fill);
+            c->drawRect(r,kDrawFilled);
+            c->setFrameColor(CColor(62,72,84,255));
+            c->drawRect(r,kDrawStroked);
         };
-        const CColor edge(105,89,62), black(15,18,22), dark(24,28,34);
-        // P142: one compact 1000 x 640 logical surface. Panel tabs switch
-        // actual VSTGUI child containers; nothing is scaled, rasterized or
-        // positioned outside its host view.
-        surface({12,8,988,55},dark,edge);     // unit identity
-        surface({12,64,666,203},black,edge); // live hardware/LCD status
-        surface({677,64,988,203},dark,edge); // file/ROM operations
-        surface({12,210,988,261},dark,edge); // bank / program / nav
-        surface({12,267,988,305},dark,edge); // MAIN / EDIT / BROWSER
-        surface({12,310,988,604},dark,edge); // active page
-        surface({12,609,988,635},black,edge);// meaningful status/error
-        c->setFrameColor(CColor(155,121,69,255));
-        c->drawLine({24,57},{976,57});
+        // These are flat, aligned functional zones, NOT a provisional
+        // soundcard picture. No textures, simulated ICs, or PCB traces.
+        const CColor charcoal(25,30,38,255);
+        const CColor dark(11,16,22,255);
+        panel({14,14,281,173},charcoal); // identity
+        panel({290,14,781,173},dark);     // live LCD text
+        panel({790,14,986,173},charcoal); // SF2/ROM status and loading
+        panel({14,183,986,251},charcoal); // persistent bank + preset
+        panel({14,259,986,307},charcoal); // SYNTH / BROWSER
+        panel({14,311,986,604},dark);     // entire functional surface
+        panel({14,609,986,635},charcoal); // status and errors
         setDirty(false);
-    }
-private:
-    CBitmap* pcb_{nullptr};
-};
-// The separate chip/component PNG appears ONLY in MAIN, below native VSTGUI
-// controls. This artwork is mouse-transparent and clipped to the page.
-class MainPcbArtwork final : public CView {
-public:
-    explicit MainPcbArtwork(const CRect& r):CView(r),
-        pcb_(new CBitmap("125A_PCB_MAIN_1000x640.png")) {
-        setMouseEnabled(false);
-    }
-    ~MainPcbArtwork() noexcept override {if(pcb_)pcb_->forget();}
-    void draw(CDrawContext* c) override {
-        if(pcb_ && pcb_->isLoaded())
-            pcb_->draw(c,getViewSize(),{0,310});
-        setDirty(false);
-    }
-private:
-    CBitmap* pcb_{nullptr};
-};
-// A stylized EMU8000 chip package; pin count is decorative, not a claim
-// about the actual silicon package. Live RAM/ROM status appears below.
-class ChipPackage final : public CView {
-public:
-    explicit ChipPackage(const CRect& r):CView(r) {setMouseEnabled(false);}
-    void draw(CDrawContext* c) override {
-        c->setFillColor(CColor(10,14,19,255));
-        c->drawRect({798,13,1016,51},kDrawFilled);
-        c->setFrameColor(CColor(101,115,125,255));
-        c->drawRect({798,13,1016,51},kDrawStroked);
-        c->setFrameColor(CColor(169,179,186,255));
-        for(int i=0;i<7;++i) {
-            const CCoord y=17.5+i*4.6;
-            c->drawLine({793,y},{798,y});
-            c->drawLine({1016,y},{1021,y});
-        }
-        c->setFillColor(CColor(95,104,111,255));
-        c->drawEllipse({803,19,808,24},kDrawFilled);
     }
 };
 // Mouse-driven, modern hardware-like knob. Uses native VSTGUI controls,
@@ -239,11 +193,19 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
       sf2CatalogRevision_(std::move(sf2CatalogRevision)),
       browserBankReselect_(std::move(browserBankReselect)) {
     setBackgroundColor(kBack);
-    addView(new HardwareFaceplate({0,0,1000,640}));
+    addView(new FunctionalLayoutBackground({0,0,1000,640}));
 
-    // P145: approved gold 125A/AWE lettering is baked into the photographic
-    // background. Do not overwrite it with the conventional vector logo.
-    // The amber display, filename and status are still real live VSTGUI labels.
+    // TEMPORARY alignment labels — not the final graphic logo. The chosen
+    // gold 125A lettering remains the production faceplate reference.
+    auto* brand=MakeLabel({28,19,268,65},"125A",false);
+    brand->setFont(kNormalFontVeryBig);
+    brand->setFontColor(CColor(224,171,78,255));
+    auto* model=MakeLabel({28,70,271,105},"AWE SYNTHESIZER",false);
+    model->setFont(kNormalFontBig);
+    model->setFontColor(CColor(224,171,78,255));
+    auto* engine=MakeLabel({28,112,270,141},"EMU8000 SOUNDFONT",true);
+    engine->setFontColor(CColor(196,152,78,255));
+    // The LCD status, filename, and controls remain real live VSTGUI views.
     auto* lcd=MakeLabel({304,53,742,79},"EMU8000 | SOUNDFONT ENGINE",true);
     lcd->setFontColor(CColor(219,169,70,255));
     programLabel_=MakeLabel({310,82,744,125},"NO PRESET",false);
