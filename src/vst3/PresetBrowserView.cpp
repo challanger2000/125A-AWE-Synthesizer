@@ -68,7 +68,7 @@ public:
         }
         // P162: one aligned, rounded hardware rail spanning the SAME
         // full-width grid as the browser panel. Every menu/button has a
-        // 10px outside inset and an 8px inter-control gutter.
+        // 10px visible outside inset and 8-9px inter-control gutters.
         const CRect rail{16,173,984,224};
         if(auto* p=c->createRoundRectGraphicsPath(rail,7.)) {
             c->setFillColor(CColor(9,12,16,205));
@@ -557,20 +557,26 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     // reserved for the *real* decorative EMU8000 chip and its components.
     // Native-size button assets (ROM 77x41, SF2 75x41) were moved onto the
     // compact, consistently aligned navigation strip without scaling.
+    // P163 visual-pixel alignment: physical hardware button atlases
+    // include ~5px of transparent right-side shadow/padding. The SF2
+    // view ends at x=979, but its actual gold right edge lands at x=974,
+    // matching both browser inset fields (whose vector edges are x=974).
+    // Distribute the 5px correction as five 9px + two 8px gutters so
+    // the hardware controls retain original/native widths and look even.
     // A duplicate BANK caption cramped this entire band; the dropdown
     // already displays "Bank 0". Use the freed width for the live menu.
     activeBankMenu_=new GoldHardwareMenu({26,179,203,218},this,kActiveBank);
     StyleGoldMenu(activeBankMenu_);
     addView(activeBankMenu_);
-    previous_=MakeButton({211,179,251,218},kPrevious,"<");
-    programMenu_=new GoldHardwareMenu({259,179,550,218},this,kDirectPreset);
+    previous_=MakeButton({212,179,252,218},kPrevious,"<");
+    programMenu_=new GoldHardwareMenu({261,179,552,218},this,kDirectPreset);
     StyleGoldMenu(programMenu_);
     addView(programMenu_);
-    next_=MakeButton({558,179,598,218},kNext,">");
-    pageButtons_[0]=MakeButton({606,179,699,218},kMainPage,"SYNTH");
-    toggle_=MakeButton({707,179,806,218},kToggle,"BROWSER");
-    loadRom_=MakeButton({814,177,891,218},kLoadRom,"ROM");
-    loadSf2_=MakeButton({899,177,974,218},kLoadSf2,"SF2");
+    next_=MakeButton({561,179,601,218},kNext,">");
+    pageButtons_[0]=MakeButton({610,179,703,218},kMainPage,"SYNTH");
+    toggle_=MakeButton({712,179,811,218},kToggle,"BROWSER");
+    loadRom_=MakeButton({819,177,896,218},kLoadRom,"ROM");
+    loadSf2_=MakeButton({904,177,979,218},kLoadSf2,"SF2");
     pageButtons_[1]=toggle_;
     for(auto* tab:pageButtons_)
         tab->setStyle(CTextButton::kOnOffStyle);
