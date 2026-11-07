@@ -36,19 +36,27 @@ class FunctionalLayoutBackground final : public CView {
 public:
     explicit FunctionalLayoutBackground(const CRect& r)
         : CView(r),
+          p164_(new CBitmap("125A_P164_PCB_Single_Header_1000x640.png")),
           p160_(new CBitmap("125A_P160_PCB_1000x640.png")),
           fallback_(new CBitmap("125A_PCB_Shared_1000x640.png")) {
         setMouseEnabled(false);
     }
     ~FunctionalLayoutBackground() noexcept override {
+        if(p164_)p164_->forget();
         if(p160_)p160_->forget();
         if(fallback_)fallback_->forget();
     }
+    bool hasSingleHeader() const noexcept {
+        return p164_ && p164_->isLoaded();
+    }
     void draw(CDrawContext* c) override {
-        // P160 is the approved undistorted 1000x640 photograph. Never stretch
-        // an arbitrary aspect-ratio image here: the resource MUST be 1000x640.
-        const bool approved=p160_ && p160_->isLoaded();
-        if(approved)
+        // P164: ONE complete photographic board, one LCD frame, one logo,
+        // one clean EMU8000 chip. Do NOT overlay another LCD or logo view.
+        const bool singleHeader=hasSingleHeader();
+        const bool approved=singleHeader || (p160_ && p160_->isLoaded());
+        if(singleHeader)
+            p164_->draw(c,getViewSize());
+        else if(p160_ && p160_->isLoaded())
             p160_->draw(c,getViewSize());
         else if(fallback_ && fallback_->isLoaded())
             fallback_->draw(c,getViewSize());
@@ -81,6 +89,7 @@ public:
         setDirty(false);
     }
 private:
+    CBitmap* p164_{nullptr};
     CBitmap* p160_{nullptr};
     CBitmap* fallback_{nullptr};
 };
@@ -529,14 +538,18 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
       sf2CatalogRevision_(std::move(sf2CatalogRevision)),
       browserBankReselect_(std::move(browserBankReselect)) {
     setBackgroundColor(kBack);
-    addView(new FunctionalLayoutBackground({0,0,1000,640}));
-    // Asset is exactly 512x147 logical pixels; bitmap and hitboxes stay
-    // independent so preset/ROM/SF2/bank text remains live at every state.
-    addView(new AmberLcdArtwork({264,16,776,163}));
-
-    // The complete, approved gold logo sits in the dedicated branding bay.
-    // All other live labels, chip-zone keepouts and host parameters remain.
-    addView(new GoldLogoArtwork({16,16,252,163}));
+    auto* photo=new FunctionalLayoutBackground({0,0,1000,640});
+    addView(photo);
+    // P164 already includes the fully intact LCD bezel, gold lettering
+    // and EMU8000 chip IN ONE IMAGE. Duplicating either bitmap here was
+    // the source of the ghost screws and overlapping LCD right frame.
+    // Compatibility for older build trees is retained, but never active
+    // when the deterministic P164 photo is present.
+    if(!photo->hasSingleHeader()) {
+        addView(new AmberLcdArtwork({264,16,776,163}));
+        addView(new GoldLogoArtwork({16,16,252,163}));
+    }
+    // Native dynamic status, bank/program and filename remain on top.
 
     // P152: the amber LCD owns the complete live status line, including
     // the current filename. Its labels remain real host-driven VSTGUI views.
