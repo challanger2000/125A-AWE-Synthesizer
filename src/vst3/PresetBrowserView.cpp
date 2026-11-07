@@ -1,5 +1,6 @@
 #include "PresetBrowserView.h"
 #include "vstgui/lib/cgradient.h"
+#include "vstgui/lib/cgraphicspath.h"
 #include "vstgui/lib/cbitmap.h"
 #include "vstgui/lib/cdrawcontext.h"
 #include "vstgui/lib/cfont.h"
@@ -160,12 +161,88 @@ private:
     CBitmap* atlas_{nullptr};
 };
 
+// P155: independent hardware selector surface. COptionMenu remains the
+// actual input component and still owns native, keyboard-accessible popups,
+// item IDs, value changes and DAW automation. Only the CLOSED control is
+// custom-painted to match P149 knobs / P153 physical gold buttons.
+class GoldHardwareMenu final : public COptionMenu {
+public:
+    GoldHardwareMenu(const CRect& rect, IControlListener* listener, int32_t tag)
+        : COptionMenu(rect,listener,tag) {}
+    void draw(CDrawContext* ctx) override {
+        ctx->saveGlobalState();
+        const auto fillRounded=[&](const CRect& r,CCoord radius,
+                                   const CColor& upper,const CColor& lower) {
+            auto* p=ctx->createRoundRectGraphicsPath(r,radius);
+            if(!p)return;
+            auto* g=CGradient::create(0.,1.,upper,lower);
+            ctx->fillLinearGradient(p,*g,{r.left,r.top},{r.left,r.bottom});
+            g->forget();p->forget();
+        };
+        CRect r=getViewSize();
+        r.inset(.25,.25);
+        const bool thin=r.getHeight()<29.;
+        const auto rad=thin?4.:6.;
+        // Stable black chassis, bright metal relief, and inset dark display.
+        fillRounded(r,rad+1.,CColor(7,7,9),CColor(7,7,9));
+        CRect rim=r;rim.inset(1.,1.);
+        fillRounded(rim,rad,CColor(246,204,119),CColor(112,70,29));
+        CRect brass=rim;brass.inset(1.4,1.4);
+        fillRounded(brass,rad-1.,CColor(97,61,32),CColor(235,163,69));
+        CRect well=brass;well.inset(1.8,1.8);
+        fillRounded(well,std::max(2.,rad-2.),
+                    inPopup?CColor(8,8,9):CColor(18,17,17),
+                    inPopup?CColor(43,29,16):CColor(36,28,22));
+        // Fine bezel reflection and recessed inner shadow.
+        ctx->setLineWidth(1.);
+        ctx->setFrameColor(CColor(251,219,146,190));
+        ctx->drawLine({rim.left+rad+1.,rim.top+1.},
+                      {rim.right-rad-1.,rim.top+1.});
+        ctx->setFrameColor(CColor(5,5,5,210));
+        ctx->drawLine({well.left+rad,well.top+1.},
+                      {well.right-rad,well.top+1.});
+        const CCoord edge=well.right-(thin?21.:25.);
+        ctx->setFrameColor(CColor(132,91,39,200));
+        ctx->drawLine({edge,well.top+3.},{edge,well.bottom-3.});
+        ctx->setFrameColor(CColor(25,17,12,255));
+        ctx->drawLine({edge+1.,well.top+3.},{edge+1.,well.bottom-3.});
+        // Arrow is part of the hardware surface, not an extra hit target.
+        const CCoord ax=edge+(well.right-edge)*.50;
+        const CCoord ay=(well.top+well.bottom)*.5;
+        auto* arrow=ctx->createGraphicsPath();
+        if(arrow) {
+            const double dx=thin?4.5:5.5,dy=thin?2.7:3.3;
+            arrow->beginSubpath({ax-dx,ay-dy*.5});
+            arrow->addLine({ax+dx,ay-dy*.5});
+            arrow->addLine({ax,ay+dy});
+            arrow->closeSubpath();
+            ctx->setFillColor(inPopup?CColor(255,222,151):CColor(234,180,90));
+            ctx->drawGraphicsPath(arrow,CDrawContext::kPathFilled);
+            arrow->forget();
+        }
+        // The currently selected item is always native data, never drawn
+        // into a bitmap. Explicit clip keeps long SF2 names out of the arrow.
+        const CMenuItem* item=getCurrent();
+        if(item) {
+            CRect textRect=well;
+            textRect.left+=thin?8.:11.;
+            textRect.right=edge-5.;
+            ctx->setFont(getFont());
+            ctx->setFontColor(CColor(244,200,118));
+            ctx->setClipRect(textRect);
+            ctx->drawString(item->getTitle().data(),textRect,kLeftText);
+        }
+        ctx->restoreGlobalState();
+        setDirty(false);
+    }
+};
+
 static void StyleGoldMenu(COptionMenu* menu) {
     if(!menu)return;
-    menu->setBackColor(CColor(23,21,20,255));
+    menu->setBackColor(CColor(22,19,18,255));
     menu->setFontColor(CColor(244,198,112,255));
-    menu->setFrameColor(CColor(157,112,52,255));
-    menu->setFont(kNormalFont);
+    menu->setFrameColor(CColor(181,122,55,255));
+    menu->setFont(menu->getViewSize().getHeight()<29.?kNormalFontSmall:kNormalFont);
 }
 // Mouse-driven, modern hardware-like knob. Uses native VSTGUI controls,
 // never paints values that differ from the host's normalized parameters.
@@ -356,11 +433,11 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     // Native-size button assets (ROM 77x41, SF2 75x41) were moved onto the
     // compact, consistently aligned navigation strip without scaling.
     MakeLabel({23,184,65,214},"BANK",true);
-    activeBankMenu_=new COptionMenu({67,179,193,218},this,kActiveBank);
+    activeBankMenu_=new GoldHardwareMenu({67,179,193,218},this,kActiveBank);
     StyleGoldMenu(activeBankMenu_);
     addView(activeBankMenu_);
     previous_=MakeButton({202,179,242,218},kPrevious,"<");
-    programMenu_=new COptionMenu({250,179,537,218},this,kDirectPreset);
+    programMenu_=new GoldHardwareMenu({250,179,537,218},this,kDirectPreset);
     StyleGoldMenu(programMenu_);
     addView(programMenu_);
     next_=MakeButton({545,179,587,218},kNext,">");
@@ -398,8 +475,8 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     AddKnob(2,596,278,"SUSTAIN");
     AddKnob(3,690,278,"RELEASE");
 
-    reverbMenu_=new COptionMenu(PageRect({32,382,174,405}),this,kReverbType);
-    chorusMenu_=new COptionMenu(PageRect({216,382,358,405}),this,kChorusType);
+    reverbMenu_=new GoldHardwareMenu(PageRect({32,382,174,405}),this,kReverbType);
+    chorusMenu_=new GoldHardwareMenu(PageRect({216,382,358,405}),this,kChorusType);
     for(auto* menu:{reverbMenu_,chorusMenu_})
         StyleGoldMenu(menu);
     for(const char* label:{"Room 1","Room 2","Room 3","Hall 1",
@@ -441,7 +518,7 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     // retains true SF2 bank filtering, search and exact program selection.
     buildingPanel_=pages_[1];
     bankCaption_=MakeLabel({28,247,92,282},"FILTER",true);
-    bankMenu_=new COptionMenu(PageRect({96,247,320,284}),this,kBankFilter);
+    bankMenu_=new GoldHardwareMenu(PageRect({96,247,320,284}),this,kBankFilter);
     StyleGoldMenu(bankMenu_);
     AddToCurrentPage(bankMenu_);
     searchCaption_=MakeLabel({336,247,396,282},"SUCHE",true);
