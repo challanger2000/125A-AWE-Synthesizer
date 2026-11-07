@@ -221,7 +221,7 @@ assert 'ctx->drawString(item->getTitle().data(),textRect,kLeftText);' in b
 assert 'ctx->setClipRect(textRect);' in b
 assert 'inPopup?CColor(8,8,9)' in b
 assert b.count('new GoldHardwareMenu(')==5
-assert 'bankMenu_=new GoldHardwareMenu(PageRect({96,247,320,284})' in b
+assert 'bankMenu_=new GoldHardwareMenu(PageRect({100,247,494,284})' in b
 # P156: photo and half-opaque VSTGUI control islands are purely visual.
 # Parameter rectangles and host editing remain exactly P155.
 assert 'new CBitmap("125A_PCB_Shared_1000x640.png")' in b
@@ -246,7 +246,7 @@ assert '125A_P160_Lcd_Complete_512x147.png' in cmake
 # Compatibility builds may omit the two PNGs; make absence explicit, never
 # mistake a green runtime/validator for image-specific proof.
 # P161: browser-only gold theme; no changes to bank/program mapping.
-assert 'recessed({397,11,970,57},6.' in b
+assert 'recessed({578,15,972,52},6.' in b
 assert 'recessed({24,63,976,349},7.' in b
 assert 'search_->setFrameWidth(0.);' in b
 assert 'search_->setTextInset({11.,0.});' in b
@@ -256,4 +256,13 @@ assert 'ctx->drawRect({r.left,r.top,r.left+3.,r.bottom},kDrawFilled);' in b
 assert 'ctx->setFontColor(selected?CColor(255,225,161,255)' in b
 assert 'dbOnMouseDown(' in b and 'dbSelectionChanged(' in b
 assert 'Select(entry.bank,entry.program)' in b
-print("P161 STATIC PASS: EMU8000 keepout, amber LCD dynamic file status, 7 gold buttons and 12 host knobs")
+# P162: matching input widths (394px each) and identical caption gutters.
+assert 'bankCaption_=MakeLabel({28,247,94,282},"FILTER",true)' in b
+assert 'bankMenu_=new GoldHardwareMenu(PageRect({100,247,494,284})' in b
+assert 'searchCaption_=MakeLabel({506,247,572,282},"SUCHE",true)' in b
+assert 'search_=new CTextEdit(PageRect({584,249,966,282})' in b
+assert 'recessed({578,15,972,52},6.' in b
+assert 'dbGetCurrentColumnWidth(int32_t,CDataBrowser* browser)' in b
+assert 'browser->getVisibleClientRect().getWidth()' in b
+assert 'return 892.;' not in b
+print("P162 STATIC PASS: EMU8000 keepout, amber LCD dynamic file status, 7 gold buttons and 12 host knobs")
