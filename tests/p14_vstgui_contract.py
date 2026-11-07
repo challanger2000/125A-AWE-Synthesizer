@@ -181,7 +181,7 @@ lcd_file=root/"src/vst3/resource/125A_Lcd_Amber_Blank_512x147.png"
 assert lcd_file.is_file() and lcd_file.stat().st_size>3000
 import struct
 binary=lcd_file.read_bytes()
-assert binary[:8]==b"\\x89PNG\\r\\n\\x1a\\n"
+assert binary[:8]==b"\x89PNG\r\n\x1a\n"
 assert struct.unpack(">II",binary[16:24])==(512,147)
 assert 'resource/125A_Lcd_Amber_Blank_512x147.png' in cmake
 assert '"125A_Lcd_Amber_Blank_512x147.png" PNG DISCARDABLE' in (root/"src/vst3/resource/awe_gold_knobs.rc.in").read_text(encoding="utf-8")
