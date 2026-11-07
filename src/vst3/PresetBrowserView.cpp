@@ -27,31 +27,53 @@ constexpr CColor kBack(22,27,34,255), kRaised(42,52,63,255),
 constexpr Steinberg::Vst::ParamID kProgram=1000,kBankParam=1002;
 // P147 neutral functional canvas. The eventual photographed PCB artwork must
 // be constructed AROUND the approved control geometry, never the other way.
+// Functional-only grid. The future PCB art must preserve every hitbox.
+// Nothing here is a painted faceplate or a raised electronic component.
 class FunctionalLayoutBackground final : public CView {
 public:
     explicit FunctionalLayoutBackground(const CRect& r):CView(r) {
         setMouseEnabled(false);
     }
     void draw(CDrawContext* c) override {
-        c->setFillColor(CColor(16,20,26,255));
+        c->setFillColor(CColor(13,17,23,255));
         c->drawRect(getViewSize(),kDrawFilled);
-        const auto panel=[&](CRect r,CColor fill) {
-            c->setFillColor(fill);
+        const auto panel=[&](CRect r,CColor fill,CColor edge) {
+            c->setFillColor(fill);c->drawRect(r,kDrawFilled);
+            c->setFrameColor(edge);c->drawRect(r,kDrawStroked);
+        };
+        const CColor edge(58,66,73,255);
+        const CColor panelColor(26,31,38,255);
+        const CColor lcdColor(11,16,21,255);
+        panel({16,16,252,163},panelColor,edge); // branding
+        panel({264,16,776,163},lcdColor,edge);   // amber program display
+        panel({788,16,984,163},panelColor,edge); // ROM/SF2 files
+        panel({16,173,984,224},panelColor,edge); // all navigation
+        panel({16,232,984,592},lcdColor,edge);   // page canvas
+        panel({16,603,984,634},panelColor,edge); // status
+        setDirty(false);
+    }
+};
+
+// Only on the SYNTH page; the BROWSER receives one undivided canvas.
+// All group boundaries align to a deliberately fixed spacing grid.
+class SynthPanelGroups final : public CView {
+public:
+    explicit SynthPanelGroups(const CRect& r):CView(r) {
+        setMouseEnabled(false);
+    }
+    void draw(CDrawContext* c) override {
+        const auto group=[&](CRect r) {
+            c->setFillColor(CColor(20,26,33,255));
             c->drawRect(r,kDrawFilled);
-            c->setFrameColor(CColor(62,72,84,255));
+            c->setFrameColor(CColor(77,72,61,255));
             c->drawRect(r,kDrawStroked);
         };
-        // These are flat, aligned functional zones, NOT a provisional
-        // soundcard picture. No textures, simulated ICs, or PCB traces.
-        const CColor charcoal(25,30,38,255);
-        const CColor dark(11,16,22,255);
-        panel({14,14,281,173},charcoal); // identity
-        panel({290,14,781,173},dark);     // live LCD text
-        panel({790,14,986,173},charcoal); // SF2/ROM status and loading
-        panel({14,183,986,251},charcoal); // persistent bank + preset
-        panel({14,259,986,307},charcoal); // SYNTH / BROWSER
-        panel({14,311,986,604},dark);     // entire functional surface
-        panel({14,609,986,635},charcoal); // status and errors
+        group({16,2,190,177});   // Reverb
+        group({200,2,374,177});  // Chorus
+        group({384,2,774,177});  // Amp ADSR
+        group({784,2,984,358});  // Large independent master
+        group({16,187,518,358}); // Filter ADSR
+        group({528,187,774,358});// Cutoff / Resonance
         setDirty(false);
     }
 };
@@ -195,82 +217,83 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     setBackgroundColor(kBack);
     addView(new FunctionalLayoutBackground({0,0,1000,640}));
 
-    // TEMPORARY alignment labels — not the final graphic logo. The chosen
-    // gold 125A lettering remains the production faceplate reference.
-    auto* brand=MakeLabel({28,19,268,65},"125A",false);
+    // Provisional live text on a neutral, geometry-locked background.
+    // The final hardware art will retain the APPROVED golden 125A lettering.
+    auto* brand=MakeLabel({30,25,237,69},"125A",false);
     brand->setFont(kNormalFontVeryBig);
-    brand->setFontColor(CColor(224,171,78,255));
-    auto* model=MakeLabel({28,70,271,105},"AWE SYNTHESIZER",false);
+    brand->setFontColor(CColor(228,181,94,255));
+    auto* model=MakeLabel({30,76,238,105},"AWE SYNTHESIZER",false);
     model->setFont(kNormalFontBig);
-    model->setFontColor(CColor(224,171,78,255));
-    auto* engine=MakeLabel({28,112,270,141},"EMU8000 SOUNDFONT",true);
-    engine->setFontColor(CColor(196,152,78,255));
-    // The LCD status, filename, and controls remain real live VSTGUI views.
-    auto* lcd=MakeLabel({304,53,742,79},"EMU8000 | SOUNDFONT ENGINE",true);
+    model->setFontColor(CColor(228,181,94,255));
+    auto* engine=MakeLabel({30,118,239,141},"EMU8000 / SOUNDFONT",true);
+    engine->setFontColor(CColor(185,155,99,255));
+
+    auto* lcd=MakeLabel({284,31,748,58},"EMU8000  |  SOUNDFONT ENGINE",true);
     lcd->setFontColor(CColor(219,169,70,255));
-    programLabel_=MakeLabel({310,82,744,125},"NO PRESET",false);
+    programLabel_=MakeLabel({286,66,755,105},"NO PRESET",false);
+    programLabel_->setFont(kNormalFontBig);
     programLabel_->setFontColor(CColor(245,193,78,255));
-    hardwareInfoLabel_=MakeLabel({306,120,752,140},"ROM: ERFORDERLICH",true);
+    hardwareInfoLabel_=MakeLabel({286,118,755,143},"ROM: ERFORDERLICH",true);
     hardwareInfoLabel_->setFontColor(CColor(221,174,91,255));
     hardwareInfoLabel_->setTextTruncateMode(CTextLabel::kTruncateTail);
 
-    MakeLabel({800,40,960,62},"SOUNDFONT",true);
-    fileLabel_=MakeLabel({798,69,962,94},"",false);
+    MakeLabel({805,30,968,51},"SOUNDFONT / ROM",true);
+    fileLabel_=MakeLabel({803,62,968,88},"",false);
     fileLabel_->setTextTruncateMode(CTextLabel::kTruncateTail);
-    loadRom_=MakeButton({796,103,871,139},kLoadRom,"ROM");
-    loadSf2_=MakeButton({882,103,964,139},kLoadSf2,"SF2");
+    loadRom_=MakeButton({805,103,882,144},kLoadRom,"ROM");
+    loadSf2_=MakeButton({892,103,967,144},kLoadSf2,"SF2");
 
-    MakeLabel({24,198,76,239},"BANK",true);
-    activeBankMenu_=new COptionMenu({79,197,251,240},this,kActiveBank);
+    MakeLabel({27,184,73,214},"BANK",true);
+    activeBankMenu_=new COptionMenu({75,179,232,218},this,kActiveBank);
     activeBankMenu_->setBackColor(kBezel);
     activeBankMenu_->setFontColor(kPaper);
     activeBankMenu_->setFrameColor(kStroke);
     addView(activeBankMenu_);
-    previous_=MakeButton({263,197,312,240},kPrevious,"<");
-    programMenu_=new COptionMenu({325,197,823,240},this,kDirectPreset);
+    previous_=MakeButton({242,179,282,218},kPrevious,"<");
+    programMenu_=new COptionMenu({292,179,710,218},this,kDirectPreset);
     programMenu_->setBackColor(kBezel);
     programMenu_->setFontColor(kPaper);
     programMenu_->setFrameColor(kStroke);
     addView(programMenu_);
-    next_=MakeButton({837,197,974,240},kNext,"NEXT >");
+    next_=MakeButton({720,179,762,218},kNext,">");
 
-    // P146: ONE permanent synth control surface. Reverb/Chorus and their
-    // dedicated mode dropdowns, Master, AMP ADSR, FILTER ADSR, Cutoff and
-    // Resonance are all simultaneously visible. Only the preset BROWSER
-    // uses a separate page; no hidden EDIT controls remain.
-    pageButtons_[0]=MakeButton({23,271,190,302},kMainPage,"SYNTH");
-    toggle_=MakeButton({199,271,365,302},kToggle,"BROWSER");
+    // P148: one balanced, full-width navigation strip, two control rows,
+    // and one independent vertically dominant master. Browser is separate.
+    // These rectangles are final input geometry BEFORE any PCB artwork.
+    pageButtons_[0]=MakeButton({774,179,867,218},kMainPage,"SYNTH");
+    toggle_=MakeButton({877,179,976,218},kToggle,"BROWSER");
     pageButtons_[1]=toggle_;
     for(auto* tab:pageButtons_)
         tab->setStyle(CTextButton::kOnOffStyle);
-    MakeLabel({390,273,973,302},"ALLE KLANGREGLER DIREKT ZUGAENGLICH",true);
+
     for(auto*& page:pages_) {
-        page=new CViewContainer({0,310,1000,604});
+        page=new CViewContainer({0,232,1000,592});
         page->setTransparency(true);
         addView(page);
     }
-
-    // Native controls first, final PCB artwork later. No raised ICs or
-    // capacitors are allowed underneath these fixed hit rectangles.
     buildingPanel_=pages_[0];
-    auto* reverbTitle=MakeLabel({26,315,156,337},"REVERB",false);
+    AddToCurrentPage(new SynthPanelGroups(PageRect({0,232,1000,592})));
+
+    auto* reverbTitle=MakeLabel({23,247,183,270},"REVERB",false);
     reverbTitle->setHoriAlign(kCenterText);
-    auto* chorusTitle=MakeLabel({160,315,291,337},"CHORUS",false);
+    auto* chorusTitle=MakeLabel({207,247,367,270},"CHORUS",false);
     chorusTitle->setHoriAlign(kCenterText);
-    auto* ampTitle=MakeLabel({327,315,789,337},"AMP ENVELOPE",false);
+    auto* ampTitle=MakeLabel({395,247,764,270},"AMP ENVELOPE",false);
     ampTitle->setHoriAlign(kCenterText);
-    auto* masterTitle=MakeLabel({818,315,984,337},"MASTER VOLUME",false);
+    auto* masterTitle=MakeLabel({792,247,975,270},"MASTER VOLUME",false);
     masterTitle->setHoriAlign(kCenterText);
+    for(auto* title:{reverbTitle,chorusTitle,ampTitle,masterTitle})
+        title->setFontColor(CColor(222,181,104,255));
 
-    AddKnob(10,63,341,"SEND");
-    AddKnob(11,198,341,"SEND");
-    AddKnob(0,332,341,"ATTACK");
-    AddKnob(1,450,341,"DECAY");
-    AddKnob(2,568,341,"SUSTAIN");
-    AddKnob(3,686,341,"RELEASE");
+    AddKnob(10,74,278,"SEND");
+    AddKnob(11,258,278,"SEND");
+    AddKnob(0,408,278,"ATTACK");
+    AddKnob(1,502,278,"DECAY");
+    AddKnob(2,596,278,"SUSTAIN");
+    AddKnob(3,690,278,"RELEASE");
 
-    reverbMenu_=new COptionMenu(PageRect({32,444,149,470}),this,kReverbType);
-    chorusMenu_=new COptionMenu(PageRect({167,444,284,470}),this,kChorusType);
+    reverbMenu_=new COptionMenu(PageRect({32,382,174,405}),this,kReverbType);
+    chorusMenu_=new COptionMenu(PageRect({216,382,358,405}),this,kChorusType);
     for(auto* menu:{reverbMenu_,chorusMenu_}) {
         menu->setBackColor(kBezel);
         menu->setFontColor(kPaper);
@@ -287,54 +310,57 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     AddToCurrentPage(reverbMenu_);
     AddToCurrentPage(chorusMenu_);
 
-    // The Master has twice the visual knob diameter of the 52px controls.
-    masterVolume_=new HardwareKnob(PageRect({848,344,962,458}),
+    masterVolume_=new HardwareKnob(PageRect({817,298,951,432}),
                                   this,kMasterVolume);
     masterVolume_->setDefaultValue(1.f);
     masterVolume_->setValue(1.f);
     AddToCurrentPage(masterVolume_);
-    masterVolumeValue_=MakeLabel({849,466,961,492},"100%",false);
+    masterVolumeValue_=MakeLabel({810,446,960,483},"100%",false);
     masterVolumeValue_->setHoriAlign(kCenterText);
+    masterVolumeValue_->setFont(kNormalFontBig);
 
-    auto* filterEnv=MakeLabel({27,472,542,493},"FILTER ENVELOPE",false);
+    auto* filterEnv=MakeLabel({25,430,508,452},"FILTER ENVELOPE",false);
     filterEnv->setHoriAlign(kCenterText);
-    auto* filterTone=MakeLabel({543,472,808,493},"FILTER TONE",false);
+    auto* filterTone=MakeLabel({537,430,766,452},"FILTER",false);
     filterTone->setHoriAlign(kCenterText);
-    AddKnob(4,54,495,"ATTACK");
-    AddKnob(5,181,495,"DECAY");
-    AddKnob(6,308,495,"SUSTAIN");
-    AddKnob(7,435,495,"RELEASE");
-    AddKnob(8,562,495,"CUTOFF");
-    AddKnob(9,689,495,"RESONANCE");
-    reset_=MakeButton({832,516,975,551},kReset,"MOD RESET");
+    for(auto* title:{filterEnv,filterTone})
+        title->setFontColor(CColor(222,181,104,255));
+
+    AddKnob(4,48,464,"ATTACK");
+    AddKnob(5,169,464,"DECAY");
+    AddKnob(6,290,464,"SUSTAIN");
+    AddKnob(7,411,464,"RELEASE");
+    AddKnob(8,563,464,"CUTOFF");
+    AddKnob(9,687,464,"RESONANCE");
+    reset_=MakeButton({808,535,960,571},kReset,"MOD RESET");
 
     // BROWSER: no permanent 400px sidebar. It uses the available width,
     // retains true SF2 bank filtering, search and exact program selection.
     buildingPanel_=pages_[1];
-    bankCaption_=MakeLabel({27,324,106,354},"FILTER",true);
-    bankMenu_=new COptionMenu(PageRect({107,322,312,358}),this,kBankFilter);
+    bankCaption_=MakeLabel({28,247,92,282},"FILTER",true);
+    bankMenu_=new COptionMenu(PageRect({96,247,320,284}),this,kBankFilter);
     bankMenu_->setBackColor(kBezel);
     bankMenu_->setFontColor(kPaper);
     bankMenu_->setFrameColor(kStroke);
     AddToCurrentPage(bankMenu_);
-    searchCaption_=MakeLabel({332,324,400,354},"SUCHE",true);
-    search_=new CTextEdit(PageRect({404,322,966,358}),this,kFilter,"");
+    searchCaption_=MakeLabel({336,247,396,282},"SUCHE",true);
+    search_=new CTextEdit(PageRect({401,247,966,284}),this,kFilter,"");
     search_->setPlaceholderString("Instrument suchen...");
     search_->setImmediateTextChange(true);
     search_->setBackColor(kBezel);
     search_->setFontColor(kPaper);
     search_->setFrameColor(kStroke);
     AddToCurrentPage(search_);
-    table_=new CDataBrowser(PageRect({25,373,971,594}),this,
+    table_=new CDataBrowser(PageRect({28,299,972,576}),this,
              CScrollView::kVerticalScrollbar|
              CScrollView::kAutoHideScrollbars);
     table_->setBackgroundColor(kRaised);
     table_->setWantsFocus(true);
     AddToCurrentPage(table_);
-    empty_=MakeLabel({33,398,960,436},"",true);
+    empty_=MakeLabel({34,324,966,359},"",true);
 
     buildingPanel_=nullptr;
-    hint_=MakeLabel({26,605,972,625},
+    hint_=MakeLabel({28,607,968,629},
         "SF2-Audiostatus noch nicht vom Prozessor bestaetigt.",true);
     hint_->setTextTruncateMode(CTextLabel::kTruncateTail);
     SetPage(0);
@@ -343,22 +369,22 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
 }
 VSTGUI::CRect PresetBrowserView::PageRect(const VSTGUI::CRect& r) const {
     if (!buildingPanel_) return r;
-    // The active page starts at logical Y=310; all named controls continue
+    // The active page starts at logical Y=232; all named controls continue
     // to use one stable, explicit desktop coordinate system.
-    return {r.left,r.top-310.,r.right,r.bottom-310.};
+    return {r.left,r.top-232.,r.right,r.bottom-232.};
 }
 void PresetBrowserView::AddToCurrentPage(VSTGUI::CView* v) {
     if (buildingPanel_) buildingPanel_->addView(v);
     else addView(v);
 }
 void PresetBrowserView::AddKnob(int index,int x,int y,const char* title) {
-    auto* ctrl=new HardwareKnob(PageRect({CCoord(x),CCoord(y),CCoord(x+52),CCoord(y+52)}),
+    auto* ctrl=new HardwareKnob(PageRect({CCoord(x),CCoord(y),CCoord(x+58),CCoord(y+58)}),
                                 this,kGuiFirst+index);
     controls_[size_t(index)]=ctrl;
     AddToCurrentPage(ctrl);
-    auto* lab=MakeLabel({CCoord(x-20),CCoord(y+61),CCoord(x+82),CCoord(y+81)},title,true);
+    auto* lab=MakeLabel({CCoord(x-16),CCoord(y+63),CCoord(x+74),CCoord(y+80)},title,true);
     lab->setHoriAlign(kCenterText);
-    auto* val=MakeLabel({CCoord(x-20),CCoord(y+82),CCoord(x+82),CCoord(y+101)},"0%",false);
+    auto* val=MakeLabel({CCoord(x-16),CCoord(y+81),CCoord(x+74),CCoord(y+98)},"0%",false);
     val->setHoriAlign(kCenterText);
     values_[size_t(index)]=val;
 }
