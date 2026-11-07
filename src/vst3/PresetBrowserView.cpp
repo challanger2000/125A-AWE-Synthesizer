@@ -261,28 +261,35 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
         addView(page);
     }
 
-    // MAIN: essentials only. Master is intentionally independent from the
-    // two non-destructive SF2 SEND boosts. FX types are still eight discrete
-    // original Creative hardware modes per block.
+    // MAIN uses one permanent control cluster with clear physical hierarchy:
+    // Reverb + its own tiny mode menu, Chorus + its own tiny mode menu,
+    // and a larger independent Master Volume on the RIGHT. The panel's
+    // host parameter IDs, defaults and automation gestures are unchanged;
+    // the eventual hardware art can be swapped without moving hit targets.
     buildingPanel_=pages_[0];
-    MakeLabel({29,326,470,349},"PERFORMANCE",false);
-    MakeLabel({522,326,970,348},"MASTER / SENDS / CREATIVE FX",true);
-    masterVolume_=new HardwareKnob(PageRect({139,390,215,466}),
+    auto* reverbTitle=MakeLabel({266,336,399,364},"REVERB",false);
+    reverbTitle->setHoriAlign(kCenterText);
+    auto* chorusTitle=MakeLabel({493,336,626,364},"CHORUS",false);
+    chorusTitle->setHoriAlign(kCenterText);
+    auto* masterTitle=MakeLabel({700,336,946,364},"MASTER VOLUME",false);
+    masterTitle->setHoriAlign(kCenterText);
+
+    AddKnob(10,303,391,"SEND");
+    AddKnob(11,530,391,"SEND");
+    masterVolume_=new HardwareKnob(PageRect({736,372,848,484}),
                                   this,kMasterVolume);
     masterVolume_->setDefaultValue(1.f);
     masterVolume_->setValue(1.f);
     AddToCurrentPage(masterVolume_);
-    auto* masterTitle=MakeLabel({116,468,238,485},"MASTER",true);
-    masterTitle->setHoriAlign(kCenterText);
-    masterVolumeValue_=MakeLabel({116,488,238,512},"100%",false);
+    masterVolumeValue_=MakeLabel({740,500,846,524},"100%",false);
     masterVolumeValue_->setHoriAlign(kCenterText);
-    AddKnob(10,441,395,"HALL SEND");
-    AddKnob(11,711,395,"CHORUS SEND");
 
-    MakeLabel({333,509,564,526},"REVERB TYPE",true);
-    MakeLabel({603,509,835,526},"CHORUS TYPE",true);
-    reverbMenu_=new COptionMenu(PageRect({331,530,570,570}),this,kReverbType);
-    chorusMenu_=new COptionMenu(PageRect({600,530,842,570}),this,kChorusType);
+    auto* reverbTypeTitle=MakeLabel({260,508,401,526},"TYPE",true);
+    reverbTypeTitle->setHoriAlign(kCenterText);
+    auto* chorusTypeTitle=MakeLabel({489,508,630,526},"TYPE",true);
+    chorusTypeTitle->setHoriAlign(kCenterText);
+    reverbMenu_=new COptionMenu(PageRect({260,529,401,559}),this,kReverbType);
+    chorusMenu_=new COptionMenu(PageRect({489,529,630,559}),this,kChorusType);
     for(auto* menu:{reverbMenu_,chorusMenu_}) {
         menu->setBackColor(kBezel);
         menu->setFontColor(kPaper);
@@ -298,7 +305,7 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     chorusMenu_->setValue(2.f);
     AddToCurrentPage(reverbMenu_);
     AddToCurrentPage(chorusMenu_);
-    MakeLabel({35,564,301,586},"SEND = SF2-KLANGOFFSET",true);
+    MakeLabel({32,564,251,585},"FX SEND: 0% = UNVERAENDERT",true);
 
     // EDIT: precisely all ten remaining overlay controls. Two deliberate
     // rows give envelope and tone families predictable, stable locations.
@@ -309,7 +316,8 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     AddKnob(1,351,363,"DECAY");
     AddKnob(2,571,363,"SUSTAIN -");
     AddKnob(3,791,363,"RELEASE");
-    MakeLabel({27,468,595,486},"FILTER ENVELOPE + TONE",true);
+    MakeLabel({27,465,605,483},"FILTER ENVELOPE",true);
+    MakeLabel({668,465,965,483},"FILTER TONE",true);
     AddKnob(4,79,483,"ATTACK");
     AddKnob(5,229,483,"DECAY");
     AddKnob(6,379,483,"SUSTAIN -");
