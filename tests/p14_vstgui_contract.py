@@ -81,7 +81,7 @@ assert 'candidate.channelPrograms.fill(program)' in state
 assert 'kVolumeID=MasterOutput::kParamID' in f
 assert 'rtMaster_' in f and 'volumeGain_.setTarget(' in f
 assert 'masterVolume_' in h and 'masterVolumeValue_' in h
-assert 'new HardwareKnob(PageRect({139,390,215,466})' in b
+assert 'new HardwareKnob(PageRect({736,372,848,484})' in b
 assert 'controller_->getParamNormalized(kMasterVolume)' in b
 assert 'activeBankMenu_=new COptionMenu({79,215,251,254},this,kActiveBank)' in b
 assert 'programMenu_=new COptionMenu({325,215,823,254},this,kDirectPreset)' in b
@@ -115,6 +115,12 @@ assert 'PageRect({25,373,971,594})' in b
 assert 'SetPage(0);' in b and 'SetPage(1);' in b and 'SetPage(2);' in b
 assert 'AddKnob(0,131,363,"ATTACK")' in b
 assert 'AddKnob(9,829,483,"RESONANCE +")' in b
-assert 'AddKnob(10,441,395,"HALL SEND")' in b
-assert 'AddKnob(11,711,395,"CHORUS SEND")' in b
-print("P142 STATIC PASS: compact 1000x640 MAIN/EDIT/BROWSER real pages, FX, 12 overlays, V11 state")
+assert 'AddKnob(10,303,391,"SEND")' in b
+assert 'AddKnob(11,530,391,"SEND")' in b
+assert 'reverbMenu_=new COptionMenu(PageRect({260,529,401,559})' in b
+assert 'chorusMenu_=new COptionMenu(PageRect({489,529,630,559})' in b
+assert 'MakeLabel({27,465,605,483},"FILTER ENVELOPE",true)' in b
+assert 'MakeLabel({668,465,965,483},"FILTER TONE",true)' in b
+assert 'reset_=MakeButton({840,322,965,357},kReset,"MOD RESET")' in b
+assert 'masterVolume_->setDefaultValue(1.f)' in b
+print("P143 STATIC PASS: compact VSTGUI, FX pairing, large right-side Master, EDIT, BROWSER, V11")
