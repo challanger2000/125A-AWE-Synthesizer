@@ -25,6 +25,7 @@ smtg_target_add_plugin_resources(125A_AWE_Synthesizer
                         resource/125A_Button_Atlas_Hardware_Normal_Pressed.png
                         resource/125A_Lcd_Amber_Blank_512x147.png
                         resource/125A_AWE_Gold_Logo_236x147.png
+                        resource/125A_PCB_Shared_1000x640.png
 )
 target_include_directories(125A_AWE_Synthesizer PRIVATE
     ../engine ../engine/include
