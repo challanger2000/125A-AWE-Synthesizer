@@ -140,7 +140,7 @@ assert 'reverbMenu_=new GoldHardwareMenu(PageRect({32,382,174,405})' in b
 assert 'chorusMenu_=new GoldHardwareMenu(PageRect({216,382,358,405})' in b
 assert 'MakeLabel({25,430,508,452},"FILTER ENVELOPE",false)' in b
 assert 'MakeLabel({537,430,766,452},"FILTER",false)' in b
-assert 'reset_=MakeButton({808,535,960,571},kReset,"MOD RESET")' in b
+assert 'reset_=MakeButton({808,513,960,549},kReset,"MOD RESET")' in b
 assert 'masterVolume_->setDefaultValue(1.f)' in b
 for image in ("125A_PCB_Shared_1000x640.png","125A_PCB_MAIN_1000x640.png"):
     assert (root/"src/vst3/resource"/image).is_file(),image
@@ -226,12 +226,23 @@ assert 'bankMenu_=new GoldHardwareMenu(PageRect({96,247,320,284})' in b
 # Parameter rectangles and host editing remain exactly P155.
 assert 'new CBitmap("125A_PCB_Shared_1000x640.png")' in b
 assert 'class SynthPanelGroups final : public CView' in b
-assert 'CColor(7,11,16,204)' in b
+assert 'CColor(7,11,16,153)' in b
 assert 'createRoundRectGraphicsPath(r,8.)' in b
 assert 'class BrowserPanelBacking final : public CView' in b
 assert 'AddToCurrentPage(new BrowserPanelBacking(PageRect({0,232,1000,592})))' in b
-assert 'CColor(7,11,16,224)' in b
+assert 'CColor(7,11,16,180)' in b
 assert 'panel({16,232,984,592},lcdColor,edge);' not in b
 assert 'resource/125A_PCB_Shared_1000x640.png' in cmake
 assert '"125A_PCB_Shared_1000x640.png" PNG DISCARDABLE' in (root/"src/vst3/resource/awe_gold_knobs.rc.in").read_text(encoding="utf-8")
-print("P156 STATIC PASS: EMU8000 keepout, amber LCD dynamic file status, 7 gold buttons and 12 host knobs")
+# P160: physically protected corner screws and a shorter Reset row.
+assert 'new CBitmap("125A_P160_PCB_1000x640.png")' in b
+assert 'new CBitmap("125A_P160_Lcd_Complete_512x147.png")' in b
+assert 'CGraphicsTransform t;' in b and 't.scale(193./236.,120./147.)' in b
+assert 'notched({{784,2},{984,2},{984,318},{942,340},{942,358},{784,358}})' in b
+assert 'notched({{16,187},{518,187},{518,358},{62,358},{62,338},{16,316}})' in b
+assert 'border->beginSubpath({16,2})' in b
+assert '125A_P160_PCB_1000x640.png' in cmake
+assert '125A_P160_Lcd_Complete_512x147.png' in cmake
+# Compatibility builds may omit the two PNGs; make absence explicit, never
+# mistake a green runtime/validator for image-specific proof.
+print("P160 STATIC PASS: EMU8000 keepout, amber LCD dynamic file status, 7 gold buttons and 12 host knobs")
