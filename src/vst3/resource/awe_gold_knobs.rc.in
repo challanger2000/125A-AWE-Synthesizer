@@ -7,3 +7,6 @@
 "125A_Lcd_Amber_Blank_512x147.png" PNG DISCARDABLE "@CMAKE_CURRENT_SOURCE_DIR@/resource/125A_Lcd_Amber_Blank_512x147.png"
 // P154: exact extracted transparent golden lettering, no temporary text.
 "125A_AWE_Gold_Logo_236x147.png" PNG DISCARDABLE "@CMAKE_CURRENT_SOURCE_DIR@/resource/125A_AWE_Gold_Logo_236x147.png"
+
+// P156 experimental photographic PCB base (existing repo asset).
+"125A_PCB_Shared_1000x640.png" PNG DISCARDABLE "@CMAKE_CURRENT_SOURCE_DIR@/resource/125A_PCB_Shared_1000x640.png"
