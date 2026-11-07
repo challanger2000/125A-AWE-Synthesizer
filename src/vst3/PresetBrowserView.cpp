@@ -99,8 +99,8 @@ public:
         setDirty(false);
     }
 };
-// P150: one rigorously laid-out PNG atlas. Each button uses a native-size
-// rectangle (no scaling), with a second 44px-spaced frame for pressed/active.
+// P153: photographic hardware atlas. Each button uses a native-size
+// rectangle (no scaling), with a second 44px-spaced frame for physical depression.
 // The text remains a live VSTGUI label; the image provides the real bevel.
 class GoldButton final : public CTextButton {
 public:
@@ -108,7 +108,7 @@ public:
                const char* caption,CCoord sourceX)
         :CTextButton(r,listener,tag,caption),
          caption_(caption),sourceX_(sourceX),
-         atlas_(new CBitmap("125A_Button_Atlas_Normal_Pressed.png")) {}
+         atlas_(new CBitmap("125A_Button_Atlas_Hardware_Normal_Pressed.png")) {}
     ~GoldButton() noexcept override {
         if(atlas_)atlas_->forget();
     }
@@ -124,7 +124,13 @@ public:
         c->setFont(getFont());
         c->setFontColor(active?CColor(255,232,173,255):
                               CColor(241,201,127,255));
-        c->drawString(caption_.c_str(),getViewSize(),kCenterText);
+        CRect textRect=getViewSize();
+        // The keycap text follows the depressed surface by one pixel.
+        if(active) {
+            textRect.top+=1.;
+            textRect.bottom+=1.;
+        }
+        c->drawString(caption_.c_str(),textRect,kCenterText);
         setDirty(false);
     }
 private:
