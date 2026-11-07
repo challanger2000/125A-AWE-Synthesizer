@@ -288,4 +288,16 @@ assert 'activeBankMenu_=new GoldHardwareMenu({26,179,203,218}' in b
 # Each bank, search, and header element keeps its own original input type.
 assert b.count('new GoldHardwareMenu(')==5
 assert 'getVisibleClientRect().getWidth()' in b
-print("P163 STATIC PASS: EMU8000 keepout, amber LCD dynamic file status, 7 gold buttons and 12 host knobs")
+# P164: approved photographic PCB contains the LCD frame, logo and IC exactly
+# once. Neither the old LCD nor logo CView may be instantiated over P164.
+assert 'p164_(new CBitmap("125A_P164_PCB_Single_Header_1000x640.png"))' in b
+assert 'bool hasSingleHeader() const noexcept' in b
+assert 'if(singleHeader)' in b and 'p164_->draw(c,getViewSize())' in b
+assert 'if(!photo->hasSingleHeader()) {' in b
+assert 'addView(new AmberLcdArtwork({264,16,776,163}))' in b
+assert 'addView(new GoldLogoArtwork({16,16,252,163}))' in b
+assert 'compose_p164_faceplate.py' in cmake
+assert 'resource/125A_P164_PCB_Single_Header_1000x640.png' in cmake
+assert '125A_P164_PCB_Single_Header_1000x640.png' in cmake
+assert 'make' not in ''  # keep test semantics free of mock GUI substitutions
+print("P164 STATIC PASS: EMU8000 keepout, amber LCD dynamic file status, 7 gold buttons and 12 host knobs")
