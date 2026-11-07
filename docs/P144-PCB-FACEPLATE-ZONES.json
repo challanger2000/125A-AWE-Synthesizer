@@ -1,0 +1,324 @@
+{
+  "version": "P144-1",
+  "canvas": [
+    1000,
+    640
+  ],
+  "source_branch": "feature/p143-functional-hardware-layout",
+  "units": "logical VSTGUI pixels",
+  "semantics": "[x1,y1,x2,y2]; page artwork is drawn BEHIND native controls; shared artwork obeys the union of all blocked rectangles",
+  "shared_keepouts": [
+    {
+      "id": "identity",
+      "rect": [
+        12,
+        8,
+        988,
+        55
+      ]
+    },
+    {
+      "id": "lcd_and_assets",
+      "rect": [
+        12,
+        64,
+        988,
+        203
+      ]
+    },
+    {
+      "id": "bank_preset_navigation",
+      "rect": [
+        12,
+        210,
+        988,
+        261
+      ]
+    },
+    {
+      "id": "tabs",
+      "rect": [
+        12,
+        267,
+        988,
+        305
+      ]
+    },
+    {
+      "id": "live_status",
+      "rect": [
+        12,
+        609,
+        988,
+        635
+      ]
+    }
+  ],
+  "pages": {
+    "main": {
+      "keepouts": [
+        {
+          "id": "reverb_cluster",
+          "rect": [
+            250,
+            326,
+            413,
+            566
+          ]
+        },
+        {
+          "id": "chorus_cluster",
+          "rect": [
+            478,
+            326,
+            643,
+            566
+          ]
+        },
+        {
+          "id": "master_title",
+          "rect": [
+            690,
+            326,
+            959,
+            369
+          ]
+        },
+        {
+          "id": "master_knob_with_halo",
+          "rect": [
+            704,
+            359,
+            882,
+            505
+          ]
+        },
+        {
+          "id": "master_value",
+          "rect": [
+            730,
+            489,
+            857,
+            538
+          ]
+        },
+        {
+          "id": "send_hint",
+          "rect": [
+            24,
+            554,
+            263,
+            592
+          ]
+        }
+      ],
+      "decoration_islands": [
+        {
+          "id": "emu8000_chip_left",
+          "rect": [
+            30,
+            335,
+            230,
+            541
+          ]
+        },
+        {
+          "id": "small_smd_between_fx",
+          "rect": [
+            423,
+            381,
+            468,
+            493
+          ]
+        },
+        {
+          "id": "small_smd_chorus_master",
+          "rect": [
+            650,
+            382,
+            689,
+            499
+          ]
+        },
+        {
+          "id": "small_components_right_of_master",
+          "rect": [
+            899,
+            389,
+            966,
+            508
+          ]
+        },
+        {
+          "id": "low_profile_below_master",
+          "rect": [
+            686,
+            548,
+            969,
+            590
+          ]
+        }
+      ]
+    },
+    "edit": {
+      "keepouts": [
+        {
+          "id": "amp_heading",
+          "rect": [
+            20,
+            314,
+            410,
+            355
+          ]
+        },
+        {
+          "id": "mod_reset",
+          "rect": [
+            829,
+            313,
+            978,
+            369
+          ]
+        },
+        {
+          "id": "amp_attack",
+          "rect": [
+            104,
+            355,
+            240,
+            466
+          ]
+        },
+        {
+          "id": "amp_decay",
+          "rect": [
+            324,
+            355,
+            460,
+            466
+          ]
+        },
+        {
+          "id": "amp_sustain",
+          "rect": [
+            544,
+            355,
+            680,
+            466
+          ]
+        },
+        {
+          "id": "amp_release",
+          "rect": [
+            764,
+            355,
+            900,
+            466
+          ]
+        },
+        {
+          "id": "filter_heading",
+          "rect": [
+            20,
+            457,
+            616,
+            489
+          ]
+        },
+        {
+          "id": "filter_tone_heading",
+          "rect": [
+            660,
+            457,
+            977,
+            489
+          ]
+        },
+        {
+          "id": "filter_attack",
+          "rect": [
+            52,
+            480,
+            188,
+            590
+          ]
+        },
+        {
+          "id": "filter_decay",
+          "rect": [
+            202,
+            480,
+            338,
+            590
+          ]
+        },
+        {
+          "id": "filter_sustain",
+          "rect": [
+            352,
+            480,
+            488,
+            590
+          ]
+        },
+        {
+          "id": "filter_release",
+          "rect": [
+            502,
+            480,
+            638,
+            590
+          ]
+        },
+        {
+          "id": "filter_cutoff",
+          "rect": [
+            652,
+            480,
+            788,
+            590
+          ]
+        },
+        {
+          "id": "filter_resonance",
+          "rect": [
+            802,
+            480,
+            938,
+            590
+          ]
+        }
+      ],
+      "decoration_islands": []
+    },
+    "browser": {
+      "keepouts": [
+        {
+          "id": "search_and_filter",
+          "rect": [
+            20,
+            314,
+            977,
+            365
+          ]
+        },
+        {
+          "id": "preset_table",
+          "rect": [
+            18,
+            368,
+            979,
+            601
+          ]
+        }
+      ],
+      "decoration_islands": []
+    }
+  },
+  "safety": "Do not put raised PCB components, their shadows, labels, or traces that hurt readability inside keepouts. Artwork only. No parameter or hit-test changes.",
+  "notes": [
+    "MAIN decoration islands are NOT safe on EDIT or BROWSER; do not draw them in the shared faceplate.",
+    "No 3D ISA connector may cover the live status footer.",
+    "Allow approximately 10px additional clearance between real component silhouette and keepout edges."
+  ]
+}
