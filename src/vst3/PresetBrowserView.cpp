@@ -230,7 +230,7 @@ public:
             c->drawLine({r.left+radius+3.,r.top+2.},
                         {r.right-radius-3.,r.top+2.});
         };
-        recessed({397,11,970,57},6.,CColor(11,13,15,230),
+        recessed({578,15,972,52},6.,CColor(11,13,15,230),
                  CColor(192,132,58,245)); // search
         recessed({24,63,976,349},7.,CColor(11,14,16,242),
                  CColor(191,136,65,240)); // program table
@@ -634,12 +634,12 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     // retains true SF2 bank filtering, search and exact program selection.
     buildingPanel_=pages_[1];
     AddToCurrentPage(new BrowserPanelBacking(PageRect({0,232,1000,592})));
-    bankCaption_=MakeLabel({28,247,92,282},"FILTER",true);
-    bankMenu_=new GoldHardwareMenu(PageRect({96,247,320,284}),this,kBankFilter);
+    bankCaption_=MakeLabel({28,247,94,282},"FILTER",true);
+    bankMenu_=new GoldHardwareMenu(PageRect({100,247,494,284}),this,kBankFilter);
     StyleGoldMenu(bankMenu_);
     AddToCurrentPage(bankMenu_);
-    searchCaption_=MakeLabel({336,247,396,282},"SUCHE",true);
-    search_=new CTextEdit(PageRect({401,247,966,284}),this,kFilter,"");
+    searchCaption_=MakeLabel({506,247,572,282},"SUCHE",true);
+    search_=new CTextEdit(PageRect({584,249,966,282}),this,kFilter,"");
     search_->setPlaceholderString("Instrument suchen...");
     search_->setImmediateTextChange(true);
     // Underlying CTextEdit still owns typing, caret, search and focus.
@@ -1064,7 +1064,15 @@ int32_t PresetBrowserView::dbGetNumRows(CDataBrowser*) {
 }
 int32_t PresetBrowserView::dbGetNumColumns(CDataBrowser*) {return 1;}
 CCoord PresetBrowserView::dbGetRowHeight(CDataBrowser*) {return 27.;}
-CCoord PresetBrowserView::dbGetCurrentColumnWidth(int32_t,CDataBrowser*) {return 892.;}
+CCoord PresetBrowserView::dbGetCurrentColumnWidth(int32_t,CDataBrowser* browser) {
+    // P162: fill the current client area instead of the legacy 892px strip.
+    // The native vertical scrollbar is already excluded from this viewport.
+    // This also handles auto-hidden scrollbars and UI zoom without guessing
+    // a fixed 16px width or leaving a 52px dark gap on the right.
+    if (!browser) return 942.;
+    const CCoord visible=browser->getVisibleClientRect().getWidth();
+    return visible>0. ? visible : 942.;
+}
 void PresetBrowserView::dbDrawCell(CDrawContext* ctx,const CRect& r,
                                   int32_t row,int32_t,int32_t flags,CDataBrowser*) {
     if(row<0||size_t(row)>=rows_.size())return;
