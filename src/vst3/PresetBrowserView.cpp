@@ -47,10 +47,10 @@ public:
         const CColor lcdColor(11,16,21,255);
         panel({16,16,252,163},panelColor,edge); // branding
         panel({264,16,776,163},lcdColor,edge);   // amber program display
-        panel({788,16,984,163},panelColor,edge); // ROM/SF2 files
+        panel({788,16,984,163},panelColor,edge); // reserved EMU8000 chip
         panel({16,173,984,224},panelColor,edge); // all navigation
         panel({16,232,984,592},lcdColor,edge);   // page canvas
-        panel({16,603,984,634},panelColor,edge); // status
+        // The bottom 37 px stays clear for gold ISA edge connectors on the final artwork.
         setDirty(false);
     }
 };
@@ -318,16 +318,16 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
 
     // P152: the amber LCD owns the complete live status line, including
     // the current filename. Its labels remain real host-driven VSTGUI views.
-    auto* lcd=MakeLabel({310,52,534,71},"EMU8000  |  SOUNDFONT ENGINE",true);
+    auto* lcd=MakeLabel({310,48,534,64},"EMU8000  |  SOUNDFONT ENGINE",true);
     lcd->setFontColor(CColor(219,169,70,255));
-    fileLabel_=MakeLabel({546,52,737,71},"",false);
+    fileLabel_=MakeLabel({546,48,737,64},"",false);
     fileLabel_->setFont(kNormalFontSmall);
     fileLabel_->setFontColor(CColor(221,174,91,255));
     fileLabel_->setTextTruncateMode(CTextLabel::kTruncateTail);
-    programLabel_=MakeLabel({310,73,737,104},"NO PRESET",false);
+    programLabel_=MakeLabel({310,66,737,94},"NO PRESET",false);
     programLabel_->setFont(kNormalFontBig);
     programLabel_->setFontColor(CColor(245,193,78,255));
-    hardwareInfoLabel_=MakeLabel({310,107,737,126},"ROM: ERFORDERLICH",true);
+    hardwareInfoLabel_=MakeLabel({310,96,737,113},"ROM: ERFORDERLICH",true);
     hardwareInfoLabel_->setFontColor(CColor(221,174,91,255));
     hardwareInfoLabel_->setTextTruncateMode(CTextLabel::kTruncateTail);
 
@@ -441,7 +441,7 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     empty_=MakeLabel({34,324,966,359},"",true);
 
     buildingPanel_=nullptr;
-    hint_=MakeLabel({28,607,968,629},
+    hint_=MakeLabel({310,114,737,131},
         "SF2-Audiostatus noch nicht vom Prozessor bestaetigt.",true);
     hint_->setTextTruncateMode(CTextLabel::kTruncateTail);
     SetPage(0);
@@ -735,7 +735,7 @@ void PresetBrowserView::SyncSf2Status() {
     lastStatus_=text;
     hint_->setText(text.c_str());
     const bool err=text.find("Fehler")!=std::string::npos;
-    hint_->setFontColor(err?CColor(255,143,122,255):kMuted);
+    hint_->setFontColor(err?CColor(255,143,122,255):CColor(213,168,93,255));
 }
 void PresetBrowserView::SyncHardwareInfo() {
     if(!hardwareInfoLabel_||!hardwareInfoProvider_)return;
