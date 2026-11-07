@@ -276,8 +276,8 @@ def gold_brand_pixels(frame):
     """P117: the owner-approved gold 125A typography is in the raster faceplate."""
     w,h,raw=frame
     count=0
-    for y in range(round(14*h/640),round(50*h/640)):
-        for x in range(round(27*w/1000),round(156*w/1000)):
+    for y in range(round(29*h/640),round(145*h/640)):
+        for x in range(round(39*w/1000),round(232*w/1000)):
             i=(y*w+x)*4
             blue,green,red=raw[i],raw[i+1],raw[i+2]
             if red>=145 and green>=105 and red>=green and blue<green:
@@ -440,7 +440,7 @@ def main():
             check(985<=w<=1045 and 630<=h<=690,
                   f"actual compact native editor {w}x{h} near 1000x640",results)
             check(gold_brand_pixels(first)>150,
-                  "P155 actual extracted gold lettering visible",results)
+                  "P160 actual gold logo sampled inside approved reduced 193x120 region",results)
             check(gold_knob_pixels(first,(74,278,132,336))>160,
                   "actual gold 58px filmstrip rendered, not fallback CDrawContext",results)
             check(gold_knob_pixels(first,(817,298,951,432))>800,
