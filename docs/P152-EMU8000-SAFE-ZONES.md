@@ -12,13 +12,13 @@
 ## Fixed header and navigation
 
 - Header brand: (16,16)–(252,163), gold 125A identity.
-- Amber LCD: (264,16)–(776,163). Dynamic top text: (310,52)–(534,71). Dynamic filename: (546,52)–(737,71). Dynamic program: (310,73)–(737,104). Dynamic hardware info: (310,107)–(737,126).
+- Amber LCD: (264,16)–(776,163). Dynamic top text: (310,48)–(534,64). Dynamic filename: (546,48)–(737,64). Dynamic program: (310,66)–(737,94). Dynamic hardware info: (310,96)–(737,113). Dynamic audio status: (310,114)–(737,131).
 - Bank caption (23,184)–(65,214).
 - Bank dropdown (67,179)–(193,218).
 - Previous (202,179)–(242,218); Program dropdown (250,179)–(537,218); Next (545,179)–(587,218).
 - SYNTH (597,179)–(690,218); BROWSER (698,179)–(797,218).
 - ROM LOAD (808,177)–(885,218); SF2 LOAD (893,177)–(968,218).
-- Bottom information line: (28,607)–(968,629).
+- Bottom connector zone: **(0,603)–(1000,640)** is free of every live control and label and reserved for gold ISA edge contacts.
 
 ## Fixed SYNTH control groups
 
@@ -34,7 +34,7 @@
 
 1. Preserve the **original chosen golden 125A lettering** (never replace with a red logo).
 2. All control rectangles, including label and value overlays, are keepouts for any raised PCB part. Add at least 8px decoration clearance whenever practicable.
-3. Populate unused margins and the dedicated IC bay with gold traces, resistors, capacitors, smaller surface-mount ICs and ISA edge connector contacts.
+3. Populate unused margins and the dedicated IC bay with gold traces, resistors, capacitors, smaller surface-mount ICs and ISA edge connector contacts in the protected bottom strip.
 4. Never draw preset names, ROM/SF2 filenames, status text, knobs, buttons or menus permanently into the background bitmap.
 5. The P151 LCD, P149 knob strips and P150 button atlas remain independent, functional graphics.
 6. Compare a fresh real Windows EditorHost screenshot after composing the eventual faceplate.
