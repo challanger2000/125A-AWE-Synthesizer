@@ -238,8 +238,8 @@ assert '"125A_PCB_Shared_1000x640.png" PNG DISCARDABLE' in (root/"src/vst3/resou
 assert 'new CBitmap("125A_P160_PCB_1000x640.png")' in b
 assert 'new CBitmap("125A_P160_Lcd_Complete_512x147.png")' in b
 assert 'CGraphicsTransform t;' in b and 't.scale(193./236.,120./147.)' in b
-assert 'notched({{784,2},{984,2},{984,318},{942,340},{942,358},{784,358}})' in b
-assert 'notched({{16,187},{518,187},{518,358},{62,358},{62,338},{16,316}})' in b
+assert 'notched({{784,2},{984,2},{984,319},{969,318},{957,321},{948,329},{944,341},{944,358},{784,358}})' in b
+assert 'notched({{16,187},{518,187},{518,358},{58,358},{58,343},{55,332},{47,324},{32,318},{20,321},{16,326}})' in b
 assert 'border->beginSubpath({16,2})' in b
 assert '125A_P160_PCB_1000x640.png' in cmake
 assert '125A_P160_Lcd_Complete_512x147.png' in cmake
