@@ -44,7 +44,7 @@ assert 'msg->setMessageID("125A_ROM_LOAD")' in f
 assert 'FIDStringsEqual(msg->getMessageID(),"125A_ROM_LOAD")' in f
 assert 'romAck("OK")' in f
 assert 'romLoadRequest_' in h and 'kLoadRom=3108' in h
-assert 'MakeButton({805,103,882,144},kLoadRom,"ROM")' in b
+assert 'MakeButton({808,177,885,218},kLoadRom,"ROM")' in b
 assert 'NativeChooseFile(path,true)' in b and 'NativeChooseFile(path,false)' in b
 assert 'GetOpenFileNameW(&ofn)' in b
 assert 'getBinary("Path",bytes,bytesCount)' in f
@@ -91,8 +91,8 @@ assert 'rtMaster_' in f and 'volumeGain_.setTarget(' in f
 assert 'masterVolume_' in h and 'masterVolumeValue_' in h
 assert 'new HardwareKnob(PageRect({817,298,951,432})' in b
 assert 'controller_->getParamNormalized(kMasterVolume)' in b
-assert 'activeBankMenu_=new COptionMenu({75,179,232,218},this,kActiveBank)' in b
-assert 'programMenu_=new COptionMenu({292,179,710,218},this,kDirectPreset)' in b
+assert 'activeBankMenu_=new COptionMenu({67,179,193,218},this,kActiveBank)' in b
+assert 'programMenu_=new COptionMenu({250,179,537,218},this,kDirectPreset)' in b
 assert 'RebuildActiveMenus();' in b and 'SyncActiveMenuSelection();' in b
 assert 'sf_.Find(bank_,id)' in b
 assert 'ChooseExistingProgram(' in b
@@ -185,4 +185,15 @@ assert binary[:8]==b"\x89PNG\r\n\x1a\n"
 assert struct.unpack(">II",binary[16:24])==(512,147)
 assert 'resource/125A_Lcd_Amber_Blank_512x147.png' in cmake
 assert '"125A_Lcd_Amber_Blank_512x147.png" PNG DISCARDABLE' in (root/"src/vst3/resource/awe_gold_knobs.rc.in").read_text(encoding="utf-8")
-print("P151 STATIC PASS: blank amber LCD 512x147, dynamic labels, 7 buttons, gold menus and knobs")
+# P152 exact-size navigation and collision-free real EMU8000 module area:
+# the chip will occupy (788,16)..(984,163), so no input may intersect it.
+assert 'fileLabel_=MakeLabel({546,52,737,71},"",false)' in b
+assert 'auto* lcd=MakeLabel({310,52,534,71}' in b
+assert 'loadSf2_=MakeButton({893,177,968,218},kLoadSf2,"SF2")' in b
+assert 'previous_=MakeButton({202,179,242,218},kPrevious,"<")' in b
+assert 'next_=MakeButton({545,179,587,218},kNext,">")' in b
+assert 'pageButtons_[0]=MakeButton({597,179,690,218}' in b
+assert 'toggle_=MakeButton({698,179,797,218}' in b
+assert 'MakeLabel({805,30,968,51},"SOUNDFONT / ROM",true)' not in b
+assert 'loadRom_=MakeButton({805,103,882,144}' not in b
+print("P152 STATIC PASS: EMU8000 keepout, amber LCD dynamic file status, 7 gold buttons and 12 host knobs")
