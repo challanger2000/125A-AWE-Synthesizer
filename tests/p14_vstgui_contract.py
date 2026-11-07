@@ -92,7 +92,7 @@ assert 'masterVolume_' in h and 'masterVolumeValue_' in h
 assert 'new HardwareKnob(PageRect({817,298,951,432})' in b
 assert 'controller_->getParamNormalized(kMasterVolume)' in b
 assert 'activeBankMenu_=new GoldHardwareMenu({26,179,203,218},this,kActiveBank)' in b
-assert 'programMenu_=new GoldHardwareMenu({259,179,550,218},this,kDirectPreset)' in b
+assert 'programMenu_=new GoldHardwareMenu({261,179,552,218},this,kDirectPreset)' in b
 assert 'RebuildActiveMenus();' in b and 'SyncActiveMenuSelection();' in b
 assert 'sf_.Find(bank_,id)' in b
 assert 'ChooseExistingProgram(' in b
@@ -194,11 +194,11 @@ assert '"125A_Lcd_Amber_Blank_512x147.png" PNG DISCARDABLE' in (root/"src/vst3/r
 # the chip will occupy (788,16)..(984,163), so no input may intersect it.
 assert 'fileLabel_=MakeLabel({546,48,737,64},"",false)' in b
 assert 'auto* lcd=MakeLabel({310,48,534,64}' in b
-assert 'loadSf2_=MakeButton({899,177,974,218},kLoadSf2,"SF2")' in b
-assert 'previous_=MakeButton({211,179,251,218},kPrevious,"<")' in b
-assert 'next_=MakeButton({558,179,598,218},kNext,">")' in b
-assert 'pageButtons_[0]=MakeButton({606,179,699,218}' in b
-assert 'toggle_=MakeButton({707,179,806,218}' in b
+assert 'loadSf2_=MakeButton({904,177,979,218},kLoadSf2,"SF2")' in b
+assert 'previous_=MakeButton({212,179,252,218},kPrevious,"<")' in b
+assert 'next_=MakeButton({561,179,601,218},kNext,">")' in b
+assert 'pageButtons_[0]=MakeButton({610,179,703,218}' in b
+assert 'toggle_=MakeButton({712,179,811,218}' in b
 assert 'MakeLabel({805,30,968,51},"SOUNDFONT / ROM",true)' not in b
 assert 'loadRom_=MakeButton({805,103,882,144}' not in b
 assert 'hint_=MakeLabel({310,114,737,131}' in b
@@ -246,8 +246,8 @@ assert '125A_P160_Lcd_Complete_512x147.png' in cmake
 # Compatibility builds may omit the two PNGs; make absence explicit, never
 # mistake a green runtime/validator for image-specific proof.
 # P161: browser-only gold theme; no changes to bank/program mapping.
-assert 'recessed({578,15,972,52},6.' in b
-assert 'recessed({24,63,976,349},7.' in b
+assert 'recessed({580,15,974,52},6.' in b
+assert 'recessed({24,63,974,349},7.' in b
 assert 'search_->setFrameWidth(0.);' in b
 assert 'search_->setTextInset({11.,0.});' in b
 assert 'bar->setScrollerColor(CColor(181,129,66,255));' in b
@@ -260,8 +260,8 @@ assert 'Select(entry.bank,entry.program)' in b
 assert 'bankCaption_=MakeLabel({28,247,94,282},"FILTER",true)' in b
 assert 'bankMenu_=new GoldHardwareMenu(PageRect({100,247,494,284})' in b
 assert 'searchCaption_=MakeLabel({506,247,572,282},"SUCHE",true)' in b
-assert 'search_=new CTextEdit(PageRect({584,249,966,282})' in b
-assert 'recessed({578,15,972,52},6.' in b
+assert 'search_=new CTextEdit(PageRect({586,249,968,282})' in b
+assert 'recessed({580,15,974,52},6.' in b
 assert 'dbGetCurrentColumnWidth(int32_t,CDataBrowser* browser)' in b
 assert 'browser->getVisibleClientRect().getWidth()' in b
 assert 'return 892.;' not in b
@@ -270,11 +270,22 @@ assert 'const CRect rail{16,173,984,224};' in b
 assert 'createRoundRectGraphicsPath(rail,7.)' in b
 assert 'MakeLabel({23,184,65,214},"BANK",true)' not in b
 assert 'activeBankMenu_=new GoldHardwareMenu({26,179,203,218}' in b
-assert 'previous_=MakeButton({211,179,251,218}' in b
-assert 'programMenu_=new GoldHardwareMenu({259,179,550,218}' in b
-assert 'next_=MakeButton({558,179,598,218}' in b
-assert 'pageButtons_[0]=MakeButton({606,179,699,218}' in b
-assert 'toggle_=MakeButton({707,179,806,218}' in b
-assert 'loadRom_=MakeButton({814,177,891,218}' in b
-assert 'loadSf2_=MakeButton({899,177,974,218}' in b
-print("P162 STATIC PASS: EMU8000 keepout, amber LCD dynamic file status, 7 gold buttons and 12 host knobs")
+assert 'previous_=MakeButton({212,179,252,218}' in b
+assert 'programMenu_=new GoldHardwareMenu({261,179,552,218}' in b
+assert 'next_=MakeButton({561,179,601,218}' in b
+assert 'pageButtons_[0]=MakeButton({610,179,703,218}' in b
+assert 'toggle_=MakeButton({712,179,811,218}' in b
+assert 'loadRom_=MakeButton({819,177,896,218}' in b
+assert 'loadSf2_=MakeButton({904,177,979,218}' in b
+# P163 right-edge design contracts: three visual gold borders must
+# converge at x=974; upper SF2 bitmap contains 5px transparent right margin.
+assert 'loadSf2_=MakeButton({904,177,979,218}' in b
+assert 'recessed({580,15,974,52},6.' in b
+assert 'recessed({24,63,974,349},7.' in b
+assert 'search_=new CTextEdit(PageRect({586,249,968,282})' in b
+assert 'table_=new CDataBrowser(PageRect({28,299,970,576})' in b
+assert 'activeBankMenu_=new GoldHardwareMenu({26,179,203,218}' in b
+# Each bank, search, and header element keeps its own original input type.
+assert b.count('new GoldHardwareMenu(')==5
+assert 'getVisibleClientRect().getWidth()' in b
+print("P163 STATIC PASS: EMU8000 keepout, amber LCD dynamic file status, 7 gold buttons and 12 host knobs")
