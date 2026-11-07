@@ -158,7 +158,7 @@ for filename,size in (
 # button text and mouse hit targets remain real VSTGUI controls.
 atlas_name="125A_Button_Atlas_Normal_Pressed.png"
 atlas=(root/"src/vst3/resource"/atlas_name).read_bytes()
-assert atlas.startswith(b"\\x89PNG\\r\\n\\x1a\\n")
+assert atlas.startswith(b"\x89PNG\r\n\x1a\n")
 assert struct.unpack_from(">II",atlas,16)==(596,88)
 assert atlas[25]==6 or b"tRNS" in atlas
 assert ("resource/"+atlas_name) in cmake
