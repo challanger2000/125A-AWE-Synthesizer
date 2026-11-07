@@ -44,7 +44,7 @@ assert 'msg->setMessageID("125A_ROM_LOAD")' in f
 assert 'FIDStringsEqual(msg->getMessageID(),"125A_ROM_LOAD")' in f
 assert 'romAck("OK")' in f
 assert 'romLoadRequest_' in h and 'kLoadRom=3108' in h
-assert 'MakeButton({796,103,871,139},kLoadRom,"ROM")' in b
+assert 'MakeButton({805,103,882,144},kLoadRom,"ROM")' in b
 assert 'NativeChooseFile(path,true)' in b and 'NativeChooseFile(path,false)' in b
 assert 'GetOpenFileNameW(&ofn)' in b
 assert 'getBinary("Path",bytes,bytesCount)' in f
@@ -56,8 +56,9 @@ assert 'core.ChipRamWords()' in f and 'BankAt(i).sampleData.size()' in f
 assert 'hardwareInfoProvider_' in h and 'hardwareInfoLabel_' in h
 assert 'addView(new FunctionalLayoutBackground({0,0,1000,640}))' in b
 assert 'CBitmap' not in b and '125A_PCB_' not in b
-assert 'CBitmap' not in b and '125A_PCB_' not in b
-assert 'CBitmap' not in b and '125A_PCB_' not in b
+assert 'class SynthPanelGroups final : public CView' in b
+assert 'new SynthPanelGroups(PageRect({0,232,1000,592}))' in b
+assert 'return {r.left,r.top-232.,r.right,r.bottom-232.};' in b
 assert 'setMouseEnabled(false)' in b
 assert 'SyncHardwareInfo();' in b
 assert 'sfCatalog_=std::move(sf2PendingCatalog_)' in f
@@ -85,17 +86,17 @@ assert 'candidate.channelPrograms.fill(program)' in state
 assert 'kVolumeID=MasterOutput::kParamID' in f
 assert 'rtMaster_' in f and 'volumeGain_.setTarget(' in f
 assert 'masterVolume_' in h and 'masterVolumeValue_' in h
-assert 'new HardwareKnob(PageRect({848,344,962,458})' in b
+assert 'new HardwareKnob(PageRect({817,298,951,432})' in b
 assert 'controller_->getParamNormalized(kMasterVolume)' in b
-assert 'activeBankMenu_=new COptionMenu({79,197,251,240},this,kActiveBank)' in b
-assert 'programMenu_=new COptionMenu({325,197,823,240},this,kDirectPreset)' in b
+assert 'activeBankMenu_=new COptionMenu({75,179,232,218},this,kActiveBank)' in b
+assert 'programMenu_=new COptionMenu({292,179,710,218},this,kDirectPreset)' in b
 assert 'RebuildActiveMenus();' in b and 'SyncActiveMenuSelection();' in b
 assert 'sf_.Find(bank_,id)' in b
 assert 'ChooseExistingProgram(' in b
 assert 'kActiveBank=3109,kDirectPreset=3110' in h
 assert 'm_guiControls[11]' in syn
-assert 'brand=MakeLabel({28,19,268,65},"125A",false)' in b
-assert 'programLabel_=MakeLabel({310,82,744,125},"NO PRESET",false)' in b
+assert 'brand=MakeLabel({30,25,237,69},"125A",false)' in b
+assert 'programLabel_=MakeLabel({286,66,755,105},"NO PRESET",false)' in b
 assert (root/"src/vst3/resource/125A_Logo_Master_FINAL.svg").is_file()
 assert 'resource/125A_Logo_Master_FINAL.svg' in cmake
 assert 'resource/MAUIFM.IBK' not in cmake
@@ -113,27 +114,27 @@ assert 'ApplyPendingFxIntents(synth_)' in f
 assert 'ApplyHardwareReverbPreset(' in f and 'ApplyHardwareChorusPreset(' in f
 assert 'reverbPreset' in state and 'chorusPreset' in state
 assert 'kMainPage=3111' in h and 'kEditPage' not in h
-assert 'AddKnob(3,686,341,"RELEASE")' in b and 'AddKnob(7,435,495,"RELEASE")' in b
+assert 'AddKnob(3,690,278,"RELEASE")' in b and 'AddKnob(7,411,464,"RELEASE")' in b
 assert 'AddToCurrentPage(reverbMenu_)' in b and 'AddToCurrentPage(chorusMenu_)' in b
 assert 'pageButtons_[1]=toggle_' in b and 'buildingPanel_=pages_[1];' in b
 assert 'std::array<VSTGUI::CViewContainer*,2> pages_' in h
 assert 'currentPage_=std::clamp(page,0,1);' in b
 assert 'AddToCurrentPage(reverbMenu_)' in b and 'AddToCurrentPage(chorusMenu_)' in b
-assert 'PageRect({25,373,971,594})' in b
+assert 'PageRect({28,299,972,576})' in b
 assert 'SetPage(0);' in b and 'SetPage(1);' in b and 'SetPage(2);' not in b
-assert 'AddKnob(0,332,341,"ATTACK")' in b
-assert 'AddKnob(9,689,495,"RESONANCE")' in b
-assert 'AddKnob(10,63,341,"SEND")' in b
-assert 'AddKnob(11,198,341,"SEND")' in b
-assert 'reverbMenu_=new COptionMenu(PageRect({32,444,149,470})' in b
-assert 'chorusMenu_=new COptionMenu(PageRect({167,444,284,470})' in b
-assert 'MakeLabel({27,472,542,493},"FILTER ENVELOPE",false)' in b
-assert 'MakeLabel({543,472,808,493},"FILTER TONE",false)' in b
-assert 'reset_=MakeButton({832,516,975,551},kReset,"MOD RESET")' in b
+assert 'AddKnob(0,408,278,"ATTACK")' in b
+assert 'AddKnob(9,687,464,"RESONANCE")' in b
+assert 'AddKnob(10,74,278,"SEND")' in b
+assert 'AddKnob(11,258,278,"SEND")' in b
+assert 'reverbMenu_=new COptionMenu(PageRect({32,382,174,405})' in b
+assert 'chorusMenu_=new COptionMenu(PageRect({216,382,358,405})' in b
+assert 'MakeLabel({25,430,508,452},"FILTER ENVELOPE",false)' in b
+assert 'MakeLabel({537,430,766,452},"FILTER",false)' in b
+assert 'reset_=MakeButton({808,535,960,571},kReset,"MOD RESET")' in b
 assert 'masterVolume_->setDefaultValue(1.f)' in b
 for image in ("125A_PCB_Shared_1000x640.png","125A_PCB_MAIN_1000x640.png"):
     assert (root/"src/vst3/resource"/image).is_file(),image
     assert ("resource/"+image) not in cmake,image
 assert 'configure_file(resource/awe_pcb.rc.in' not in cmake
 assert (root/"src/vst3/resource/awe_pcb.rc.in").is_file()
-print("P147 STATIC PASS: neutral bitmap-free layout, permanent synth controls, separate browser and V11 state")
+print("P148 STATIC PASS: balanced grid, all live controls, neutral PCB-free UI, browser, and V11 state")
