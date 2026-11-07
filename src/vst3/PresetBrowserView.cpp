@@ -225,7 +225,7 @@ public:
             c->setLineWidth(1.3);
             c->drawGraphicsPath(p,CDrawContext::kPathStroked);
             p->forget();
-            c->setFrameColor(CColor(243,185,92,95));
+            c->setFrameColor(CColor(250,204,126,195));
             c->setLineWidth(1.);
             c->drawLine({r.left+radius+3.,r.top+2.},
                         {r.right-radius-3.,r.top+2.});
