@@ -316,8 +316,14 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     auto* engine=MakeLabel({30,118,239,141},"EMU8000 / SOUNDFONT",true);
     engine->setFontColor(CColor(185,155,99,255));
 
-    auto* lcd=MakeLabel({310,52,737,71},"EMU8000  |  SOUNDFONT ENGINE",true);
+    // P152: the amber LCD owns the complete live status line, including
+    // the current filename. Its labels remain real host-driven VSTGUI views.
+    auto* lcd=MakeLabel({310,52,534,71},"EMU8000  |  SOUNDFONT ENGINE",true);
     lcd->setFontColor(CColor(219,169,70,255));
+    fileLabel_=MakeLabel({546,52,737,71},"",false);
+    fileLabel_->setFont(kNormalFontSmall);
+    fileLabel_->setFontColor(CColor(221,174,91,255));
+    fileLabel_->setTextTruncateMode(CTextLabel::kTruncateTail);
     programLabel_=MakeLabel({310,73,737,104},"NO PRESET",false);
     programLabel_->setFont(kNormalFontBig);
     programLabel_->setFontColor(CColor(245,193,78,255));
@@ -325,27 +331,23 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     hardwareInfoLabel_->setFontColor(CColor(221,174,91,255));
     hardwareInfoLabel_->setTextTruncateMode(CTextLabel::kTruncateTail);
 
-    MakeLabel({805,30,968,51},"SOUNDFONT / ROM",true);
-    fileLabel_=MakeLabel({803,62,968,88},"",false);
-    fileLabel_->setTextTruncateMode(CTextLabel::kTruncateTail);
-    loadRom_=MakeButton({805,103,882,144},kLoadRom,"ROM");
-    loadSf2_=MakeButton({892,103,967,144},kLoadSf2,"SF2");
-
-    MakeLabel({27,184,73,214},"BANK",true);
-    activeBankMenu_=new COptionMenu({75,179,232,218},this,kActiveBank);
+    // Full 196 x 147 top-right region (788..984,16..163) is now strictly
+    // reserved for the *real* decorative EMU8000 chip and its components.
+    // Native-size button assets (ROM 77x41, SF2 75x41) were moved onto the
+    // compact, consistently aligned navigation strip without scaling.
+    MakeLabel({23,184,65,214},"BANK",true);
+    activeBankMenu_=new COptionMenu({67,179,193,218},this,kActiveBank);
     StyleGoldMenu(activeBankMenu_);
     addView(activeBankMenu_);
-    previous_=MakeButton({242,179,282,218},kPrevious,"<");
-    programMenu_=new COptionMenu({292,179,710,218},this,kDirectPreset);
+    previous_=MakeButton({202,179,242,218},kPrevious,"<");
+    programMenu_=new COptionMenu({250,179,537,218},this,kDirectPreset);
     StyleGoldMenu(programMenu_);
     addView(programMenu_);
-    next_=MakeButton({720,179,762,218},kNext,">");
-
-    // P148: one balanced, full-width navigation strip, two control rows,
-    // and one independent vertically dominant master. Browser is separate.
-    // These rectangles are final input geometry BEFORE any PCB artwork.
-    pageButtons_[0]=MakeButton({774,179,867,218},kMainPage,"SYNTH");
-    toggle_=MakeButton({877,179,976,218},kToggle,"BROWSER");
+    next_=MakeButton({545,179,587,218},kNext,">");
+    pageButtons_[0]=MakeButton({597,179,690,218},kMainPage,"SYNTH");
+    toggle_=MakeButton({698,179,797,218},kToggle,"BROWSER");
+    loadRom_=MakeButton({808,177,885,218},kLoadRom,"ROM");
+    loadSf2_=MakeButton({893,177,968,218},kLoadSf2,"SF2");
     pageButtons_[1]=toggle_;
     for(auto* tab:pageButtons_)
         tab->setStyle(CTextButton::kOnOffStyle);
