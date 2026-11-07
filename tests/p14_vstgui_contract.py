@@ -57,7 +57,7 @@ assert 'hardwareInfoProvider_' in h and 'hardwareInfoLabel_' in h
 assert 'addView(new HardwareFaceplate({0,0,1000,640}))' in b
 assert 'new CBitmap("125A_PCB_Shared_1000x640.png")' in b
 assert 'new CBitmap("125A_PCB_MAIN_1000x640.png")' in b
-assert 'AddToCurrentPage(new MainPcbArtwork(PageRect({0,310,1000,604})))' in b
+assert 'AddToCurrentPage(new MainPcbArtwork(PageRect({0,310,1000,604})))' not in b
 assert 'setMouseEnabled(false)' in b
 assert 'SyncHardwareInfo();' in b
 assert 'sfCatalog_=std::move(sf2PendingCatalog_)' in f
@@ -85,7 +85,7 @@ assert 'candidate.channelPrograms.fill(program)' in state
 assert 'kVolumeID=MasterOutput::kParamID' in f
 assert 'rtMaster_' in f and 'volumeGain_.setTarget(' in f
 assert 'masterVolume_' in h and 'masterVolumeValue_' in h
-assert 'new HardwareKnob(PageRect({736,372,848,484})' in b
+assert 'new HardwareKnob(PageRect({848,344,962,458})' in b
 assert 'controller_->getParamNormalized(kMasterVolume)' in b
 assert 'activeBankMenu_=new COptionMenu({79,197,251,240},this,kActiveBank)' in b
 assert 'programMenu_=new COptionMenu({325,197,823,240},this,kDirectPreset)' in b
@@ -112,25 +112,28 @@ assert 'reverbMenu_=new COptionMenu' in b and 'chorusMenu_=new COptionMenu' in b
 assert 'ApplyPendingFxIntents(synth_)' in f
 assert 'ApplyHardwareReverbPreset(' in f and 'ApplyHardwareChorusPreset(' in f
 assert 'reverbPreset' in state and 'chorusPreset' in state
-assert 'kMainPage=3111,kEditPage=3112' in h
-assert 'std::array<VSTGUI::CViewContainer*,3> pages_' in h
-assert 'currentPage_=std::clamp(page,0,2);' in b
+assert 'kMainPage=3111' in h and 'kEditPage' not in h
+assert 'AddKnob(3,686,341,"RELEASE")' in b and 'AddKnob(7,435,495,"RELEASE")' in b
+assert 'AddToCurrentPage(reverbMenu_)' in b and 'AddToCurrentPage(chorusMenu_)' in b
+assert 'pageButtons_[1]=toggle_' in b and 'buildingPanel_=pages_[1];' in b
+assert 'std::array<VSTGUI::CViewContainer*,2> pages_' in h
+assert 'currentPage_=std::clamp(page,0,1);' in b
 assert 'AddToCurrentPage(reverbMenu_)' in b and 'AddToCurrentPage(chorusMenu_)' in b
 assert 'PageRect({25,373,971,594})' in b
-assert 'SetPage(0);' in b and 'SetPage(1);' in b and 'SetPage(2);' in b
-assert 'AddKnob(0,131,363,"ATTACK")' in b
-assert 'AddKnob(9,829,483,"RESONANCE +")' in b
-assert 'AddKnob(10,303,391,"SEND")' in b
-assert 'AddKnob(11,530,391,"SEND")' in b
-assert 'reverbMenu_=new COptionMenu(PageRect({260,529,401,559})' in b
-assert 'chorusMenu_=new COptionMenu(PageRect({489,529,630,559})' in b
-assert 'MakeLabel({27,465,605,483},"FILTER ENVELOPE",true)' in b
-assert 'MakeLabel({668,465,965,483},"FILTER TONE",true)' in b
-assert 'reset_=MakeButton({840,322,965,357},kReset,"MOD RESET")' in b
+assert 'SetPage(0);' in b and 'SetPage(1);' in b and 'SetPage(2);' not in b
+assert 'AddKnob(0,332,341,"ATTACK")' in b
+assert 'AddKnob(9,689,495,"RESONANCE")' in b
+assert 'AddKnob(10,63,341,"SEND")' in b
+assert 'AddKnob(11,198,341,"SEND")' in b
+assert 'reverbMenu_=new COptionMenu(PageRect({32,444,149,470})' in b
+assert 'chorusMenu_=new COptionMenu(PageRect({167,444,284,470})' in b
+assert 'MakeLabel({27,472,542,493},"FILTER ENVELOPE",false)' in b
+assert 'MakeLabel({543,472,808,493},"FILTER TONE",false)' in b
+assert 'reset_=MakeButton({832,516,975,551},kReset,"MOD RESET")' in b
 assert 'masterVolume_->setDefaultValue(1.f)' in b
 for image in ("125A_PCB_Shared_1000x640.png","125A_PCB_MAIN_1000x640.png"):
     assert (root/"src/vst3/resource"/image).is_file(),image
     assert ("resource/"+image) in cmake,image
 assert 'resource/awe_pcb.rc.in' in cmake
 assert (root/"src/vst3/resource/awe_pcb.rc.in").is_file()
-print("P145 STATIC PASS: real PCB PNG layers, native Windows resources, gold logo, retained controls and V11 state")
+print("P146 STATIC PASS: single-page synth/FX/AMP/FILTER, native PCB resource, separate browser, gold logo, V11 state")
