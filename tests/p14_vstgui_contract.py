@@ -55,7 +55,7 @@ assert 'CORE: INAKTIV' in f and 'ROM: ERFORDERLICH' in f
 assert 'core.ChipRamWords()' in f and 'BankAt(i).sampleData.size()' in f
 assert 'hardwareInfoProvider_' in h and 'hardwareInfoLabel_' in h
 assert 'addView(new FunctionalLayoutBackground({0,0,1000,640}))' in b
-assert '125A_PCB_' not in b  # P149 still has no photographic faceplate
+assert 'new CBitmap("125A_PCB_Shared_1000x640.png")' in b  # P156 photo is a separate background bitmap
 assert 'new CBitmap(isMaster' in b
 assert 'frames_->draw(ctx,getViewSize(),{0.,frameSize_*index})' in b
 assert 'int(std::lround(double(getValue())*32.))' in b
