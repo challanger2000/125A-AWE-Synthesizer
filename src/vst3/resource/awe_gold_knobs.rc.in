@@ -2,6 +2,6 @@
 // Windows image resources so the VSTGUI CBitmap(resource-name) loader works.
 "125A_Knob_Standard_33frames_58px.png" PNG DISCARDABLE "@CMAKE_CURRENT_SOURCE_DIR@/resource/125A_Knob_Standard_33frames_58px.png"
 "125A_Knob_Master_33frames_134px.png" PNG DISCARDABLE "@CMAKE_CURRENT_SOURCE_DIR@/resource/125A_Knob_Master_33frames_134px.png"
-"125A_Button_Atlas_Normal_Pressed.png" PNG DISCARDABLE "@CMAKE_CURRENT_SOURCE_DIR@/resource/125A_Button_Atlas_Normal_Pressed.png"
+"125A_Button_Atlas_Hardware_Normal_Pressed.png" PNG DISCARDABLE "@CMAKE_CURRENT_SOURCE_DIR@/resource/125A_Button_Atlas_Hardware_Normal_Pressed.png"
 // P151: text-free vintage amber LCD panel. Live text is drawn above it.
 "125A_Lcd_Amber_Blank_512x147.png" PNG DISCARDABLE "@CMAKE_CURRENT_SOURCE_DIR@/resource/125A_Lcd_Amber_Blank_512x147.png"
