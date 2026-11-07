@@ -566,7 +566,10 @@ def main():
                         x=min(w-1,round(x0*w/1000.))
                         off=(y*w+x)*4
                         blue,green,red=pixels[off:off+3]
-                        if red>140 and green>80 and red>green+30 and green>blue+30:
+                        # P165: browser recess has translucent antiqued-gold
+                        # border (RGB ~120/85/41), not the brighter
+                        # physical atlas gold of the SF2 button.
+                        if red>105 and green>65 and red>green+25 and green>blue+20:
                             candidate.append(x0)
                     if candidate:
                         observed.append(max(candidate))
