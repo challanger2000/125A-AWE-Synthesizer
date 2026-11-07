@@ -33,30 +33,38 @@ constexpr Steinberg::Vst::ParamID kProgram=1000,kBankParam=1002;
 class FunctionalLayoutBackground final : public CView {
 public:
     explicit FunctionalLayoutBackground(const CRect& r)
-        : CView(r), pcb_(new CBitmap("125A_PCB_Shared_1000x640.png")) {
+        : CView(r),
+          p160_(new CBitmap("125A_P160_PCB_1000x640.png")),
+          fallback_(new CBitmap("125A_PCB_Shared_1000x640.png")) {
         setMouseEnabled(false);
     }
     ~FunctionalLayoutBackground() noexcept override {
-        if(pcb_)pcb_->forget();
+        if(p160_)p160_->forget();
+        if(fallback_)fallback_->forget();
     }
     void draw(CDrawContext* c) override {
-        if(pcb_ && pcb_->isLoaded())
-            pcb_->draw(c,getViewSize());
+        // P160 is the approved undistorted 1000x640 photograph. Never stretch
+        // an arbitrary aspect-ratio image here: the resource MUST be 1000x640.
+        const bool approved=p160_ && p160_->isLoaded();
+        if(approved)
+            p160_->draw(c,getViewSize());
+        else if(fallback_ && fallback_->isLoaded())
+            fallback_->draw(c,getViewSize());
         else {
             c->setFillColor(CColor(13,17,23,255));
             c->drawRect(getViewSize(),kDrawFilled);
         }
-        // The established gold logo and animated amber LCD are independent
-        // images above this back layer, never permanently printed on a PCB.
-        // Keep those compartments dark to prevent double-looking typography
-        // if an imported reference image already contains mockup lettering.
-        c->setFillColor(CColor(9,12,14,240));
-        c->drawRect({16,16,252,163},kDrawFilled);
-        c->setFillColor(CColor(9,12,14,252));
-        c->drawRect({264,16,776,163},kDrawFilled);
-        // Navigation may have opaque brass buttons, but its backing should
-        // still allow a faint hint of the printed traces to show through.
-        c->setFillColor(CColor(9,12,16,218));
+        // The fallback P156 image was not stripped of the original lettering
+        // and LCD. Keep that obsolete image safe for builds without new art.
+        // The P160 board was deliberately scrubbed in those two rectangles;
+        // leave its gold PCB traces fully visible behind the live assets.
+        if(!approved) {
+            c->setFillColor(CColor(9,12,14,240));
+            c->drawRect({16,16,252,163},kDrawFilled);
+            c->setFillColor(CColor(9,12,14,252));
+            c->drawRect({264,16,776,163},kDrawFilled);
+        }
+        c->setFillColor(CColor(9,12,16,228));
         c->drawRect({16,173,984,224},kDrawFilled);
         c->setFrameColor(CColor(159,109,47,217));
         c->setLineWidth(1.);
@@ -64,7 +72,8 @@ public:
         setDirty(false);
     }
 private:
-    CBitmap* pcb_{nullptr};
+    CBitmap* p160_{nullptr};
+    CBitmap* fallback_{nullptr};
 };
 
 // P154: exact gold wordmark extracted from the approved soundcard reference.
@@ -80,8 +89,17 @@ public:
         if(bitmap_) bitmap_->forget();
     }
     void draw(CDrawContext* ctx) override {
-        if(bitmap_ && bitmap_->isLoaded())
-            bitmap_->draw(ctx,getViewSize());
+        if(bitmap_ && bitmap_->isLoaded()) {
+            // P160: 193x120 exactly, proportional to the approved 236x147 PNG,
+            // using a rendering transform rather than inventing new lettering.
+            auto r=getViewSize();
+            CGraphicsTransform t;
+            t.translate(-r.left,-r.top);
+            t.scale(193./236.,120./147.);
+            t.translate(39.,28.);
+            CDrawContext::Transform scaled(*ctx,t);
+            bitmap_->draw(ctx,r);
+        }
         setDirty(false);
     }
 private:
@@ -93,18 +111,24 @@ private:
 class AmberLcdArtwork final : public CView {
 public:
     explicit AmberLcdArtwork(const CRect& r)
-        : CView(r), bitmap_(new CBitmap("125A_Lcd_Amber_Blank_512x147.png")) {
+        : CView(r),
+          complete_(new CBitmap("125A_P160_Lcd_Complete_512x147.png")),
+          bitmap_(new CBitmap("125A_Lcd_Amber_Blank_512x147.png")) {
         setMouseEnabled(false);
     }
     ~AmberLcdArtwork() noexcept override {
+        if(complete_)complete_->forget();
         if(bitmap_)bitmap_->forget();
     }
     void draw(CDrawContext* c) override {
-        if(bitmap_ && bitmap_->isLoaded())
+        if(complete_ && complete_->isLoaded())
+            complete_->draw(c,getViewSize());
+        else if(bitmap_ && bitmap_->isLoaded())
             bitmap_->draw(c,getViewSize());
         setDirty(false);
     }
 private:
+    CBitmap* complete_{nullptr};
     CBitmap* bitmap_{nullptr};
 };
 
@@ -119,7 +143,7 @@ public:
         const auto island=[&](CRect r) {
             auto* border=c->createRoundRectGraphicsPath(r,8.);
             if(!border)return;
-            c->setFillColor(CColor(7,11,16,204)); // P156 80% experimental.
+            c->setFillColor(CColor(7,11,16,153)); // P160 60% approved preview.
             c->drawGraphicsPath(border,CDrawContext::kPathFilled);
             c->setLineWidth(1.);
             c->setFrameColor(CColor(190,131,55,226));
@@ -130,11 +154,32 @@ public:
             c->drawLine({r.left+13.,r.top+2.},
                         {r.right-13.,r.top+2.});
         };
+        // P160 screw-safe silhouettes are polygons, not circles painted
+        // over the photo: the photo's original corner screw pixels remain
+        // completely untouched. Coordinates are page-local (global Y-232).
+        const auto notched=[&](std::initializer_list<CPoint> vertices) {
+            auto* p=c->createGraphicsPath();
+            if(!p)return;
+            bool first=true;
+            for(const auto& xy:vertices) {
+                if(first){p->beginSubpath(xy);first=false;}
+                else p->addLine(xy);
+            }
+            p->closeSubpath();
+            c->setFillColor(CColor(7,11,16,153));
+            c->drawGraphicsPath(p,CDrawContext::kPathFilled);
+            c->setLineWidth(1.);
+            c->setFrameColor(CColor(190,131,55,226));
+            c->drawGraphicsPath(p,CDrawContext::kPathStroked);
+            p->forget();
+        };
         island({16,2,190,177});   // REVERB
         island({200,2,374,177});  // CHORUS
         island({384,2,774,177});  // AMP ADSR
-        island({784,2,984,358});  // MASTER / RESET
-        island({16,187,518,358}); // FILTER ADSR
+        // Master panel has a relief notch at bottom-right (screw 969,575).
+        notched({{784,2},{984,2},{984,318},{942,340},{942,358},{784,358}});
+        // Filter ADSR panel has a relief notch at bottom-left (screw 32,575).
+        notched({{16,187},{518,187},{518,358},{62,358},{62,338},{16,316}});
         island({528,187,774,358});// CUTOFF / RESONANCE
         setDirty(false);
     }
@@ -146,10 +191,18 @@ class BrowserPanelBacking final : public CView {
 public:
     explicit BrowserPanelBacking(const CRect& r):CView(r) {setMouseEnabled(false);}
     void draw(CDrawContext* c) override {
-        const CRect r={16,2,984,356};
-        auto* border=c->createRoundRectGraphicsPath(r,8.);
+        // Cut both lower corners away from the PCB's gold screw heads.
+        auto* border=c->createGraphicsPath();
         if(border) {
-            c->setFillColor(CColor(7,11,16,224));
+            border->beginSubpath({16,2});
+            for(const CPoint p:std::initializer_list<CPoint>{
+                {984,2},{984,315},{940,338},{940,356},
+                {62,356},{62,338},{16,315}
+            }) border->addLine(p);
+            border->closeSubpath();
+        }
+        if(border) {
+            c->setFillColor(CColor(7,11,16,180));
             c->drawGraphicsPath(border,CDrawContext::kPathFilled);
             c->setFrameColor(CColor(190,131,55,207));
             c->setLineWidth(1.);
@@ -550,7 +603,7 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     AddKnob(7,411,464,"RELEASE");
     AddKnob(8,563,464,"CUTOFF");
     AddKnob(9,687,464,"RESONANCE");
-    reset_=MakeButton({808,535,960,571},kReset,"MOD RESET");
+    reset_=MakeButton({808,513,960,549},kReset,"MOD RESET");
 
     // BROWSER: no permanent 400px sidebar. It uses the available width,
     // retains true SF2 bank filtering, search and exact program selection.
