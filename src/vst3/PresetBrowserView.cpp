@@ -55,6 +55,27 @@ public:
     }
 };
 
+
+// P151 separate, text-free amber LCD photo artwork. Dynamic labels are
+// native VSTGUI children added AFTER this non-interactive bitmap view.
+class AmberLcdArtwork final : public CView {
+public:
+    explicit AmberLcdArtwork(const CRect& r)
+        : CView(r), bitmap_(new CBitmap("125A_Lcd_Amber_Blank_512x147.png")) {
+        setMouseEnabled(false);
+    }
+    ~AmberLcdArtwork() noexcept override {
+        if(bitmap_)bitmap_->forget();
+    }
+    void draw(CDrawContext* c) override {
+        if(bitmap_ && bitmap_->isLoaded())
+            bitmap_->draw(c,getViewSize());
+        setDirty(false);
+    }
+private:
+    CBitmap* bitmap_{nullptr};
+};
+
 // Only on the SYNTH page; the BROWSER receives one undivided canvas.
 // All group boundaries align to a deliberately fixed spacing grid.
 class SynthPanelGroups final : public CView {
@@ -280,6 +301,9 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
       browserBankReselect_(std::move(browserBankReselect)) {
     setBackgroundColor(kBack);
     addView(new FunctionalLayoutBackground({0,0,1000,640}));
+    // Asset is exactly 512x147 logical pixels; bitmap and hitboxes stay
+    // independent so preset/ROM/SF2/bank text remains live at every state.
+    addView(new AmberLcdArtwork({264,16,776,163}));
 
     // Provisional live text on a neutral, geometry-locked background.
     // The final hardware art will retain the APPROVED golden 125A lettering.
@@ -292,12 +316,12 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     auto* engine=MakeLabel({30,118,239,141},"EMU8000 / SOUNDFONT",true);
     engine->setFontColor(CColor(185,155,99,255));
 
-    auto* lcd=MakeLabel({284,31,748,58},"EMU8000  |  SOUNDFONT ENGINE",true);
+    auto* lcd=MakeLabel({310,52,737,71},"EMU8000  |  SOUNDFONT ENGINE",true);
     lcd->setFontColor(CColor(219,169,70,255));
-    programLabel_=MakeLabel({286,66,755,105},"NO PRESET",false);
+    programLabel_=MakeLabel({310,73,737,104},"NO PRESET",false);
     programLabel_->setFont(kNormalFontBig);
     programLabel_->setFontColor(CColor(245,193,78,255));
-    hardwareInfoLabel_=MakeLabel({286,118,755,143},"ROM: ERFORDERLICH",true);
+    hardwareInfoLabel_=MakeLabel({310,107,737,126},"ROM: ERFORDERLICH",true);
     hardwareInfoLabel_->setFontColor(CColor(221,174,91,255));
     hardwareInfoLabel_->setTextTruncateMode(CTextLabel::kTruncateTail);
 
