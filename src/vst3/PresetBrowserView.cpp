@@ -1,6 +1,7 @@
 #include "PresetBrowserView.h"
 #include "MasterLogoView.h"
 #include "vstgui/lib/cgradient.h"
+#include "vstgui/lib/cbitmap.h"
 #include "vstgui/lib/cdrawcontext.h"
 #include "vstgui/lib/cfont.h"
 #include <algorithm>
@@ -28,8 +29,19 @@ constexpr CColor kBack(22,27,34,255), kRaised(42,52,63,255),
 constexpr Steinberg::Vst::ParamID kProgram=1000,kBankParam=1002;
 class HardwareFaceplate final : public CView {
 public:
-    explicit HardwareFaceplate(const CRect& r):CView(r) {setMouseEnabled(false);}
+    explicit HardwareFaceplate(const CRect& r):CView(r),
+        pcb_(new CBitmap("125A_PCB_Shared_1000x640.png")) {
+        setMouseEnabled(false);
+    }
+    ~HardwareFaceplate() noexcept override {if(pcb_)pcb_->forget();}
     void draw(CDrawContext* c) override {
+        if(pcb_ && pcb_->isLoaded()) {
+            pcb_->draw(c,getViewSize());
+            setDirty(false);
+            return;
+        }
+        // Fail visibly to the previous native faceplate when a resource is
+        // missing. Never blank the host UI or disable interactive controls.
         const auto surface=[&](CRect r,CColor fill,CColor edge) {
             c->setFillColor(fill);c->drawRect(r,kDrawFilled);
             c->setFrameColor(edge);c->drawRect(r,kDrawStroked);
@@ -47,7 +59,27 @@ public:
         surface({12,609,988,635},black,edge);// meaningful status/error
         c->setFrameColor(CColor(155,121,69,255));
         c->drawLine({24,57},{976,57});
+        setDirty(false);
     }
+private:
+    CBitmap* pcb_{nullptr};
+};
+// The separate chip/component PNG appears ONLY in MAIN, below native VSTGUI
+// controls. This artwork is mouse-transparent and clipped to the page.
+class MainPcbArtwork final : public CView {
+public:
+    explicit MainPcbArtwork(const CRect& r):CView(r),
+        pcb_(new CBitmap("125A_PCB_MAIN_1000x640.png")) {
+        setMouseEnabled(false);
+    }
+    ~MainPcbArtwork() noexcept override {if(pcb_)pcb_->forget();}
+    void draw(CDrawContext* c) override {
+        if(pcb_ && pcb_->isLoaded())
+            pcb_->draw(c,getViewSize(),{0,310});
+        setDirty(false);
+    }
+private:
+    CBitmap* pcb_{nullptr};
 };
 // A stylized EMU8000 chip package; pin count is decorative, not a claim
 // about the actual silicon package. Live RAM/ROM status appears below.
@@ -209,42 +241,36 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     setBackgroundColor(kBack);
     addView(new HardwareFaceplate({0,0,1000,640}));
 
-    // Permanent identity and engine status; all values are supplied by
-    // the real processor, never painted as an unconditional green LED.
-    auto* brand=MakeLabel({27,14,157,49},"125A",false);
-    brand->setFontColor(CColor(218,179,103,255));
-    auto* title=MakeLabel({162,15,718,49},"AWE SYNTHESIZER",false);
-    title->setFontColor(CColor(218,179,103,255));
-    MakeLabel({824,16,976,37},"EMU8000",false);
-    MakeLabel({820,38,978,51},"32 VOICES / 44.1 kHz",true);
-
-    auto* lcd=MakeLabel({28,74,633,96},"EMU8000  |  SOUNDFONT ENGINE",true);
-    lcd->setFontColor(CColor(221,174,94,255));
-    programLabel_=MakeLabel({28,104,640,138},"NO PRESET",false);
-    programLabel_->setFontColor(CColor(239,202,114,255));
-    hardwareInfoLabel_=MakeLabel({28,151,641,193},"ROM: ERFORDERLICH",true);
-    hardwareInfoLabel_->setFontColor(CColor(205,164,94,255));
+    // P145: approved gold 125A/AWE lettering is baked into the photographic
+    // background. Do not overwrite it with the conventional vector logo.
+    // The amber display, filename and status are still real live VSTGUI labels.
+    auto* lcd=MakeLabel({304,53,742,79},"EMU8000 | SOUNDFONT ENGINE",true);
+    lcd->setFontColor(CColor(219,169,70,255));
+    programLabel_=MakeLabel({310,82,744,125},"NO PRESET",false);
+    programLabel_->setFontColor(CColor(245,193,78,255));
+    hardwareInfoLabel_=MakeLabel({306,132,752,157},"ROM: ERFORDERLICH",true);
+    hardwareInfoLabel_->setFontColor(CColor(221,174,91,255));
     hardwareInfoLabel_->setTextTruncateMode(CTextLabel::kTruncateTail);
 
-    MakeLabel({689,75,973,99},"SOUNDFONT",true);
-    fileLabel_=MakeLabel({688,102,974,136},"",false);
+    MakeLabel({800,40,960,62},"SOUNDFONT",true);
+    fileLabel_=MakeLabel({798,69,962,94},"",false);
     fileLabel_->setTextTruncateMode(CTextLabel::kTruncateTail);
-    loadRom_=MakeButton({690,151,821,187},kLoadRom,"ROM LADEN");
-    loadSf2_=MakeButton({835,151,974,187},kLoadSf2,"SF2 LADEN");
+    loadRom_=MakeButton({796,103,871,139},kLoadRom,"ROM");
+    loadSf2_=MakeButton({882,103,964,139},kLoadSf2,"SF2");
 
-    MakeLabel({24,217,77,250},"BANK",true);
-    activeBankMenu_=new COptionMenu({79,215,251,254},this,kActiveBank);
+    MakeLabel({24,198,76,239},"BANK",true);
+    activeBankMenu_=new COptionMenu({79,197,251,240},this,kActiveBank);
     activeBankMenu_->setBackColor(kBezel);
     activeBankMenu_->setFontColor(kPaper);
     activeBankMenu_->setFrameColor(kStroke);
     addView(activeBankMenu_);
-    previous_=MakeButton({263,215,312,254},kPrevious,"<");
-    programMenu_=new COptionMenu({325,215,823,254},this,kDirectPreset);
+    previous_=MakeButton({263,197,312,240},kPrevious,"<");
+    programMenu_=new COptionMenu({325,197,823,240},this,kDirectPreset);
     programMenu_->setBackColor(kBezel);
     programMenu_->setFontColor(kPaper);
     programMenu_->setFrameColor(kStroke);
     addView(programMenu_);
-    next_=MakeButton({837,215,983,254},kNext,"NEXT >");
+    next_=MakeButton({837,197,974,240},kNext,"NEXT >");
 
     // Three mutually exclusive, native VSTGUI child layouts. No modal
     // dialogs or ghost/offscreen knobs; the host-facing params are shared.
@@ -267,6 +293,7 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     // host parameter IDs, defaults and automation gestures are unchanged;
     // the eventual hardware art can be swapped without moving hit targets.
     buildingPanel_=pages_[0];
+    AddToCurrentPage(new MainPcbArtwork(PageRect({0,310,1000,604})));
     auto* reverbTitle=MakeLabel({266,336,399,364},"REVERB",false);
     reverbTitle->setHoriAlign(kCenterText);
     auto* chorusTitle=MakeLabel({493,336,626,364},"CHORUS",false);
