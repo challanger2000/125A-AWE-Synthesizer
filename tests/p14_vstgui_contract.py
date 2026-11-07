@@ -144,7 +144,7 @@ assert 'reset_=MakeButton({808,535,960,571},kReset,"MOD RESET")' in b
 assert 'masterVolume_->setDefaultValue(1.f)' in b
 for image in ("125A_PCB_Shared_1000x640.png","125A_PCB_MAIN_1000x640.png"):
     assert (root/"src/vst3/resource"/image).is_file(),image
-    assert ("resource/"+image) not in cmake,image
+    assert (("resource/"+image) in cmake)==(image=="125A_PCB_Shared_1000x640.png"),image
 assert 'configure_file(resource/awe_pcb.rc.in' not in cmake
 assert 'configure_file(resource/awe_gold_knobs.rc.in' in cmake
 assert (root/"src/vst3/resource/awe_gold_knobs.rc.in").is_file()
@@ -222,4 +222,16 @@ assert 'ctx->setClipRect(textRect);' in b
 assert 'inPopup?CColor(8,8,9)' in b
 assert b.count('new GoldHardwareMenu(')==5
 assert 'bankMenu_=new GoldHardwareMenu(PageRect({96,247,320,284})' in b
-print("P155 STATIC PASS: EMU8000 keepout, amber LCD dynamic file status, 7 gold buttons and 12 host knobs")
+# P156: photo and half-opaque VSTGUI control islands are purely visual.
+# Parameter rectangles and host editing remain exactly P155.
+assert 'new CBitmap("125A_PCB_Shared_1000x640.png")' in b
+assert 'class SynthPanelGroups final : public CView' in b
+assert 'CColor(7,11,16,204)' in b
+assert 'createRoundRectGraphicsPath(r,8.)' in b
+assert 'class BrowserPanelBacking final : public CView' in b
+assert 'AddToCurrentPage(new BrowserPanelBacking(PageRect({0,232,1000,592})))' in b
+assert 'CColor(7,11,16,224)' in b
+assert 'panel({16,232,984,592},lcdColor,edge);' not in b
+assert 'resource/125A_PCB_Shared_1000x640.png' in cmake
+assert '"125A_PCB_Shared_1000x640.png" PNG DISCARDABLE' in (root/"src/vst3/resource/awe_gold_knobs.rc.in").read_text(encoding="utf-8")
+print("P156 STATIC PASS: EMU8000 keepout, amber LCD dynamic file status, 7 gold buttons and 12 host knobs")
