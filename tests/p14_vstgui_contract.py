@@ -159,15 +159,16 @@ for filename,size in (
     assert 'new CBitmap(isMaster' in b,filename
 # P150: the button atlas is one exact-size PNG with seven native rectangles;
 # button text and mouse hit targets remain real VSTGUI controls.
-atlas_name="125A_Button_Atlas_Normal_Pressed.png"
+atlas_name="125A_Button_Atlas_Hardware_Normal_Pressed.png"
 atlas=(root/"src/vst3/resource"/atlas_name).read_bytes()
 assert atlas.startswith(b"\x89PNG\r\n\x1a\n")
 assert struct.unpack_from(">II",atlas,16)==(596,88)
 assert atlas[25]==6 or b"tRNS" in atlas
 assert ("resource/"+atlas_name) in cmake
 assert ('"'+atlas_name+'" PNG DISCARDABLE') in (root/"src/vst3/resource/awe_gold_knobs.rc.in").read_text(encoding="utf-8")
-assert 'new CBitmap("125A_Button_Atlas_Normal_Pressed.png")' in b
+assert 'new CBitmap("125A_Button_Atlas_Hardware_Normal_Pressed.png")' in b
 assert 'atlas_->draw(c,getViewSize(),{sourceX_,active?44.:0.})' in b
+assert 'textRect.top+=1.;' in b and 'textRect.bottom+=1.;' in b
 assert 'auto* button=new GoldButton(PageRect(r),this,tag,s,x);' in b
 assert 'StyleGoldMenu(activeBankMenu_)' in b
 assert 'StyleGoldMenu(programMenu_)' in b
@@ -198,4 +199,4 @@ assert 'MakeLabel({805,30,968,51},"SOUNDFONT / ROM",true)' not in b
 assert 'loadRom_=MakeButton({805,103,882,144}' not in b
 assert 'hint_=MakeLabel({310,114,737,131}' in b
 assert 'panel({16,603,984,634},panelColor,edge);' not in b
-print("P152 STATIC PASS: EMU8000 keepout, amber LCD dynamic file status, 7 gold buttons and 12 host knobs")
+print("P153 STATIC PASS: EMU8000 keepout, amber LCD dynamic file status, 7 gold buttons and 12 host knobs")
