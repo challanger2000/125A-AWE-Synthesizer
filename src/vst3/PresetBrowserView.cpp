@@ -474,7 +474,7 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     programLabel_->setFont(kNormalFontBig);
     programLabel_->setFontColor(CColor(41,31,6,255));
     hardwareInfoLabel_=MakeLabel({350,145,728,163},"ROM: ERFORDERLICH",true);
-    hardwareInfoLabel_->setFontColor(CColor(221,174,91,255));
+    hardwareInfoLabel_->setFontColor(CColor(53,40,9,255));
     hardwareInfoLabel_->setTextTruncateMode(CTextLabel::kTruncateTail);
 
     // The entire original top-right EMU8000 chip is strictly
@@ -902,7 +902,7 @@ void PresetBrowserView::SyncSf2Status() {
     lastStatus_=text;
     hint_->setText(text.c_str());
     const bool err=text.find("Fehler")!=std::string::npos;
-    hint_->setFontColor(err?CColor(255,143,122,255):CColor(213,168,93,255));
+    hint_->setFontColor(err?CColor(112,30,18,255):CColor(63,47,13,255));
 }
 void PresetBrowserView::SyncHardwareInfo() {
     if(!hardwareInfoLabel_||!hardwareInfoProvider_)return;
