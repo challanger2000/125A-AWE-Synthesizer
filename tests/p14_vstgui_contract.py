@@ -194,11 +194,11 @@ assert '"125A_Lcd_Amber_Blank_512x147.png" PNG DISCARDABLE' in (root/"src/vst3/r
 # the chip will occupy (788,16)..(984,163), so no input may intersect it.
 assert 'fileLabel_=MakeLabel({546,48,737,64},"",false)' in b
 assert 'auto* lcd=MakeLabel({310,48,534,64}' in b
-assert 'loadSf2_=MakeButton({893,177,968,218},kLoadSf2,"SF2")' in b
-assert 'previous_=MakeButton({202,179,242,218},kPrevious,"<")' in b
-assert 'next_=MakeButton({545,179,587,218},kNext,">")' in b
-assert 'pageButtons_[0]=MakeButton({597,179,690,218}' in b
-assert 'toggle_=MakeButton({698,179,797,218}' in b
+assert 'loadSf2_=MakeButton({899,177,974,218},kLoadSf2,"SF2")' in b
+assert 'previous_=MakeButton({211,179,251,218},kPrevious,"<")' in b
+assert 'next_=MakeButton({558,179,598,218},kNext,">")' in b
+assert 'pageButtons_[0]=MakeButton({606,179,699,218}' in b
+assert 'toggle_=MakeButton({707,179,806,218}' in b
 assert 'MakeLabel({805,30,968,51},"SOUNDFONT / ROM",true)' not in b
 assert 'loadRom_=MakeButton({805,103,882,144}' not in b
 assert 'hint_=MakeLabel({310,114,737,131}' in b
@@ -265,4 +265,16 @@ assert 'recessed({578,15,972,52},6.' in b
 assert 'dbGetCurrentColumnWidth(int32_t,CDataBrowser* browser)' in b
 assert 'browser->getVisibleClientRect().getWidth()' in b
 assert 'return 892.;' not in b
+# P162 the full header rail is balanced and the redundant BANK label is gone.
+assert 'const CRect rail{16,173,984,224};' in b
+assert 'createRoundRectGraphicsPath(rail,7.)' in b
+assert 'MakeLabel({23,184,65,214},"BANK",true)' not in b
+assert 'activeBankMenu_=new GoldHardwareMenu({26,179,203,218}' in b
+assert 'previous_=MakeButton({211,179,251,218}' in b
+assert 'programMenu_=new GoldHardwareMenu({259,179,550,218}' in b
+assert 'next_=MakeButton({558,179,598,218}' in b
+assert 'pageButtons_[0]=MakeButton({606,179,699,218}' in b
+assert 'toggle_=MakeButton({707,179,806,218}' in b
+assert 'loadRom_=MakeButton({814,177,891,218}' in b
+assert 'loadSf2_=MakeButton({899,177,974,218}' in b
 print("P162 STATIC PASS: EMU8000 keepout, amber LCD dynamic file status, 7 gold buttons and 12 host knobs")
