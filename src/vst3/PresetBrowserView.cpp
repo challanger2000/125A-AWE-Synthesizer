@@ -3,6 +3,7 @@
 #include "vstgui/lib/cgraphicspath.h"
 #include "vstgui/lib/cbitmap.h"
 #include "vstgui/lib/cdrawcontext.h"
+#include "vstgui/lib/controls/cscrollbar.h"
 #include "vstgui/lib/cfont.h"
 #include <algorithm>
 #include <array>
@@ -203,13 +204,36 @@ public:
             border->closeSubpath();
         }
         if(border) {
-            c->setFillColor(CColor(7,11,16,180));
+            // Keep the whole PCB visible at the same overall opacity as P160.
+            // The muted gold edge is shared with the SYNTH control islands.
+            c->setFillColor(CColor(7,11,16,153));
             c->drawGraphicsPath(border,CDrawContext::kPathFilled);
-            c->setFrameColor(CColor(190,131,55,207));
+            c->setFrameColor(CColor(190,131,55,220));
             c->setLineWidth(1.);
             c->drawGraphicsPath(border,CDrawContext::kPathStroked);
             border->forget();
         }
+        // P161: two understated gold-recessed fields beneath the actual
+        // VSTGUI search edit and CDataBrowser. Neither changes hitboxes.
+        const auto recessed=[&](const CRect& r,CCoord radius,
+                                 CColor backing,CColor edge) {
+            auto* p=c->createRoundRectGraphicsPath(r,radius);
+            if(!p)return;
+            c->setFillColor(backing);
+            c->drawGraphicsPath(p,CDrawContext::kPathFilled);
+            c->setFrameColor(edge);
+            c->setLineWidth(1.3);
+            c->drawGraphicsPath(p,CDrawContext::kPathStroked);
+            p->forget();
+            c->setFrameColor(CColor(243,185,92,95));
+            c->setLineWidth(1.);
+            c->drawLine({r.left+radius+3.,r.top+2.},
+                        {r.right-radius-3.,r.top+2.});
+        };
+        recessed({397,11,970,57},6.,CColor(11,13,15,230),
+                 CColor(192,132,58,245)); // search
+        recessed({24,63,976,349},7.,CColor(11,14,16,242),
+                 CColor(191,136,65,240)); // program table
         setDirty(false);
     }
 };
@@ -618,17 +642,30 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     search_=new CTextEdit(PageRect({401,247,966,284}),this,kFilter,"");
     search_->setPlaceholderString("Instrument suchen...");
     search_->setImmediateTextChange(true);
-    search_->setBackColor(CColor(23,21,20,255));
-    search_->setFontColor(CColor(244,198,112,255));
-    search_->setFrameColor(CColor(157,112,52,255));
+    // Underlying CTextEdit still owns typing, caret, search and focus.
+    // Its metal bezel is a separate non-interactive view behind the edit.
+    search_->setBackColor(CColor(18,19,18,255));
+    search_->setFontColor(CColor(244,204,136,255));
+    search_->setFrameColor(CColor(18,19,18,255));
+    search_->setFrameWidth(0.);
+    search_->setTextInset({11.,0.});
     AddToCurrentPage(search_);
     table_=new CDataBrowser(PageRect({28,299,972,576}),this,
              CScrollView::kVerticalScrollbar|
              CScrollView::kAutoHideScrollbars);
-    table_->setBackgroundColor(kRaised);
+    table_->setBackgroundColor(CColor(18,21,22,255));
+    if(auto* bar=table_->getVerticalScrollbar()) {
+        bar->setScrollerColor(CColor(181,129,66,255));
+        bar->setBackgroundColor(CColor(17,19,20,255));
+        bar->setFrameColor(CColor(114,80,43,255));
+    }
     table_->setWantsFocus(true);
     AddToCurrentPage(table_);
     empty_=MakeLabel({34,324,966,359},"",true);
+    // All browser captions are gold, not the temporary steel-blue palette.
+    for(auto* label:{bankCaption_,searchCaption_})
+        label->setFontColor(CColor(224,181,108,255));
+    empty_->setFontColor(CColor(204,167,108,255));
 
     buildingPanel_=nullptr;
     hint_=MakeLabel({310,114,737,131},
@@ -1031,18 +1068,35 @@ CCoord PresetBrowserView::dbGetCurrentColumnWidth(int32_t,CDataBrowser*) {return
 void PresetBrowserView::dbDrawCell(CDrawContext* ctx,const CRect& r,
                                   int32_t row,int32_t,int32_t flags,CDataBrowser*) {
     if(row<0||size_t(row)>=rows_.size())return;
-    ctx->setFillColor((flags&IDataBrowserDelegate::kRowSelected)?kSel:kRaised);
+    // P161: hardware-black rows, subdued copper separators and a warm
+    // brass selection instead of the old blue-gray list box.
+    const bool selected=(flags&IDataBrowserDelegate::kRowSelected)!=0;
+    ctx->setFillColor(selected ? CColor(78,56,27,255)
+                               : (row%2 ? CColor(21,23,22,255)
+                                        : CColor(17,20,20,255)));
     ctx->drawRect(r,kDrawFilled);
+    if(selected) {
+        ctx->setFillColor(CColor(235,178,83,255));
+        ctx->drawRect({r.left,r.top,r.left+3.,r.bottom},kDrawFilled);
+        ctx->setFrameColor(CColor(181,130,67,255));
+        ctx->setLineWidth(1.);
+        ctx->drawLine({r.left+3.,r.top},{r.right,r.top});
+        ctx->drawLine({r.left+3.,r.bottom-1.},{r.right,r.bottom-1.});
+    }
     ctx->setFont(kNormalFontSmall);
-    ctx->setFontColor(kPaper);
+    ctx->setFontColor(selected?CColor(255,225,161,255)
+                              :CColor(229,205,162,255));
     const auto& p=rows_[size_t(row)];
     char id[24]{};
     std::snprintf(id,sizeof(id),"%03u:%03u  ",p.bank,p.program);
     const auto text=std::string(id)+p.name;
-    CRect inset=r;inset.left+=9;inset.right-=5;
+    CRect inset=r;inset.left+=11;inset.right-=5;
     ctx->drawString(text.c_str(),inset,kLeftText);
-    ctx->setFrameColor(kGrid);
-    ctx->drawLine({r.left,r.bottom-1},{r.right,r.bottom-1});
+    if(!selected) {
+        ctx->setFrameColor(CColor(86,66,41,155));
+        ctx->setLineWidth(1.);
+        ctx->drawLine({r.left+6.,r.bottom-1.},{r.right-5.,r.bottom-1.});
+    }
 }
 CMouseEventResult PresetBrowserView::dbOnMouseDown(const CPoint&,
     const CButtonState&,int32_t row,int32_t,CDataBrowser* browser) {
