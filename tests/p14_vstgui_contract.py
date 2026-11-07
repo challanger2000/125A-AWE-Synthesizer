@@ -130,7 +130,7 @@ assert 'pageButtons_[1]=toggle_' in b and 'buildingPanel_=pages_[1];' in b
 assert 'std::array<VSTGUI::CViewContainer*,2> pages_' in h
 assert 'currentPage_=std::clamp(page,0,1);' in b
 assert 'AddToCurrentPage(reverbMenu_)' in b and 'AddToCurrentPage(chorusMenu_)' in b
-assert 'PageRect({28,299,972,576})' in b
+assert 'PageRect({28,299,970,576})' in b
 assert 'SetPage(0);' in b and 'SetPage(1);' in b and 'SetPage(2);' not in b
 assert 'AddKnob(0,408,278,"ATTACK")' in b
 assert 'AddKnob(9,687,464,"RESONANCE")' in b
