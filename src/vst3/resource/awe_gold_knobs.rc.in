@@ -1,0 +1,4 @@
+// P149: embed the exact owner-approved gold PNG filmstrips as native
+// Windows image resources so the VSTGUI CBitmap(resource-name) loader works.
+"125A_Knob_Standard_33frames_58px.png" PNG DISCARDABLE "@CMAKE_CURRENT_SOURCE_DIR@/resource/125A_Knob_Standard_33frames_58px.png"
+"125A_Knob_Master_33frames_134px.png" PNG DISCARDABLE "@CMAKE_CURRENT_SOURCE_DIR@/resource/125A_Knob_Master_33frames_134px.png"
