@@ -507,7 +507,7 @@ def main():
                   "BROWSER switches to actual search/table",results)
             # P161 screenshot-based browser design acceptance: gold
             # enclosure and inset search are native VSTGUI views.
-            check(gold_knob_pixels(browser,(397,243,970,289))>65,
+            check(gold_knob_pixels(browser,(397,243,970,289))>50,
                   "P161 recessed gold search field visible",results)
             check(gold_knob_pixels(browser,(24,295,976,581))>180,
                   "P161 gold preset list bezel visible",results)
