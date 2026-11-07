@@ -82,7 +82,7 @@ if(WIN32)
   # The single-header PNG MUST also be an embedded Windows resource:
   # VSTGUI's CBitmap(name) on Windows uses the DLL's native PNG table.
   file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/awe_gold_knobs.rc"
-       "\"125A_P164_PCB_Single_Header_1000x640.png\" PNG DISCARDABLE \"${CMAKE_CURRENT_SOURCE_DIR}/resource/125A_P164_PCB_Single_Header_1000x640.png\"\\n")
+       "\"125A_P164_PCB_Single_Header_1000x640.png\" PNG DISCARDABLE \"${CMAKE_CURRENT_SOURCE_DIR}/resource/125A_P164_PCB_Single_Header_1000x640.png\"\n")
   target_sources(125A_AWE_Synthesizer PRIVATE
     "${CMAKE_CURRENT_BINARY_DIR}/awe_gold_knobs.rc")
   target_link_libraries(125A_AWE_Synthesizer PRIVATE comdlg32)
