@@ -560,7 +560,7 @@ def main():
                 w,h,pixels=frame
                 observed=[]
                 for y0 in range(from_y,to_y):
-                    y=min(h-1,round(y0*h/CANVAS_H.))
+                    y=min(h-1,round(layout_y(y0)*h/CANVAS_H))
                     candidate=[]
                     for x0 in range(956,979):
                         x=min(w-1,round(x0*w/1000.))
@@ -654,13 +654,13 @@ def main():
             before_program=snap(hwnd,args.output/"p152_preset000.bmp")
             click(hwnd,579,198)
             next_program=snap(hwnd,args.output/"p152_preset012.bmp")
-            check(different(before_program,next_program,(282,63,759,109))>10,
+            check(different(before_program,next_program,(350,115,730,147))>10,
                   "NEXT switches sparse Bank 0 program 000 to 012",results)
             click(hwnd,230,198)
             prev_program=snap(hwnd,args.output/"p152_preset000_restored.bmp")
-            check(different(next_program,prev_program,(282,63,759,109))>10,
+            check(different(next_program,prev_program,(350,115,730,147))>10,
                   "PREV switches program 012 back to 000",results)
-            check(different(before_program,prev_program,(282,63,759,109))<24,
+            check(different(before_program,prev_program,(350,115,730,147))<24,
                   "PREV restores exact original bank/program",results)
             click(hwnd,751,198)
             click(hwnd,595,264)
@@ -670,7 +670,7 @@ def main():
                   "separate BROWSER search filters actual SF2 rows",results)
             click(hwnd,140,323)
             selected=snap(hwnd,args.output/"p152_browser_selection.bmp")
-            check(different(filtered,selected,(282,63,759,109))>10,
+            check(different(filtered,selected,(350,115,730,147))>10,
                   "BROWSER selection actually changes the host program",results)
             check(different(filtered,selected,(28,299,972,576))>15,
                   "P161 selected row visibly changes highlight",results)
@@ -680,13 +680,13 @@ def main():
             key(0x1B)
             time.sleep(.35)
             after_rom=snap(hwnd,args.output/"p152_rom_cancel.bmp")
-            check(different(selected,after_rom,(282,63,759,109))<24,
+            check(different(selected,after_rom,(350,115,730,147))<24,
                   "ROM chooser cancel preserves current SF2 bank/program",results)
             click(hwnd,936,198)
             key(0x1B)
             time.sleep(.35)
             after_sf2=snap(hwnd,args.output/"p152_sf2_cancel.bmp")
-            check(different(selected,after_sf2,(282,63,759,109))<24,
+            check(different(selected,after_sf2,(350,115,730,147))<24,
                   "SF2 chooser cancel preserves current bank/program",results)
             u.PostMessageW(hwnd,0x0010,0,0)
             proc.wait(timeout=10)
