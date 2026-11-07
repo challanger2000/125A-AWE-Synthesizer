@@ -56,6 +56,27 @@ public:
 };
 
 
+// P154: exact gold wordmark extracted from the approved soundcard reference.
+// The image stays separate and has an alpha channel; no live text is baked
+// into the final PCB and no alternative branding is substituted.
+class GoldLogoArtwork final : public CView {
+public:
+    explicit GoldLogoArtwork(const CRect& rect)
+        : CView(rect), bitmap_(new CBitmap("125A_AWE_Gold_Logo_236x147.png")) {
+        setMouseEnabled(false);
+    }
+    ~GoldLogoArtwork() noexcept override {
+        if(bitmap_) bitmap_->forget();
+    }
+    void draw(CDrawContext* ctx) override {
+        if(bitmap_ && bitmap_->isLoaded())
+            bitmap_->draw(ctx,getViewSize());
+        setDirty(false);
+    }
+private:
+    CBitmap* bitmap_{nullptr};
+};
+
 // P151 separate, text-free amber LCD photo artwork. Dynamic labels are
 // native VSTGUI children added AFTER this non-interactive bitmap view.
 class AmberLcdArtwork final : public CView {
@@ -311,16 +332,9 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     // independent so preset/ROM/SF2/bank text remains live at every state.
     addView(new AmberLcdArtwork({264,16,776,163}));
 
-    // Provisional live text on a neutral, geometry-locked background.
-    // The final hardware art will retain the APPROVED golden 125A lettering.
-    auto* brand=MakeLabel({30,25,237,69},"125A",false);
-    brand->setFont(kNormalFontVeryBig);
-    brand->setFontColor(CColor(228,181,94,255));
-    auto* model=MakeLabel({30,76,238,105},"AWE SYNTHESIZER",false);
-    model->setFont(kNormalFontBig);
-    model->setFontColor(CColor(228,181,94,255));
-    auto* engine=MakeLabel({30,118,239,141},"EMU8000 / SOUNDFONT",true);
-    engine->setFontColor(CColor(185,155,99,255));
+    // The complete, approved gold logo sits in the dedicated branding bay.
+    // All other live labels, chip-zone keepouts and host parameters remain.
+    addView(new GoldLogoArtwork({16,16,252,163}));
 
     // P152: the amber LCD owns the complete live status line, including
     // the current filename. Its labels remain real host-driven VSTGUI views.
