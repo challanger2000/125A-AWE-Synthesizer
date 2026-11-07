@@ -23,6 +23,7 @@ smtg_target_add_plugin_resources(125A_AWE_Synthesizer
                         resource/125A_Knob_Standard_33frames_58px.png
                         resource/125A_Knob_Master_33frames_134px.png
                         resource/125A_Button_Atlas_Normal_Pressed.png
+                        resource/125A_Lcd_Amber_Blank_512x147.png
 )
 target_include_directories(125A_AWE_Synthesizer PRIVATE
     ../engine ../engine/include
