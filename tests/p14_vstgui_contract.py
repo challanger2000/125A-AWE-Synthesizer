@@ -55,7 +55,10 @@ assert 'CORE: INAKTIV' in f and 'ROM: ERFORDERLICH' in f
 assert 'core.ChipRamWords()' in f and 'BankAt(i).sampleData.size()' in f
 assert 'hardwareInfoProvider_' in h and 'hardwareInfoLabel_' in h
 assert 'addView(new FunctionalLayoutBackground({0,0,1000,640}))' in b
-assert 'CBitmap' not in b and '125A_PCB_' not in b
+assert '125A_PCB_' not in b  # P149 still has no photographic faceplate
+assert 'new CBitmap(isMaster' in b
+assert 'frames_->draw(ctx,getViewSize(),{0.,frameSize_*index})' in b
+assert 'int(std::lround(double(getValue())*32.))' in b
 assert 'class SynthPanelGroups final : public CView' in b
 assert 'new SynthPanelGroups(PageRect({0,232,1000,592}))' in b
 assert 'return {r.left,r.top-232.,r.right,r.bottom-232.};' in b
@@ -136,5 +139,19 @@ for image in ("125A_PCB_Shared_1000x640.png","125A_PCB_MAIN_1000x640.png"):
     assert (root/"src/vst3/resource"/image).is_file(),image
     assert ("resource/"+image) not in cmake,image
 assert 'configure_file(resource/awe_pcb.rc.in' not in cmake
+assert 'configure_file(resource/awe_gold_knobs.rc.in' in cmake
+assert (root/"src/vst3/resource/awe_gold_knobs.rc.in").is_file()
 assert (root/"src/vst3/resource/awe_pcb.rc.in").is_file()
-print("P148 STATIC PASS: balanced grid, all live controls, neutral PCB-free UI, browser, and V11 state")
+import struct
+for filename,size in (
+    ("125A_Knob_Standard_33frames_58px.png",58),
+    ("125A_Knob_Master_33frames_134px.png",134),
+):
+    data=(root/"src/vst3/resource"/filename).read_bytes()
+    assert data.startswith(b"\\x89PNG\\r\\n\\x1a\\n"),filename
+    assert struct.unpack_from(">II",data,16)==(size,size*33),filename
+    assert data[25] in (3,6), (filename,data[25])
+    assert data[25]==6 or b"tRNS" in data, filename
+    assert "resource/"+filename in cmake,filename
+    assert 'new CBitmap(isMaster' in b,filename
+print("P149 STATIC PASS: exact 33-frame gold standard/master PNGs, true alpha, original host-bound controls, no PCB faceplate")
