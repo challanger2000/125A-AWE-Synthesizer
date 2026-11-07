@@ -60,9 +60,9 @@ public:
         // The P160 board was deliberately scrubbed in those two rectangles;
         // leave its gold PCB traces fully visible behind the live assets.
         if(!approved) {
-            c->setFillColor(CColor(9,12,14,240));
+            c->setFillColor(CColor(9,12,14,255));
             c->drawRect({16,16,252,163},kDrawFilled);
-            c->setFillColor(CColor(9,12,14,252));
+            c->setFillColor(CColor(9,12,14,255));
             c->drawRect({264,16,776,163},kDrawFilled);
         }
         c->setFillColor(CColor(9,12,16,228));
