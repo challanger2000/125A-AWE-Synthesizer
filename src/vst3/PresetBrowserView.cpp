@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <initializer_list>
 #include <string>
 #if defined(_WIN32)
 #ifndef NOMINMAX
@@ -135,7 +136,7 @@ private:
 // Only on the SYNTH page; the BROWSER receives one undivided canvas.
 // All group boundaries align to a deliberately fixed spacing grid.
 // These groups render ABOVE the photographic PCB and BELOW every real
-// control. The fill is 80 percent opaque (alpha 204/255), not flat black.
+// control. The fill is 60 percent opaque (alpha 153/255), showing the PCB.
 class SynthPanelGroups final : public CView {
 public:
     explicit SynthPanelGroups(const CRect& r):CView(r) {setMouseEnabled(false);}
