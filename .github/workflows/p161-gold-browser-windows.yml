@@ -1,0 +1,112 @@
+name: P161 gold preset browser with P160 PCB and VST3 regression
+on:
+  push:
+    branches: [feature/p161-browser-gold-theme]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: p161-gold-browser-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  fx-full-windows:
+    runs-on: windows-2022
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned Steinberg SDK
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch v3.8.1_build_84 --recurse-submodules https://github.com/steinbergmedia/vst3sdk.git external/vst3sdk
+          if ($LASTEXITCODE -ne 0) { throw 'SDK clone failed' }
+          $sha=(git -C external/vst3sdk rev-parse HEAD).Trim()
+          if ($sha -ne '3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96') { throw "Unexpected SDK: $sha" }
+      - name: Configure full production VST3 and engine tests
+        shell: pwsh
+        run: |
+          cmake -S . -B build-p133 -G "Visual Studio 17 2022" -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_EDITORHOST_TEST=ON
+          if ($LASTEXITCODE -ne 0) { throw 'Configure failed' }
+      - name: Build all tests and production VST3
+        shell: pwsh
+        run: |
+          cmake --build build-p133 --config Release --parallel 2
+          if ($LASTEXITCODE -ne 0) { throw 'Production Windows VST3 build failed' }
+      - name: Run entire CTest suite including V11 migration and 8x8 hardware FX modes
+        shell: pwsh
+        timeout-minutes: 15
+        run: |
+          New-Item -ItemType Directory -Force qa | Out-Null
+          ctest --test-dir build-p133 -C Release --output-on-failure --timeout 120 2>&1 |
+            Tee-Object -FilePath qa/ctest.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Full CTest failed' }
+          $log=Get-Content qa/ctest.txt -Raw
+          if ($log -notmatch '100% tests passed' -or
+              $log -notmatch '125A_p133_fx_register_modes' -or
+              $log -notmatch '125A_asset_state') {
+              throw 'P133 required tests not evidenced'
+          }
+      - name: Validate actual AWE VST3 module with Steinberg validator
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          $validator=(Get-ChildItem build-p133 -Filter validator.exe -File -Recurse |
+            Where-Object {$_.FullName -match 'Release'} |
+            Select-Object -First 1 -ExpandProperty FullName)
+          $plugin=(Resolve-Path 'build-p133/VST3/Release/125A_AWE_Synthesizer.vst3').Path
+          if (-not $validator) { throw 'No Steinberg validator executable' }
+          & $validator -e $plugin 2>&1 | Tee-Object qa/validator.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Steinberg VST3 validator failed' }
+          $text=Get-Content qa/validator.txt -Raw
+          if ($text -notmatch 'Result: ([0-9]+) tests passed, 0 tests failed') {
+            throw 'Steinberg validator did not report a complete success summary'
+          }
+          $passed=[int]$Matches[1]
+          # SDK's 47 internal selftests run during the build; the actual
+          # VST3 module validation typically exercises >500 concrete cases.
+          if ($passed -lt 500) { throw "Incomplete VST3 module validation: $passed" }
+          Write-Host "Steinberg VST3 module validation PASS $passed tests, 0 failed"
+      - name: Exercise compact SYNTH/BROWSER real VST3 GUI in EditorHost three times
+        shell: pwsh
+        timeout-minutes: 6
+        run: |
+          $editor=(Get-ChildItem build-p133 -Filter editorhost.exe -File -Recurse |
+            Where-Object {$_.FullName -match 'Release'} |
+            Select-Object -First 1 -ExpandProperty FullName)
+          $plugin=(Resolve-Path 'build-p133/VST3/Release/125A_AWE_Synthesizer.vst3').Path
+          if (-not $editor) { throw 'EditorHost missing' }
+          for($i=1;$i -le 3;$i++) {
+            python tools/p161_gold_browser_editor_acceptance.py --quick --editorhost "$editor" --plugin "$plugin" --output "qa/editor-$i"
+            if($LASTEXITCODE -ne 0) { throw "EditorHost GUI smoke $i failed" }
+          }
+      - name: P161 full gold-browser and existing VSTGUI interactions – pages, all 12 knobs and hardware FX
+        shell: pwsh
+        timeout-minutes: 12
+        run: |
+          $editor=(Get-ChildItem build-p133 -Filter editorhost.exe -File -Recurse |
+            Where-Object {$_.FullName -match 'Release'} |
+            Select-Object -First 1 -ExpandProperty FullName)
+          $plugin=(Resolve-Path 'build-p133/VST3/Release/125A_AWE_Synthesizer.vst3').Path
+          if (-not $editor) { throw 'P141 real EditorHost not built' }
+          python tools/p161_gold_browser_editor_acceptance.py --editorhost "$editor" --plugin "$plugin" --output qa/p161
+          if ($LASTEXITCODE -ne 0) { throw 'P141 actual VSTGUI acceptance failed' }
+          $verdict=Get-Content qa/p161/result.json -Raw | ConvertFrom-Json
+          if ($verdict.passed -ne $true -or $verdict.results.Count -lt 50) {
+            throw "P160 incomplete compact GUI coverage: $($verdict.results.Count) verified interactions"
+          }
+          Write-Host "P161 all $($verdict.results.Count) real editor interactions PASS"
+
+      - name: Package validated Windows x64 VST3 preview (NOT a release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: P161-Gold-Browser-Unified-Synth-Browser-Windows-x64-VST3-TEST
+          path: build-p133/VST3/Release/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Preserve independent numerical evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: P161-Gold-Browser-Real-GUI-Windows-Regression
+          path: qa/
+          if-no-files-found: warn
+          retention-days: 14
