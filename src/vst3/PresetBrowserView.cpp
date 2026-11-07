@@ -272,51 +272,43 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     addView(programMenu_);
     next_=MakeButton({837,197,974,240},kNext,"NEXT >");
 
-    // Three mutually exclusive, native VSTGUI child layouts. No modal
-    // dialogs or ghost/offscreen knobs; the host-facing params are shared.
-    pageButtons_[0]=MakeButton({23,271,151,302},kMainPage,"MAIN");
-    pageButtons_[1]=MakeButton({161,271,289,302},kEditPage,"EDIT");
-    toggle_=MakeButton({299,271,443,302},kToggle,"BROWSER");
-    pageButtons_[2]=toggle_;
+    // P146: ONE permanent synth control surface. Reverb/Chorus and their
+    // dedicated mode dropdowns, Master, AMP ADSR, FILTER ADSR, Cutoff and
+    // Resonance are all simultaneously visible. Only the preset BROWSER
+    // uses a separate page; no hidden EDIT controls remain.
+    pageButtons_[0]=MakeButton({23,271,190,302},kMainPage,"SYNTH");
+    toggle_=MakeButton({199,271,365,302},kToggle,"BROWSER");
+    pageButtons_[1]=toggle_;
     for(auto* tab:pageButtons_)
         tab->setStyle(CTextButton::kOnOffStyle);
-    MakeLabel({493,273,974,302},"BANK / PRESET / ROM / SF2 BLEIBEN IMMER SICHTBAR",true);
+    MakeLabel({390,273,973,302},"ALLE KLANGREGLER DIREKT ZUGAENGLICH",true);
     for(auto*& page:pages_) {
         page=new CViewContainer({0,310,1000,604});
         page->setTransparency(true);
         addView(page);
     }
 
-    // MAIN uses one permanent control cluster with clear physical hierarchy:
-    // Reverb + its own tiny mode menu, Chorus + its own tiny mode menu,
-    // and a larger independent Master Volume on the RIGHT. The panel's
-    // host parameter IDs, defaults and automation gestures are unchanged;
-    // the eventual hardware art can be swapped without moving hit targets.
+    // Native controls first, final PCB artwork later. No raised ICs or
+    // capacitors are allowed underneath these fixed hit rectangles.
     buildingPanel_=pages_[0];
-    AddToCurrentPage(new MainPcbArtwork(PageRect({0,310,1000,604})));
-    auto* reverbTitle=MakeLabel({266,336,399,364},"REVERB",false);
+    auto* reverbTitle=MakeLabel({26,315,156,337},"REVERB",false);
     reverbTitle->setHoriAlign(kCenterText);
-    auto* chorusTitle=MakeLabel({493,336,626,364},"CHORUS",false);
+    auto* chorusTitle=MakeLabel({160,315,291,337},"CHORUS",false);
     chorusTitle->setHoriAlign(kCenterText);
-    auto* masterTitle=MakeLabel({700,336,946,364},"MASTER VOLUME",false);
+    auto* ampTitle=MakeLabel({327,315,789,337},"AMP ENVELOPE",false);
+    ampTitle->setHoriAlign(kCenterText);
+    auto* masterTitle=MakeLabel({818,315,984,337},"MASTER VOLUME",false);
     masterTitle->setHoriAlign(kCenterText);
 
-    AddKnob(10,303,391,"SEND");
-    AddKnob(11,530,391,"SEND");
-    masterVolume_=new HardwareKnob(PageRect({736,372,848,484}),
-                                  this,kMasterVolume);
-    masterVolume_->setDefaultValue(1.f);
-    masterVolume_->setValue(1.f);
-    AddToCurrentPage(masterVolume_);
-    masterVolumeValue_=MakeLabel({740,500,846,524},"100%",false);
-    masterVolumeValue_->setHoriAlign(kCenterText);
+    AddKnob(10,63,341,"SEND");
+    AddKnob(11,198,341,"SEND");
+    AddKnob(0,332,341,"ATTACK");
+    AddKnob(1,450,341,"DECAY");
+    AddKnob(2,568,341,"SUSTAIN");
+    AddKnob(3,686,341,"RELEASE");
 
-    auto* reverbTypeTitle=MakeLabel({260,508,401,526},"TYPE",true);
-    reverbTypeTitle->setHoriAlign(kCenterText);
-    auto* chorusTypeTitle=MakeLabel({489,508,630,526},"TYPE",true);
-    chorusTypeTitle->setHoriAlign(kCenterText);
-    reverbMenu_=new COptionMenu(PageRect({260,529,401,559}),this,kReverbType);
-    chorusMenu_=new COptionMenu(PageRect({489,529,630,559}),this,kChorusType);
+    reverbMenu_=new COptionMenu(PageRect({32,444,149,470}),this,kReverbType);
+    chorusMenu_=new COptionMenu(PageRect({167,444,284,470}),this,kChorusType);
     for(auto* menu:{reverbMenu_,chorusMenu_}) {
         menu->setBackColor(kBezel);
         menu->setFontColor(kPaper);
@@ -332,25 +324,27 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     chorusMenu_->setValue(2.f);
     AddToCurrentPage(reverbMenu_);
     AddToCurrentPage(chorusMenu_);
-    MakeLabel({32,564,251,585},"FX SEND: 0% = UNVERAENDERT",true);
 
-    // EDIT: precisely all ten remaining overlay controls. Two deliberate
-    // rows give envelope and tone families predictable, stable locations.
-    buildingPanel_=pages_[1];
-    MakeLabel({27,322,395,347},"AMP ENVELOPE",false);
-    reset_=MakeButton({840,322,965,357},kReset,"MOD RESET");
-    AddKnob(0,131,363,"ATTACK");
-    AddKnob(1,351,363,"DECAY");
-    AddKnob(2,571,363,"SUSTAIN -");
-    AddKnob(3,791,363,"RELEASE");
-    MakeLabel({27,465,605,483},"FILTER ENVELOPE",true);
-    MakeLabel({668,465,965,483},"FILTER TONE",true);
-    AddKnob(4,79,483,"ATTACK");
-    AddKnob(5,229,483,"DECAY");
-    AddKnob(6,379,483,"SUSTAIN -");
-    AddKnob(7,529,483,"RELEASE");
-    AddKnob(8,679,483,"CUTOFF -");
-    AddKnob(9,829,483,"RESONANCE +");
+    // The Master has twice the visual knob diameter of the 52px controls.
+    masterVolume_=new HardwareKnob(PageRect({848,344,962,458}),
+                                  this,kMasterVolume);
+    masterVolume_->setDefaultValue(1.f);
+    masterVolume_->setValue(1.f);
+    AddToCurrentPage(masterVolume_);
+    masterVolumeValue_=MakeLabel({849,466,961,492},"100%",false);
+    masterVolumeValue_->setHoriAlign(kCenterText);
+
+    auto* filterEnv=MakeLabel({27,472,542,493},"FILTER ENVELOPE",false);
+    filterEnv->setHoriAlign(kCenterText);
+    auto* filterTone=MakeLabel({543,472,808,493},"FILTER TONE",false);
+    filterTone->setHoriAlign(kCenterText);
+    AddKnob(4,54,495,"ATTACK");
+    AddKnob(5,181,495,"DECAY");
+    AddKnob(6,308,495,"SUSTAIN");
+    AddKnob(7,435,495,"RELEASE");
+    AddKnob(8,562,495,"CUTOFF");
+    AddKnob(9,689,495,"RESONANCE");
+    reset_=MakeButton({832,516,975,551},kReset,"MOD RESET");
 
     // BROWSER: no permanent 400px sidebar. It uses the available width,
     // retains true SF2 bank filtering, search and exact program selection.
@@ -396,7 +390,7 @@ void PresetBrowserView::AddToCurrentPage(VSTGUI::CView* v) {
     else addView(v);
 }
 void PresetBrowserView::AddKnob(int index,int x,int y,const char* title) {
-    auto* ctrl=new HardwareKnob(PageRect({CCoord(x),CCoord(y),CCoord(x+58),CCoord(y+58)}),
+    auto* ctrl=new HardwareKnob(PageRect({CCoord(x),CCoord(y),CCoord(x+52),CCoord(y+52)}),
                                 this,kGuiFirst+index);
     controls_[size_t(index)]=ctrl;
     AddToCurrentPage(ctrl);
@@ -668,7 +662,7 @@ void PresetBrowserView::SyncHardwareInfo() {
         : state.c_str());
 }
 void PresetBrowserView::SetPage(int page) {
-    currentPage_=std::clamp(page,0,2);
+    currentPage_=std::clamp(page,0,1);
     for(size_t i=0;i<pages_.size();++i) {
         if(pages_[i])pages_[i]->setVisible(int(i)==currentPage_);
         if(pageButtons_[i]) {
@@ -676,7 +670,7 @@ void PresetBrowserView::SetPage(int page) {
             pageButtons_[i]->invalid();
         }
     }
-    if(empty_)empty_->setVisible(currentPage_==2&&rows_.empty());
+    if(empty_)empty_->setVisible(currentPage_==1&&rows_.empty());
 }
 void PresetBrowserView::ChooseSf2() {
     std::string path;
@@ -741,8 +735,7 @@ void PresetBrowserView::valueChanged(CControl* control) {
             if(target>=0)Select(bank_,static_cast<uint8_t>(target));
         }
     } else if(tag==kMainPage)SetPage(0);
-    else if(tag==kEditPage)SetPage(1);
-    else if(tag==kToggle)SetPage(2);
+    else if(tag==kToggle)SetPage(1);
     else if(tag==kFilter) {
         searchText_=search_->getText().data();
         RebuildRows();
