@@ -148,7 +148,7 @@ for filename,size in (
     ("125A_Knob_Master_33frames_134px.png",134),
 ):
     data=(root/"src/vst3/resource"/filename).read_bytes()
-    assert data.startswith(b"\\x89PNG\\r\\n\\x1a\\n"),filename
+    assert data.startswith(b"\x89PNG\r\n\x1a\n"),filename
     assert struct.unpack_from(">II",data,16)==(size,size*33),filename
     assert data[25] in (3,6), (filename,data[25])
     assert data[25]==6 or b"tRNS" in data, filename
