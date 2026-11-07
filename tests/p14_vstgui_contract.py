@@ -99,8 +99,8 @@ assert 'ChooseExistingProgram(' in b
 assert 'kActiveBank=3109,kDirectPreset=3110' in h
 assert 'm_guiControls[11]' in syn
 assert 'brand=MakeLabel({30,25,237,69},"125A",false)' in b
-assert 'programLabel_=MakeLabel({310,73,737,104},"NO PRESET",false)' in b
-assert 'hardwareInfoLabel_=MakeLabel({310,107,737,126},"ROM: ERFORDERLICH",true)' in b
+assert 'programLabel_=MakeLabel({310,66,737,94},"NO PRESET",false)' in b
+assert 'hardwareInfoLabel_=MakeLabel({310,96,737,113},"ROM: ERFORDERLICH",true)' in b
 assert 'addView(new AmberLcdArtwork({264,16,776,163}))' in b
 assert 'new CBitmap("125A_Lcd_Amber_Blank_512x147.png")' in b
 assert (root/"src/vst3/resource/125A_Logo_Master_FINAL.svg").is_file()
@@ -187,8 +187,8 @@ assert 'resource/125A_Lcd_Amber_Blank_512x147.png' in cmake
 assert '"125A_Lcd_Amber_Blank_512x147.png" PNG DISCARDABLE' in (root/"src/vst3/resource/awe_gold_knobs.rc.in").read_text(encoding="utf-8")
 # P152 exact-size navigation and collision-free real EMU8000 module area:
 # the chip will occupy (788,16)..(984,163), so no input may intersect it.
-assert 'fileLabel_=MakeLabel({546,52,737,71},"",false)' in b
-assert 'auto* lcd=MakeLabel({310,52,534,71}' in b
+assert 'fileLabel_=MakeLabel({546,48,737,64},"",false)' in b
+assert 'auto* lcd=MakeLabel({310,48,534,64}' in b
 assert 'loadSf2_=MakeButton({893,177,968,218},kLoadSf2,"SF2")' in b
 assert 'previous_=MakeButton({202,179,242,218},kPrevious,"<")' in b
 assert 'next_=MakeButton({545,179,587,218},kNext,">")' in b
@@ -196,4 +196,6 @@ assert 'pageButtons_[0]=MakeButton({597,179,690,218}' in b
 assert 'toggle_=MakeButton({698,179,797,218}' in b
 assert 'MakeLabel({805,30,968,51},"SOUNDFONT / ROM",true)' not in b
 assert 'loadRom_=MakeButton({805,103,882,144}' not in b
+assert 'hint_=MakeLabel({310,114,737,131}' in b
+assert 'panel({16,603,984,634},panelColor,edge);' not in b
 print("P152 STATIC PASS: EMU8000 keepout, amber LCD dynamic file status, 7 gold buttons and 12 host knobs")
