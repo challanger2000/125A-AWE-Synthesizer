@@ -1,4 +1,5 @@
-// P149: embed the exact owner-approved gold PNG filmstrips as native
+// P150: embed the approved gold knob PNGs and native-size button atlas as native
 // Windows image resources so the VSTGUI CBitmap(resource-name) loader works.
 "125A_Knob_Standard_33frames_58px.png" PNG DISCARDABLE "@CMAKE_CURRENT_SOURCE_DIR@/resource/125A_Knob_Standard_33frames_58px.png"
 "125A_Knob_Master_33frames_134px.png" PNG DISCARDABLE "@CMAKE_CURRENT_SOURCE_DIR@/resource/125A_Knob_Master_33frames_134px.png"
+"125A_Button_Atlas_Normal_Pressed.png" PNG DISCARDABLE "@CMAKE_CURRENT_SOURCE_DIR@/resource/125A_Button_Atlas_Normal_Pressed.png"
