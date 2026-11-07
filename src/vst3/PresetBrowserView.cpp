@@ -29,55 +29,31 @@ constexpr CColor kBack(22,27,34,255), kRaised(42,52,63,255),
                  kBezel(11,16,22,255), kStroke(85,100,113,255),
                  kOrange(220,151,87,255);
 constexpr Steinberg::Vst::ParamID kProgram=1000,kBankParam=1002;
-// P156: PCB image is a pure noninteractive BACK layer. The exact 1000x640
-// resource is allowed to have dense raised parts everywhere; half-opaque
-// control islands on a separate VSTGUI layer protect labels and input hitboxes.
+// P165: the user's approved ORIGINAL faceplate is the sole static PCB layer.
+// Native 1491x1055 artwork is proportionally sampled to 1000x708, once,
+// before packaging. The original yellow LCD, complete EMU8000 chip and all
+// hardware detail already belong to this image. Nothing is painted over them
+// except live transparent VSTGUI text inside the LCD.
 class FunctionalLayoutBackground final : public CView {
 public:
     explicit FunctionalLayoutBackground(const CRect& r)
-        : CView(r),
-          p164_(new CBitmap("125A_P164_PCB_Single_Header_1000x640.png")),
-          p160_(new CBitmap("125A_P160_PCB_1000x640.png")),
-          fallback_(new CBitmap("125A_PCB_Shared_1000x640.png")) {
+        : CView(r), photo_(new CBitmap("125A_P165_Original_Faceplate_1000x708.png")) {
         setMouseEnabled(false);
     }
     ~FunctionalLayoutBackground() noexcept override {
-        if(p164_)p164_->forget();
-        if(p160_)p160_->forget();
-        if(fallback_)fallback_->forget();
-    }
-    bool hasSingleHeader() const noexcept {
-        return p164_ && p164_->isLoaded();
+        if(photo_) photo_->forget();
     }
     void draw(CDrawContext* c) override {
-        // P164: ONE complete photographic board, one LCD frame, one logo,
-        // one clean EMU8000 chip. Do NOT overlay another LCD or logo view.
-        const bool singleHeader=hasSingleHeader();
-        const bool approved=singleHeader || (p160_ && p160_->isLoaded());
-        if(singleHeader)
-            p164_->draw(c,getViewSize());
-        else if(p160_ && p160_->isLoaded())
-            p160_->draw(c,getViewSize());
-        else if(fallback_ && fallback_->isLoaded())
-            fallback_->draw(c,getViewSize());
-        else {
+        if(photo_ && photo_->isLoaded()) {
+            photo_->draw(c,getViewSize());
+        } else {
+            // No silent P164/P160 substitute: a missing approved asset is
+            // a packaging failure (also rejected in CMake/CI).
             c->setFillColor(CColor(13,17,23,255));
             c->drawRect(getViewSize(),kDrawFilled);
         }
-        // The fallback P156 image was not stripped of the original lettering
-        // and LCD. Keep that obsolete image safe for builds without new art.
-        // The P160 board was deliberately scrubbed in those two rectangles;
-        // leave its gold PCB traces fully visible behind the live assets.
-        if(!approved) {
-            c->setFillColor(CColor(9,12,14,255));
-            c->drawRect({16,16,252,163},kDrawFilled);
-            c->setFillColor(CColor(9,12,14,255));
-            c->drawRect({264,16,776,163},kDrawFilled);
-        }
-        // P162: one aligned, rounded hardware rail spanning the SAME
-        // full-width grid as the browser panel. Every menu/button has a
-        // 10px visible outside inset and 8-9px inter-control gutters.
-        const CRect rail{16,173,984,224};
+        // One navigation rail. No header decorations or second LCD.
+        const CRect rail{16,228,984,279};
         if(auto* p=c->createRoundRectGraphicsPath(rail,7.)) {
             c->setFillColor(CColor(9,12,16,205));
             c->drawGraphicsPath(p,CDrawContext::kPathFilled);
@@ -89,65 +65,7 @@ public:
         setDirty(false);
     }
 private:
-    CBitmap* p164_{nullptr};
-    CBitmap* p160_{nullptr};
-    CBitmap* fallback_{nullptr};
-};
-
-// P154: exact gold wordmark extracted from the approved soundcard reference.
-// The image stays separate and has an alpha channel; no live text is baked
-// into the final PCB and no alternative branding is substituted.
-class GoldLogoArtwork final : public CView {
-public:
-    explicit GoldLogoArtwork(const CRect& rect)
-        : CView(rect), bitmap_(new CBitmap("125A_AWE_Gold_Logo_236x147.png")) {
-        setMouseEnabled(false);
-    }
-    ~GoldLogoArtwork() noexcept override {
-        if(bitmap_) bitmap_->forget();
-    }
-    void draw(CDrawContext* ctx) override {
-        if(bitmap_ && bitmap_->isLoaded()) {
-            // P160: 193x120 exactly, proportional to the approved 236x147 PNG,
-            // using a rendering transform rather than inventing new lettering.
-            auto r=getViewSize();
-            CGraphicsTransform t;
-            t.translate(-r.left,-r.top);
-            t.scale(193./236.,120./147.);
-            t.translate(39.,28.);
-            CDrawContext::Transform scaled(*ctx,t);
-            bitmap_->draw(ctx,r);
-        }
-        setDirty(false);
-    }
-private:
-    CBitmap* bitmap_{nullptr};
-};
-
-// P151 separate, text-free amber LCD photo artwork. Dynamic labels are
-// native VSTGUI children added AFTER this non-interactive bitmap view.
-class AmberLcdArtwork final : public CView {
-public:
-    explicit AmberLcdArtwork(const CRect& r)
-        : CView(r),
-          complete_(new CBitmap("125A_P160_Lcd_Complete_512x147.png")),
-          bitmap_(new CBitmap("125A_Lcd_Amber_Blank_512x147.png")) {
-        setMouseEnabled(false);
-    }
-    ~AmberLcdArtwork() noexcept override {
-        if(complete_)complete_->forget();
-        if(bitmap_)bitmap_->forget();
-    }
-    void draw(CDrawContext* c) override {
-        if(complete_ && complete_->isLoaded())
-            complete_->draw(c,getViewSize());
-        else if(bitmap_ && bitmap_->isLoaded())
-            bitmap_->draw(c,getViewSize());
-        setDirty(false);
-    }
-private:
-    CBitmap* complete_{nullptr};
-    CBitmap* bitmap_{nullptr};
+    CBitmap* photo_{nullptr};
 };
 
 // Only on the SYNTH page; the BROWSER receives one undivided canvas.
@@ -538,37 +456,30 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
       sf2CatalogRevision_(std::move(sf2CatalogRevision)),
       browserBankReselect_(std::move(browserBankReselect)) {
     setBackgroundColor(kBack);
-    auto* photo=new FunctionalLayoutBackground({0,0,1000,640});
+    auto* photo=new FunctionalLayoutBackground({0,0,1000,708});
     addView(photo);
-    // P164 already includes the fully intact LCD bezel, gold lettering
-    // and EMU8000 chip IN ONE IMAGE. Duplicating either bitmap here was
-    // the source of the ghost screws and overlapping LCD right frame.
-    // Compatibility for older build trees is retained, but never active
-    // when the deterministic P164 photo is present.
-    if(!photo->hasSingleHeader()) {
-        addView(new AmberLcdArtwork({264,16,776,163}));
-        addView(new GoldLogoArtwork({16,16,252,163}));
-    }
+    // P165: do not instantiate bitmap LCD/logo views: the original faceplate
+    // already contains them. Only native transparent status labels follow.
     // Native dynamic status, bank/program and filename remain on top.
 
     // P152: the amber LCD owns the complete live status line, including
     // the current filename. Its labels remain real host-driven VSTGUI views.
-    auto* lcd=MakeLabel({310,48,534,64},"EMU8000  |  SOUNDFONT ENGINE",true);
-    lcd->setFontColor(CColor(219,169,70,255));
-    fileLabel_=MakeLabel({546,48,737,64},"",false);
+    auto* lcd=MakeLabel({350,96,570,112},"EMU8000  |  SOUNDFONT ENGINE",true);
+    lcd->setFontColor(CColor(55,42,9,255));
+    fileLabel_=MakeLabel({575,96,728,112},"",false);
     fileLabel_->setFont(kNormalFontSmall);
-    fileLabel_->setFontColor(CColor(221,174,91,255));
+    fileLabel_->setFontColor(CColor(65,46,12,255));
     fileLabel_->setTextTruncateMode(CTextLabel::kTruncateTail);
-    programLabel_=MakeLabel({310,66,737,94},"NO PRESET",false);
+    programLabel_=MakeLabel({350,118,728,145},"NO PRESET",false);
     programLabel_->setFont(kNormalFontBig);
-    programLabel_->setFontColor(CColor(245,193,78,255));
-    hardwareInfoLabel_=MakeLabel({310,96,737,113},"ROM: ERFORDERLICH",true);
+    programLabel_->setFontColor(CColor(41,31,6,255));
+    hardwareInfoLabel_=MakeLabel({350,145,728,163},"ROM: ERFORDERLICH",true);
     hardwareInfoLabel_->setFontColor(CColor(221,174,91,255));
     hardwareInfoLabel_->setTextTruncateMode(CTextLabel::kTruncateTail);
 
-    // Full 196 x 147 top-right region (788..984,16..163) is now strictly
-    // reserved for the *real* decorative EMU8000 chip and its components.
-    // Native-size button assets (ROM 77x41, SF2 75x41) were moved onto the
+    // The entire original top-right EMU8000 chip is strictly
+    // protected. Its complete body/pins come directly from the faceplate.
+    // Buttons share ONE 39px visual height in the navigation rail.
     // compact, consistently aligned navigation strip without scaling.
     // P163 visual-pixel alignment: physical hardware button atlases
     // include ~5px of transparent right-side shadow/padding. The SF2
@@ -578,24 +489,24 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     // the hardware controls retain original/native widths and look even.
     // A duplicate BANK caption cramped this entire band; the dropdown
     // already displays "Bank 0". Use the freed width for the live menu.
-    activeBankMenu_=new GoldHardwareMenu({26,179,203,218},this,kActiveBank);
+    activeBankMenu_=new GoldHardwareMenu({26,234,203,273},this,kActiveBank);
     StyleGoldMenu(activeBankMenu_);
     addView(activeBankMenu_);
-    previous_=MakeButton({212,179,252,218},kPrevious,"<");
-    programMenu_=new GoldHardwareMenu({261,179,552,218},this,kDirectPreset);
+    previous_=MakeButton({212,234,252,273},kPrevious,"<");
+    programMenu_=new GoldHardwareMenu({261,234,552,273},this,kDirectPreset);
     StyleGoldMenu(programMenu_);
     addView(programMenu_);
-    next_=MakeButton({561,179,601,218},kNext,">");
-    pageButtons_[0]=MakeButton({610,179,703,218},kMainPage,"SYNTH");
-    toggle_=MakeButton({712,179,811,218},kToggle,"BROWSER");
-    loadRom_=MakeButton({819,177,896,218},kLoadRom,"ROM");
-    loadSf2_=MakeButton({904,177,979,218},kLoadSf2,"SF2");
+    next_=MakeButton({561,234,601,273},kNext,">");
+    pageButtons_[0]=MakeButton({610,234,703,273},kMainPage,"SYNTH");
+    toggle_=MakeButton({712,234,811,273},kToggle,"BROWSER");
+    loadRom_=MakeButton({819,234,896,273},kLoadRom,"ROM");
+    loadSf2_=MakeButton({904,234,979,273},kLoadSf2,"SF2");
     pageButtons_[1]=toggle_;
     for(auto* tab:pageButtons_)
         tab->setStyle(CTextButton::kOnOffStyle);
 
     for(auto*& page:pages_) {
-        page=new CViewContainer({0,232,1000,592});
+        page=new CViewContainer({0,287,1000,647});
         page->setTransparency(true);
         addView(page);
     }
@@ -697,7 +608,7 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     empty_->setFontColor(CColor(204,167,108,255));
 
     buildingPanel_=nullptr;
-    hint_=MakeLabel({310,114,737,131},
+    hint_=MakeLabel({350,166,728,184},
         "SF2-Audiostatus noch nicht vom Prozessor bestaetigt.",true);
     hint_->setTextTruncateMode(CTextLabel::kTruncateTail);
     SetPage(0);
@@ -706,8 +617,8 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
 }
 VSTGUI::CRect PresetBrowserView::PageRect(const VSTGUI::CRect& r) const {
     if (!buildingPanel_) return r;
-    // The active page starts at logical Y=232; all named controls continue
-    // to use one stable, explicit desktop coordinate system.
+    // The active page starts at Y=287; legacy page-local controls retain
+    // their tested 360px geometry, shifted down by 55px as a single unit.
     return {r.left,r.top-232.,r.right,r.bottom-232.};
 }
 void PresetBrowserView::AddToCurrentPage(VSTGUI::CView* v) {
