@@ -348,7 +348,7 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
 
     // BROWSER: no permanent 400px sidebar. It uses the available width,
     // retains true SF2 bank filtering, search and exact program selection.
-    buildingPanel_=pages_[2];
+    buildingPanel_=pages_[1];
     bankCaption_=MakeLabel({27,324,106,354},"FILTER",true);
     bankMenu_=new COptionMenu(PageRect({107,322,312,358}),this,kBankFilter);
     bankMenu_->setBackColor(kBezel);
@@ -553,7 +553,7 @@ void PresetBrowserView::RebuildRows() {
         empty_->setText(sf_.Entries().empty()?
             "Keine SF2 geladen. Oben auf SF2 LADEN klicken.":
             "Keine Treffer. Suche oder Bankfilter aendern.");
-        empty_->setVisible(currentPage_==2);
+        empty_->setVisible(currentPage_==1);
     } else empty_->setVisible(false);
     SyncBrowserSelection();
 }
