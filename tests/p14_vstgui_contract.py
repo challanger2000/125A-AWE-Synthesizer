@@ -54,10 +54,10 @@ assert 'core.ChipVariant()!=Emu8000Core::Chip::Box86' in f
 assert 'CORE: INAKTIV' in f and 'ROM: ERFORDERLICH' in f
 assert 'core.ChipRamWords()' in f and 'BankAt(i).sampleData.size()' in f
 assert 'hardwareInfoProvider_' in h and 'hardwareInfoLabel_' in h
-assert 'addView(new HardwareFaceplate({0,0,1000,640}))' in b
-assert 'new CBitmap("125A_PCB_Shared_1000x640.png")' in b
-assert 'new CBitmap("125A_PCB_MAIN_1000x640.png")' in b
-assert 'AddToCurrentPage(new MainPcbArtwork(PageRect({0,310,1000,604})))' not in b
+assert 'addView(new FunctionalLayoutBackground({0,0,1000,640}))' in b
+assert 'CBitmap' not in b and '125A_PCB_' not in b
+assert 'CBitmap' not in b and '125A_PCB_' not in b
+assert 'CBitmap' not in b and '125A_PCB_' not in b
 assert 'setMouseEnabled(false)' in b
 assert 'SyncHardwareInfo();' in b
 assert 'sfCatalog_=std::move(sf2PendingCatalog_)' in f
@@ -94,7 +94,7 @@ assert 'sf_.Find(bank_,id)' in b
 assert 'ChooseExistingProgram(' in b
 assert 'kActiveBank=3109,kDirectPreset=3110' in h
 assert 'm_guiControls[11]' in syn
-assert 'MakeLabel({27,14,157,49},"125A",false)' not in b
+assert 'brand=MakeLabel({28,19,268,65},"125A",false)' in b
 assert 'programLabel_=MakeLabel({310,82,744,125},"NO PRESET",false)' in b
 assert (root/"src/vst3/resource/125A_Logo_Master_FINAL.svg").is_file()
 assert 'resource/125A_Logo_Master_FINAL.svg' in cmake
@@ -133,7 +133,7 @@ assert 'reset_=MakeButton({832,516,975,551},kReset,"MOD RESET")' in b
 assert 'masterVolume_->setDefaultValue(1.f)' in b
 for image in ("125A_PCB_Shared_1000x640.png","125A_PCB_MAIN_1000x640.png"):
     assert (root/"src/vst3/resource"/image).is_file(),image
-    assert ("resource/"+image) in cmake,image
-assert 'resource/awe_pcb.rc.in' in cmake
+    assert ("resource/"+image) not in cmake,image
+assert 'configure_file(resource/awe_pcb.rc.in' not in cmake
 assert (root/"src/vst3/resource/awe_pcb.rc.in").is_file()
-print("P146 STATIC PASS: single-page synth/FX/AMP/FILTER, native PCB resource, separate browser, gold logo, V11 state")
+print("P147 STATIC PASS: neutral bitmap-free layout, permanent synth controls, separate browser and V11 state")
