@@ -220,8 +220,10 @@ public:
             c->drawGraphicsPath(border,CDrawContext::kPathStroked);
             border->forget();
         }
-        // P161: two understated gold-recessed fields beneath the actual
-        // VSTGUI search edit and CDataBrowser. Neither changes hitboxes.
+        // P163: the rail's last button and BOTH recessed gold-field right
+        // edges finish at X=974 (10px inside the X=984 outer bezel).
+        // Preserve 394px width of the bank and search control surfaces.
+        // Bezel views remain non-interactive; input controls are unchanged.
         const auto recessed=[&](const CRect& r,CCoord radius,
                                  CColor backing,CColor edge) {
             auto* p=c->createRoundRectGraphicsPath(r,radius);
@@ -237,9 +239,9 @@ public:
             c->drawLine({r.left+radius+3.,r.top+2.},
                         {r.right-radius-3.,r.top+2.});
         };
-        recessed({578,15,972,52},6.,CColor(11,13,15,230),
+        recessed({580,15,974,52},6.,CColor(11,13,15,230),
                  CColor(192,132,58,245)); // search
-        recessed({24,63,976,349},7.,CColor(11,14,16,242),
+        recessed({24,63,974,349},7.,CColor(11,14,16,242),
                  CColor(191,136,65,240)); // program table
         setDirty(false);
     }
@@ -647,7 +649,7 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     StyleGoldMenu(bankMenu_);
     AddToCurrentPage(bankMenu_);
     searchCaption_=MakeLabel({506,247,572,282},"SUCHE",true);
-    search_=new CTextEdit(PageRect({584,249,966,282}),this,kFilter,"");
+    search_=new CTextEdit(PageRect({586,249,968,282}),this,kFilter,"");
     search_->setPlaceholderString("Instrument suchen...");
     search_->setImmediateTextChange(true);
     // Underlying CTextEdit still owns typing, caret, search and focus.
@@ -658,7 +660,7 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     search_->setFrameWidth(0.);
     search_->setTextInset({11.,0.});
     AddToCurrentPage(search_);
-    table_=new CDataBrowser(PageRect({28,299,972,576}),this,
+    table_=new CDataBrowser(PageRect({28,299,970,576}),this,
              CScrollView::kVerticalScrollbar|
              CScrollView::kAutoHideScrollbars);
     table_->setBackgroundColor(CColor(18,21,22,255));
