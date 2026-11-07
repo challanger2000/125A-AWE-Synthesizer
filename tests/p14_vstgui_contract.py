@@ -99,7 +99,10 @@ assert 'ChooseExistingProgram(' in b
 assert 'kActiveBank=3109,kDirectPreset=3110' in h
 assert 'm_guiControls[11]' in syn
 assert 'brand=MakeLabel({30,25,237,69},"125A",false)' in b
-assert 'programLabel_=MakeLabel({286,66,755,105},"NO PRESET",false)' in b
+assert 'programLabel_=MakeLabel({310,73,737,104},"NO PRESET",false)' in b
+assert 'hardwareInfoLabel_=MakeLabel({310,107,737,126},"ROM: ERFORDERLICH",true)' in b
+assert 'addView(new AmberLcdArtwork({264,16,776,163}))' in b
+assert 'new CBitmap("125A_Lcd_Amber_Blank_512x147.png")' in b
 assert (root/"src/vst3/resource/125A_Logo_Master_FINAL.svg").is_file()
 assert 'resource/125A_Logo_Master_FINAL.svg' in cmake
 assert 'resource/MAUIFM.IBK' not in cmake
@@ -174,4 +177,12 @@ for tag,x in [('kLoadRom','0.'),('kLoadSf2','80.'),('kPrevious','158.'),
               ('kNext','201.'),('kMainPage','246.'),('kToggle','342.'),
               ('kReset','444.')]:
     assert ('case '+tag+':') in b
-print("P150 STATIC PASS: native 7-button gold atlas, live VSTGUI text and pressed states, styled four native menus, unchanged knobs")
+lcd_file=root/"src/vst3/resource/125A_Lcd_Amber_Blank_512x147.png"
+assert lcd_file.is_file() and lcd_file.stat().st_size>3000
+import struct
+binary=lcd_file.read_bytes()
+assert binary[:8]==b"\\x89PNG\\r\\n\\x1a\\n"
+assert struct.unpack(">II",binary[16:24])==(512,147)
+assert 'resource/125A_Lcd_Amber_Blank_512x147.png' in cmake
+assert '"125A_Lcd_Amber_Blank_512x147.png" PNG DISCARDABLE' in (root/"src/vst3/resource/awe_gold_knobs.rc.in").read_text(encoding="utf-8")
+print("P151 STATIC PASS: blank amber LCD 512x147, dynamic labels, 7 buttons, gold menus and knobs")
