@@ -17,33 +17,13 @@ smtg_add_vst3plugin(125A_AWE_Synthesizer
   "${CMAKE_SOURCE_DIR}/external/vst3sdk/public.sdk/source/main/dllmain.cpp"
 )
 target_link_libraries(125A_AWE_Synthesizer PRIVATE sdk vstgui_support awe32_chip_safety awe32_opl3_midi)
-# P160: the exact approved photo and the repaired four-screw LCD are
-# OPTIONAL binary resources. Until the curated PNGs are staged on this
-# branch, retain a functioning P156 compatibility build, never invent art.
-set(P160_ARTWORK_RESOURCES "")
-foreach(p160_image IN ITEMS
-    125A_P160_PCB_1000x640.png
-    125A_P160_Lcd_Complete_512x147.png)
-  if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/resource/${p160_image}")
-    list(APPEND P160_ARTWORK_RESOURCES "resource/${p160_image}")
-  else()
-    message(STATUS "P160 approved image is NOT in this source tree: ${p160_image} (compatibility photo used)")
-  endif()
-endforeach()
-# P164: deterministic photographic composition of EXISTING checked-in P160
-# PNGs. Generate the single-header bitmap before the resource build; no AI
-# image generation and no extra LCD/brand VSTGUI bitmap overlays are involved.
-# Pillow is required only when building the plugin from source, not when
-# installing the resulting VST3 on a DAW machine.
-execute_process(
-  COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/compose_p164_faceplate.py"
-          "${CMAKE_CURRENT_SOURCE_DIR}/resource"
-  RESULT_VARIABLE P164_COMPOSE_RESULT
-)
-if(NOT P164_COMPOSE_RESULT EQUAL 0)
-  message(FATAL_ERROR "P164 single-display PCB composition failed; install Python Pillow")
+# P165 requires the user's ORIGINAL faceplate, faithfully reduced to
+# 1000x708 (1491x1055 source, proportional LANCZOS). Never silently
+# recompose the LCD/chip from legacy P160/P164 parts.
+set(P165_FACEPLATE "resource/125A_P165_Original_Faceplate_1000x708.png")
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${P165_FACEPLATE}")
+  message(FATAL_ERROR "P165 original faceplate resource missing. No placeholder or old photo is allowed.")
 endif()
-set(P164_SINGLE_HEADER "resource/125A_P164_PCB_Single_Header_1000x640.png")
 smtg_target_add_plugin_resources(125A_AWE_Synthesizer
   RESOURCES resource/awe_test_panel.uidesc
                         resource/125A_Logo_Master_FINAL.svg
@@ -53,8 +33,7 @@ smtg_target_add_plugin_resources(125A_AWE_Synthesizer
                         resource/125A_Lcd_Amber_Blank_512x147.png
                         resource/125A_AWE_Gold_Logo_236x147.png
                         resource/125A_PCB_Shared_1000x640.png
-                        ${P160_ARTWORK_RESOURCES}
-                        ${P164_SINGLE_HEADER}
+                        ${P165_FACEPLATE}
 )
 target_include_directories(125A_AWE_Synthesizer PRIVATE
     ../engine ../engine/include
@@ -69,20 +48,9 @@ if(WIN32)
   # Deliberately NO photographic PCB faceplate until geometry is approved.
   configure_file(resource/awe_gold_knobs.rc.in
     "${CMAKE_CURRENT_BINARY_DIR}/awe_gold_knobs.rc" @ONLY)
-  # Export the same image-resource names as CBitmap uses. This avoids
-  # requiring optional P160 files in a compatibility-only CI checkout.
-  foreach(p160_image IN ITEMS
-      125A_P160_PCB_1000x640.png
-      125A_P160_Lcd_Complete_512x147.png)
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/resource/${p160_image}")
-      file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/awe_gold_knobs.rc"
-           "\"${p160_image}\" PNG DISCARDABLE \"${CMAKE_CURRENT_SOURCE_DIR}/resource/${p160_image}\"\n")
-    endif()
-  endforeach()
-  # The single-header PNG MUST also be an embedded Windows resource:
-  # VSTGUI's CBitmap(name) on Windows uses the DLL's native PNG table.
+  # This is the ONLY static faceplate used in the editor.
   file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/awe_gold_knobs.rc"
-       "\"125A_P164_PCB_Single_Header_1000x640.png\" PNG DISCARDABLE \"${CMAKE_CURRENT_SOURCE_DIR}/resource/125A_P164_PCB_Single_Header_1000x640.png\"\n")
+       "\"125A_P165_Original_Faceplate_1000x708.png\" PNG DISCARDABLE \"${CMAKE_CURRENT_SOURCE_DIR}/${P165_FACEPLATE}\"\n")
   target_sources(125A_AWE_Synthesizer PRIVATE
     "${CMAKE_CURRENT_BINARY_DIR}/awe_gold_knobs.rc")
   target_link_libraries(125A_AWE_Synthesizer PRIVATE comdlg32)
