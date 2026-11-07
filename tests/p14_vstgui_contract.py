@@ -44,7 +44,7 @@ assert 'msg->setMessageID("125A_ROM_LOAD")' in f
 assert 'FIDStringsEqual(msg->getMessageID(),"125A_ROM_LOAD")' in f
 assert 'romAck("OK")' in f
 assert 'romLoadRequest_' in h and 'kLoadRom=3108' in h
-assert 'MakeButton({808,177,885,218},kLoadRom,"ROM")' in b
+assert 'MakeButton({814,177,891,218},kLoadRom,"ROM")' in b
 assert 'NativeChooseFile(path,true)' in b and 'NativeChooseFile(path,false)' in b
 assert 'GetOpenFileNameW(&ofn)' in b
 assert 'getBinary("Path",bytes,bytesCount)' in f
@@ -91,8 +91,8 @@ assert 'rtMaster_' in f and 'volumeGain_.setTarget(' in f
 assert 'masterVolume_' in h and 'masterVolumeValue_' in h
 assert 'new HardwareKnob(PageRect({817,298,951,432})' in b
 assert 'controller_->getParamNormalized(kMasterVolume)' in b
-assert 'activeBankMenu_=new GoldHardwareMenu({67,179,193,218},this,kActiveBank)' in b
-assert 'programMenu_=new GoldHardwareMenu({250,179,537,218},this,kDirectPreset)' in b
+assert 'activeBankMenu_=new GoldHardwareMenu({26,179,203,218},this,kActiveBank)' in b
+assert 'programMenu_=new GoldHardwareMenu({259,179,550,218},this,kDirectPreset)' in b
 assert 'RebuildActiveMenus();' in b and 'SyncActiveMenuSelection();' in b
 assert 'sf_.Find(bank_,id)' in b
 assert 'ChooseExistingProgram(' in b
