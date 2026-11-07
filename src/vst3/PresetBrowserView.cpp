@@ -66,11 +66,18 @@ public:
             c->setFillColor(CColor(9,12,14,255));
             c->drawRect({264,16,776,163},kDrawFilled);
         }
-        c->setFillColor(CColor(9,12,16,228));
-        c->drawRect({16,173,984,224},kDrawFilled);
-        c->setFrameColor(CColor(159,109,47,217));
-        c->setLineWidth(1.);
-        c->drawRect({16,173,984,224},kDrawStroked);
+        // P162: one aligned, rounded hardware rail spanning the SAME
+        // full-width grid as the browser panel. Every menu/button has a
+        // 10px outside inset and an 8px inter-control gutter.
+        const CRect rail{16,173,984,224};
+        if(auto* p=c->createRoundRectGraphicsPath(rail,7.)) {
+            c->setFillColor(CColor(9,12,16,205));
+            c->drawGraphicsPath(p,CDrawContext::kPathFilled);
+            c->setFrameColor(CColor(190,131,55,220));
+            c->setLineWidth(1.);
+            c->drawGraphicsPath(p,CDrawContext::kPathStroked);
+            p->forget();
+        }
         setDirty(false);
     }
 private:
@@ -548,19 +555,20 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     // reserved for the *real* decorative EMU8000 chip and its components.
     // Native-size button assets (ROM 77x41, SF2 75x41) were moved onto the
     // compact, consistently aligned navigation strip without scaling.
-    MakeLabel({23,184,65,214},"BANK",true);
-    activeBankMenu_=new GoldHardwareMenu({67,179,193,218},this,kActiveBank);
+    // A duplicate BANK caption cramped this entire band; the dropdown
+    // already displays "Bank 0". Use the freed width for the live menu.
+    activeBankMenu_=new GoldHardwareMenu({26,179,203,218},this,kActiveBank);
     StyleGoldMenu(activeBankMenu_);
     addView(activeBankMenu_);
-    previous_=MakeButton({202,179,242,218},kPrevious,"<");
-    programMenu_=new GoldHardwareMenu({250,179,537,218},this,kDirectPreset);
+    previous_=MakeButton({211,179,251,218},kPrevious,"<");
+    programMenu_=new GoldHardwareMenu({259,179,550,218},this,kDirectPreset);
     StyleGoldMenu(programMenu_);
     addView(programMenu_);
-    next_=MakeButton({545,179,587,218},kNext,">");
-    pageButtons_[0]=MakeButton({597,179,690,218},kMainPage,"SYNTH");
-    toggle_=MakeButton({698,179,797,218},kToggle,"BROWSER");
-    loadRom_=MakeButton({808,177,885,218},kLoadRom,"ROM");
-    loadSf2_=MakeButton({893,177,968,218},kLoadSf2,"SF2");
+    next_=MakeButton({558,179,598,218},kNext,">");
+    pageButtons_[0]=MakeButton({606,179,699,218},kMainPage,"SYNTH");
+    toggle_=MakeButton({707,179,806,218},kToggle,"BROWSER");
+    loadRom_=MakeButton({814,177,891,218},kLoadRom,"ROM");
+    loadSf2_=MakeButton({899,177,974,218},kLoadSf2,"SF2");
     pageButtons_[1]=toggle_;
     for(auto* tab:pageButtons_)
         tab->setStyle(CTextButton::kOnOffStyle);
