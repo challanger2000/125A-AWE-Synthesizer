@@ -486,7 +486,6 @@ def main():
             # The selected P160 hardware photo is optional until the exact
             # 1000x640 asset is imported; do NOT mistake compatibility art
             # for proof of the final P160 visual design.
-            from pathlib import Path
             if Path("src/vst3/resource/125A_P160_PCB_1000x640.png").is_file():
                 for box in ((13,548,53,596),(948,548,989,596)):
                     check(gold_knob_pixels(first,box)>15,
