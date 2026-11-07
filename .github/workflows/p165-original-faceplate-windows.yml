@@ -2,8 +2,6 @@ name: P165 original faceplate Windows VST3 geometry and real-pixel acceptance
 on:
   push:
     branches: [fix/p165-original-faceplate-layout]
-    paths:
-      - 'src/vst3/resource/125A_P165_Original_Faceplate_1000x708.png'
   workflow_dispatch:
 permissions:
   contents: read
@@ -41,7 +39,7 @@ jobs:
         run: |
           cmake --build build-p133 --config Release --parallel 2
           if ($LASTEXITCODE -ne 0) { throw 'Production Windows VST3 build failed' }
-      - name: Run entire CTest suite including V11 migration and 8x8 hardware FX modes
+      - name: Run all 45 CTests including updated P165 static VSTGUI contract
         shell: pwsh
         timeout-minutes: 15
         run: |
@@ -88,7 +86,7 @@ jobs:
             python tools/p165_original_faceplate_editor_acceptance.py --quick --editorhost "$editor" --plugin "$plugin" --output "qa/editor-$i"
             if($LASTEXITCODE -ne 0) { throw "EditorHost GUI smoke $i failed" }
           }
-      - name: P165 full single-display and browser and existing VSTGUI interactions – pages, all 12 knobs and hardware FX
+      - name: P165 original-faceplate pixel fidelity plus SYNTH BROWSER and 12 knobs
         shell: pwsh
         timeout-minutes: 12
         run: |
