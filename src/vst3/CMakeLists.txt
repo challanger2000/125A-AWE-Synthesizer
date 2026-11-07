@@ -20,6 +20,8 @@ target_link_libraries(125A_AWE_Synthesizer PRIVATE sdk vstgui_support awe32_chip
 smtg_target_add_plugin_resources(125A_AWE_Synthesizer
   RESOURCES resource/awe_test_panel.uidesc
                         resource/125A_Logo_Master_FINAL.svg
+                        resource/125A_PCB_Shared_1000x640.png
+                        resource/125A_PCB_MAIN_1000x640.png
 )
 target_include_directories(125A_AWE_Synthesizer PRIVATE
     ../engine ../engine/include
@@ -30,6 +32,11 @@ target_compile_features(125A_AWE_Synthesizer PRIVATE cxx_std_23)
 smtg_target_configure_version_file(125A_AWE_Synthesizer)
 
 if(WIN32)
+  # Native VSTGUI CBitmap loads these actual PNG resources by their file names.
+  # Embed them in the DLL in addition to copying them into the .vst3 bundle.
+  configure_file(resource/awe_pcb.rc.in "${CMAKE_CURRENT_BINARY_DIR}/awe_pcb.rc" @ONLY)
+  target_sources(125A_AWE_Synthesizer PRIVATE
+      "${CMAKE_CURRENT_BINARY_DIR}/awe_pcb.rc")
   target_link_libraries(125A_AWE_Synthesizer PRIVATE comdlg32)
   # P120: query the actual built DLL and VST3 IUnitInfo; do not infer
   # program-change support from source substrings or Validator PASS alone.
