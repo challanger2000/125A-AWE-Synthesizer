@@ -56,7 +56,7 @@ assert 'core.ChipRamWords()' in f and 'BankAt(i).sampleData.size()' in f
 assert 'hardwareInfoProvider_' in h and 'hardwareInfoLabel_' in h
 assert 'auto* photo=new FunctionalLayoutBackground({0,0,1000,708});' in b
 assert 'addView(photo);' in b
-assert 'new CBitmap("125A_PCB_Shared_1000x640.png")' in b  # P156 photo is a separate background bitmap
+# P165 retains any compatibility assets only as packaged resources, never as overlay views.
 assert 'new CBitmap(isMaster' in b
 assert 'frames_->draw(ctx,getViewSize(),{0.,frameSize_*index})' in b
 assert 'int(std::lround(double(getValue())*32.))' in b
@@ -99,13 +99,13 @@ assert 'sf_.Find(bank_,id)' in b
 assert 'ChooseExistingProgram(' in b
 assert 'kActiveBank=3109,kDirectPreset=3110' in h
 assert 'm_guiControls[11]' in syn
-assert 'new CBitmap("125A_AWE_Gold_Logo_236x147.png")' in b
+# P165 retains any compatibility assets only as packaged resources, never as overlay views.
 assert 'brand=MakeLabel({30,25,237,69},"125A",false)' not in b
 assert 'model=MakeLabel({30,76,238,105}' not in b
 assert 'engine=MakeLabel({30,118,239,141}' not in b
 assert 'programLabel_=MakeLabel({350,118,728,145},"NO PRESET",false)' in b
 assert 'hardwareInfoLabel_=MakeLabel({350,145,728,163},"ROM: ERFORDERLICH",true)' in b
-assert 'new CBitmap("125A_Lcd_Amber_Blank_512x147.png")' in b
+# P165 retains any compatibility assets only as packaged resources, never as overlay views.
 assert (root/"src/vst3/resource/125A_Logo_Master_FINAL.svg").is_file()
 assert 'resource/125A_Logo_Master_FINAL.svg' in cmake
 assert 'resource/MAUIFM.IBK' not in cmake
