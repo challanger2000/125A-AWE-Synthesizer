@@ -52,7 +52,7 @@ private:
     static constexpr int kPrevious=3101,kNext=3102,kToggle=3103,
                          kFilter=3104,kBankFilter=3105,kLoadSf2=3106,kReset=3107,
                          kLoadRom=3108,kActiveBank=3109,kDirectPreset=3110,
-                         kMainPage=3111,kEditPage=3112,
+                         kMainPage=3111,
                          kReverbType=1200,kChorusType=1201;
     static constexpr int kGuiFirst=1100,kGuiCount=12;
     static constexpr int kMasterVolume=static_cast<int>(MasterOutput::kParamID);
@@ -72,10 +72,10 @@ private:
     uint8_t program_=0;
     int bankFilter_=-1;
     bool syncing_=false,selectingRowFromMouse_=false;
-    int currentPage_=0;  // MAIN=0, EDIT=1, BROWSER=2 (UI only, no VST state)
-    std::array<VSTGUI::CViewContainer*,3> pages_{};
+    int currentPage_=0;  // SYNTH=0, BROWSER=1 (UI only, no VST state)
+    std::array<VSTGUI::CViewContainer*,2> pages_{};
     VSTGUI::CViewContainer* buildingPanel_=nullptr;
-    std::array<VSTGUI::CTextButton*,3> pageButtons_{};
+    std::array<VSTGUI::CTextButton*,2> pageButtons_{};
     std::string searchText_;
     std::vector<uint16_t> filterBanks_;
     std::vector<uint16_t> activeBanks_;
