@@ -44,7 +44,7 @@ assert 'msg->setMessageID("125A_ROM_LOAD")' in f
 assert 'FIDStringsEqual(msg->getMessageID(),"125A_ROM_LOAD")' in f
 assert 'romAck("OK")' in f
 assert 'romLoadRequest_' in h and 'kLoadRom=3108' in h
-assert 'MakeButton({690,151,821,187},kLoadRom,"ROM LADEN")' in b
+assert 'MakeButton({796,103,871,139},kLoadRom,"ROM")' in b
 assert 'NativeChooseFile(path,true)' in b and 'NativeChooseFile(path,false)' in b
 assert 'GetOpenFileNameW(&ofn)' in b
 assert 'getBinary("Path",bytes,bytesCount)' in f
@@ -54,7 +54,11 @@ assert 'core.ChipVariant()!=Emu8000Core::Chip::Box86' in f
 assert 'CORE: INAKTIV' in f and 'ROM: ERFORDERLICH' in f
 assert 'core.ChipRamWords()' in f and 'BankAt(i).sampleData.size()' in f
 assert 'hardwareInfoProvider_' in h and 'hardwareInfoLabel_' in h
-assert 'addView(new HardwareFaceplate({0,0,1000,640}))' in b and '32 VOICES / 44.1 kHz' in b
+assert 'addView(new HardwareFaceplate({0,0,1000,640}))' in b
+assert 'new CBitmap("125A_PCB_Shared_1000x640.png")' in b
+assert 'new CBitmap("125A_PCB_MAIN_1000x640.png")' in b
+assert 'AddToCurrentPage(new MainPcbArtwork(PageRect({0,310,1000,604})))' in b
+assert 'setMouseEnabled(false)' in b
 assert 'SyncHardwareInfo();' in b
 assert 'sfCatalog_=std::move(sf2PendingCatalog_)' in f
 assert 'std::try_to_lock' not in f
@@ -83,14 +87,15 @@ assert 'rtMaster_' in f and 'volumeGain_.setTarget(' in f
 assert 'masterVolume_' in h and 'masterVolumeValue_' in h
 assert 'new HardwareKnob(PageRect({736,372,848,484})' in b
 assert 'controller_->getParamNormalized(kMasterVolume)' in b
-assert 'activeBankMenu_=new COptionMenu({79,215,251,254},this,kActiveBank)' in b
-assert 'programMenu_=new COptionMenu({325,215,823,254},this,kDirectPreset)' in b
+assert 'activeBankMenu_=new COptionMenu({79,197,251,240},this,kActiveBank)' in b
+assert 'programMenu_=new COptionMenu({325,197,823,240},this,kDirectPreset)' in b
 assert 'RebuildActiveMenus();' in b and 'SyncActiveMenuSelection();' in b
 assert 'sf_.Find(bank_,id)' in b
 assert 'ChooseExistingProgram(' in b
 assert 'kActiveBank=3109,kDirectPreset=3110' in h
 assert 'm_guiControls[11]' in syn
-assert 'MakeLabel({27,14,157,49},"125A",false)' in b
+assert 'MakeLabel({27,14,157,49},"125A",false)' not in b
+assert 'programLabel_=MakeLabel({310,82,744,125},"NO PRESET",false)' in b
 assert (root/"src/vst3/resource/125A_Logo_Master_FINAL.svg").is_file()
 assert 'resource/125A_Logo_Master_FINAL.svg' in cmake
 assert 'resource/MAUIFM.IBK' not in cmake
@@ -123,4 +128,9 @@ assert 'MakeLabel({27,465,605,483},"FILTER ENVELOPE",true)' in b
 assert 'MakeLabel({668,465,965,483},"FILTER TONE",true)' in b
 assert 'reset_=MakeButton({840,322,965,357},kReset,"MOD RESET")' in b
 assert 'masterVolume_->setDefaultValue(1.f)' in b
-print("P143 STATIC PASS: compact VSTGUI, FX pairing, large right-side Master, EDIT, BROWSER, V11")
+for image in ("125A_PCB_Shared_1000x640.png","125A_PCB_MAIN_1000x640.png"):
+    assert (root/"src/vst3/resource"/image).is_file(),image
+    assert ("resource/"+image) in cmake,image
+assert 'resource/awe_pcb.rc.in' in cmake
+assert (root/"src/vst3/resource/awe_pcb.rc.in").is_file()
+print("P145 STATIC PASS: real PCB PNG layers, native Windows resources, gold logo, retained controls and V11 state")
