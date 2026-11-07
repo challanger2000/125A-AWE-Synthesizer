@@ -207,7 +207,7 @@ assert 'panel({16,603,984,634},panelColor,edge);' not in b
 gold_logo=root/"src/vst3/resource/125A_AWE_Gold_Logo_236x147.png"
 assert gold_logo.is_file() and gold_logo.stat().st_size>2500
 gold_logo_data=gold_logo.read_bytes()
-assert gold_logo_data.startswith(b"\\x89PNG\\r\\n\\x1a\\n")
+assert gold_logo_data.startswith(b"\x89PNG\r\n\x1a\n")
 assert struct.unpack_from(">II",gold_logo_data,16)==(236,147)
 assert gold_logo_data[25] in (3,6)
 assert gold_logo_data[25]==6 or b"tRNS" in gold_logo_data
