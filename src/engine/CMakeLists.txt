@@ -65,6 +65,19 @@ target_link_libraries(awe32_sf2_audio_integration_test PRIVATE awe32_chip_safety
 set_target_properties(awe32_sf2_audio_integration_test PROPERTIES CXX_STANDARD 23)
 add_test(NAME 125A_sf2_audio_integration COMMAND awe32_sf2_audio_integration_test)
 
+# P166: actual SF2/ROM metadata and 86Box PCM regression, including the
+# 77-preset sparse shape (missing 63), explicit ROM banks, MIDI CC0, negative
+# mutation control, noncontiguous banks and V11 project identity.
+# Creates only synthetic ephemeral fixtures in the OS temp directory.
+add_executable(awe32_p166_exact_presets_test
+  "${PROJECT_SOURCE_DIR}/tests/p166_exact_sf2_rom.cpp")
+target_include_directories(awe32_p166_exact_presets_test PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/src/vst3" "${UPSTREAM_SRC}")
+target_link_libraries(awe32_p166_exact_presets_test PRIVATE awe32_chip_safety)
+target_compile_features(awe32_p166_exact_presets_test PRIVATE cxx_std_23)
+add_test(NAME 125A_p166_exact_sf2_rom COMMAND awe32_p166_exact_presets_test)
+set_tests_properties(125A_p166_exact_sf2_rom PROPERTIES TIMEOUT 90)
+
 # P121: real 86Box synthetic ROM / PCM regression for dense pitchbend.
 # Exercises the genuine 32,768-write queue and a playing 16-voice bank.
 add_executable(awe32_p121_pitchbend_audio_test "${PROJECT_SOURCE_DIR}/tests/p121_pitchbend_audio.cpp")
