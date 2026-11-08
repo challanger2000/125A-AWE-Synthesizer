@@ -236,10 +236,14 @@ int main(){
        PresetBrowserModel::Neighbor(0,s,s,5,2,1)==70,
        "sparse unsorted multi-bank SF2 keeps physical bank/program numbers");
     PresetCatalog collision;
-    ok&=Check(collision.LoadSoundFont(reserved.string(),err)&&
-       !collision.AppendRomGm(gm.string(),err)&&
-       collision.Entries().size()==1&&collision.Find(16383,20),
-       "reserved ROM-bank collision fails atomically, never renumbers SF2");
+    const bool validBefore=collision.LoadSoundFont(sparse.string(),err);
+    const auto countBefore=collision.Entries().size();
+    const bool reservedRejected=!collision.LoadSoundFont(reserved.string(),err);
+    ok&=Check(validBefore&&reservedRejected&&
+       countBefore==6&&collision.Entries().size()==countBefore&&
+       collision.Find(5,70)&&!collision.Find(16383,20)&&
+       err.find("reserved")!=std::string::npos,
+       "reserved ROM-bank collision rejected by catalog/engine, prior catalog atomic");
 
     // Validate genuine 86Box NoteOn and rendered PCM. Baseline control:
     // disabling strict selection must make the missing-preset oracle FAIL.
