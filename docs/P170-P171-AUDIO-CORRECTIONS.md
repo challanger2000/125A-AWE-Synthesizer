@@ -61,6 +61,13 @@ bedeuten stärkeres Verkürzen bzw. Sustain-Absenken. Die Regler gelten weiterhi
 bei **neuem NoteOn**, nicht rückwirkend für laufende Stimmen. Tooltips und
 Host-Titel erläutern dies bei unveränderter Faceplate/Reglergeometrie.
 
+Zusätzliche Selbstgegenprobe: Ein SF2-Release von 8000 Timecents wird als
+Rate 0 kodiert; `StartVoice` spielt dafür außerhalb DOS bereits historisch Rate
+0x40. Die neue Kennlinie muss von diesem tatsächlich gespielten Ersatzwert
+ausgehen. Sonst stieg die späte RMS bei 0→1% von 0,00482 auf 0,04185.
+Nach Korrektur: 0,00482 → 0,00444 → 0,00379 → 0 für 0/1/5/100%.
+Auch diese Regression wurde vor der Korrektur durch PCM nachgewiesen.
+
 **Kompatibilitätsgrenze:** V11-Bytes und ParamIDs bleiben lesbar/unverändert;
 früher mit **nichtnull** gespeicherten fehlerhaften Overlays wird bewusst eine
 korrigierte Klangbedeutung gegeben. Es wird keine PCM-Gleichheit für diese alten

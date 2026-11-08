@@ -127,6 +127,13 @@ def main():
                 measurements.append(rms(pcm,44100,lo,hi))
             check(measurements[0]>measurements[-1]*5 and all(b<=a*1.03+1e-5 for a,b in zip(measurements,measurements[1:])),
                   f'AMP {title} audio sweep {measurements}')
+        release_zero=[]
+        for value in [0,.01,.05,1]:
+            pcm,_=render(f'release-zero-rate-{value}',
+                [p for p in DRY if p[0]!=38]+[(38,8000)],[0,0,0,value]+[0]*8,off=.5)
+            release_zero.append(rms(pcm,44100,.55,.8))
+        check(all(b<=a*1.03+1e-5 for a,b in zip(release_zero,release_zero[1:])),
+              'AMP release zero-rate fallback remains monotone '+str(release_zero))
         # This SF2 has NO filter route: require spectral modulation, not changed registers alone.
         dry,_=render('filter-neutral')
         filtered,_=render('filter-adsr',controls=[0]*4+[1,.5,1,1]+[0]*4)

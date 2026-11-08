@@ -958,7 +958,14 @@ void Synth::StartLayers(size_t bankIndex, std::span<const SoundFont::Region> reg
         if(m_guiControls[1]>0.f) v.dcysusv=replaceLow(v.dcysusv,timeRate(v.dcysusv&127,m_guiControls[1]));
         if(m_guiControls[2]>0.f) v.dcysusv=replaceHigh(v.dcysusv,
             int(std::lround(((v.dcysusv>>8)&127)*(1.f-m_guiControls[2]))));
-        if(m_guiControls[3]>0.f) v.releaseRate=static_cast<uint8_t>(timeRate(v.releaseRate,m_guiControls[3]));
+        if(m_guiControls[3]>0.f) {
+            // StartVoice uses 0x40 for a zero volume-release rate outside
+            // the DOS families. Interpolate from the rate actually played,
+            // otherwise 1% could lengthen that fallback to tens of seconds.
+            const int original=v.releaseRate ? v.releaseRate :
+                (Awe32::IsDosLike(m_core.DriverVariant()) ? 0 : 0x40);
+            v.releaseRate=static_cast<uint8_t>(timeRate(original,m_guiControls[3]));
+        }
         shortenAttack(v.envval,v.atkhld,m_guiControls[4]);
         if(m_guiControls[5]>0.f) v.dcysus=replaceLow(v.dcysus,timeRate(v.dcysus&127,m_guiControls[5]));
         if(m_guiControls[6]>0.f) v.dcysus=replaceHigh(v.dcysus,
