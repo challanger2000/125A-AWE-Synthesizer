@@ -117,6 +117,7 @@ int wmain(int argc,wchar_t** argv) {
         const auto get=reinterpret_cast<GetFactory>(GetProcAddress(dll,"GetPluginFactory"));
         require(get!=nullptr,"P177 factory export");
         factory=get();
+        std::cerr<<"P177_STAGE factory-ready\n"<<std::flush;
         require(factory!=nullptr,"P177 factory");
         const auto assets=std::filesystem::path(argv[2]);
         AWE125::AssetState::Data wanted{};
@@ -125,19 +126,27 @@ int wmain(int argc,wchar_t** argv) {
         wanted.sf2Path=(assets/"bank.sf2").string();
         wanted.program=7;wanted.bank=0;wanted.channelPrograms.fill(7);
         auto blank=wanted;blank.sf2Path.clear();blank.program=0;blank.channelPrograms.fill(0);
+        std::cerr<<"P177_STAGE reference-start\n"<<std::flush;
         Instance reference(factory,44100,wanted);
+        std::cerr<<"P177_STAGE reference-active\n"<<std::flush;
         const auto expected=render(reference.audio,0);
         require(std::any_of(expected.begin(),expected.end(),[](float x){return x!=0.f;}),
                 "P177 reference sound missing");
+        std::cerr<<"P177_STAGE reference-pcm\n"<<std::flush;
         Instance actual(factory,44100,blank);
+        std::cerr<<"P177_STAGE actual-active\n"<<std::flush;
         syncController(actual,blank);
+        std::cerr<<"P177_STAGE controller-state\n"<<std::flush;
         auto* handler=new Handler;
         require(actual.controller->setComponentHandler(handler)==kResultOk,"P177 handler binding");
+        std::cerr<<"P177_STAGE handler-installed\n"<<std::flush;
         auto* view=actual.controller->createView(ViewType::kEditor);
         require(view!=nullptr,"P177 actual VSTGUI view");
+        std::cerr<<"P177_STAGE view-created\n"<<std::flush;
         Frame* frame=nullptr;HWND hwnd=nullptr;bool attached=false,frameSet=false;
         try {
             ViewRect size{};
+            std::cerr<<"P177_STAGE view-size-enter\n"<<std::flush;
             require(view->getSize(&size)==kResultTrue,"P177 editor size");
             require(view->isPlatformTypeSupported(kPlatformTypeHWND)==kResultTrue,
                     "P177 native HWND unsupported");
@@ -154,12 +163,15 @@ int wmain(int argc,wchar_t** argv) {
                 rect.right-rect.left,rect.bottom-rect.top,nullptr,nullptr,
                 GetModuleHandleW(nullptr),nullptr);
             require(hwnd!=nullptr,"P177 create Win32 host");
+            std::cerr<<"P177_STAGE host-window-created\n"<<std::flush;
             frame=new Frame(hwnd);
             require(view->setFrame(frame)==kResultTrue,"P177 native frame");
             frameSet=true;
             require(view->attached(hwnd,kPlatformTypeHWND)==kResultTrue,"P177 editor attach");
             attached=true;
+            std::cerr<<"P177_STAGE view-attached\n"<<std::flush;
             ShowWindow(hwnd,SW_SHOWNORMAL);UpdateWindow(hwnd);
+            std::cerr<<"P177_STAGE window-shown\n"<<std::flush;
             std::cout<<"P177_GUI_READY\n"<<std::flush;
             MSG message{};
             const auto until=GetTickCount64()+45000u;
