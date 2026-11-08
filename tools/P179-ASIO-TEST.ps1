@@ -1,0 +1,121 @@
+#requires -Version 5.1
+# P179: true hardware ASIO + MIDI/PCM from actual AWE VST3, LOCAL ONLY.
+# Never silently installs a driver, copies original ROM/SF2 or uploads media.
+[CmdletBinding()] param()
+Set-StrictMode -Version Latest
+$ErrorActionPreference='Stop'
+$root=$PSScriptRoot
+$exe=Join-Path $root '125A-Test-Lab-ASIO-MIDI.exe'
+$dll=Join-Path $root '125A_AWE_Synthesizer.vst3\Contents\x86_64-win\125A_AWE_Synthesizer.vst3'
+$out=Join-Path $root ('P179-LOCAL-RESULT-'+(Get-Date -Format 'yyyyMMdd-HHmmss')+'-'+[Guid]::NewGuid().ToString('N').Substring(0,8))
+New-Item -ItemType Directory -Path $out -ErrorAction Stop | Out-Null
+$reportFile=Join-Path $out 'P179-ACCEPTANCE.json'
+$report=@{schema='125a-p179-local-awe-asio-v1';status='NOT_RUN';
+  original_rom_sf2='LOCAL_NOT_UPLOADED';daw_session_verified=$false;
+  release_approved=$false;physical_asio_verified=$false;
+  native_midi_audio_verified=$false;errors=@()}
+function Publish { $report | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $reportFile -Encoding UTF8 }
+function ReadPath([string]$title) {
+  $inputPath=Read-Host $title
+  return ($inputPath.Trim().Trim([char]34))
+}
+$oldRom=$env:AWE32_ROM_PATH
+$oldSf2=$env:AWE32_SF2_PATH
+try {
+  if (-not [Environment]::Is64BitProcess) { throw 'Bitte eine 64-Bit-Windows-PowerShell verwenden.' }
+  if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw 'ASIO-Testprogramm fehlt im Paket.' }
+  if (-not (Test-Path -LiteralPath $dll -PathType Leaf)) { throw 'AWE-VST3-Modul fehlt im Paket.' }
+  $rom=ReadPath 'Original AWE32-ROM (*.raw), voller Pfad'
+  $sf2=ReadPath 'Original SoundFont (*.sf2), voller Pfad'
+  if (-not (Test-Path -LiteralPath $rom -PathType Leaf)) { throw 'Die angegebene ROM-Datei existiert nicht.' }
+  if ((Get-Item -LiteralPath $rom).Length -ne 1048576) { throw 'Die ROM muss genau 1.048.576 Bytes gross sein (keine Echtheitsgarantie).' }
+  if (-not (Test-Path -LiteralPath $sf2 -PathType Leaf) -or [IO.Path]::GetExtension($sf2).ToLowerInvariant() -ne '.sf2') { throw 'Die SF2 existiert nicht oder ist ungueltig.' }
+  $driverRoot='Registry::HKEY_LOCAL_MACHINE\SOFTWARE\ASIO'
+  if (-not (Test-Path -LiteralPath $driverRoot)) { throw 'Keine Windows-ASIO-Treiberregistrierung vorhanden.' }
+  $drivers=@(Get-ChildItem -LiteralPath $driverRoot | ForEach-Object {
+    $driver=$_.PSChildName
+    $props=Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue
+    if($props -and [string]$props.CLSID -match '^\{[0-9A-Fa-f-]{36}\}$') {
+      [PSCustomObject]@{Name=$driver;CLSID=[string]$props.CLSID}
+    }
+  })
+  if ($drivers.Count -eq 0) { throw 'Kein gueltig registrierter Windows-ASIO-Treiber gefunden.' }
+  $audient=@($drivers | Where-Object {$_.Name -match '(?i)audient|id14|id\s*driver'})
+  if ($audient.Count -eq 1) {
+    $selected=$audient[0]
+    Write-Host ('ASIO-Treiber automatisch erkannt: '+$selected.Name)
+  } elseif ($drivers.Count -eq 1) {
+    $selected=$drivers[0]
+  } else {
+    Write-Host 'Installierte echte ASIO-Treiber:'
+    for($i=0;$i -lt $drivers.Count;$i++){Write-Host ('  '+($i+1)+': '+$drivers[$i].Name)}
+    $choice=Read-Host 'Nummer des Audiointerface-ASIO-Treibers'
+    $number=0
+    if(-not [int]::TryParse($choice,[ref]$number) -or $number -lt 1 -or $number -gt $drivers.Count) { throw 'Ungueltige ASIO-Treiberwahl.' }
+    $selected=$drivers[$number-1]
+  }
+  Write-Host ''
+  Write-Host 'Dieser Test nutzt den ECHTEN ASIO-Treiber und spielt MIDI-Note 48.'
+  Write-Host 'Bitte DAW schliessen und Monitor-/Kopfhoererlautstaerke absenken.'
+  Write-Host 'Sicherheitsgrenze am ASIO-Ausgang: -20 dBFS Peak.'
+  $consent=Read-Host 'Mit Enter starten, mit N abbrechen'
+  if($consent.Trim() -ne ''){throw 'Benutzer hat ASIO-Test nicht gestartet.'}
+  $moduleHash=(Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash.ToLowerInvariant()
+  $executorHash=(Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+  $random=[byte[]]::new(24)
+  $rng=[System.Security.Cryptography.RandomNumberGenerator]::Create()
+  try{$rng.GetBytes($random)}finally{$rng.Dispose()}
+  $nonce=([BitConverter]::ToString($random)).Replace('-','').ToLowerInvariant()
+  $asioPath=Join-Path $out 'ASIO-CALLBACKS.json'
+  $midiPath=Join-Path $out 'ASIO-MIDI-PCM.json'
+  $env:AWE32_ROM_PATH=$rom
+  $env:AWE32_SF2_PATH=$sf2
+  $args=@('--physical-asio-probe','--plugin',$dll,'--driver-name',$selected.Name,
+    '--driver-clsid',$selected.CLSID,'--rate','44100','--frames','256',
+    '--callbacks','1000','--nonce',$nonce,'--out',$asioPath,
+    '--midi-note','48','--midi-out',$midiPath)
+  & $exe @args 2>&1 | Tee-Object -FilePath (Join-Path $out 'NATIVE-HOST-LOG.txt')
+  if($LASTEXITCODE -ne 0){throw ('Echter ASIO-Host FAIL (Exitcode '+$LASTEXITCODE+'). Siehe NATIVE-HOST-LOG.txt')}
+  if(-not (Test-Path $asioPath) -or -not (Test-Path $midiPath)){throw 'Echte ASIO- und MIDI-PCM-Beweisdateien fehlen.'}
+  $asio=Get-Content -LiteralPath $asioPath -Raw | ConvertFrom-Json
+  $midi=Get-Content -LiteralPath $midiPath -Raw | ConvertFrom-Json
+  if($asio.schema -cne '125a-physical-asio-native-evidence-v1' -or
+     $midi.schema -cne '125a-physical-asio-instrument-midi-v1' -or
+     $asio.nonce -cne $nonce -or $midi.nonce -cne $nonce -or
+     $asio.product_sha256 -cne $moduleHash -or $midi.product_sha256 -cne $moduleHash -or
+     $asio.executor_sha256 -cne $executorHash -or $midi.executor_sha256 -cne $executorHash -or
+     $asio.asio_driver_name -cne $selected.Name -or $midi.asio_driver_name -cne $selected.Name -or
+     [int]$asio.sample_rate -ne 44100 -or [int]$asio.buffer_frames -ne 256 -or
+     [int]$asio.completed_callbacks -lt 1000 -or [int]$asio.asio_callbacks -lt 1000 -or
+     [int]$asio.asio_callbacks -ne [int]$asio.completed_callbacks -or
+     [int]$asio.deadline_misses -ne 0 -or [int]$asio.xruns -ne 0 -or
+     [int]$asio.process_failures -ne 0 -or [int]$asio.error_code -ne 0 -or
+     [int]$midi.midi_note -ne 48 -or [int]$midi.note_ons -lt 1 -or
+     [int]$midi.note_offs -lt 1 -or [int]$midi.nonzero_pcm_samples -lt 100 -or
+     [double]$midi.peak_before_safety_ceiling -le 0.0001) {
+    throw 'ASIO-/MIDI-Nachweise sind falsch, unvollstaendig oder ohne Klang.'
+  }
+  $report.status='PHYSICAL_ASIO_MIDI_PCM_PASS'
+  $report.physical_asio_verified=$true
+  $report.native_midi_audio_verified=$true
+  $report.driver=$selected.Name
+  $report.sample_rate=44100
+  $report.buffer_frames=256
+  $report.callbacks=[int]$asio.asio_callbacks
+  $report.midi_notes=[int]$midi.note_ons
+  $report.pcm_peak=[double]$midi.peak_before_safety_ceiling
+  $report.module_sha256=$moduleHash
+  $report.executor_sha256=$executorHash
+  Write-Host 'PASS: Echter ASIO-Callback und MIDI-Klang deiner Originaldateien verifiziert.'
+} catch {
+  $report.status='NOT_RUN_OR_FAIL'
+  $report.errors=@($_.Exception.Message)
+  Write-Host ('ASIO-NO-GO: '+$_.Exception.Message) -ForegroundColor Red
+} finally {
+  [Environment]::SetEnvironmentVariable('AWE32_ROM_PATH',$oldRom,'Process')
+  [Environment]::SetEnvironmentVariable('AWE32_SF2_PATH',$oldSf2,'Process')
+  Publish
+  Write-Host ('Ergebnis: '+$reportFile)
+}
+if($report.status -ceq 'PHYSICAL_ASIO_MIDI_PCM_PASS'){exit 0}
+exit 1

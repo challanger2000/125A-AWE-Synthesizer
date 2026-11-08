@@ -1,0 +1,118 @@
+name: P179 real Audient ASIO MIDI Windows local hardware test kit
+on:
+  push:
+    branches: [qa/p179-native-asio-instrument-kit]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  prepare-local-kit:
+    runs-on: windows-2022
+    timeout-minutes: 26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Retrieve exactly validated P178 original-media AWE test bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: P178-Windows-PRIVATE-LOCAL-TEST-KIT
+          run-id: 42496568131
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: p178-verified
+      - name: Verify archived P178 VST3 binary and provenance before any reuse
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'p178-verified/PROVENANCE.txt')) { throw 'P178 proven source metadata missing' }
+          $provenance=Get-Content 'p178-verified/PROVENANCE.txt' -Raw
+          if ($provenance -notmatch 'SOURCE_SHA=cff9d91cdec5aa2574d039b23660fae0589c6878') { throw 'P178 artifact source SHA mismatch' }
+          $binary=(Get-ChildItem 'p178-verified/125A_AWE_Synthesizer.vst3' -Recurse -File -Filter '*.vst3' | Select-Object -First 1)
+          if (-not $binary -or $binary.Name -ne '125A_AWE_Synthesizer.vst3') { throw 'Verified P178 binary missing' }
+          $manifest=Get-Content 'p178-verified/SHA256SUMS.txt' -Raw
+          $hash=(Get-FileHash -LiteralPath $binary.FullName -Algorithm SHA256).Hash
+          if ($manifest -notmatch [Regex]::Escape($hash)) { throw 'Product DLL SHA256 does not match P178 signed-off test manifest' }
+          $ownerExe=Get-Item -LiteralPath 'p178-verified/125A-P178-Media-Probe.exe'
+          $ownerHash=(Get-FileHash -LiteralPath $ownerExe.FullName -Algorithm SHA256).Hash
+          if ($manifest -notmatch [Regex]::Escape($ownerHash)) { throw 'Original media probe does not match P178 tested binary' }
+          Write-Host 'P178 verified Windows DLL and media probe hash-checked'
+      - name: Clone audited Test Lab P100 ASIO-MIDI native source at exact commit
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch qa/p100-asio-instrument-midi https://github.com/challanger2000/125A-Plugin-Test-Lab.git lab-p100
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot fetch native ASIO host' }
+          if ((git -C lab-p100 rev-parse HEAD).Trim() -cne '94316da44f68d6c52b66ccf2af202f6f6b807da8') { throw 'Native Test Lab source not exactly pinned' }
+      - name: Fetch original ASIO SDK at separately pinned GPLv3 reference
+        shell: pwsh
+        run: |
+          git clone --no-checkout https://github.com/audiosdk/asio.git asio-sdk
+          if ($LASTEXITCODE -ne 0) { throw 'ASIO source unavailable' }
+          git -C asio-sdk checkout --detach 496a0765b8bb9c26f764f22f9a9712a937177db2
+          if ($LASTEXITCODE -ne 0 -or (git -C asio-sdk rev-parse HEAD).Trim() -cne '496a0765b8bb9c26f764f22f9a9712a937177db2') { throw 'Wrong ASIO SDK source' }
+      - name: Build native ASIO driver MIDI event host on Windows x64
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force qa | Out-Null
+          cmake -S lab-p100 -B build-lab-p179 -G 'Visual Studio 17 2022' -A x64 "-DASIO_SDK_DIR=$env:GITHUB_WORKSPACE/asio-sdk"
+          if ($LASTEXITCODE -ne 0) { throw 'P179 native ASIO configure failed' }
+          cmake --build build-lab-p179 --config Release --parallel 4 --target TestLabPhysicalASIO 2>&1 | Tee-Object qa/build.txt
+          if ($LASTEXITCODE -ne 0) { throw 'P179 native ASIO MIDI host compile failed' }
+      - name: Negative: real product must not pass ASIO with unregistered hardware
+        shell: pwsh
+        run: |
+          $exe=@(Get-ChildItem build-lab-p179 -Recurse -File -Filter '125A_Test_Lab_Physical_ASIO.exe')
+          if ($exe.Count -ne 1) { throw 'Exactly one native ASIO executor required' }
+          $plugin=(Get-ChildItem p178-verified -Filter '125A_AWE_Synthesizer.vst3' -Recurse -File | Select-Object -First 1).FullName
+          & $exe[0].FullName --sample-format-selftest
+          if ($LASTEXITCODE -ne 0) { throw 'ASIO sample converter self-test failed' }
+          $badAsio=(Join-Path $env:RUNNER_TEMP 'P179-FORBIDDEN-ASIO.json')
+          $badMidi=(Join-Path $env:RUNNER_TEMP 'P179-FORBIDDEN-MIDI.json')
+          $args=@('--physical-asio-probe','--plugin',$plugin,'--driver-name','No physical P179 device','--driver-clsid','{00000000-0000-0000-0000-000000000000}','--rate','44100','--frames','256','--callbacks','1000','--nonce','0123456789abcdef0123456789abcdef0123456789abcdef','--out',$badAsio,'--midi-note','48','--midi-out',$badMidi)
+          $PSNativeCommandUseErrorActionPreference=$false
+          & $exe[0].FullName @args
+          if ($LASTEXITCODE -eq 0 -or (Test-Path $badAsio) -or (Test-Path $badMidi)) { throw 'False physical-ASIO PASS without device' }
+          Write-Host 'PASS native sample conversion and intentionally unavailable real-device rejection'
+          exit 0
+      - name: Package Windows BAT/PowerShell + physically testable native EXE and exact P178 VST3
+        shell: pwsh
+        run: |
+          $dest='qa/local-kit'
+          New-Item -ItemType Directory -Force $dest | Out-Null
+          Copy-Item 'p178-verified/*' $dest -Recurse
+          $exe=@(Get-ChildItem build-lab-p179 -Recurse -File -Filter '125A_Test_Lab_Physical_ASIO.exe')
+          if ($exe.Count -ne 1) { throw 'Native ASIO executor ambiguity' }
+          Copy-Item $exe[0].FullName (Join-Path $dest '125A-Test-Lab-ASIO-MIDI.exe')
+          Copy-Item 'tools/P179-ASIO-TEST.bat' $dest
+          Copy-Item 'tools/P179-ASIO-TEST.ps1' $dest
+          Copy-Item 'docs/P179-LOCAL-PHYSICAL-ASIO-ACCEPTANCE.md' (Join-Path $dest 'README-P179-ASIO.txt')
+          Copy-Item 'asio-sdk/LICENSE.txt' (Join-Path $dest 'ASIO-SDK-LICENSE.txt')
+          New-Item -ItemType Directory -Force (Join-Path $dest 'ASIO-HOST-SOURCE') | Out-Null
+          Copy-Item 'lab-p100/src/physical_asio.cpp' (Join-Path $dest 'ASIO-HOST-SOURCE/physical_asio.cpp')
+          Copy-Item 'lab-p100/CMakeLists.txt' (Join-Path $dest 'ASIO-HOST-SOURCE/CMakeLists.txt')
+          Copy-Item 'lab-p100/docs/P100-PHYSICAL-ASIO-MIDI.md' (Join-Path $dest 'ASIO-HOST-SOURCE/README.txt')
+          @(
+            "P179_SOURCE_SHA=$env:GITHUB_SHA"
+            'AWE_P178_EXACT_VALIDATED_SOURCE=cff9d91cdec5aa2574d039b23660fae0589c6878'
+            'ASIO_HOST_EXACT_SOURCE=94316da44f68d6c52b66ccf2af202f6f6b807da8'
+            'ASIO_SDK_SOURCE=496a0765b8bb9c26f764f22f9a9712a937177db2'
+            'ORIGINAL_ROM_SF2=NEVER_IN_CLOUD'
+            'PHYSICAL_ASIO_SESSION=NOT_RUN_IN_CLOUD'
+            'REAL_DAW_SESSION=NOT_RUN'
+            'RELEASE=NO_GO'
+          ) | Set-Content (Join-Path $dest 'P179-PROVENANCE.txt')
+          $plugin=(Get-ChildItem $dest -Filter '125A_AWE_Synthesizer.vst3' -Recurse -File | Select-Object -First 1).FullName
+          @($plugin,(Join-Path $dest '125A-Test-Lab-ASIO-MIDI.exe')) | ForEach-Object {
+            $f=Get-FileHash -LiteralPath $_ -Algorithm SHA256
+            "{0}  {1}" -f $f.Hash,([IO.Path]::GetFileName($f.Path))
+          } | Set-Content (Join-Path $dest 'P179-SHA256SUMS.txt')
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: P179-AWE-PHYSICAL-ASIO-LOCAL-TEST
+          path: qa/local-kit/
+          if-no-files-found: warn
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: P179-Windows-ASIO-Build-and-Negative-Evidence
+          path: qa/build.txt
+          if-no-files-found: warn
+          retention-days: 14
