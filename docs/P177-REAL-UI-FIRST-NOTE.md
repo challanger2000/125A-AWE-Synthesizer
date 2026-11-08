@@ -36,8 +36,14 @@ Sources: `tests/p177_ui_first_note_host.cpp`,
 
 ## Evidence discipline
 
-At authoring, the new P177 code was **NOT YET COMPILED OR EXECUTED**.
-No P177 PASS is claimed before verifying exact-commit Windows native logs.
+**Confirmed P177 exact-source Windows execution:**
+[Run #42493315242 SUCCESS](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42493315242) on commit `25373c00fb041dc8a5df56e2fe5eec43c0d43c8e`.
+The new **one scoped native GUI → Controller → first-note PCM CTest passed (1/1)**. The exported DLL and the native host compiled; the Steinberg SDK build selftests passed (47/47). The successful test asserts a real Win32 dialog, Controller/Processor communication, VST3 host begin/perform/endEdit and first-note PCM identity.
+
+**Why preceding P177 attempts failed:** first a Windows Unicode cursor resource type mismatch in the newly introduced testhost, then a missing Windows VST3 module `InitDll` call causing its VSTGUI editor creation to stall. The final testhost now mirrors the Steinberg 3.8.1 `Module::create` initialization order and invokes `ExitDll` on shutdown. These were harness defects, not proof of a product audio defect.
+
+**Full-suite distinction:** this P177 workflow deliberately runs the new end-to-end CTest alone, **not** a 64/64 full CTest or entire fresh EditorHost/Test Lab run at P177 SHA. The earlier full-suite evidence remains P176-specific; there were no production-DLL source edits between P176 and P177.
+
 P176's 63/63 CTests, 537/537 Steinberg Validator, 99/99 GUI checks and
 independent Test Lab TECHNICAL_PASS were observed in Windows run
 https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42488547080
