@@ -113,6 +113,12 @@ int wmain(int argc,wchar_t** argv) {
     try {
         dll=LoadLibraryW(argv[1]);
         require(dll!=nullptr,"P177 LoadLibrary actual binary");
+        // Steinberg module-loading contract: hosts call InitDll if exported,
+        // *before* GetPluginFactory. Native PCM-only P171 did not exercise UI.
+        using InitDllProc=bool(*)();
+        const auto initDll=reinterpret_cast<InitDllProc>(GetProcAddress(dll,"InitDll"));
+        if(initDll)require(initDll(),"P177 optional VST3 InitDll rejected");
+        std::cerr<<"P177_STAGE module-entry-complete\n"<<std::flush;
         using GetFactory=IPluginFactory*(*)();
         const auto get=reinterpret_cast<GetFactory>(GetProcAddress(dll,"GetPluginFactory"));
         require(get!=nullptr,"P177 factory export");
@@ -213,7 +219,13 @@ int wmain(int argc,wchar_t** argv) {
         std::cerr<<"P177_GUI_PCM_FAIL "<<e.what()<<'\n';
     }
     if(factory)factory->release();
-    if(dll)FreeLibrary(dll);
+    if(dll) {
+        // ExitDll likewise precedes FreeLibrary if the plug-in exports it.
+        using ExitDllProc=bool(*)();
+        const auto exitDll=reinterpret_cast<ExitDllProc>(GetProcAddress(dll,"ExitDll"));
+        if(exitDll)exitDll();
+        FreeLibrary(dll);
+    }
     CoUninitialize();
     return rc;
 }
