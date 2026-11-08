@@ -129,6 +129,35 @@ native stderr bei Exitcode 0 nicht fälschlich fehlschlägt und bei
 Exitcode 7 keinesfalls als Erfolg gilt. Die eigentlichen ASIO-Gates
 werden **nicht gelockert**; eine Diagnose allein bleibt
 `DIAGNOSTIC_ONLY_NOT_HARDWARE_PASS`.
+## P181 – gezielte zeitliche Einordnung des echten ASIO-Ausreißers
+
+Der bisher letzte reale Hardware-Lauf (Yamaha Steinberg USB ASIO,
+512 Frames / 44.100 Hz) ergab **1.000 von 1.000** erfolgreich
+verarbeitete Blöcke, **0 DSP-Fehler**, **0 ASIO-XRUN-/Resync-Meldungen**,
+12 MIDI-NoteOns und 12 NoteOffs, jedoch weiterhin **eine**
+Überschreitung des zulässigen Abstands zwischen Callback-Starts
+(maximal 58,8728 ms); maximale Callback-Verarbeitung 6,7364 ms
+gegenüber einem Blockzeitraum von 11,61 ms.
+
+Die neue P181-Zeitspur ist dafür gedacht, **die Position im Ablauf**
+der Auffälligkeit zu bestimmen. Während der tatsächlichen ASIO-Sitzung
+werden Callback-Index, Thread-ID, Buffer-Index, QPC-Zeitpunkte,
+NoteOn/Off-Stand und etwaige Treibermeldungen in vorab angelegte
+Speicherzellen geschrieben. Nach dem Treiber-Stop entsteht
+`ASIO-CALLBACK-TIMING-TRACE.json` mit jeweils vier benachbarten
+Callbacks vor und nach jeder Auffälligkeit (keine privaten Audiodaten).
+Das lokale `P179-ACCEPTANCE.json` enthält nun zusätzlich
+`timing_trace_verified`, `timing_trace_gaps` und die einzelnen
+`timing_trace_events` mit den genauen Zeitpunkten – so genügt
+normalerweise wieder **nur eine JSON-Datei** für die Auswertung.
+
+Das ist keine unabhängige Windows-ETW-/Kernel-Scheduling-Aufzeichnung.
+Ein Wechsel der Thread-ID oder ein zeitlicher Zusammenhang mit einem
+MIDI-Ereignis erklärt allein noch nicht die Ursache. Keine Grenzwerte
+werden gelockert und kein Hardware-PASS wird aus dem Diagnoseformat
+abgeleitet. Dieser P181-Lauf ist **nicht** erforderlich, um die
+bisherigen 1.000/1.000-Audioerfolge erneut zu beweisen, sondern nur
+zur weiteren Ursachenanalyse des einen Timing-Ausreißers.
 ## Abgrenzungen
 
 Das ist ein echter Hardware-ASIO-/MIDI-Test, jedoch **keine Aufnahme von

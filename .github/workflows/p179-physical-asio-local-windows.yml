@@ -38,7 +38,7 @@ jobs:
         run: |
           git clone --depth 1 --branch qa/p100-asio-instrument-midi https://github.com/challanger2000/125A-Plugin-Test-Lab.git lab-p100
           if ($LASTEXITCODE -ne 0) { throw 'Cannot fetch native ASIO host' }
-          if ((git -C lab-p100 rev-parse HEAD).Trim() -cne '789dea2c57f517ffe68b713cba8128f6087706c9') { throw 'Native Test Lab source not exactly pinned' }
+          if ((git -C lab-p100 rev-parse HEAD).Trim() -cne '8c1becdc7ef1f6d8c56d97bf42e52f15bb2f1e9c') { throw 'Native Test Lab source not exactly pinned' }
       - name: Fetch original ASIO SDK at separately pinned GPLv3 reference
         shell: pwsh
         run: |
@@ -64,13 +64,16 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'ASIO sample converter self-test failed' }
           & $exe[0].FullName --buffer-choice-selftest
           if ($LASTEXITCODE -ne 0) { throw 'P101 real ASIO buffer chooser selftest failed' }
+          & $exe[0].FullName --timing-trace-selftest
+          if ($LASTEXITCODE -ne 0) { throw 'P181 ASIO trace window selftest failed' }
           $badAsio=(Join-Path $env:RUNNER_TEMP 'P179-FORBIDDEN-ASIO.json')
           $badMidi=(Join-Path $env:RUNNER_TEMP 'P179-FORBIDDEN-MIDI.json')
           $diag=(Join-Path $env:RUNNER_TEMP 'P179-FORBIDDEN-ASIO-DIAGNOSTIC.json')
-          $args=@('--physical-asio-probe','--plugin',$plugin,'--driver-name','No physical P179 device','--driver-clsid','{00000000-0000-0000-0000-000000000000}','--rate','44100','--frames','256','--callbacks','1000','--nonce','0123456789abcdef0123456789abcdef0123456789abcdef','--out',$badAsio,'--midi-note','48','--midi-out',$badMidi,'--diagnostic-out',$diag)
+          $trace=(Join-Path $env:RUNNER_TEMP 'P179-FORBIDDEN-ASIO-TIMING-TRACE.json')
+          $args=@('--physical-asio-probe','--plugin',$plugin,'--driver-name','No physical P179 device','--driver-clsid','{00000000-0000-0000-0000-000000000000}','--rate','44100','--frames','256','--callbacks','1000','--nonce','0123456789abcdef0123456789abcdef0123456789abcdef','--out',$badAsio,'--midi-note','48','--midi-out',$badMidi,'--diagnostic-out',$diag,'--timing-trace-out',$trace)
           $PSNativeCommandUseErrorActionPreference=$false
           & $exe[0].FullName @args
-          if ($LASTEXITCODE -eq 0 -or (Test-Path $badAsio) -or (Test-Path $badMidi) -or (Test-Path $diag)) { throw 'False physical-ASIO PASS without device' }
+          if ($LASTEXITCODE -eq 0 -or (Test-Path $badAsio) -or (Test-Path $badMidi) -or (Test-Path $diag) -or (Test-Path $trace)) { throw 'False physical-ASIO PASS without device' }
           $capPath=(Join-Path $env:RUNNER_TEMP 'P179-FORBIDDEN-ASIO-CAPABILITIES.json')
           & $exe[0].FullName --asio-buffer-capabilities --driver-name 'No physical P179 device' --driver-clsid '{00000000-0000-0000-0000-000000000000}' --nonce '0123456789abcdef0123456789abcdef0123456789abcdef' --out $capPath
           if ($LASTEXITCODE -eq 0 -or (Test-Path $capPath)) { throw 'P101 accepted unregistered physical ASIO capability report' }
@@ -110,7 +113,7 @@ jobs:
           $content=Get-Content -LiteralPath 'tools/P179-ASIO-TEST.ps1' -Raw
           $helper=Get-Content -LiteralPath 'tools/P179-NATIVE-CALL.ps1' -Raw
           if (-not $helper.Contains('Invoke-P180NativeWithLog') -or -not $content.Contains('Invoke-P180NativeWithLog')) { throw 'P180 native stderr wrapper not wired to hardware and capability probes' }
-          foreach($phrase in @('AWE32_ROM_PATH','AWE32_SF2_PATH','P179-SHA256SUMS.txt','asio.asio_callbacks','midi.note_ons','midi.nonzero_pcm_samples','deadline_misses','release_approved=$false','--asio-buffer-capabilities','125a-asio-driver-capability-v1','caps.selected_frames','caps.preferred_frames','--diagnostic-out','ASIO-CALLBACK-DIAGNOSTICS.json','asio_callback_counts','asio_cause_counts')) {
+          foreach($phrase in @('AWE32_ROM_PATH','AWE32_SF2_PATH','P179-SHA256SUMS.txt','asio.asio_callbacks','midi.note_ons','midi.nonzero_pcm_samples','deadline_misses','release_approved=$false','--asio-buffer-capabilities','125a-asio-driver-capability-v1','caps.selected_frames','caps.preferred_frames','--diagnostic-out','ASIO-CALLBACK-DIAGNOSTICS.json','asio_callback_counts','asio_cause_counts','--timing-trace-out','ASIO-CALLBACK-TIMING-TRACE.json','timing_trace_events','timing_trace_verified')) {
             if (-not $content.Contains($phrase)) { throw "Local P179 script missing independent gate $phrase" }
           }
           Write-Host 'P179 Windows PowerShell 5.1-compatible parsing and fail-closed source contract PASS'
@@ -132,13 +135,15 @@ jobs:
           Copy-Item 'lab-p100/src/physical_asio.cpp' (Join-Path $dest 'ASIO-HOST-SOURCE/physical_asio.cpp')
           Copy-Item 'lab-p100/src/asio_buffer_probe.inc' (Join-Path $dest 'ASIO-HOST-SOURCE/asio_buffer_probe.inc')
           Copy-Item 'lab-p100/src/asio_live_diagnostics.inc' (Join-Path $dest 'ASIO-HOST-SOURCE/asio_live_diagnostics.inc')
+          Copy-Item 'lab-p100/src/asio_timing_trace.inc' (Join-Path $dest 'ASIO-HOST-SOURCE/asio_timing_trace.inc')
+          Copy-Item 'lab-p100/docs/P181-ASIO-CALLBACK-TIMING-TRACE.md' (Join-Path $dest 'ASIO-HOST-SOURCE/P181-CALLBACK-TRACE.txt')
           Copy-Item 'lab-p100/docs/P102-REAL-ASIO-FAILURE-TELEMETRY.md' (Join-Path $dest 'ASIO-HOST-SOURCE/P102-DIAGNOSTICS.txt')
           Copy-Item 'lab-p100/CMakeLists.txt' (Join-Path $dest 'ASIO-HOST-SOURCE/CMakeLists.txt')
           Copy-Item 'lab-p100/docs/P100-PHYSICAL-ASIO-MIDI.md' (Join-Path $dest 'ASIO-HOST-SOURCE/README.txt')
           @(
             "P179_SOURCE_SHA=$env:GITHUB_SHA"
             'AWE_P178_EXACT_VALIDATED_SOURCE=cff9d91cdec5aa2574d039b23660fae0589c6878'
-            'ASIO_HOST_EXACT_SOURCE=789dea2c57f517ffe68b713cba8128f6087706c9'
+            'ASIO_HOST_EXACT_SOURCE=8c1becdc7ef1f6d8c56d97bf42e52f15bb2f1e9c'
             'ASIO_SDK_SOURCE=496a0765b8bb9c26f764f22f9a9712a937177db2'
             'ORIGINAL_ROM_SF2=NEVER_IN_CLOUD'
             'PHYSICAL_ASIO_SESSION=NOT_RUN_IN_CLOUD'

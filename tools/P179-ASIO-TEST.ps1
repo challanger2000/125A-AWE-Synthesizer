@@ -13,7 +13,7 @@ $reportFile=Join-Path $out 'P179-ACCEPTANCE.json'
 $report=@{schema='125a-p179-local-awe-asio-v1';status='NOT_RUN';
   original_rom_sf2='LOCAL_NOT_UPLOADED';daw_session_verified=$false;
   release_approved=$false;physical_asio_verified=$false;
-  native_midi_audio_verified=$false;diagnostics_verified=$false;errors=@()}
+  native_midi_audio_verified=$false;diagnostics_verified=$false;timing_trace_verified=$false;errors=@()}
 function Publish { $report | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $reportFile -Encoding UTF8 }
 function ReadPath([string]$title) {
   $inputPath=Read-Host $title
@@ -114,13 +114,15 @@ try {
   $asioPath=Join-Path $out 'ASIO-CALLBACKS.json'
   $midiPath=Join-Path $out 'ASIO-MIDI-PCM.json'
   $diagnosticPath=Join-Path $out 'ASIO-CALLBACK-DIAGNOSTICS.json'
+  $timingTracePath=Join-Path $out 'ASIO-CALLBACK-TIMING-TRACE.json'
   $env:AWE32_ROM_PATH=$rom
   $env:AWE32_SF2_PATH=$sf2
   $args=@('--physical-asio-probe','--plugin',$dll,'--driver-name',$selected.Name,
     '--driver-clsid',$selected.CLSID,'--rate',([string]$rate),'--frames',([string]$frames),
     '--callbacks','1000','--nonce',$nonce,'--out',$asioPath,
     '--midi-note','48','--midi-out',$midiPath,
-    '--diagnostic-out',$diagnosticPath)
+    '--diagnostic-out',$diagnosticPath,
+    '--timing-trace-out',$timingTracePath)
   $nativeExit=Invoke-P180NativeWithLog -Executable $exe -Arguments $args -LogPath (Join-Path $out 'NATIVE-HOST-LOG.txt')
   # A diagnostic report NEVER establishes hardware PASS.
   if(Test-Path -LiteralPath $diagnosticPath -PathType Leaf){
@@ -164,6 +166,83 @@ try {
       asio_converter_errors=[int64]$diag.asio_sample_write_failures
       callback_exceptions=[int64]$diag.caught_callback_exceptions
     }
+  }
+  # Time windows, exact nonce+driver+hash checked independently from P102.
+  if(Test-Path -LiteralPath $timingTracePath -PathType Leaf){
+    $trace=Get-Content -LiteralPath $timingTracePath -Raw | ConvertFrom-Json
+    if($trace.schema -cne '125a-real-asio-callback-window-trace-v1' -or
+       $trace.status -cne 'DIAGNOSTIC_ONLY_NOT_HARDWARE_PASS' -or
+       $trace.nonce -cne $nonce -or
+       $trace.asio_driver_name -cne $selected.Name -or
+       $trace.asio_driver_clsid -ine $selected.CLSID -or
+       $trace.product_sha256 -cne $moduleHash -or
+       $trace.executor_sha256 -cne $executorHash -or
+       [int]$trace.sample_rate -ne $rate -or
+       [int]$trace.buffer_frames -ne $frames -or
+       [int]$trace.requested_callbacks -ne 1000 -or
+       [int]$trace.actual_callbacks -lt 1000 -or
+       [int]$trace.recorded_callbacks -ne [int]$trace.actual_callbacks -or
+       [int]$trace.unrecorded_callback_slots -ne 0 -or
+       [int]$trace.trace_overflow_callbacks -ne 0 -or
+       -not [bool]$trace.trace_complete -or
+       [long]$trace.qpc_frequency_hz -le 0 -or
+       -not [bool]$trace.captured_after_asio_driver_stop -or
+       [bool]$trace.physical_asio_verified -or
+       [bool]$trace.commercial_daw_verified -or
+       [bool]$trace.release_approved){
+      throw 'P181 Zeitspur hat falsche Sitzung, Identitaet oder unvollstaendige Daten.'
+    }
+    if(-not $report.diagnostics_verified){
+      throw 'P181 Zeitspur kann ohne unabhaengig verifizierte P102-Diagnose nicht gelten.'
+    }
+    $events=@($trace.events)
+    if([int]$trace.callback_start_spacing_violations -ne [int]$diag.callback_spacing_violations -or
+       [int]$trace.actual_callbacks -ne [int]$diag.asio_callbacks -or
+       [int]$trace.selected_window_callbacks -ne $events.Count){
+      throw 'P181 Zeitspur und realer P102 ASIO-Zaehler widersprechen sich.'
+    }
+    $outOfOrder=$false
+    $previous=-1
+    $gapsInWindows=0
+    foreach($sample in $events){
+      $ci=[int]$sample.callback_index_zero_based
+      if($ci -le $previous -or $ci -ge [int]$trace.actual_callbacks -or
+         [long]$sample.qpc_end_ticks -lt [long]$sample.qpc_start_ticks){$outOfOrder=$true}
+      $previous=$ci
+      if([bool]$sample.gap_violation){
+        $gapsInWindows++
+        if([double]$sample.previous_start_to_start_us -le (2000000.0*$frames/$rate)){
+          throw 'P181 aufgezeichnete Timingverletzung hat keinen validen Startabstand.'
+        }
+      }
+    }
+    if($outOfOrder -or $gapsInWindows -ne [int]$trace.callback_start_spacing_violations){
+      throw 'P181 QPC Zeitfenster enthalten doppelte oder fehlende Callback-Indizes.'
+    }
+    $report.timing_trace_verified=$true
+    $report.timing_trace_file='ASIO-CALLBACK-TIMING-TRACE.json'
+    $report.timing_trace_gaps=[int]$trace.callback_start_spacing_violations
+    $report.timing_trace_window_samples=$events.Count
+    $report.timing_trace_events=@($events | ForEach-Object {
+      [PSCustomObject]@{
+        callback_index_zero_based=[int]$_.callback_index_zero_based
+        driver_buffer_index=[int]$_.driver_buffer_index
+        thread_id=[int64]$_.thread_id
+        relative_start_us=[double]$_.relative_start_us
+        previous_start_to_start_us=[double]$_.previous_start_to_start_us
+        previous_callback_duration_us=[double]$_.previous_callback_duration_us
+        this_callback_duration_us=[double]$_.this_callback_duration_us
+        gap_violation=[bool]$_.gap_violation
+        process_success=[bool]$_.process_success
+        driver_overload_or_resync_messages=[int]$_.driver_overload_or_resync_messages
+        sample_rate_change_messages=[int]$_.sample_rate_change_messages
+        midi_note_on_count_after=[int]$_.midi_note_on_count_after
+        midi_note_off_count_after=[int]$_.midi_note_off_count_after
+      }
+    })
+  }
+  if(-not $report.timing_trace_verified -and $nativeExit -eq 0){
+    throw 'P181 Echtzeit-Zeitspur fehlt trotz erfolgreichem ASIO-Native-Host.'
   }
   if($nativeExit -ne 0){
     throw ('Echter ASIO-Test NO-GO (Exitcode '+$nativeExit+'). Siehe ASIO-CALLBACK-DIAGNOSTICS.json und NATIVE-HOST-LOG.txt')
