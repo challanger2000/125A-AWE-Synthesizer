@@ -1,0 +1,138 @@
+name: P173 independent LIVE already-open editor host-program GUI automation
+on:
+  push:
+    branches: [audit/p173-live-open-editor-program]
+    paths:
+      - .github/workflows/p173-live-host-program-visual.yml
+      - tools/p172_host_program_visual_oracle.py
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  independent-old-versus-new-real-gui:
+    runs-on: windows-2022
+    timeout-minutes: 24
+    steps:
+      - uses: actions/checkout@v4
+
+      # Immutable artifact run+name pair, both Windows builds already fully
+      # compiled and validated.  NO rewriting/repacking original private ROM.
+      - name: Download pinned P168 original-bug Windows VST3
+        uses: actions/download-artifact@v4
+        with:
+          repository: challanger2000/125A-AWE-Synthesizer
+          run-id: 42435400626
+          name: P168-LCD-Fix-Windows-x64-VST3-TEST
+          path: binaries/p168
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download pinned P169 candidate Windows VST3
+        uses: actions/download-artifact@v4
+        with:
+          repository: challanger2000/125A-AWE-Synthesizer
+          run-id: 42438260642
+          name: P169-Unavailable-Preset-Windows-x64-VST3-TEST
+          path: binaries/p169
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify actual VST3 DLL hashes independently, fail closed
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $files=@{
+            p168='binaries/p168/125A_AWE_Synthesizer.vst3/Contents/x86_64-win/125A_AWE_Synthesizer.vst3';
+            p169='binaries/p169/125A_AWE_Synthesizer.vst3/Contents/x86_64-win/125A_AWE_Synthesizer.vst3'
+          }
+          $expected=@{
+            p168='8bd300bd7019efd7f7652b4393df075209944fcbd027d8b104699d96dcc7e3c7';
+            p169='4aa865c53de76eb5e23696e7455d9c1e7708438ffee8f83a35e1fd22c62125cb'
+          }
+          foreach($key in @('p168','p169')) {
+            if(!(Test-Path $files[$key])) {throw "Pinned real module missing: $key"}
+            $actual=(Get-FileHash $files[$key] -Algorithm SHA256).Hash.ToLowerInvariant()
+            if($actual -ne $expected[$key]) {throw "VST3 SHA mismatch: $key actual=$actual"}
+            Write-Host "SHA VERIFIED $key $actual"
+          }
+
+      - name: Build genuine independent Plugin Test Lab native Win32 editor host
+        shell: pwsh
+        timeout-minutes: 12
+        run: |
+          $ErrorActionPreference='Stop'
+          git clone --depth 1 --branch audit/p99-live-host-gui-timer https://github.com/challanger2000/125A-Plugin-Test-Lab.git testlab
+          if($LASTEXITCODE -ne 0) {throw 'Independent Test Lab clone failed'}
+          $sha=(git -C testlab rev-parse HEAD).Trim()
+          if($sha -ne '2e13550546fdbc1c701ed09fbefa3acc26da86b5') {
+            throw "Independent Test Lab SHA mismatch: $sha"
+          }
+          cmake -S testlab -B build-lab -G "Visual Studio 17 2022" -A x64
+          if($LASTEXITCODE -ne 0) {throw 'Generic Win32 Test Lab configure failed'}
+          cmake --build build-lab --config Release --parallel 4 --target TestLabGUI
+          if($LASTEXITCODE -ne 0) {throw 'Generic native Test Lab GUI host compile failed'}
+
+      - name: Generate copyright-free SF2; capture actual host Program0/12/63/0 in both VST3s
+        shell: pwsh
+        timeout-minutes: 7
+        run: |
+          $ErrorActionPreference='Stop'
+          New-Item -ItemType Directory -Force qa/p172 | Out-Null
+          python -c "import runpy,pathlib; d=runpy.run_path('tools/p165_original_faceplate_editor_acceptance.py'); d['make_sf2'](pathlib.Path('qa/p172/independent-sparse.sf2')); d['ensure_full_desktop']()"
+          if($LASTEXITCODE -ne 0) {throw 'Real Win32 desktop or synthetic SF2 missing'}
+          $sf2=(Resolve-Path 'qa/p172/independent-sparse.sf2').Path
+          $env:APPDATA=(Join-Path (Resolve-Path 'qa/p172').Path 'AppData')
+          $config=Join-Path $env:APPDATA '125A/AWE Synthesizer/assets.cfg'
+          New-Item -ItemType Directory -Force (Split-Path $config -Parent) | Out-Null
+          "SF2 = `"$sf2`"" | Set-Content -Encoding utf8 $config
+          $exes=@(Get-ChildItem build-lab -File -Recurse -Filter '125A_Test_Lab_GUI.exe')
+          if($exes.Count -ne 1) {throw "Real test host executable ambiguous: $($exes.Count)"}
+          $hostexe=$exes[0].FullName
+          foreach($label in @('p168','p169')) {
+            $module=(Resolve-Path "binaries/$label/125A_AWE_Synthesizer.vst3").Path
+            $out=(Join-Path (Resolve-Path 'qa/p172').Path $label)
+            & $hostexe --capture-host-param-sequence "$module" 1000 "0,0.09448818897637795,0.4960629921259843,0" "$out"
+            if($LASTEXITCODE -ne 0) {throw "$label real product GUI host parameter sequence failed"}
+            foreach($n in 0..3) {
+              if(!(Test-Path (Join-Path $out "step-$n.bmp"))) {
+                throw "$label real HWND screenshot step $n missing"
+              }
+            }
+          }
+          Write-Host 'P173 8 actual live-open-Windows VST3 editor screenshots acquired; no mocks'
+
+      - name: Independent positive-present and original-bug-negative pixel oracle
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          python tools/p172_host_program_visual_oracle.py qa/p172/p168 qa/p172/p169 qa/p172/P172-RESULT.json
+          if($LASTEXITCODE -ne 0) {throw 'P172 real external MIDI program63 visual oracle FAIL'}
+
+      - name: Document exact product source and test host provenance
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force qa/p172 | Out-Null
+          @(
+            'OLD_SOURCE=P168/8ad695055cdaa0dafc99e3b1d1d61b83d9f30f14',
+            'NEW_SOURCE=P169/99fb90fc855c4c7643e24816fa644fdc738c290f',
+            'OLD_RUN=42435400626',
+            'NEW_RUN=42438260642',
+            'LAB_SOURCE=2e13550546fdbc1c701ed09fbefa3acc26da86b5',
+            "AUDIT_SOURCE=$env:GITHUB_SHA",
+            'GUI_PATH=real native Test Lab Win32 IEditController setParamNormalized WHILE live VSTGUI IPlugView is already attached + GetDIBits',
+            'ORACLE=old absent Program63 must keep incorrect Program0; corrected must paint explicit unavailable text',
+            'SF2=ephemeral synthetic with Bank0 program0, program12 and absent program63',
+            'REAL_PHYSICAL_ASIO=NOT_RUN',
+            'FENDER_STUDIO_PRO=NOT_RUN',
+            'SYNTH_AUDIO=NOT_RUN, LIVE_ALREADY_OPEN_GUI_AUTOMATION=NOT_VERIFIED',
+            'RELEASE=NO_GO'
+          ) | Set-Content qa/p172/PROVENANCE.txt
+
+      - name: Preserve native HWND bitmaps, independent oracle, DLL SHA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: P173-Independent-Live-Open-Editor-Automation-Diagnostic
+          path: qa/p172/
+          if-no-files-found: warn
+          retention-days: 14
