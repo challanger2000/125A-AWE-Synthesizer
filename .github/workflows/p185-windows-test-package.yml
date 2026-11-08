@@ -1,0 +1,162 @@
+name: P185 checked AWE Windows ETW ASIO BAT test package
+on:
+  push:
+    branches: [qa/p185-independent-etw-asio]
+    paths: ['.github/workflows/p185-windows-test-package.yml']
+permissions:
+  contents: read
+  actions: read
+  pull-requests: write
+concurrency:
+  group: p185-awe-package-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  package:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    env:
+      TESTLAB_SHA: c3d1bd6a60e9d524c091c841ce6b6674816436fa
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: challanger2000/125A-Plugin-Test-Lab
+          ref: c3d1bd6a60e9d524c091c841ce6b6674816436fa
+          path: lab
+      - name: Retrieve proven unchanged P178 AWE binary
+        uses: actions/download-artifact@v4
+        with:
+          name: P178-Windows-PRIVATE-LOCAL-TEST-KIT
+          run-id: 42496568131
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: p178-verified
+      - name: Validate exact baseline source and original binary manifest
+        shell: pwsh
+        run: |
+          if ((git -C lab rev-parse HEAD).Trim() -cne $env:TESTLAB_SHA) { throw 'Lab source pin mismatch' }
+          $provenance=Get-Content p178-verified/PROVENANCE.txt -Raw
+          if ($provenance -notmatch 'SOURCE_SHA=cff9d91cdec5aa2574d039b23660fae0589c6878') { throw 'Wrong AWE binary source' }
+          $dll=@(Get-ChildItem p178-verified/125A_AWE_Synthesizer.vst3 -Recurse -File -Filter '*.vst3')
+          if ($dll.Count -ne 1) { throw 'Ambiguous original AWE DLL' }
+          $hash=(Get-FileHash $dll[0].FullName -Algorithm SHA256).Hash
+          if ((Get-Content p178-verified/SHA256SUMS.txt -Raw) -notmatch [regex]::Escape($hash)) { throw 'P178 original DLL hash mismatch' }
+          git clone --no-checkout https://github.com/audiosdk/asio.git lab/asio-sdk
+          if ($LASTEXITCODE -ne 0) { throw 'ASIO clone failed' }
+          git -C lab/asio-sdk checkout --detach 496a0765b8bb9c26f764f22f9a9712a937177db2
+          if ($LASTEXITCODE -ne 0) { throw 'ASIO SDK mismatch' }
+      - name: Compile the pinned universal native ETW and ASIO tools
+        shell: pwsh
+        run: |
+          cmake -S lab -B build-p185 -G 'Visual Studio 17 2022' -A x64 "-DASIO_SDK_DIR=$env:GITHUB_WORKSPACE/lab/asio-sdk"
+          if ($LASTEXITCODE -ne 0) { throw 'P185 configure failed' }
+          if ((git -C build-p185/_deps/vst3sdk-src rev-parse HEAD).Trim() -cne '3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96') { throw 'VST3 SDK mismatch' }
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          cmake --build build-p185 --config Release --parallel 4 --target TestLabETW TestLabPhysicalASIO QAASIOReferenceMidi QAASIOReferenceMidiBroken 2>&1 | Tee-Object evidence/build.txt
+          if ($LASTEXITCODE -ne 0) { Get-Content evidence/build.txt | Select-String 'error [A-Z]+[0-9]+' | Select-Object -First 10 | ForEach-Object { Write-Host "::error::$($_.Line)" }; throw 'P185 native build failed' }
+      - name: Actual Windows native ETW controls plus independent adverse fixtures
+        shell: powershell
+        run: |
+          try {
+            & ./lab/tests/p185_windows.ps1 -Build build-p185 -Evidence evidence
+            if ($LASTEXITCODE -ne 0) { throw 'Native controls failed' }
+            & ./lab/tests/p185_adversarial.ps1 -Evidence evidence
+            if (-not (Test-Path evidence/P185-ADVERSARIAL.json)) { throw 'Adversarial completion missing' }
+          } catch { Write-Host "::error::P185_CONTROLS $($_.Exception.Message) $($_.ScriptStackTrace)"; throw }
+      - name: Require the completed full unchanged-AWE regression
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const id=42528736196;
+            for(let attempt=0;attempt<30;attempt++) {
+              const r=(await github.rest.actions.getWorkflowRun({...context.repo,run_id:id})).data;
+              if(r.head_sha!=='bb11f88ada05ab671b0eada423e9187d77fc3ed8') throw new Error('Full-regression source mismatch');
+              if(r.status==='completed') { if(r.conclusion!=='success') throw new Error(`Full regression: ${r.conclusion}`); return; }
+              await new Promise(resolve=>setTimeout(resolve,30000));
+            }
+            throw new Error('Full regression not completed; no package acceptance');
+      - uses: actions/download-artifact@v4
+        with:
+          name: P185-AWE-Full-Windows-Evidence-A
+          run-id: 42528736196
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: full-regression
+      - name: Reconcile actual full-suite and validator counts
+        shell: pwsh
+        run: |
+          $ctest=Get-Content full-regression/ctest.txt -Raw
+          if ($ctest -notmatch '100% tests passed, 0 tests failed out of ([0-9]+)') { throw 'No full CTest success' }
+          $count=[int]$Matches[1]
+          if ($count -lt 63) { throw 'Incomplete CTest suite' }
+          $validator=Get-Content full-regression/validator.txt -Raw
+          if ($validator -notmatch 'Result: ([0-9]+) tests passed, 0 tests failed') { throw 'Incomplete validator evidence' }
+          $validated=[int]$Matches[1]
+          $gui=@(Get-ChildItem full-regression -Recurse -Filter result.json | Where-Object {$_.FullName -match 'editor-[123]'} | ForEach-Object {Get-Content $_.FullName -Raw | ConvertFrom-Json})
+          if ($gui.Count -ne 3 -or @($gui | Where-Object {-not $_.passed}).Count) { throw 'Missing three actual EditorHost smokes' }
+          @{awe_source='bb11f88ada05ab671b0eada423e9187d77fc3ed8';ctest_passed=$count;validator_passed=$validated;editor_smokes=3;physical_asio='NOT_RUN';release_approved=$false} | ConvertTo-Json | Set-Content evidence/P185-FULL-REGRESSION.json
+          Write-Host "::notice::P185_AWE_FULL_REGRESSION ctest=$count validator=$validated editor_smokes=3 source=bb11f88ada05ab671b0eada423e9187d77fc3ed8"
+      - name: Integrate unchanged AWE and test the actual extracted ZIP BAT
+        shell: powershell
+        run: |
+          try {
+            & ./lab/tools/p185/Build-P185-Package.ps1 -Build build-p185 -Destination package -TestlabSource $env:TESTLAB_SHA -AweSource cff9d91cdec5aa2574d039b23660fae0589c6878 -AweBundle p178-verified/125A_AWE_Synthesizer.vst3
+            $manifest=Get-Content package/P185-PACKAGE.json -Raw | ConvertFrom-Json
+            $manifest | Add-Member -NotePropertyName awe_integration_source -NotePropertyValue $env:GITHUB_SHA
+            $manifest | ConvertTo-Json -Depth 10 | Set-Content package/P185-PACKAGE.json -Encoding UTF8
+            Compress-Archive -Path package/* -DestinationPath P185-AWE-Windows.zip
+            Expand-Archive P185-AWE-Windows.zip 'P185 BAT path with spaces'
+            $env:CI='true'
+            & cmd.exe /d /c '"P185 BAT path with spaces\P185-ETW-ASIO.bat" -CheckOnly'
+            if ($LASTEXITCODE -ne 0) { throw 'Packaged BAT CheckOnly failed' }
+            & cmd.exe /d /c '"P185 BAT path with spaces\P185-ETW-ASIO.bat" -Cancel'
+            if ($LASTEXITCODE -ne 2) { throw 'BAT lost cancel errorlevel' }
+            $reports=@(Get-ChildItem 'P185 BAT path with spaces' -Recurse -Filter P185-ACCEPTANCE.json | ForEach-Object {Get-Content $_.FullName -Raw | ConvertFrom-Json})
+            if ($reports.Count -ne 2 -or @($reports | Where-Object {$_.physical_asio -cne 'NOT_RUN' -or $_.release_approved}).Count) { throw 'False hardware certification' }
+            Add-Content 'P185 BAT path with spaces/P185-ANALYZE.ps1' '# deliberate tamper'
+            & cmd.exe /d /c '"P185 BAT path with spaces\P185-ETW-ASIO.bat" -CheckOnly'
+            if ($LASTEXITCODE -ne 3) { throw 'BAT failed to reject actual tamper' }
+            # Verify the archive contents including the actual unchanged AWE DLL.
+            $original=(Get-ChildItem p178-verified/125A_AWE_Synthesizer.vst3 -Recurse -File -Filter '*.vst3').FullName
+            $archived=(Get-ChildItem 'P185 BAT path with spaces/AWE-UNCHANGED.vst3' -Recurse -File -Filter '*.vst3').FullName
+            if ((Get-FileHash $original).Hash -cne (Get-FileHash $archived).Hash) { throw 'AWE DLL changed during packaging' }
+            $adverse=@(Get-Content evidence/P185-ADVERSARIAL.json -Raw | ConvertFrom-Json).Count
+            @{
+              schema='125a-p185-ci-integration-v1';awe_integration=$env:GITHUB_SHA;testlab_source=$env:TESTLAB_SHA;
+              awe_binary_source='cff9d91cdec5aa2574d039b23660fae0589c6878';awe_dll_sha256=(Get-FileHash $original).Hash.ToLowerInvariant();
+              native_etw_controls='PASS';adversarial_cases=$adverse;zip_bat_checkonly='PASS';cancel='PASS';tamper='REJECTED';
+              physical_p185='NOT_RUN';awe_realtime='NOT_RUN';cause='INCONCLUSIVE';release_approved=$false
+            } | ConvertTo-Json | Set-Content evidence/P185-INTEGRATION-CI.json
+            Write-Host "::notice::P185_AWE_PACKAGE_VERIFIED awe=$env:GITHUB_SHA lab=$env:TESTLAB_SHA adverse=$adverse physical=NOT_RUN release=NO_GO"
+            exit 0
+          } catch { Write-Host "::error::P185_PACKAGE $($_.Exception.Message) $($_.ScriptStackTrace)"; throw }
+      - uses: actions/upload-artifact@v4
+        if: success()
+        id: kit
+        with:
+          name: P185-AWE-ETW-ASIO-Windows-BAT
+          path: package/
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: P185-AWE-Windows-QA-Evidence
+          path: |
+            evidence/*.json
+            evidence/*.txt
+            evidence/native-etw-local/*.json
+            evidence/native-etw-local/*.csv
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Create draft review request, no merge or release
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const head='qa/p185-independent-etw-asio',base='qa/p179-native-asio-instrument-kit';
+            const body=`Implements AWE issue #91 through the independent universal Test Lab P185 tooling. AWE DSP/GUI and entire-run ASIO gates unchanged; P184 is not repeated. Checked Windows BAT package: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}. Native Windows ETW/privilege controls, adversarial fixtures, actual ZIP/BAT/cancel/tamper verified. Physical P185 and target-machine realtime remain NOT_RUN; cause INCONCLUSIVE, release NO_GO. No merge or release requested.`;
+            try {
+              const open=await github.rest.pulls.list({...context.repo,state:'open',head:`${context.repo.owner}:${head}`,base});
+              const pr=open.data[0]||(await github.rest.pulls.create({...context.repo,head,base,title:'P185: independent Windows ETW / ASIO BAT test package',body,draft:true})).data;
+              core.notice(`P185_DRAFT_PR=${pr.html_url}`);
+              core.notice(`P185_ZIP=${{ steps.kit.outputs.artifact-url }}`);
+            } catch(e){core.warning(`Draft PR creation unavailable: ${e.message}`);}
