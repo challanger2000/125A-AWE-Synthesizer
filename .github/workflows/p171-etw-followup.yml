@@ -7,6 +7,25 @@ permissions:
   contents: read
   actions: read
 jobs:
+  preserve-original-numeric-rows:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        repetition: [A, B]
+        partition: [0, 1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read the successfully decoded original audit artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: P171-ETW-Original-b02e02d-${{ matrix.repetition }}
+          run-id: 42480859178
+          github-token: ${{ github.token }}
+          path: decoded-original
+      - name: Preserve every unchanged callback row with bounded notices and original SHA
+        run: python3 tools/p171_etw/publish_raw.py decoded-original/original-callbacks.csv ${{ matrix.partition }} ${{ matrix.repetition }}
   decode-original-trace:
     runs-on: windows-2022
     timeout-minutes: 25

@@ -105,7 +105,6 @@ def main():
         if len(rows)!=14400:raise RuntimeError('incomplete original callback population')
         with (out/'callbacks-with-context.csv').open('w',newline='') as f:
             writer=csv.DictWriter(f,fieldnames=list(measured[0]));writer.writeheader();writer.writerows(measured)
-        publish('P171_ORIGINAL_CSV',raw)
     data=(json.dumps(result,indent=2)+'\n').encode();(out/'result.json').write_bytes(data)
     publish('P171_ETW_RESULT',data)
     print('P171_ETW_STATUS',args.mode,'control',ok,'callbacks',len(rows),
