@@ -15,13 +15,13 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 30
     env:
-      TESTLAB_SHA: 8db0bea5d0888324aa4b33af3676d689900f1f2a
+      TESTLAB_SHA: 59762ae67a5878f4bade2e000672497acde4f763
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
         with:
           repository: challanger2000/125A-Plugin-Test-Lab
-          ref: 8db0bea5d0888324aa4b33af3676d689900f1f2a
+          ref: 59762ae67a5878f4bade2e000672497acde4f763
           path: lab
       - name: Retrieve proven unchanged P178 AWE binary
         uses: actions/download-artifact@v4
