@@ -502,11 +502,38 @@ void exactMissingPresetProcessorRegression() {
     }
 }
 
+// P167 AUDIT ONLY. Compiles the exact production Processor from Factory.cpp,
+// sends MIDI CC0 through a real Steinberg ParameterChanges queue, and measures
+// actual 86Box output after NoteOn on channel 10. Two distinct existing
+// soundfonts are essential: a generic 'some sound' check cannot detect
+// the drum-bank vs melodic-bank substitution.
+void p167ChannelTenZeroBank() {
+    Rig base0(state(0,0));
+    const auto bank0=sound(*base0.p,9);
+    Rig base128(state(128,0));
+    const auto drums=sound(*base128.p,9);
+    check(audible(bank0)&&audible(drums)&&bank0!=drums,
+          "P167 independent control: channel10 distinct SF2 bank0 versus bank128 PCM");
+    Rig actual(state(128,0));
+    // Explicit CC0=0 MUST select SoundFont melodic bank zero, not the
+    // untouched default channel-ten drum bank 128.
+    {
+        Block bankSelect(0);
+        constexpr int index=MidiControlMapping::Index(0);
+        bankSelect.param(MidiControlMapping::ParamID(9,index),0.);
+        bankSelect.run(*actual.p);
+    }
+    const auto selected=sound(*actual.p,9);
+    check(selected==bank0&&selected!=drums,
+          "P167 actual VST3 Processor channel10 explicit CC0=0 selects bank0 PCM");
+}
+
 int main(int argc,char** argv) {
     try {
         if(argc!=3)return 2;
         assetsDir=argv[2];
-        if(std::string(argv[1])=="cc120-stop") cc120PhysicalStopRegression();
+        if(std::string(argv[1])=="p167-channel10-bank-zero") p167ChannelTenZeroBank();
+        else if(std::string(argv[1])=="cc120-stop") cc120PhysicalStopRegression();
         else if(std::string(argv[1])=="fx-presets") fxPresetAutomationRecall();
         else if(std::string(argv[1])=="p166-exact-presets")
             exactMissingPresetProcessorRegression();
