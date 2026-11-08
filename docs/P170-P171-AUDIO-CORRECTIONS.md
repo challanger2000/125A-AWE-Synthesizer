@@ -155,14 +155,21 @@ prüft erste Noten nach SF2-Load-Nachricht bei 44,1/48/96 kHz und Programm0/7/9.
 Er ersetzt keinen interaktiven SF2-Dateidialog im Nutzerhost.
 
 Der neue Stress schreibt jeden gemessenen Callback nach `p171-rt.csv`:
-44,1 kHz, 128/256/512/1024 Frames, 1/16/30 NoteOn-Identitäten, vier Lastarten
-(Render, Save, Save+Recall, zusätzliche MIDI-/Pitchautomation), je 200 Blöcke:
-**9.600 process()-Messungen je Lauf**. Host-Pufferbau/PCM-Kopie liegt außerhalb
+44,1 kHz, 128/256/512/1024 Frames, 1/16/30 NoteOn-Identitäten, sechs Lastarten
+(Render, Save, Save+Recall, MIDI-/Pitchautomation mit Recall, bewegte neue
+Filterroute bei exakt gehaltener Last, Filterroute mit Retrigger/FX/Recall),
+je 200 Blöcke: **14.400 process()-Messungen je Lauf**. Die zusätzliche
+synthetische Filter-Stressbank hält ihren Modulations-Attack über den gesamten
+Messabschnitt in Bewegung. Die ursprüngliche neutrale Fixture bleibt bytegleich. Host-Pufferbau/PCM-Kopie liegt außerhalb
 der Zeitmessung. Windows zusätzlich rohe Threadzyklen, Kernnummern, QPC-Beginn/
 -Ende/Frequenz und PID/TID. Zyklen werden nicht in angebliche CPU-ms umgerechnet.
 Median/p99/Maximum/Misses und Held-Min/Max werden pro Zelle ausgewiesen.
 
-**Recall reduziert die gehaltene Last**: diese Fälle dürfen nicht als
+**Recall und dichtes Retriggern können die gehaltene Last reduzieren**:
+Auch Creative Voice-Stealing bei noch lauten freigegebenen Stimmen wird im
+Held-Min/Max sichtbar. Die separate bewegte Filter-Haltelast verlangt ausdrücklich
+unverändert 1/16/30 zugeordnete Identitäten; sie benutzt keine Retrigger, die
+andere gehaltene Stimmen stehlen könnten. Für die Recall-/Retrigger-Zellen gilt: diese Fälle dürfen nicht als
 Beschleunigung gegenüber voll klingenden 30-Stimmen-Zellen interpretiert werden.
 Dies sind Offline-Laborzeiten ohne ASIO/MMCSS. Optional aufgezeichnetes WPR-
 GeneralProfile wird archiviert, ohne unanalysierte Schedulerursachen zu behaupten.

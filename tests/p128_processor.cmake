@@ -37,10 +37,10 @@ if(125A_PROCESSOR_SDK_ROOT AND 125A_BUILD_ENGINE_PROBES)
   # Generate the shared Processor header ONCE before parallel MSBuild compiles.
   # P131 independently reproduced PermissionError without this guard.
   add_custom_target(p128_processor_header DEPENDS "${p128_generated}/ProcessorUnderTest.h")
-  add_custom_command(OUTPUT "${p128_assets}/bank.sf2" "${p128_assets}/zero.rom"
+  add_custom_command(OUTPUT "${p128_assets}/bank.sf2" "${p128_assets}/bank-filter-stress.sf2" "${p128_assets}/zero.rom"
     COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/p128_synthetic_assets.py" "${p128_assets}"
     DEPENDS "${PROJECT_SOURCE_DIR}/tests/p128_synthetic_assets.py")
-  add_custom_target(p128_assets DEPENDS "${p128_assets}/bank.sf2" "${p128_assets}/zero.rom")
+  add_custom_target(p128_assets DEPENDS "${p128_assets}/bank.sf2" "${p128_assets}/bank-filter-stress.sf2" "${p128_assets}/zero.rom")
   if(WIN32 AND 125A_BUILD_VST3)
     add_executable(awe32_p171_vst3_load_host "${PROJECT_SOURCE_DIR}/tests/p171_vst3_load_host.cpp"
       "${125A_PROCESSOR_SDK_ROOT}/public.sdk/source/common/memorystream.cpp")

@@ -24,7 +24,7 @@ for key,rows in sorted(cells.items()):
         max_us=max(times),late=sum(int(r['late']) for r in rows),
         held_min=min(int(r['held_identities']) for r in rows),
         held_max=max(int(r['held_identities']) for r in rows)))
-if len(stats)!=48 or any(s['n']!=200 for s in stats):raise RuntimeError('incomplete callback matrix')
+if len(stats)!=72 or any(s['n']!=200 for s in stats):raise RuntimeError('incomplete callback matrix')
 audio=json.loads((build/'p170-audio/measurements.json').read_text())
 paired=json.loads((build/'p170-paired/comparison.json').read_text())
 ctest=(qa/'ctest.txt').read_text(encoding='utf-8-sig',errors='replace')

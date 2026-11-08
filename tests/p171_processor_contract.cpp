@@ -55,14 +55,23 @@ void banksAndFirstNotes() {
 void stress(const std::filesystem::path& output) {
     std::ofstream csv(output);require(bool(csv),"stress CSV open");
     csv<<"frames,notes,scenario,block,wall_us,deadline_us,held_identities,late,thread_cycles,start_core,end_core,qpc_start,qpc_end,qpc_frequency,pid,tid\n";
-    for(int frames:{128,256,512,1024})for(int notes:{1,16,30})for(int scenario:{0,1,2,3}) {
-        Rig rig;Block onset(0);for(int n=0;n<notes;++n)onset.note(0,40+n);onset.run(*rig.p);
+    for(int frames:{128,256,512,1024})for(int notes:{1,16,30})for(int scenario:{0,1,2,3,4,5}) {
+        auto initial=state();
+        if(scenario>=4) {
+            // An originally slow MOD attack keeps the new PEFE route moving
+            // through the full held-note measurement (also at 1024 frames).
+            initial.sf2Path=(assetsDir/"bank-filter-stress.sf2").string();
+            initial.controls[4]=100;initial.controls[5]=100;
+            initial.controls[6]=8000;initial.controls[7]=10000;
+            initial.controls[9]=5000;initial.controls[10]=5000;initial.controls[11]=5000;
+        }
+        Rig rig(initial);Block onset(0);for(int n=0;n<notes;++n)onset.note(0,40+n);onset.run(*rig.p);
         std::atomic<bool> done=false;std::atomic<unsigned> saves=0,recalls=0;std::atomic<bool> valid=true;
         std::thread control([&] {
-            if(scenario==0)return;
+            if(scenario==0||scenario==4)return;
             while(!done.load()) {
                 try {const auto s=save(*rig.p);++saves;
-                    if(scenario>=2){if(recall(*rig.p,s)!=kResultOk)valid=false;++recalls;}
+                    if(scenario==2||scenario==3||scenario==5){if(recall(*rig.p,s)!=kResultOk)valid=false;++recalls;}
                 } catch(...) {valid=false;break;}
                 std::this_thread::yield();
             }
@@ -74,6 +83,23 @@ void stress(const std::filesystem::path& output) {
                 for(int n=0;n<16;++n) {
                     block.param(MidiControlMapping::ParamID(n,MidiControlMapping::Index(129)),.5+(b&1)*.02);
                     block.param(MidiProgramRouting::ParamID(n),7./127.);
+                }
+            }
+            if(scenario>=4) {
+                // Control automation accompanies an already active route.
+                // Case 4 holds its exact 1/16/30 identities throughout. Case
+                // 5 additionally retriggers and recalls; Creative stealing
+                // and recall can reduce that load, recorded rather than hidden.
+                for(int k=4;k<8;++k)block.param(kGuiFirstID+k,k==7?1.:(k==6?.8:.01));
+                block.param(kGuiFirstID+9,.5); // hardware resonance
+                block.param(kGuiFirstID+10,.5);block.param(kGuiFirstID+11,.5);
+                if(scenario==5) {
+                    block.param(kReverbPresetID,double(b%8)/7.);
+                    block.param(kChorusPresetID,double((b/8)%8)/7.);
+                }
+                if(scenario==5)for(int n=0;n<std::min(notes,4);++n) {
+                    const int pitch=40+(4*b+n)%notes;
+                    block.note(0,pitch,0,false);block.note(0,pitch);
                 }
             }
             // Measure the real callback with its parameter queues. Host
@@ -109,9 +135,9 @@ void stress(const std::filesystem::path& output) {
             csv<<'\n';
         }
         done=true;control.join();
-        check(valid&& (scenario? saves>0:true),"P171 concurrent state stress transport frames="+
+        check(valid&& ((scenario==0||scenario==4)?true:saves>0),"P171 concurrent state stress transport frames="+
               std::to_string(frames)+" notes="+std::to_string(notes)+" scenario="+std::to_string(scenario));
-        if(scenario<2)check(heldMin==unsigned(notes)&&heard>0,"P171 sounding workload preserves held identities");
+        if(scenario<2||scenario==4)check(heldMin==unsigned(notes)&&heard>0,"P171 sounding workload preserves held identities");
         std::cout<<"RT frames="<<frames<<" notes="<<notes<<" scenario="<<scenario<<" late="<<late
             <<" held_min="<<heldMin<<" saves="<<saves<<" recalls="<<recalls<<'\n';
     }
