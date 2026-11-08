@@ -12,6 +12,7 @@
 #include <cstring>
 #include <initializer_list>
 #include <string>
+#include <utility>
 #if defined(_WIN32)
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -803,7 +804,8 @@ void PresetBrowserView::SyncActiveMenuSelection() {
     if(programMenu_) {
         const auto current=std::find(activePrograms_.begin(),activePrograms_.end(),program_);
         const bool missing=current==activePrograms_.end();
-        programMenu_->SetUnavailableProgram(missing?int(program_):-1);
+        static_cast<GoldHardwareMenu*>(programMenu_)->SetUnavailableProgram(
+            missing?int(program_):-1);
         // Do not invent a selectable SF2 preset. The native popup still
         // offers only the soundfont's real phdr entries.
         if(!missing)programMenu_->setValue(
