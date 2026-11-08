@@ -54,7 +54,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'P179 native ASIO configure failed' }
           cmake --build build-lab-p179 --config Release --parallel 4 --target TestLabPhysicalASIO 2>&1 | Tee-Object qa/build.txt
           if ($LASTEXITCODE -ne 0) { throw 'P179 native ASIO MIDI host compile failed' }
-      - name: Negative: real product must not pass ASIO with unregistered hardware
+      - name: Reject missing physical ASIO device with real product VST3
         shell: pwsh
         run: |
           $exe=@(Get-ChildItem build-lab-p179 -Recurse -File -Filter '125A_Test_Lab_Physical_ASIO.exe')
