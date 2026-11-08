@@ -5,7 +5,19 @@
 [Issue #91](https://github.com/challanger2000/125A-AWE-Synthesizer/issues/91),
 [implementation / evidence / limits](docs/P185-ETW-ASIO-INTEGRATION.md).
 Universal tools live in Test Lab `feature/p185-independent-etw-asio`.
-Windows regressions and checked BAT packaging are in progress, not yet PASS.
+**Geprüftes Paket:** [P185-AWE-ETW-ASIO-Windows-BAT](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42531433260/artifacts/13637930245).
+**Geprüfter Paket-/Workflow-Code:** `22d08278a20d9989e71393944bfbc31d640bf231`;
+**Test-Lab-Code:** `59762ae67a5878f4bade2e000672497acde4f763`.
+Windows-Nachweise: [Paket inklusive tatsächlichem GitHub-Download/BAT](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42531433260),
+[vollständige AWE-Regression](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42529874449),
+[Test Lab](https://github.com/challanger2000/125A-Plugin-Test-Lab/actions/runs/42531360274).
+**66/66 CTests, 537/537 Modul-Validatorprüfungen, 3/3 GUI-Smokes und 99 GUI-Prüfschritte bestanden.**
+36 adversariale/positive Parserfälle und echte native ETW/QPC-/Rechte-Gegenproben bestanden.
+BAT aus entpacktem ZIP und anschließend aus dem tatsächlichen GitHub-Artefakt geprüft.
+Draft-PR-Erstellung wurde von der GitHub-Repository-Einstellung blockiert:
+`GitHub Actions is not permitted to create or approve pull requests`.
+[Vorbereiteter Review-Text](docs/P185-DRAFT-PR.md); kein Merge, keine Releasefreigabe.
+Nachfolgende Dokumentationscommits ändern die geprüften Binärdateien nicht.
 P184 is completed and is not repeated. Physical P185 is **NOT_RUN**;
 root cause **INCONCLUSIVE**, release **NO-GO**. AWE DSP/GUI and ASIO gates unchanged.
 
