@@ -1,5 +1,19 @@
 # START HERE — 125A AWE Synthesizer
 
+**P183 – erste echte P182-Referenzmessung NO-GO, Referenz-VST3 korrigiert (8. November 2026):**
+Der erste lokale P182-Versuch brach **vor jeglichem ASIO-Callback** bei
+`REFERENCE-A` ab (`VST3 setProcessing failed`); die AWE-Session
+startete nicht. Ursache im neu gebauten Test-Referenzinstrument:
+`setProcessing` musste `kResultOk` liefern. Das Referenz-VST3
+wurde korrigiert und mittels **echtem Windows-VST3-Lebenszyklustest**
+(inklusive MIDI-Note48, PCM, NoteOff-Stille) sowie absichtlich
+defektem `setProcessing`-Testinstrument geprüft. **Der ASIO-Host-Gate
+und die AWE-DLL sind unverändert.** Ein erneuter physischer P182-Test
+ist erst mit dem aktualisierten, P183-geprüften Windows-Paket sinnvoll.
+[Ursache und Testvertrag](docs/P182-INDEPENDENT-ASIO-REFERENCE.md).
+Keine AWE-Hardware-/DAW-/Release-Freigabe. 
+
+
 ## P182 – physische ASIO-Referenz-Gegenprobe (8. November 2026)
 
 **P182 ist jetzt vollständig gebaut, aber der unabhängige lokale

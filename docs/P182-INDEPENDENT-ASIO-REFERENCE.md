@@ -1,5 +1,41 @@
 # P182 – unabhängiger physischer ASIO-A/B/A-Gegenversuch
 
+## P183 – Fehler der ersten lokalen P182-Gegenprobe behoben
+
+**Echte lokale Benutzerdateien (8. November 2026):**
+`P182-COMPARISON.json` endet bereits bei `REFERENCE-A`
+mit `classification=INCOMPLETE`, `trials=[]` und
+`REFERENCE-A: ... native exit=1`. `NATIVE-HOST-LOG` nennt
+`[P58 HARDWARE NO-GO] VST3 setProcessing failed`.
+Die echte Yamaha-Steinberg-ASIO-Kapazitätsabfrage lieferte
+zuvor korrekt `512 Frames / 44100 Hz`. **Es gab bei
+P182 noch keinerlei realen ASIO-Callback, und der AWE-Synth
+wurde in diesem Dreifachvergleich überhaupt nicht gestartet.**
+Der Fehler ist ein Defekt der neu erzeugten QA-Referenz-VST3
+beim Übergang in den Processing-State, kein neuer Befund
+über den bestehenden AWE-P181-Timing-Ausreißer.
+
+Der Fix liegt im **Referenzinstrument**, nicht in der realen
+AWE-Klangengine und nicht im ASIO-Laufzeitgate.
+`setProcessing(true/false)` liefert explizit `kResultOk`.
+Der identische native Host lehnt weiterhin jedes Nicht-OK ab.
+Zusätzlich gibt es nun einen echten Windows-Lebenszyklustest,
+der die aus Quellcode gebaute Referenz-VST3 lädt und
+`initialize -> setupProcessing -> setActive -> setProcessing ->
+MIDI NoteOn48 -> hörbare Stereo-PCM -> NoteOff48 -> Stille ->
+setProcessing(false) -> setActive(false) -> terminate`
+prüft. Ein absichtlich kaputtes VST3 mit `setProcessing`-
+Fehler **muss** das Gegenstück der Prüfung negativ verlassen.
+Es wird kein physischer ASIO-Treiber zum CI-Preflight benötigt.
+
+**Erst ein Windows-Paket, dessen ausführbarer P183-Lebenszyklus-Test
+für exakt die mitgelieferte Referenz-DLL bestanden ist, darf dem
+Benutzer erneut für einen lokalen P182-A/B/A-Vergleich empfohlen
+werden.** CI ist nicht die reale Hardwareabnahme, weiterhin
+keine Freigabe, keine Ursachenzuordnung zu USB/Windows
+und keine Veränderung der strengen Startabstandsregel.
+
+
 **Ausgangspunkt:** Die echten P179/P180/P181-AWE-Messungen mit
 `Yamaha Steinberg USB ASIO` und dem ASIO-Host des Test Labs ergaben
 jeweils **1** zu langen Callback-Startabstand bei **1.000/1.000**

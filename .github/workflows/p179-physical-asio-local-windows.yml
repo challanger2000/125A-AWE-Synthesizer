@@ -38,7 +38,7 @@ jobs:
         run: |
           git clone --depth 1 --branch qa/p100-asio-instrument-midi https://github.com/challanger2000/125A-Plugin-Test-Lab.git lab-p100
           if ($LASTEXITCODE -ne 0) { throw 'Cannot fetch native ASIO host' }
-          if ((git -C lab-p100 rev-parse HEAD).Trim() -cne '7683cf3f9de2e8795371ffa38f24a70e6a40cf2d') { throw 'Native Test Lab source not exactly pinned' }
+          if ((git -C lab-p100 rev-parse HEAD).Trim() -cne 'e154eb8efe37cfd21c7be4aad84650d7f778962c') { throw 'Native Test Lab source not exactly pinned' }
       - name: Fetch original ASIO SDK at separately pinned GPLv3 reference
         shell: pwsh
         run: |
@@ -52,7 +52,7 @@ jobs:
           New-Item -ItemType Directory -Force qa | Out-Null
           cmake -S lab-p100 -B build-lab-p179 -G 'Visual Studio 17 2022' -A x64 "-DASIO_SDK_DIR=$env:GITHUB_WORKSPACE/asio-sdk"
           if ($LASTEXITCODE -ne 0) { throw 'P179 native ASIO configure failed' }
-          cmake --build build-lab-p179 --config Release --parallel 4 --target TestLabPhysicalASIO QAASIOReferenceMidi 2>&1 | Tee-Object qa/build.txt
+          cmake --build build-lab-p179 --config Release --parallel 4 --target TestLabPhysicalASIO QAASIOReferenceMidi QAASIOReferenceMidiBroken 2>&1 | Tee-Object qa/build.txt
           if ($LASTEXITCODE -ne 0) { throw 'P179 native ASIO MIDI host compile failed' }
       - name: Reject missing physical ASIO device with real product VST3
         shell: pwsh
@@ -94,6 +94,19 @@ jobs:
           if ($LASTEXITCODE -eq 0 -or (Test-Path $refNativeProof) -or
               (Test-Path $refNativeMidi) -or (Test-Path $refNativeDiagnostic) -or
               (Test-Path $refNativeTrace)) { throw 'P182 reference manufactured physical hardware proof' }
+          # P183: actual source-built reference module must survive the same
+          # VST3 initialize/setup/setProcessing/MIDI48/process/stop path as ASIO.
+          # A deliberate setProcessing failure must be detected, NOT accepted.
+          & $exe[0].FullName --vst3-reference-lifecycle-selftest --plugin $referenceFiles[0].FullName
+          if ($LASTEXITCODE -ne 0) { throw 'P183 source-built reference VST3 lifecycle failed' }
+          $brokenRef=@(Get-ChildItem build-lab-p179 -Filter '125A_QA_ASIO_Reference_MIDI_Broken.vst3' -Recurse -File)
+          if ($brokenRef.Count -ne 1) { throw 'P183 broken reference lifecycle negative fixture missing' }
+          $PSNativeCommandUseErrorActionPreference=$false
+          $brokenOutput=(& $exe[0].FullName --vst3-reference-lifecycle-selftest --plugin $brokenRef[0].FullName 2>&1 | Out-String)
+          if ($LASTEXITCODE -eq 0 -or -not $brokenOutput.Contains('P183 reference setProcessing(true) failed')) {
+            throw 'P183 negative VST3 with broken setProcessing passed unexpectedly'
+          }
+          Write-Host 'PASS P183 real reference lifecycle + MIDI PCM and intentional VST3 processing failure rejected'
           Write-Host 'PASS native sample format, P101 buffer policy, and absent physical-driver rejection'
           exit 0
       - name: Exercise actual Windows PowerShell 5.1 native stderr and return-code handling
@@ -172,6 +185,8 @@ jobs:
           $referencePackageDll=Join-Path $dest '125A_QA_ASIO_Reference_MIDI.vst3/Contents/x86_64-win/125A_QA_ASIO_Reference_MIDI.vst3'
           if (-not (Test-Path -LiteralPath $referencePackageDll -PathType Leaf)) { throw 'P182 reference DLL did not survive packaging' }
           $referenceSha=(Get-FileHash -LiteralPath $referencePackageDll -Algorithm SHA256).Hash.ToLowerInvariant()
+          & (Join-Path $dest '125A-Test-Lab-ASIO-MIDI.exe') --vst3-reference-lifecycle-selftest --plugin $referencePackageDll
+          if ($LASTEXITCODE -ne 0) { throw 'P183 ZIP-contained reference module lifecycle failed after packaging' }
           ($referenceSha+'  125A_QA_ASIO_Reference_MIDI.vst3') | Set-Content (Join-Path $dest 'P182-REFERENCE-SHA256.txt')
           Copy-Item 'lab-p100/tests/asio_reference_midi_fixture.cpp' (Join-Path $dest 'P182-REFERENCE-SOURCE.cpp')
           Copy-Item 'docs/P179-LOCAL-PHYSICAL-ASIO-ACCEPTANCE.md' (Join-Path $dest 'README-P179-ASIO.txt')
@@ -181,6 +196,8 @@ jobs:
           Copy-Item 'lab-p100/src/asio_buffer_probe.inc' (Join-Path $dest 'ASIO-HOST-SOURCE/asio_buffer_probe.inc')
           Copy-Item 'lab-p100/src/asio_live_diagnostics.inc' (Join-Path $dest 'ASIO-HOST-SOURCE/asio_live_diagnostics.inc')
           Copy-Item 'lab-p100/src/asio_timing_trace.inc' (Join-Path $dest 'ASIO-HOST-SOURCE/asio_timing_trace.inc')
+          Copy-Item 'lab-p100/src/asio_reference_lifecycle.inc' (Join-Path $dest 'ASIO-HOST-SOURCE/asio_reference_lifecycle.inc')
+          Copy-Item 'lab-p100/docs/P183-REFERENCE-LIFECYCLE-REGRESSION.md' (Join-Path $dest 'ASIO-HOST-SOURCE/P183-LIFECYCLE-TEST.txt')
           Copy-Item 'lab-p100/docs/P181-ASIO-CALLBACK-TIMING-TRACE.md' (Join-Path $dest 'ASIO-HOST-SOURCE/P181-CALLBACK-TRACE.txt')
           Copy-Item 'lab-p100/docs/P102-REAL-ASIO-FAILURE-TELEMETRY.md' (Join-Path $dest 'ASIO-HOST-SOURCE/P102-DIAGNOSTICS.txt')
           Copy-Item 'lab-p100/CMakeLists.txt' (Join-Path $dest 'ASIO-HOST-SOURCE/CMakeLists.txt')
@@ -188,7 +205,7 @@ jobs:
           @(
             "P179_SOURCE_SHA=$env:GITHUB_SHA"
             'AWE_P178_EXACT_VALIDATED_SOURCE=cff9d91cdec5aa2574d039b23660fae0589c6878'
-            'ASIO_HOST_EXACT_SOURCE=7683cf3f9de2e8795371ffa38f24a70e6a40cf2d'
+            'ASIO_HOST_EXACT_SOURCE=e154eb8efe37cfd21c7be4aad84650d7f778962c'
             'ASIO_SDK_SOURCE=496a0765b8bb9c26f764f22f9a9712a937177db2'
             'ORIGINAL_ROM_SF2=NEVER_IN_CLOUD'
             'PHYSICAL_ASIO_SESSION=NOT_RUN_IN_CLOUD'
