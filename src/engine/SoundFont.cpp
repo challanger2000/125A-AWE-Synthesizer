@@ -1108,7 +1108,14 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
     //   SBAWE.VXD   obj 1, 0x6D60 (the same table, the same values)
     // It shows on the Magic Carpet 2 bank: the presets LOOP2 and LOOP3 have
     // no sampleModes and the driver really puts their loop past the sample.
-    vp.sampleEndAddr = (sf1 && inRom) ? s.end : (base + s.end);
+    // SF2 end offsets are as real as start/loop offsets. Use signed wide
+    // arithmetic before bounding the sample address; SF1 reference unchanged.
+    const int64_t adjustedEnd=sf1 ? int64_t(s.end) :
+        int64_t(s.end)+g.Get(Gen::EndAddrsOffset,0)+
+        int64_t(32768)*g.Get(Gen::EndAddrsCoarseOffset,0);
+    const uint32_t sampleEnd=static_cast<uint32_t>(std::clamp<int64_t>(
+        adjustedEnd,0,inRom ? int64_t(kDramOffset-base) : int64_t(bank.sampleData.size())));
+    vp.sampleEndAddr = sf1 ? ((inRom) ? s.end : base+s.end) : base+sampleEnd;
     vp.loopEndAddr   = loopEnd;
     const int sampleModes = g.Get(Gen::SampleModes, 0);
     vp.looping = (sampleModes & 1) != 0;
@@ -1127,7 +1134,7 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
         // The specific offsets +4 and +8 are transcribed from SBAWE32.DRV
         // (0x02E4):
         //     loopStart = end + 4;  loopEnd = end + 8;
-        const uint32_t end = (sf1 && inRom) ? s.end : (base + s.end);
+        const uint32_t end = vp.sampleEndAddr;
         loopStart = end + 4;
         loopEnd   = end + 8;
     }

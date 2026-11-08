@@ -931,9 +931,12 @@ void Synth::StartLayers(size_t bankIndex, std::span<const SoundFont::Region> reg
             m_core.DriverVariant());
         // User-editable, deliberately non-destructive performance overlay.
         // All zero = exact existing SF2-to-register behaviour. No bank edits.
-        auto timeRate = [](float value) -> uint16_t {
-            return static_cast<uint16_t>(std::clamp(127-
-                int(std::lround(value*120.f)),1,127));
+        // 0 = the actual patch; increasing the overlay SHORTENS its time
+        // towards the fastest hardware rate. Never replace the patch by an
+        // unrelated absolute time immediately above zero.
+        auto timeRate = [](int original,float value) -> uint16_t {
+            return static_cast<uint16_t>(original+
+                int(std::lround((127-original)*value)));
         };
         auto replaceLow = [](uint16_t registerValue,uint16_t low) -> uint16_t {
             return static_cast<uint16_t>((registerValue&0xFF00u)|(low&0x7Fu));
@@ -942,16 +945,39 @@ void Synth::StartLayers(size_t bankIndex, std::span<const SoundFont::Region> reg
             return static_cast<uint16_t>((registerValue&0x00FFu)|
                 (static_cast<unsigned>(std::clamp(high,0,127))<<8));
         };
-        if(m_guiControls[0]>0.f) v.atkhldv=replaceLow(v.atkhldv,timeRate(m_guiControls[0]));
-        if(m_guiControls[1]>0.f) v.dcysusv=replaceLow(v.dcysusv,timeRate(m_guiControls[1]));
+        auto shortenAttack = [&](uint16_t& delay,uint16_t& attack,float amount) {
+            if(amount<=0.f)return;
+            // Delay precedes attack and hold precedes decay on the chip.
+            // Both must reach zero for a held pad to become a short click.
+            const int ticks=std::max(0,0x8000-int(delay));
+            delay=static_cast<uint16_t>(0x8000-int(std::lround(ticks*(1.f-amount))));
+            attack=replaceHigh(replaceLow(attack,timeRate(attack&127,amount)),
+                timeRate((attack>>8)&127,amount));
+        };
+        shortenAttack(v.envvol,v.atkhldv,m_guiControls[0]);
+        if(m_guiControls[1]>0.f) v.dcysusv=replaceLow(v.dcysusv,timeRate(v.dcysusv&127,m_guiControls[1]));
         if(m_guiControls[2]>0.f) v.dcysusv=replaceHigh(v.dcysusv,
-            127-int(std::lround(m_guiControls[2]*127.f)));
-        if(m_guiControls[3]>0.f) v.releaseRate=static_cast<uint8_t>(timeRate(m_guiControls[3]));
-        if(m_guiControls[4]>0.f) v.atkhld=replaceLow(v.atkhld,timeRate(m_guiControls[4]));
-        if(m_guiControls[5]>0.f) v.dcysus=replaceLow(v.dcysus,timeRate(m_guiControls[5]));
+            int(std::lround(((v.dcysusv>>8)&127)*(1.f-m_guiControls[2]))));
+        if(m_guiControls[3]>0.f) v.releaseRate=static_cast<uint8_t>(timeRate(v.releaseRate,m_guiControls[3]));
+        shortenAttack(v.envval,v.atkhld,m_guiControls[4]);
+        if(m_guiControls[5]>0.f) v.dcysus=replaceLow(v.dcysus,timeRate(v.dcysus&127,m_guiControls[5]));
         if(m_guiControls[6]>0.f) v.dcysus=replaceHigh(v.dcysus,
-            127-int(std::lround(m_guiControls[6]*127.f)));
-        if(m_guiControls[7]>0.f) v.releaseModRate=static_cast<uint8_t>(timeRate(m_guiControls[7]));
+            int(std::lround(((v.dcysus>>8)&127)*(1.f-m_guiControls[6]))));
+        if(m_guiControls[7]>0.f) v.releaseModRate=static_cast<uint8_t>(timeRate(v.releaseModRate,m_guiControls[7]));
+        // EMU8000 has one modulation envelope routed through PEFE. Retain
+        // existing positive/negative patch routes and pitch modulation. When
+        // the patch has no filter route, introduce an actual hardware filter
+        // sweep progressively with the overlay, with its peak at the patch's
+        // original cutoff (not a second software filter or extra DSP).
+        const float filterEdit=std::max({m_guiControls[4],m_guiControls[5],
+                                        m_guiControls[6],m_guiControls[7]});
+        if(filterEdit>0.f && (v.pefe&0xFFu)==0) {
+            const int depth=int(std::lround(96.f*filterEdit));
+            v.pefe=static_cast<uint16_t>((v.pefe&0xFF00u)|depth);
+            // PEFE +/-127 spans six octaves, i.e. 255 cutoff register steps.
+            const int cutoff=(v.ifatn>>8)&255;
+            v.ifatn=static_cast<uint16_t>((std::max(0,cutoff-2*depth)<<8)|(v.ifatn&255));
+        }
         if(m_guiControls[8]>0.f) {
             const int cutoff=(v.ifatn>>8)&0xFF;
             v.ifatn=static_cast<uint16_t>((std::max(0,cutoff-int(std::lround(
@@ -1027,7 +1053,7 @@ int Synth::BankNumberFor(uint8_t channel) const
     // convention; a real CC0 selects the actual numbered bank thereafter.
     if (m_strictPresetSelection) {
         if (selection.browserBankActive) return selection.browserBank;
-        if (channel == 9 && selection.bankMsb == 0) return kDrumBank;
+        if (channel == 9 && !selection.bankMsbTouched) return kDrumBank;
         return selection.bankMsb;
     }
     if (channel == 9) return kDrumBank;
@@ -1431,7 +1457,9 @@ void Synth::StartVoice(int voice, uint8_t channel, uint8_t note, uint8_t velocit
         // Same rule as SBAWE32.MDI: a looped sample with at least 0x14 words
         // after the loop end gets its loop moved behind the end at note-off
         // (block +0x06 = sample end + 4, relax/georgia traces: PSST 983F, CSL 9843).
-        a.vxdNoteEnd = (vp.loopOpensOnRelease && (vp.sampleEndAddr - vp.loopEndAddr) >= 0x14u)
+        a.vxdNoteEnd = (vp.loopOpensOnRelease &&
+                        ((bank && bank->version==SoundFont::Version::Sf2) ||
+                         (vp.sampleEndAddr - vp.loopEndAddr) >= 0x14u))
                      ? vp.sampleEndAddr + 4 : 0u;
         a.vxdPanTarget = a.vxdPanCur = static_cast<uint8_t>(pan);
         a.vxdPanTimer = -1;
@@ -1733,7 +1761,7 @@ void Synth::ControlChange(uint8_t channel, uint8_t controller, uint8_t value)
 
     switch (controller)
     {
-    case 0:  ch.bankMsb = value; ch.browserBankActive = false; break;
+    case 0:  ch.bankMsb = value; ch.bankMsbTouched = true; ch.browserBankActive = false; break;
     case 1:
         ch.modWheel = value;
         if (m_core.DriverVariant() == Awe32::Driver::Win95) UpdateFmmodVxd(channel);

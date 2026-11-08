@@ -41,6 +41,17 @@ if(125A_PROCESSOR_SDK_ROOT AND 125A_BUILD_ENGINE_PROBES)
     COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/p128_synthetic_assets.py" "${p128_assets}"
     DEPENDS "${PROJECT_SOURCE_DIR}/tests/p128_synthetic_assets.py")
   add_custom_target(p128_assets DEPENDS "${p128_assets}/bank.sf2" "${p128_assets}/zero.rom")
+  if(WIN32 AND 125A_BUILD_VST3)
+    add_executable(awe32_p171_vst3_load_host "${PROJECT_SOURCE_DIR}/tests/p171_vst3_load_host.cpp"
+      "${125A_PROCESSOR_SDK_ROOT}/public.sdk/source/common/memorystream.cpp")
+    target_include_directories(awe32_p171_vst3_load_host PRIVATE
+      "${125A_PROCESSOR_SDK_ROOT}" "${PROJECT_SOURCE_DIR}/src/vst3")
+    target_link_libraries(awe32_p171_vst3_load_host PRIVATE sdk sdk_hosting)
+    add_dependencies(awe32_p171_vst3_load_host 125A_AWE_Synthesizer p128_assets)
+    add_test(NAME 125A_p171_exported_dll_first_note COMMAND awe32_p171_vst3_load_host
+      "$<TARGET_FILE:125A_AWE_Synthesizer>" "${p128_assets}")
+    set_tests_properties(125A_p171_exported_dll_first_note PROPERTIES TIMEOUT 120)
+  endif()
   add_executable(awe32_p128_processor_order_test
     "${PROJECT_SOURCE_DIR}/tests/p128_processor_order.cpp"
     "${125A_PROCESSOR_SDK_ROOT}/public.sdk/source/common/memorystream.cpp"
@@ -65,6 +76,24 @@ if(125A_PROCESSOR_SDK_ROOT AND 125A_BUILD_ENGINE_PROBES)
   # and V11 project save/recall. No synthetic ROM copyright contamination.
   add_test(NAME 125A_p166_processor_missing_program
     COMMAND awe32_p128_processor_order_test p166-exact-presets "${p128_assets}")
+  add_test(NAME 125A_p167_channel10_explicit_zero
+    COMMAND awe32_p128_processor_order_test p167-channel10-bank-zero "${p128_assets}")
+  add_executable(awe32_p171_processor_contract
+    "${PROJECT_SOURCE_DIR}/tests/p171_processor_contract.cpp"
+    "${125A_PROCESSOR_SDK_ROOT}/public.sdk/source/common/memorystream.cpp"
+    "${125A_PROCESSOR_SDK_ROOT}/public.sdk/source/vst/hosting/parameterchanges.cpp"
+    "${125A_PROCESSOR_SDK_ROOT}/public.sdk/source/vst/hosting/eventlist.cpp")
+  target_include_directories(awe32_p171_processor_contract PRIVATE
+    "${p128_generated}" "${125A_PROCESSOR_SDK_ROOT}" "${PROJECT_SOURCE_DIR}/src/vst3"
+    "${PROJECT_SOURCE_DIR}/src/engine" "${PROJECT_SOURCE_DIR}/src/opl3"
+    "${PROJECT_SOURCE_DIR}/upstream/AWE32Emu/AWE32Emu/src")
+  target_link_libraries(awe32_p171_processor_contract PRIVATE sdk sdk_hosting awe32_chip_safety)
+  add_dependencies(awe32_p171_processor_contract p128_assets p128_processor_header)
+  add_test(NAME 125A_p171_first_note_bank_pcm
+    COMMAND awe32_p171_processor_contract functional "${p128_assets}")
+  add_test(NAME 125A_p171_state_rt_stress
+    COMMAND awe32_p171_processor_contract stress "${p128_assets}" "${PROJECT_BINARY_DIR}/p171-rt.csv")
+  set_tests_properties(125A_p171_first_note_bank_pcm 125A_p171_state_rt_stress PROPERTIES TIMEOUT 600)
   set_tests_properties(125A_p128_processor_order 125A_p128_processor_remove_engine
     125A_p128_persistent_controls 125A_p128_sample_accurate_program_pcm
     125A_p166_processor_missing_program PROPERTIES TIMEOUT 90)

@@ -79,6 +79,20 @@ target_compile_features(awe32_p166_exact_presets_test PRIVATE cxx_std_23)
 add_test(NAME 125A_p166_exact_sf2_rom COMMAND awe32_p166_exact_presets_test)
 set_tests_properties(125A_p166_exact_sf2_rom PROPERTIES TIMEOUT 90)
 
+add_executable(awe32_p170_audio_render "${PROJECT_SOURCE_DIR}/tests/p170_audio_render.cpp")
+target_include_directories(awe32_p170_audio_render PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${UPSTREAM_SRC}")
+target_link_libraries(awe32_p170_audio_render PRIVATE awe32_chip_safety)
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+add_test(NAME 125A_p170_pcm_audio_oracles COMMAND "${Python3_EXECUTABLE}"
+  "${PROJECT_SOURCE_DIR}/tests/p170_audio_oracles.py" "$<TARGET_FILE:awe32_p170_audio_render>"
+  "${PROJECT_BINARY_DIR}/p170-audio")
+set_tests_properties(125A_p170_pcm_audio_oracles PROPERTIES TIMEOUT 600)
+add_executable(awe32_p171_rom_level "${PROJECT_SOURCE_DIR}/tests/p171_rom_level.cpp")
+target_include_directories(awe32_p171_rom_level PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}"
+  "${PROJECT_SOURCE_DIR}/src/vst3" "${PROJECT_SOURCE_DIR}/src/opl3" "${UPSTREAM_SRC}")
+target_link_libraries(awe32_p171_rom_level PRIVATE awe32_chip_safety)
+add_test(NAME 125A_p171_synthetic_rom_level COMMAND awe32_p171_rom_level)
+
 # P121: real 86Box synthetic ROM / PCM regression for dense pitchbend.
 # Exercises the genuine 32,768-write queue and a playing 16-voice bank.
 add_executable(awe32_p121_pitchbend_audio_test "${PROJECT_SOURCE_DIR}/tests/p121_pitchbend_audio.cpp")

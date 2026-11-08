@@ -1971,9 +1971,9 @@ public:
                     ParameterInfo::kCanAutomate));
             }
         constexpr const char16* labels[kGuiCount]={
-            STR16("Amp Attack"),STR16("Amp Decay"),STR16("Amp Sustain Reduction"),
-            STR16("Amp Release"),STR16("Filter Attack"),STR16("Filter Decay"),
-            STR16("Filter Sustain Reduction"),STR16("Filter Release"),
+            STR16("Amp Attack Shorten"),STR16("Amp Decay Shorten"),STR16("Amp Sustain Reduction"),
+            STR16("Amp Release Shorten"),STR16("Filter Attack Shorten"),STR16("Filter Decay Shorten"),
+            STR16("Filter Sustain Reduction"),STR16("Filter Release Shorten"),
             STR16("Filter Cutoff Reduction"),STR16("Filter Resonance Boost"),
             STR16("Reverb Send Boost"),STR16("Chorus Send Boost")};
         for(int i=0;i<kGuiCount;++i)

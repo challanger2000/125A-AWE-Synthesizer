@@ -659,6 +659,20 @@ void PresetBrowserView::AddKnob(int index,int x,int y,const char* title) {
     auto* ctrl=new HardwareKnob(PageRect({CCoord(x),CCoord(y),CCoord(x+58),CCoord(y+58)}),
                                 this,kGuiFirst+index);
     controls_[size_t(index)]=ctrl;
+    static constexpr const char* help[kGuiCount]={
+        "Neue Noten: 0% Original; 100% kuerzeste Attack, kein Delay/Hold.",
+        "Neue Noten: 0% Original; 100% schnellster Decay.",
+        "Neue Noten: 0% Original; 100% Sustain stumm (zusammen mit Decay).",
+        "Neue Noten: 0% Original; 100% kuerzeste Release nach Note-Off.",
+        "Neue Noten: Filter-Attack verkuerzen; fehlende Filterroute wird eingeblendet.",
+        "Neue Noten: Filter-Decay verkuerzen; vorhandene SF2-Filterroute bleibt erhalten.",
+        "Neue Noten: Filter-Sustain reduzieren; 0% Original, 100% Minimum.",
+        "Neue Noten: Filter-Release verkuerzen; EMU8000-Modulationshuellkurve.",
+        "Neue Noten: Cutoff REDUZIEREN. 0% Original; 100% tiefster Hardware-Cutoff.",
+        "Neue Noten: Resonanz erhoehen. 0% Original; 100% Hardware-Maximum.",
+        "Neue Noten: Reverb-Send erhoehen. 100% Send; Dry-Signal bleibt erhalten.",
+        "Neue Noten: Chorus-Send erhoehen. 100% Send; Dry-Signal bleibt erhalten."};
+    ctrl->setTooltipText(help[index]);
     AddToCurrentPage(ctrl);
     auto* lab=MakeLabel({CCoord(x-16),CCoord(y+63),CCoord(x+74),CCoord(y+80)},title,true);
     lab->setHoriAlign(kCenterText);

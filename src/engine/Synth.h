@@ -169,6 +169,7 @@ private:
         uint8_t program = 0;
         uint8_t modWheel = 0;   // CC1, see Synth::NoteOn
         uint8_t bankMsb = 0;         // CC0
+        bool bankMsbTouched = false; // explicit zero differs from GM default
         uint16_t browserBank=0;
         bool browserBankActive=false;
         uint8_t bankLsb = 0;         // CC32

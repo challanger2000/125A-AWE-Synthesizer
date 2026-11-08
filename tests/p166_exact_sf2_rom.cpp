@@ -44,7 +44,7 @@ bool Save(const fs::path& path,const Bytes& data){
     return f.good();
 }
 struct Spec {uint16_t bank;uint8_t program;uint16_t instrument;};
-Bytes MakeSoundFont(const std::vector<Spec>& specs,bool sf1=false){
+Bytes MakeSoundFont(const std::vector<Spec>& specs,bool sf1=false,bool level=false){
     Bytes info,version,romName,inam;
     U16(version,sf1?1:2);U16(version,sf1?0:1);
     Chunk(info,"ifil",version);
@@ -83,15 +83,21 @@ Bytes MakeSoundFont(const std::vector<Spec>& specs,bool sf1=false){
     for(int i=0;i<2;++i) {
         Name(inst,"P166 Synth Sample "+std::to_string(i));
         U16(inst,unsigned(i));
-        U16(ibag,unsigned(i));U16(ibag,0);
+        U16(ibag,unsigned(i)*(level?9u:1u));U16(ibag,0);
+        if(level)for(auto gen:std::array<std::pair<int,int>,8>{{
+            {34,sf1?0:-12000},{35,sf1?0:-12000},{36,sf1?0:-12000},
+            {37,sf1?99:0},{38,sf1?1000:0},{16,0},{54,1},{58,69}}}) {
+            U16(igen,unsigned(gen.first));U16(igen,unsigned(gen.second));
+        }
         U16(igen,53);U16(igen,unsigned(i));
     }
-    Name(inst,"EOI");U16(inst,2);U16(ibag,2);U16(ibag,0);
+    Name(inst,"EOI");U16(inst,2);U16(ibag,level?18:2);U16(ibag,0);
     for(int i=0;i<2;++i) {
         const unsigned start=unsigned(i)*N;
         if(sf1) {
-            U32(shdr,start);U32(shdr,start+N);
-            U32(shdr,start+16);U32(shdr,start+N-16);
+            const unsigned base=level?495:0;
+            U32(shdr,base+start);U32(shdr,base+start+N);
+            U32(shdr,base+start+(level?15:16));U32(shdr,base+start+N-(level?18:16));
         } else {
             Name(shdr,"P166 Sine "+std::to_string(i));
             U32(shdr,start);U32(shdr,start+N);
@@ -139,10 +145,11 @@ struct Heard {
     bool note=false;
     bool audio=false;
     uint64_t energy=0;
+    uint64_t pcmFingerprint=1469598103934665603ULL;
     size_t banks=0;
 };
 Heard Play(const fs::path& rom,const fs::path& sf2,
-           uint16_t bank,uint8_t program,
+           int bank,uint8_t program,
            int channel=0,int midiBank=-1,bool legacy=false) {
     Synth synth(44100);
     synth.Core().SetDriver(Awe32::Driver::Win95);
@@ -158,14 +165,18 @@ Heard Play(const fs::path& rom,const fs::path& sf2,
         return {};
     }
     if(legacy)synth.SetStrictPresetSelection(false); // oracle sensitivity
-    synth.SelectBrowserBank(bank);
+    if(bank>=0)synth.SelectBrowserBank(uint16_t(bank));
     if(midiBank>=0)synth.ControlChange(uint8_t(channel),0,uint8_t(midiBank));
     synth.ProgramChange(uint8_t(channel),program);
     synth.NoteOn(uint8_t(channel),69,115,123);
     Heard h;h.ready=true;h.banks=synth.BankCount();h.note=Held(synth)!=0;
     std::vector<int16_t> pcm(32768,0);
     synth.RenderBlock(pcm.data(),16384);
-    for(const auto v:pcm)h.energy+=uint64_t(std::abs(int(v)));
+    for(const auto v:pcm) {
+        h.energy+=uint64_t(std::abs(int(v)));
+        h.pcmFingerprint^=uint16_t(v);
+        h.pcmFingerprint*=1099511628211ULL;
+    }
     h.audio=h.energy>1000;
     return h;
 }
@@ -277,6 +288,25 @@ int main(){
        "MIDI CC0 overrides global browser bank with exact target selection");
     ok&=Check(available.banks==2&&rom63.banks==2,
        "engine loads only real SF2 and virtual GM ROM bank, NO physical GM bank 0");
+
+    // Independent P167 adversarial test. MIDI channel 10 defaults to GM
+    // percussion, but a *real explicit* CC0=0 must select bank zero.
+    // This exercises the actual 86Box stereo PCM and checks the chosen
+    // waveform, not just 'audio present' (both banks have valid presets).
+    const auto ch10Bank0=Play(rom,sparse,0,0,9);
+    const auto ch10Drums=Play(rom,sparse,128,0,9);
+    const auto ch10Cc0=Play(rom,sparse,128,0,9,0);
+    const auto untouchedDrums=Play(rom,sparse,-1,0,9);
+    ok&=Check(untouchedDrums.audio&&untouchedDrums.pcmFingerprint==ch10Drums.pcmFingerprint,
+          "untouched channel10 retains GM drum128 default");
+    ok&=Check(ch10Bank0.ready&&ch10Drums.ready&&ch10Cc0.ready&&
+          ch10Bank0.audio&&ch10Drums.audio&&ch10Cc0.audio&&
+          ch10Bank0.pcmFingerprint!=ch10Drums.pcmFingerprint,
+          "P167 independent control: ch10 SF2 bank0 and drum128 produce distinct real PCM");
+    ok&=Check(ch10Cc0.ready && ch10Cc0.pcmFingerprint==ch10Bank0.pcmFingerprint &&
+          ch10Cc0.pcmFingerprint!=ch10Drums.pcmFingerprint,
+          "P167 adversarial: explicit channel10 MIDI CC0=0 must override drum bank128, exact PCM");
+
     // Project state preserves sparse bank/program identifiers. The actual
     // production VST3 processor concurrency/host tests run separately.
     AWE125::AssetState::Data state;
