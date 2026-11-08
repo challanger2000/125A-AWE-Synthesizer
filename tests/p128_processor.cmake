@@ -58,6 +58,20 @@ if(125A_PROCESSOR_SDK_ROOT AND 125A_BUILD_ENGINE_PROBES)
     add_test(NAME 125A_p176_exported_dll_sf2_loops COMMAND awe32_p171_vst3_load_host
       "$<TARGET_FILE:125A_AWE_Synthesizer>" "${p128_assets}" loops)
     set_tests_properties(125A_p176_exported_dll_sf2_loops PROPERTIES TIMEOUT 120)
+    # P177: actual compiled DLL and native Win32 file dialog into first-note PCM.
+    add_executable(awe32_p177_ui_first_note_host
+      "${PROJECT_SOURCE_DIR}/tests/p177_ui_first_note_host.cpp"
+      "${125A_PROCESSOR_SDK_ROOT}/public.sdk/source/common/memorystream.cpp")
+    target_include_directories(awe32_p177_ui_first_note_host PRIVATE
+      "${125A_PROCESSOR_SDK_ROOT}" "${PROJECT_SOURCE_DIR}/src/vst3")
+    target_link_libraries(awe32_p177_ui_first_note_host PRIVATE sdk sdk_hosting ole32 user32)
+    target_compile_features(awe32_p177_ui_first_note_host PRIVATE cxx_std_23)
+    add_dependencies(awe32_p177_ui_first_note_host 125A_AWE_Synthesizer p128_assets)
+    add_test(NAME 125A_p177_real_gui_load_first_note COMMAND
+      "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/p177_win32_first_note_driver.py"
+      "$<TARGET_FILE:awe32_p177_ui_first_note_host>"
+      "$<TARGET_FILE:125A_AWE_Synthesizer>" "${p128_assets}")
+    set_tests_properties(125A_p177_real_gui_load_first_note PROPERTIES TIMEOUT 155)
   endif()
   add_executable(awe32_p128_processor_order_test
     "${PROJECT_SOURCE_DIR}/tests/p128_processor_order.cpp"

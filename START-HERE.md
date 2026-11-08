@@ -1,5 +1,15 @@
 # START HERE — 125A AWE Synthesizer
 
+## P177 – reale Windows-SF2-Auswahl → erster Ton bestanden (8. November 2026)
+
+**Branch `qa/p177-controller-gui-first-note`, geprüfter Produkt-/P177-Teststand `25373c00fb041dc8a5df56e2fe5eec43c0d43c8e`**, Draft [PR #88](https://github.com/challanger2000/125A-AWE-Synthesizer/pull/88) – **kein Merge und kein Release**. P177 ist eine zusätzliche native Testintegration; **keine Änderungen am Synth-, ROM-, Filter-, SoundFont-, Controller- oder GUI-Produktionscode**.
+
+- [**P177 Windows #42493315242 SUCCESS**](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42493315242): echtes exportiertes Windows-VST3-Modul wird geladen und der VSTGUI-Editor an ein echtes Win32-Fenster gebunden; der Test klickt den echten SF2-Knopf, wählt eine mathematisch erzeugte SoundFont durch den Windows-Dateidialog, wechselt per NEXT auf vorhandenes Programm 7, prüft Host-Parameter-Gesten, gespeicherten Prozessor-SF2-Pfad sowie die **erste** hörbare Note einschließlich PCM-Bitgleichheit zur vorinstallierten DLL-Referenz. **Dedizierter Integrationstest 1/1 PASS**, produktive Steinberg-SDK-Selbsttests beim Build 47/47 PASS. Der zuvor blockierte Test-Editor wurde durch den korrekt aufgerufenen Steinberg-Modul-Lebenszyklus `InitDll`/`ExitDll` behoben; es war ein Fehler des neuen Testhosts, **kein nachgewiesener Fehler der Produkt-DLL**.
+- **P176 vorheriger vollständiger Windows-Test #42488547080 SUCCESS** auf exakt `65bba76976115d8b3634a4a1316bc59d79ebab80`: **63/63 CTests** inklusive neun echter exportierter-DLL-SF2-Loopfälle (Modi 0/1/3 × 44,1/48/96 kHz); **537/537 vollständiger VST3-Modulvalidator, 3/3 EditorHost-Smokes, 99/99 GUI-Entscheidungen und universelles Test Lab TECHNICAL_PASS**, 0/14.400 Deadlinemisses in genau dieser P176-Runner-Matrix. P177 verändert die Produkt-Quellen nicht, aber sein eigener scoped Windows-Lauf ersetzt **keinen erneuten P177-Vollregressionslauf**.
+- **Freigabegrenze:** P177/P176 nutzen ausschließlich synthetische ROM/SF2-Dateien. Benutzer-Original-ROM und SF2-Presets, Creative-Hardwareparität, reale Ziel-DAW/ASIO/MMCSS, unabhängiger FULL AUDIT und Release-Abnahme weiterhin **NOT RUN / NO-GO**. Der frühere P171-Deadlinebefund 1/28.800 bleibt formal dokumentiert. **Keine Originaldateien in öffentliches CI.**
+- Prüfverfahren, Negativkontrollen und Grenzen: [P177-Nachweis](docs/P177-REAL-UI-FIRST-NOTE.md) und [P176-PR #87](https://github.com/challanger2000/125A-AWE-Synthesizer/pull/87). Historische „aktueller Branch“-Angaben weiter unten sind nicht aktuell.
+
+
 ## P170/P171 — Windows-Funktionsprüfung bestanden, Echtzeit-Gates offen (8. November 2026)
 
 **Aktueller Arbeitsbranch: `fix/p170-p171-audio-corrections`**, endgültig geprüfter Produkt-/Teststand **`b02e02d472544eb2122533f9b8d7dc9d0b97f68a`**, auf P169 `99fb90fc855c4c7643e24816fa644fdc738c290f` mit P166/P168 und originaler P165-Faceplate. Die folgenden älteren „aktuellen“ Abschnitte sind Historie. `main` ist keine Entwicklungsbasis.
