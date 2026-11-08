@@ -36,7 +36,8 @@ try {
     $driver=$_.PSChildName
     $props=Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue
     $clsidValue=if($props -and $props.PSObject.Properties['CLSID']){[string]$props.CLSID}else{''}
-    if($clsidValue -match '^\{[0-9A-Fa-f]{8}-(?:[0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}\}
+    if($clsidValue -match '^\{[0-9A-Fa-f]{8}-(?:[0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}\}$') {
+      [PSCustomObject]@{Name=$driver;CLSID=$clsidValue}
     }
   })
   if ($drivers.Count -eq 0) { throw 'Kein gueltig registrierter Windows-ASIO-Treiber gefunden.' }
@@ -65,7 +66,11 @@ try {
   $manifestFile=Join-Path $root 'P179-SHA256SUMS.txt'
   if(-not (Test-Path -LiteralPath $manifestFile -PathType Leaf)){throw 'Verifizierte P179-SHA256SUMS.txt fehlt.'}
   $checks=Get-Content -LiteralPath $manifestFile
-  if(-not @($checks | Where-Object {$_ -match ('^'+$moduleHash+'  125A_AWE_Synthesizer\.vst3  $random=[byte[]]::new(24)
+  if(-not ($checks -contains ($moduleHash+'  125A_AWE_Synthesizer.vst3')) -or
+     -not ($checks -contains ($executorHash+'  125A-Test-Lab-ASIO-MIDI.exe'))) {
+    throw 'P179-Binaerdateien stimmen nicht mit dem verifizierten SHA256-Paket ueberein.'
+  }
+  $random=[byte[]]::new(24)
   $rng=[System.Security.Cryptography.RandomNumberGenerator]::Create()
   try{$rng.GetBytes($random)}finally{$rng.Dispose()}
   $nonce=([BitConverter]::ToString($random)).Replace('-','').ToLowerInvariant()
