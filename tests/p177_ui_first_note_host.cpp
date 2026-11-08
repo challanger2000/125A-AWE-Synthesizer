@@ -143,7 +143,7 @@ int wmain(int argc,wchar_t** argv) {
                     "P177 native HWND unsupported");
             WNDCLASSW wc{};wc.lpfnWndProc=wndProc;
             wc.hInstance=GetModuleHandleW(nullptr);wc.lpszClassName=kClass;
-            wc.hCursor=LoadCursorW(nullptr,IDC_ARROW);
+            wc.hCursor=LoadCursorW(nullptr,MAKEINTRESOURCEW(32512));
             require(RegisterClassW(&wc)||GetLastError()==ERROR_CLASS_ALREADY_EXISTS,
                     "P177 window class");
             RECT rect{0,0,size.getWidth(),size.getHeight()};
