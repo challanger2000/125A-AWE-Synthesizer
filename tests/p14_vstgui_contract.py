@@ -97,6 +97,15 @@ assert 'programMenu_=new GoldHardwareMenu({261,234,552,273},this,kDirectPreset)'
 assert 'RebuildActiveMenus();' in b and 'SyncActiveMenuSelection();' in b
 assert 'sf_.Find(bank_,id)' in b
 assert 'ChooseExistingProgram(' in b
+# P169: missing external MIDI program is explicitly visible, not silently
+# painted as first existing SF2 instrument. The popup retains only real IDs.
+assert 'SetUnavailableProgram(int program)' in b
+assert 'const bool missing=current==activePrograms_.end();' in b
+assert 'missing?int(program_):-1' in b
+assert 'if(!missing)programMenu_->setValue(' in b
+assert 'if(item || !unavailableProgram_.empty())' in b
+assert '"%03d  NICHT VORHANDEN"' in b
+
 assert 'kActiveBank=3109,kDirectPreset=3110' in h
 assert 'm_guiControls[11]' in syn
 # P165 retains any compatibility assets only as packaged resources, never as overlay views.
