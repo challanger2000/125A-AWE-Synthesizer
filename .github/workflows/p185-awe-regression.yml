@@ -141,7 +141,7 @@ jobs:
         timeout-minutes: 18
         run: |
           $ErrorActionPreference='Stop'
-          $labSha='d9d795e888dd0b6ec34fb6b99ae14d43a07ab72d'
+          $labSha='fbc4e2de8f74f177a364ac845bb8d00c1115b53b'
           git clone --depth 1 https://github.com/challanger2000/125A-Plugin-Test-Lab.git test-lab
           if ($LASTEXITCODE -ne 0) { throw 'Cannot clone independent Test Lab' }
           git -C test-lab fetch --depth 1 origin $labSha
@@ -203,6 +203,9 @@ jobs:
           Copy-Item build-p133/p170-audio qa/p170-audio -Recurse
           Copy-Item build-p133/p170-paired qa/p170-paired -Recurse
           Get-ChildItem build-p133 -Directory -Filter 'p170-negative-*' | ForEach-Object { Copy-Item $_.FullName qa/ -Recurse }
+          # The legacy summarizer requires an explicit ETW status even when no
+          # broad WPR recording was requested. P185 native controls are separate.
+          @{recorded=$false;analyzed=$false;heap_attribution='NOT RUN';scope='No WPR in unchanged-AWE regression; independent P185 native controls are separate'} | ConvertTo-Json | Set-Content qa/etw-status.json
           python tools/p170_evidence_summary.py build-p133 qa
           if ($LASTEXITCODE -ne 0) { throw 'Incomplete P170/P171 numerical evidence' }
 

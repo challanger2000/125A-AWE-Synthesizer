@@ -15,13 +15,13 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 30
     env:
-      TESTLAB_SHA: c3d1bd6a60e9d524c091c841ce6b6674816436fa
+      TESTLAB_SHA: fbc4e2de8f74f177a364ac845bb8d00c1115b53b
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
         with:
           repository: challanger2000/125A-Plugin-Test-Lab
-          ref: c3d1bd6a60e9d524c091c841ce6b6674816436fa
+          ref: fbc4e2de8f74f177a364ac845bb8d00c1115b53b
           path: lab
       - name: Retrieve proven unchanged P178 AWE binary
         uses: actions/download-artifact@v4
@@ -62,22 +62,27 @@ jobs:
             & ./lab/tests/p185_adversarial.ps1 -Evidence evidence
             if (-not (Test-Path evidence/P185-ADVERSARIAL.json)) { throw 'Adversarial completion missing' }
           } catch { Write-Host "::error::P185_CONTROLS $($_.Exception.Message) $($_.ScriptStackTrace)"; throw }
-      - name: Require the completed full unchanged-AWE regression
+      - name: Require the completed full unchanged-AWE regression on this exact commit
+        id: regression
         uses: actions/github-script@v7
         with:
           script: |
-            const id=42528736196;
-            for(let attempt=0;attempt<30;attempt++) {
-              const r=(await github.rest.actions.getWorkflowRun({...context.repo,run_id:id})).data;
-              if(r.head_sha!=='bb11f88ada05ab671b0eada423e9187d77fc3ed8') throw new Error('Full-regression source mismatch');
-              if(r.status==='completed') { if(r.conclusion!=='success') throw new Error(`Full regression: ${r.conclusion}`); return; }
+            for(let attempt=0;attempt<40;attempt++) {
+              const list=(await github.rest.actions.listWorkflowRuns({...context.repo,workflow_id:'p185-awe-regression.yml',head_sha:context.sha,per_page:10})).data.workflow_runs;
+              const r=list.find(x=>x.head_sha===context.sha);
+              if(r&&r.status==='completed') {
+                const jobs=(await github.rest.actions.listJobsForWorkflowRun({...context.repo,run_id:r.id})).data.jobs;
+                for(const job of jobs) core.notice(`P185_AWE_REGRESSION_JOB=${job.html_url} conclusion=${job.conclusion}`);
+                if(r.conclusion!=='success') throw new Error(`Full regression: ${r.conclusion}`);
+                core.setOutput('run_id',String(r.id));return;
+              }
               await new Promise(resolve=>setTimeout(resolve,30000));
             }
             throw new Error('Full regression not completed; no package acceptance');
       - uses: actions/download-artifact@v4
         with:
           name: P185-AWE-Full-Windows-Evidence-A
-          run-id: 42528736196
+          run-id: ${{ steps.regression.outputs.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: full-regression
       - name: Reconcile actual full-suite and validator counts
@@ -92,8 +97,8 @@ jobs:
           $validated=[int]$Matches[1]
           $gui=@(Get-ChildItem full-regression -Recurse -Filter result.json | Where-Object {$_.FullName -match 'editor-[123]'} | ForEach-Object {Get-Content $_.FullName -Raw | ConvertFrom-Json})
           if ($gui.Count -ne 3 -or @($gui | Where-Object {-not $_.passed}).Count) { throw 'Missing three actual EditorHost smokes' }
-          @{awe_source='bb11f88ada05ab671b0eada423e9187d77fc3ed8';ctest_passed=$count;validator_passed=$validated;editor_smokes=3;physical_asio='NOT_RUN';release_approved=$false} | ConvertTo-Json | Set-Content evidence/P185-FULL-REGRESSION.json
-          Write-Host "::notice::P185_AWE_FULL_REGRESSION ctest=$count validator=$validated editor_smokes=3 source=bb11f88ada05ab671b0eada423e9187d77fc3ed8"
+          @{awe_source=$env:GITHUB_SHA;ctest_passed=$count;validator_passed=$validated;editor_smokes=3;physical_asio='NOT_RUN';release_approved=$false} | ConvertTo-Json | Set-Content evidence/P185-FULL-REGRESSION.json
+          Write-Host "::notice::P185_AWE_FULL_REGRESSION ctest=$count validator=$validated editor_smokes=3 source=$env:GITHUB_SHA"
       - name: Integrate unchanged AWE and test the actual extracted ZIP BAT
         shell: powershell
         run: |
