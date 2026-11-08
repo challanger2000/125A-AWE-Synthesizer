@@ -30,3 +30,13 @@ for stress in (False,True):
  (D/('bank-filter-stress.sf2' if stress else 'bank.sf2')).write_bytes(chunk('RIFF',b))
 (D/'zero.rom').write_bytes(bytes(1048576))
 print('9 distinct bank/program waves (including GM drum channel); generated from sine formula; zero-filled synthetic ROM')
+
+# P176: independent 86Box/VST3 loop-mode fixtures with a 16-word
+# post-loop tail. Reuse the already falsified P170 sample-mode oracle.
+# All tones are generated, public-domain-equivalent mathematical signals;
+# no original Wave-ROM, SBK or user SF2 data leaves the local machine.
+from p170_audio_oracles import DRY, sf2
+for loop_mode in (0, 1, 3):
+    generators = [pair for pair in DRY if pair[0] not in (38, 54)]
+    generators += [(38, 0), (54, loop_mode)]
+    sf2(D / f'loop-{loop_mode}.sf2', generators, loop_end=4080)

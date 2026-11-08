@@ -38,9 +38,11 @@ if(125A_PROCESSOR_SDK_ROOT AND 125A_BUILD_ENGINE_PROBES)
   # P131 independently reproduced PermissionError without this guard.
   add_custom_target(p128_processor_header DEPENDS "${p128_generated}/ProcessorUnderTest.h")
   add_custom_command(OUTPUT "${p128_assets}/bank.sf2" "${p128_assets}/bank-filter-stress.sf2" "${p128_assets}/zero.rom"
+    "${p128_assets}/loop-0.sf2" "${p128_assets}/loop-1.sf2" "${p128_assets}/loop-3.sf2"
     COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/p128_synthetic_assets.py" "${p128_assets}"
     DEPENDS "${PROJECT_SOURCE_DIR}/tests/p128_synthetic_assets.py")
-  add_custom_target(p128_assets DEPENDS "${p128_assets}/bank.sf2" "${p128_assets}/bank-filter-stress.sf2" "${p128_assets}/zero.rom")
+  add_custom_target(p128_assets DEPENDS "${p128_assets}/bank.sf2" "${p128_assets}/bank-filter-stress.sf2" "${p128_assets}/zero.rom"
+    "${p128_assets}/loop-0.sf2" "${p128_assets}/loop-1.sf2" "${p128_assets}/loop-3.sf2")
   if(WIN32 AND 125A_BUILD_VST3)
     add_executable(awe32_p171_vst3_load_host "${PROJECT_SOURCE_DIR}/tests/p171_vst3_load_host.cpp"
       "${125A_PROCESSOR_SDK_ROOT}/public.sdk/source/common/memorystream.cpp")
@@ -51,6 +53,11 @@ if(125A_PROCESSOR_SDK_ROOT AND 125A_BUILD_ENGINE_PROBES)
     add_test(NAME 125A_p171_exported_dll_first_note COMMAND awe32_p171_vst3_load_host
       "$<TARGET_FILE:125A_AWE_Synthesizer>" "${p128_assets}")
     set_tests_properties(125A_p171_exported_dll_first_note PROPERTIES TIMEOUT 120)
+    # P176: directly exercise mode 0/1/3 in the exported Windows VST3 DLL,
+    # including first NoteOn after load, precise NoteOff and actual PCM windows.
+    add_test(NAME 125A_p176_exported_dll_sf2_loops COMMAND awe32_p171_vst3_load_host
+      "$<TARGET_FILE:125A_AWE_Synthesizer>" "${p128_assets}" loops)
+    set_tests_properties(125A_p176_exported_dll_sf2_loops PROPERTIES TIMEOUT 120)
   endif()
   add_executable(awe32_p128_processor_order_test
     "${PROJECT_SOURCE_DIR}/tests/p128_processor_order.cpp"

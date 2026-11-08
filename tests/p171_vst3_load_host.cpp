@@ -15,6 +15,8 @@
 #include "MidiControlMapping.h"
 #include <algorithm>
 #include <array>
+#include <cmath>
+#include <string>
 #include <filesystem>
 #include <iostream>
 #include <stdexcept>
@@ -42,6 +44,44 @@ std::vector<float> render(IAudioProcessor* audio,int channel) {
         require(audio->process(data)==kResultOk,"actual DLL process");
         pcm.insert(pcm.end(),l.begin(),l.end());pcm.insert(pcm.end(),r.begin(),r.end());
     }return pcm;
+}
+
+/* P176: the real exported DLL, never an extracted Synth/Processor copy.
+   Frames 0 and rate carry NoteOn/NoteOff at exact sample offsets, including
+   an event offset inside a block at 44.1/48/96 kHz. */
+std::vector<float> renderLoop(IAudioProcessor* audio,int rate) {
+    constexpr int framesPerBlock=1024;
+    const int blocks=(rate*14/10+framesPerBlock-1)/framesPerBlock;
+    std::vector<float> pcm;pcm.reserve(size_t(blocks)*framesPerBlock);
+    for(int block=0;block<blocks;++block) {
+        std::array<float,framesPerBlock> left{},right{};
+        float* channels[]{left.data(),right.data()};
+        AudioBusBuffers out{};out.numChannels=2;out.channelBuffers32=channels;
+        EventList events;
+        if(block==0) {
+            Event on{};on.type=Event::kNoteOnEvent;on.sampleOffset=0;
+            on.noteOn.channel=0;on.noteOn.pitch=60;on.noteOn.velocity=.85f;on.noteOn.noteId=7;
+            require(events.addEvent(on)==kResultOk,"loop NoteOn");
+        }
+        if(block==rate/framesPerBlock) {
+            Event off{};off.type=Event::kNoteOffEvent;off.sampleOffset=rate%framesPerBlock;
+            off.noteOff.channel=0;off.noteOff.pitch=60;off.noteOff.velocity=0.f;off.noteOff.noteId=7;
+            require(events.addEvent(off)==kResultOk,"loop NoteOff");
+        }
+        ProcessData data{};data.processMode=kRealtime;data.symbolicSampleSize=kSample32;
+        data.numSamples=framesPerBlock;data.numOutputs=1;data.outputs=&out;
+        data.inputEvents=&events;
+        require(audio->process(data)==kResultOk,"actual DLL loop process");
+        pcm.insert(pcm.end(),left.begin(),left.end());
+    }
+    return pcm;
+}
+double windowRms(const std::vector<float>& pcm,int rate,double start,double end) {
+    const auto first=size_t(rate*start),last=size_t(rate*end);
+    require(last>first&&last<=pcm.size(),"valid PCM measurement window");
+    double energy=0.;
+    for(size_t i=first;i<last;++i)energy+=double(pcm[i])*double(pcm[i]);
+    return std::sqrt(energy/double(last-first));
 }
 struct Instance {
     IComponent* component=nullptr;IAudioProcessor* audio=nullptr;IEditController* controller=nullptr;
@@ -73,29 +113,69 @@ struct Instance {
 };
 }
 int wmain(int argc,wchar_t** argv) {
-    if(argc!=3)return 2;
+    if(argc!=3&&argc!=4)return 2;
+    const bool checkLoops=argc==4&&std::wstring(argv[3])==L"loops";
+    if(argc==4&&!checkLoops)return 2;
     auto dll=LoadLibraryW(argv[1]);if(!dll)return 2;
     using GetFactory=IPluginFactory*(*)();auto get=reinterpret_cast<GetFactory>(GetProcAddress(dll,"GetPluginFactory"));
     if(!get)return 2;auto* factory=get();int checks=0,failures=0;
     try {
         auto assets=std::filesystem::path(argv[2]);
-        for(int rate:{44100,48000,96000})for(unsigned program:{0u,7u,9u}) {
-            AWE125::AssetState::Data wanted;wanted.pathsSpecified=true;wanted.program=program;
-            wanted.channelPrograms.fill(program);wanted.romPath=(assets/"zero.rom").string();wanted.sf2Path=(assets/"bank.sf2").string();
-            auto blank=wanted;blank.sf2Path.clear();
-            Instance reference(factory,rate,wanted);auto expected=render(reference.audio,0);
-            Instance actual(factory,rate,blank);
-            auto* load=new HostMessage;load->setMessageID("125A_SF2_LOAD");
-            load->getAttributes()->setInt("RequestID",1);
-            load->getAttributes()->setBinary("Path",wanted.sf2Path.data(),uint32(wanted.sf2Path.size()));
-            require(actual.procConnection->notify(load)==kResultOk,"real load message");load->release();
-            auto got=render(actual.audio,0);
-            const bool good=got==expected&&std::any_of(got.begin(),got.end(),[](float v){return v!=0.f;});
-            ++checks;failures+=!good;
-            std::cout<<(good?"PASS ":"FAIL ")<<"actual DLL first NoteOn after SF2 load rate="<<rate<<" program="<<program<<'\n';
+        if(!checkLoops) {
+            for(int rate:{44100,48000,96000})for(unsigned program:{0u,7u,9u}) {
+                AWE125::AssetState::Data wanted;wanted.pathsSpecified=true;wanted.program=program;
+                wanted.channelPrograms.fill(program);wanted.romPath=(assets/"zero.rom").string();wanted.sf2Path=(assets/"bank.sf2").string();
+                auto blank=wanted;blank.sf2Path.clear();
+                Instance reference(factory,rate,wanted);auto expected=render(reference.audio,0);
+                Instance actual(factory,rate,blank);
+                auto* load=new HostMessage;load->setMessageID("125A_SF2_LOAD");
+                load->getAttributes()->setInt("RequestID",1);
+                load->getAttributes()->setBinary("Path",wanted.sf2Path.data(),uint32(wanted.sf2Path.size()));
+                require(actual.procConnection->notify(load)==kResultOk,"real load message");load->release();
+                auto got=render(actual.audio,0);
+                const bool good=got==expected&&std::any_of(got.begin(),got.end(),[](float v){return v!=0.f;});
+                ++checks;failures+=!good;
+                std::cout<<(good?"PASS ":"FAIL ")<<"actual DLL first NoteOn after SF2 load rate="<<rate<<" program="<<program<<'\n';
+            }
+        } else {
+            for(int rate:{44100,48000,96000})for(int mode:{0,1,3}) {
+                AWE125::AssetState::Data wanted;
+                wanted.pathsSpecified=true;wanted.bank=0;wanted.program=0;
+                wanted.channelPrograms.fill(0);
+                wanted.romPath=(assets/"zero.rom").string();
+                wanted.sf2Path=(assets/("loop-"+std::to_string(mode)+".sf2")).string();
+                auto blank=wanted;blank.sf2Path.clear();
+                Instance reference(factory,rate,wanted);
+                const auto expected=renderLoop(reference.audio,rate);
+                Instance actual(factory,rate,blank);
+                auto* load=new HostMessage;load->setMessageID("125A_SF2_LOAD");
+                load->getAttributes()->setInt("RequestID",1);
+                load->getAttributes()->setBinary("Path",wanted.sf2Path.data(),
+                                                 uint32(wanted.sf2Path.size()));
+                require(actual.procConnection->notify(load)==kResultOk,"real DLL loop load");
+                load->release();
+                const auto got=renderLoop(actual.audio,rate);
+                const double first=windowRms(got,rate,.04,.08);
+                const double sustained=windowRms(got,rate,.30,.80);
+                const double released=windowRms(got,rate,1.15,1.25);
+                // Independent acoustic contract, not an equality-only self-oracle:
+                // 0 one-shot ends before .3s; 1 loops through release;
+                // 3 exits its short 16-word post-loop tail on NoteOff.
+                const bool semantics=first>1e-4 &&
+                    (mode==0?sustained<1e-4:sustained>1e-3) &&
+                    (mode==1?released>1e-4:released<1e-4);
+                const bool good=semantics&&got==expected;
+                ++checks;failures+=!good;
+                std::cout<<(good?"PASS ":"FAIL ")
+                    <<"P176 exported DLL loop mode="<<mode<<" rate="<<rate
+                    <<" initial="<<first<<" held="<<sustained
+                    <<" after_noteoff="<<released
+                    <<" reference_bit_equal="<<(got==expected)<<"\\n";
+            }
         }
     } catch(const std::exception& e){std::cerr<<e.what()<<'\n';++failures;}
     factory->release();FreeLibrary(dll);
-    std::cout<<"P171_EXPORTED_DLL checks="<<checks<<" failures="<<failures<<'\n';
+    std::cout<<(checkLoops?"P176_EXPORTED_DLL_LOOPS":"P171_EXPORTED_DLL")
+             <<" checks="<<checks<<" failures="<<failures<<'\n';
     return checks==9&&failures==0?0:1;
 }
