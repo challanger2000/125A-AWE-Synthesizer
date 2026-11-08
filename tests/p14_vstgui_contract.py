@@ -192,7 +192,7 @@ assert '"125A_Lcd_Amber_Blank_512x147.png" PNG DISCARDABLE' in (root/"src/vst3/r
 # P152 exact-size navigation and collision-free real EMU8000 module area:
 # the chip will occupy (788,16)..(984,163), so no input may intersect it.
 assert 'fileLabel_=MakeLabel({575,96,728,112},"",false)' in b
-assert 'auto* lcd=MakeLabel({350,96,570,112}' in b
+assert 'auto* lcd=MakeLabel({370,96,570,112}' in b
 assert 'loadSf2_=MakeButton({904,234,979,273},kLoadSf2,"SF2")' in b
 assert 'previous_=MakeButton({212,234,252,273},kPrevious,"<")' in b
 assert 'next_=MakeButton({561,234,601,273},kNext,">")' in b
@@ -200,7 +200,7 @@ assert 'pageButtons_[0]=MakeButton({610,234,703,273}' in b
 assert 'toggle_=MakeButton({712,234,811,273}' in b
 assert 'MakeLabel({805,30,968,51},"SOUNDFONT / ROM",true)' not in b
 assert 'loadRom_=MakeButton({805,103,882,144}' not in b
-assert 'hint_=MakeLabel({350,166,728,184}' in b
+assert 'hint_=MakeLabel({370,166,728,184}' in b
 assert 'panel({16,603,984,634},panelColor,edge);' not in b
 # The approved logo is real transparent artwork at its exact native size.
 gold_logo=root/"src/vst3/resource/125A_AWE_Gold_Logo_236x147.png"
