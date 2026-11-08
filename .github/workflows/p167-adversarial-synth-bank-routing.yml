@@ -1,0 +1,56 @@
+name: P167 audit-only independent EMU8000 adversarial bank-select probe
+on:
+  push:
+    branches: [audit/p167-p166-adversarial-test-gate]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  bank-routing-falsification:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure the real 86Box Synth CTest without building VST3
+        shell: pwsh
+        run: |
+          cmake -S . -B build-p167 -G "Visual Studio 17 2022" -A x64 -D125A_BUILD_VST3=OFF -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_OPL3_PROBES=OFF
+          if ($LASTEXITCODE -ne 0) { throw 'P167 actual Synth CMake configure failed' }
+      - name: Compile real EMU8000 86Box Synth + existing P166 regression
+        shell: pwsh
+        run: |
+          cmake --build build-p167 --config Release --parallel 2 --target awe32_p166_exact_presets_test
+          if ($LASTEXITCODE -ne 0) { throw 'P167 synthetic Synth executable compile failure' }
+      - name: Verify independently derived control passes and channel-10 bank-switch contradiction fails
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force qa/p167 | Out-Null
+          & build-p167/src/engine/Release/awe32_p166_exact_presets_test.exe 2>&1 | Tee-Object qa/p167/adversarial-stdout.txt
+          $testExit=$LASTEXITCODE
+          $lines=@(Get-Content qa/p167/adversarial-stdout.txt)
+          if ($testExit -ne 1) { throw "Expected exact-one test failure exit 1; observed $testExit" }
+          $fails=@($lines | Where-Object { $_ -match '^FAIL ' })
+          if ($fails.Count -ne 1 -or
+              $fails[0] -notmatch '^FAIL P167 adversarial: explicit channel10 MIDI CC0=0' -or
+              -not @($lines | Where-Object {$_ -match '^PASS P167 independent control:'}).Count) {
+              throw "Falsification does not isolate the intended channel 10 bank mapping bug: $($fails -join '; ')"
+          }
+          if ($lines -notcontains 'P166_EXACT_PRESETS_FAIL') { throw 'Test did not signal substantive failure' }
+          @(
+            "AUDIT_STATUS=REPRODUCED_FAIL",
+            "BRANCH=$env:GITHUB_REF_NAME",
+            "SOURCE_SHA=$env:GITHUB_SHA",
+            "OS=windows-2022",
+            "TEST=actual Synth::ControlChange(9,0,0)+86Box stereo PCM",
+            "POSITIVE=PASS same-channel synth-bank and drum-bank sounds are distinct",
+            "NEGATIVE=FAIL CC0=0 must switch channel 10 from 128 to 0",
+            "PLUGIN_RELEASE=NO_GO"
+          ) | Set-Content qa/p167/P167-PROVENANCE.txt
+      - name: Preserve original fail and positive-control evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: P167-Independent-Channel10-CC0-Falsification
+          path: qa/p167/
+          if-no-files-found: warn
+          retention-days: 7
