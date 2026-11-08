@@ -1,5 +1,20 @@
 # P182 – unabhängiger physischer ASIO-A/B/A-Gegenversuch
 
+**Status-Update P184 (8. November 2026): Der unabhängige
+physische A/B/A-Versuch ist inzwischen vollständig gelaufen.**
+Beide unabhängig source-built MIDI-Sinus-Referenzen reproduzierten
+denselben einzelnen langen **dritten** Callback-Startabstand
+(58,4385 ms / 56,3673 ms) wie der echte AWE (63,1304 ms),
+bei 1.000/1.000 verarbeiteten Audioblöcken pro Lauf.
+Ein AWE-exklusives DSP-Timingproblem ist damit für dieses
+Phänomen nicht belegt. Alle strengen ASIO-Startgates bleiben NO-GO;
+Treiber-/USB-/Scheduler-Ursache ist nicht bewiesen.
+Für die Original-ZIP-Auswertung und die vollständige Messmatrix:
+[P184](P184-REAL-ASIO-THREE-WAY-REFERENCE-RESULT.md).
+Die folgenden P182/P183-Anleitungen bleiben als historische
+Entwicklungs- und Testvertragsdokumentation erhalten.
+
+
 ## P183 – Fehler der ersten lokalen P182-Gegenprobe behoben
 
 **Echte lokale Benutzerdateien (8. November 2026):**

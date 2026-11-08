@@ -1,5 +1,35 @@
 # START HERE — 125A AWE Synthesizer
 
+## P184 – echter A/B/A-ASIO-Gegenversuch abgeschlossen (8. November 2026)
+
+**Die originale ZIP-Messung `P182-LOCAL-RESULT-20261108-221242-090ab1f8.zip`**
+enthält drei vollständig validierte echte lokale IASIO-Sessions,
+`REFERENCE-A → AWE → REFERENCE-B`, jeweils 1.000/1.000
+erfolgreiche VST3-Prozessblöcke, MIDI 12/12, PCM nachgewiesen,
+0 DSP-Überläufe und 0 ASIO-Treiber-XRUN-Meldungen. Der einzige
+Startabstands-Ausreißer lag in **allen drei** Fällen beim
+**dritten Callback (Index 2)**:
+Referenz A **58,4385 ms**, AWE **63,1304 ms**,
+Referenz B **56,3673 ms** bei 512 Samples/44,1 kHz.
+Die einfache unabhängige Referenz berechnete pro Block
+maximal **0,0916/0,0967 ms** und reproduzierte die
+Ausreißer dennoch. **Keine exklusiv AWE-DSP-bedingte Ursache
+ableitbar; ein gemeinsamer ASIO-Stream-Anlauffaktor ist beteiligt**,
+genauer Kernel-/USB-/Treiber-Verursacher bleibt **unbewiesen**.
+Die ursprüngliche strenge Startabstands-Abnahme gilt weiterhin
+für **alle drei Läufe als NO-GO**, keine Freigabe. Den
+Anlauf nicht stillschweigend überspringen oder Testgrenzen
+aufweichen; keine identischen Wiederholungsmessungen
+ohne neue Kausalfrage verlangen.
+
+**Vollständiger nachprüfbarer Ergebnisbericht:**
+[docs/P184-REAL-ASIO-THREE-WAY-REFERENCE-RESULT.md](docs/P184-REAL-ASIO-THREE-WAY-REFERENCE-RESULT.md).
+Produktiv-Code, ROM-/SF2-Dateien und ASIO-Test-Laufzeitcode
+wurden für diese Ergebnisdokumentation **nicht geändert**.
+DAW-/Ausgangs-/Fidelity-/FULL-AUDIT- und Release-Nachweise
+bleiben offen.
+
+
 **P183 – erste echte P182-Referenzmessung NO-GO, Referenz-VST3 korrigiert (8. November 2026):**
 Der erste lokale P182-Versuch brach **vor jeglichem ASIO-Callback** bei
 `REFERENCE-A` ab (`VST3 setProcessing failed`); die AWE-Session
@@ -16,8 +46,9 @@ Keine AWE-Hardware-/DAW-/Release-Freigabe.
 
 ## P182 – physische ASIO-Referenz-Gegenprobe (8. November 2026)
 
-**P182 ist jetzt vollständig gebaut, aber der unabhängige lokale
-A/B/A-Hardwareversuch noch NICHT gelaufen.**
+**Historischer P182-Buildstand (vor der P183-Korrektur); der
+anschließende echte A/B/A-Hardwareversuch wurde später unter
+P184 vollständig ausgewertet.**
 [Windows-CI #42522058749](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42522058749):
 verifiziert die unveränderte P178-AWE-VST3-DLL, den exakten
 P182-Test-Lab-Host-Quellstand
@@ -26,7 +57,7 @@ source-built QA-MIDI-Sinus bei Note 48, das Windows-PowerShell-
 5.1-Klassifizierungs-Selftest, negative physische IASIO-Gerätetests,
 Original-SHA256-Manifest sowie die Paketierung in einem Windows-ZIP.
 
-**Einmaliger physischer Test:** neuestes
+**Historische Anleitung zum inzwischen ausgeführten physischen Test:** neuestes
 `P182-ASIO-REFERENCE-COMPARISON`-Paket entpacken,
 DAW schließen, Monitore/Kopfhörer leise stellen,
 `P182-ASIO-COMPARE.bat` ausführen und den vorhandenen
