@@ -106,11 +106,14 @@ jobs:
             & ./lab/tools/p185/Build-P185-Package.ps1 -Build build-p185 -Destination package -TestlabSource $env:TESTLAB_SHA -AweSource cff9d91cdec5aa2574d039b23660fae0589c6878 -AweBundle p178-verified/125A_AWE_Synthesizer.vst3
             $manifest=Get-Content package/P185-PACKAGE.json -Raw | ConvertFrom-Json
             $manifest | Add-Member -NotePropertyName awe_integration_source -NotePropertyValue $env:GITHUB_SHA
+            # PS 5.1 emits a JSON array as one pipeline item; inspect the assigned array.
+            $adversarial=Get-Content evidence/P185-ADVERSARIAL.json -Raw | ConvertFrom-Json
+            if ($adversarial.Count -ne 36 -or @($adversarial | Where-Object {$_.status -cne 'PASS' -or $_.hardware -cne 'NOT_RUN'}).Count) { throw 'Adversarial evidence count/status mismatch' }
             @{
               schema='125a-p185-tested-windows-package-v1';testlab_source=$env:TESTLAB_SHA;awe_integration_source=$env:GITHUB_SHA;
               full_awe_regression=(Get-Content evidence/P185-FULL-REGRESSION.json -Raw | ConvertFrom-Json);
               native_controls=(Get-Content evidence/P185-WINDOWS-CONTROLS.json -Raw | ConvertFrom-Json);
-              adversarial_cases=@(Get-Content evidence/P185-ADVERSARIAL.json -Raw | ConvertFrom-Json).Count;
+              adversarial_cases=$adversarial.Count;
               physical_p185='NOT_RUN';cause='INCONCLUSIVE';release_approved=$false
             } | ConvertTo-Json -Depth 10 | Set-Content package/P185-WINDOWS-QA.json -Encoding UTF8
             $manifest.files | Add-Member -NotePropertyName 'P185-WINDOWS-QA.json' -NotePropertyValue (Get-FileHash package/P185-WINDOWS-QA.json).Hash.ToLowerInvariant()
@@ -131,7 +134,7 @@ jobs:
             $original=(Get-ChildItem p178-verified/125A_AWE_Synthesizer.vst3 -Recurse -File -Filter '*.vst3').FullName
             $archived=(Get-ChildItem 'P185 BAT path with spaces/AWE-UNCHANGED.vst3' -Recurse -File -Filter '*.vst3').FullName
             if ((Get-FileHash $original).Hash -cne (Get-FileHash $archived).Hash) { throw 'AWE DLL changed during packaging' }
-            $adverse=@(Get-Content evidence/P185-ADVERSARIAL.json -Raw | ConvertFrom-Json).Count
+            $adverse=$adversarial.Count
             @{
               schema='125a-p185-ci-integration-v1';awe_integration=$env:GITHUB_SHA;testlab_source=$env:TESTLAB_SHA;
               awe_binary_source='cff9d91cdec5aa2574d039b23660fae0589c6878';awe_dll_sha256=(Get-FileHash $original).Hash.ToLowerInvariant();
