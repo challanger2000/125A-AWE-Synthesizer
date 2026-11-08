@@ -1,0 +1,232 @@
+name: P175 independent dark-SF2 filter peak full Windows regression
+on:
+  push:
+    branches: [fix/p175-dark-filter-peak-bound]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: p175-dark-filter-headroom-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  fx-full-windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        repetition: [A]
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch pinned Steinberg SDK
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch v3.8.1_build_84 --recurse-submodules https://github.com/steinbergmedia/vst3sdk.git external/vst3sdk
+          if ($LASTEXITCODE -ne 0) { throw 'SDK clone failed' }
+          $sha=(git -C external/vst3sdk rev-parse HEAD).Trim()
+          if ($sha -ne '3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96') { throw "Unexpected SDK: $sha" }
+      - name: Verify original faceplate, undistorted geometry and aligned controls
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check Pillow==11.3.0
+          if ($LASTEXITCODE -ne 0) { throw 'Pillow install failed' }
+          python tools/p165_layout_contract.py
+          if ($LASTEXITCODE -ne 0) { throw 'P165 exact faceplate/layout contract failed' }
+      - name: Pin the P169 pre-fix source for identical-stimulus PCM comparison
+        shell: pwsh
+        run: |
+          $baseline=Join-Path $env:RUNNER_TEMP 'p170-baseline-engine'
+          New-Item -ItemType Directory -Force $baseline | Out-Null
+          $env:P170_BASELINE_ROOT=$baseline
+          python -c "import os,pathlib,subprocess; p=pathlib.Path(os.environ['P170_BASELINE_ROOT']); [(p/f).write_bytes(subprocess.check_output(['git','show','99fb90fc855c4c7643e24816fa644fdc738c290f:src/engine/'+f])) for f in ['Synth.cpp','SoundFont.cpp']]"
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned baseline unavailable' }
+          "P170_BASELINE_ROOT=$baseline" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Configure full production VST3 and engine tests
+        shell: pwsh
+        run: |
+          $python=(Get-Command python).Source
+          cmake -S . -B build-p133 -G "Visual Studio 17 2022" -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_EDITORHOST_TEST=ON "-DPython3_EXECUTABLE=$python" "-D125A_P170_BASELINE_ROOT=$env:P170_BASELINE_ROOT"
+          if ($LASTEXITCODE -ne 0) { throw 'Configure failed' }
+      - name: Build all tests and production VST3
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force qa | Out-Null
+          cmake --build build-p133 --config Release --parallel 2 2>&1 | Tee-Object qa/build.txt
+          if ($LASTEXITCODE -ne 0) { python tools/p170_ci_failure.py qa/build.txt; throw 'Production Windows VST3 build failed' }
+      - name: Run full CTests plus 77-preset sparse/ROM exact-PCM regression
+        shell: pwsh
+        timeout-minutes: 20
+        run: |
+          New-Item -ItemType Directory -Force qa | Out-Null
+          $recording=$false
+          if (Get-Command wpr.exe -ErrorAction SilentlyContinue) {
+            wpr.exe -start GeneralProfile -filemode 2>&1 | Out-File qa/etw-start.txt
+            $recording=($LASTEXITCODE -eq 0)
+          }
+          try {
+            ctest --test-dir build-p133 -C Release --output-on-failure --timeout 650 2>&1 |
+              Tee-Object -FilePath qa/ctest.txt
+            $ctestExit=$LASTEXITCODE
+          } finally {
+            if ($recording) { wpr.exe -stop qa/p170-cpu-scheduler.etl 2>&1 | Out-File qa/etw-stop.txt }
+            @{recorded=$recording; analyzed=$false; heap_attribution='NOT RUN'} | ConvertTo-Json | Set-Content qa/etw-status.json
+          }
+          if ($ctestExit -ne 0) { python tools/p170_ci_failure.py qa/ctest.txt; throw 'Full CTest failed' }
+          $fullLog=Get-Content qa/ctest.txt -Raw
+          if ($fullLog -notmatch '100% tests passed, 0 tests failed out of (\d+)') {
+              throw 'P170-P171 entire CTest suite did not pass'
+          }
+          $passed=[int]$Matches[1]
+          if ($passed -lt 62 -or
+              $fullLog -notmatch '125A_p171_exported_dll_first_note.+Passed' -or
+              $fullLog -notmatch '125A_p170_pinned_baseline_pcm.+Passed' -or
+              $fullLog -notmatch '125A_p170_detect_mutant_rom.+Passed' -or
+              $fullLog -notmatch '125A_p170_detect_mutant_pedal.+Passed' -or
+              $fullLog -notmatch '125A_p170_detect_mutant_headroom.+Passed' -or
+              $fullLog -notmatch '125A_p166_exact_sf2_rom.+Passed' -or
+              $fullLog -notmatch '125A_p166_processor_missing_program.+Passed') {
+              throw "P170-P171 dedicated 77-shape and actual VST3 Processor PCM tests missing: $passed"
+          }
+          $log=Get-Content qa/ctest.txt -Raw
+          if ($log -notmatch '100% tests passed' -or
+              $log -notmatch '125A_p133_fx_register_modes' -or
+              $log -notmatch '125A_asset_state') {
+              throw 'P133 required tests not evidenced'
+          }
+      - name: Validate actual AWE VST3 module with Steinberg validator
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          $validator=(Get-ChildItem build-p133 -Filter validator.exe -File -Recurse |
+            Where-Object {$_.FullName -match 'Release'} |
+            Select-Object -First 1 -ExpandProperty FullName)
+          $plugin=(Resolve-Path 'build-p133/VST3/Release/125A_AWE_Synthesizer.vst3').Path
+          if (-not $validator) { throw 'No Steinberg validator executable' }
+          & $validator -e $plugin 2>&1 | Tee-Object qa/validator.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Steinberg VST3 validator failed' }
+          $text=Get-Content qa/validator.txt -Raw
+          if ($text -notmatch 'Result: ([0-9]+) tests passed, 0 tests failed') {
+            throw 'Steinberg validator did not report a complete success summary'
+          }
+          $passed=[int]$Matches[1]
+          # SDK's 47 internal selftests run during the build; the actual
+          # VST3 module validation typically exercises >500 concrete cases.
+          if ($passed -lt 500) { throw "Incomplete VST3 module validation: $passed" }
+          Write-Host "Steinberg VST3 module validation PASS $passed tests, 0 failed"
+      - name: Exercise compact SYNTH/BROWSER real VST3 GUI in EditorHost three times
+        shell: pwsh
+        timeout-minutes: 6
+        run: |
+          $editor=(Get-ChildItem build-p133 -Filter editorhost.exe -File -Recurse |
+            Where-Object {$_.FullName -match 'Release'} |
+            Select-Object -First 1 -ExpandProperty FullName)
+          $plugin=(Resolve-Path 'build-p133/VST3/Release/125A_AWE_Synthesizer.vst3').Path
+          if (-not $editor) { throw 'EditorHost missing' }
+          for($i=1;$i -le 3;$i++) {
+            python tools/p165_original_faceplate_editor_acceptance.py --quick --editorhost "$editor" --plugin "$plugin" --output "qa/editor-$i"
+            if($LASTEXITCODE -ne 0) { throw "EditorHost GUI smoke $i failed" }
+          }
+      - name: P165 original-faceplate pixel fidelity plus SYNTH BROWSER and 12 knobs
+        shell: pwsh
+        timeout-minutes: 12
+        run: |
+          $editor=(Get-ChildItem build-p133 -Filter editorhost.exe -File -Recurse |
+            Where-Object {$_.FullName -match 'Release'} |
+            Select-Object -First 1 -ExpandProperty FullName)
+          $plugin=(Resolve-Path 'build-p133/VST3/Release/125A_AWE_Synthesizer.vst3').Path
+          if (-not $editor) { throw 'P141 real EditorHost not built' }
+          python tools/p165_original_faceplate_editor_acceptance.py --editorhost "$editor" --plugin "$plugin" --output qa/p165
+          if ($LASTEXITCODE -ne 0) { throw 'P141 actual VSTGUI acceptance failed' }
+          $verdict=Get-Content qa/p165/result.json -Raw | ConvertFrom-Json
+          if ($verdict.passed -ne $true -or $verdict.results.Count -lt 50) {
+            throw "P160 incomplete compact GUI coverage: $($verdict.results.Count) verified interactions"
+          }
+          Write-Host "P165 all $($verdict.results.Count) real editor interactions PASS"
+
+      - name: Independent current P170-P171 VST3 in 125A Plugin Test Lab (native host + state + GUI + isolation)
+        shell: pwsh
+        timeout-minutes: 18
+        run: |
+          $ErrorActionPreference='Stop'
+          $labSha='4267c86065bc8665b7af056f08af0a08760256d4'
+          git clone --depth 1 https://github.com/challanger2000/125A-Plugin-Test-Lab.git test-lab
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot clone independent Test Lab' }
+          git -C test-lab fetch --depth 1 origin $labSha
+          if ($LASTEXITCODE -ne 0) { throw 'Test Lab exact revision unavailable' }
+          git -C test-lab checkout --detach $labSha
+          if ($LASTEXITCODE -ne 0 -or (git -C test-lab rev-parse HEAD).Trim() -ne $labSha) {
+              throw 'Test Lab source SHA mismatch'
+          }
+          cmake -S test-lab -B build-testlab -G "Visual Studio 17 2022" -A x64
+          if ($LASTEXITCODE -ne 0) { throw 'Independent Test Lab configure failed' }
+          cmake --build build-testlab --config Release --parallel 4 --target TestLabHost TestLabStateStress TestLabGUI TestLabInstanceIsolation
+          if ($LASTEXITCODE -ne 0) { throw 'Independent Test Lab hosts compile failed' }
+          $hostNames=@('125A_Test_Lab_Host.exe','125A_Test_Lab_State_Stress.exe','125A_Test_Lab_GUI.exe','125A_Test_Lab_Instance_Isolation.exe')
+          $hosts=@()
+          foreach ($name in $hostNames) {
+              $located=@(Get-ChildItem build-testlab -File -Recurse -Filter $name)
+              if ($located.Count -ne 1) { throw "Missing or duplicate independent host: $name" }
+              $hosts+= $located[0].FullName
+          }
+          $bundle=(Resolve-Path 'build-p133/VST3/Release/125A_AWE_Synthesizer.vst3').Path
+          $modules=@(Get-ChildItem $bundle -Recurse -File -Filter '*.vst3')
+          if ($modules.Count -ne 1) { throw 'Built VST3 DLL absent or ambiguous' }
+          python test-lab/tests/run_plugin_quickcheck.py --plugin "$bundle" --host "$($hosts[0])" --stress-host "$($hosts[1])" --gui-host "$($hosts[2])" --dual-host "$($hosts[3])" --out qa/testlab --timeout 120
+          if ($LASTEXITCODE -ne 0) { throw 'Independent Test Lab quickcheck failed' }
+          $result=Get-Content qa/testlab/QUICKCHECK-RESULT.json -Raw | ConvertFrom-Json
+          $sha=(Get-FileHash $modules[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($result.schema -ne '125a-quickcheck-result-v1' -or
+              $result.status -ne 'TECHNICAL_PASS' -or
+              $result.release_approved -ne $false -or
+              $result.verified_module_sha256 -ne $sha) {
+              throw 'Independent Test Lab product SHA/status evidence mismatch'
+          }
+          foreach ($key in @('api_playback_save','sample_rate_buffer_matrix',
+              'native_audio_state_capture','fresh_process_project_recall',
+              'native_gui_lifecycle','same_process_dual_instance_lifecycle')) {
+              if ($result.coverage.$key -ne 'PASS') { throw "Test Lab real host failed: $key" }
+          }
+          if ($result.coverage.preset_semantics -ne 'NOT COVERED') {
+              throw 'Test Lab improperly claims to establish product preset semantics'
+          }
+          @(
+              "P170-P171_AWE_SOURCE_SHA=$env:GITHUB_SHA",
+              "PINNED_INDEPENDENT_TEST_LAB_SHA=$labSha",
+              "ACTUAL_AWE_VST3_DLL_SHA256=$sha",
+              "GENERIC_TECHNICAL_HOST=TECHNICAL_PASS",
+              "PRODUCT_PRESET_SEMANTICS=SEPARATE_P170-P171_CTESTS",
+              "USER_PRIVATE_77_PRESET_SF2=NOT_PROVIDED",
+              "PRIVATE_CREATIVE_WAVE_ROM=NOT_PROVIDED",
+              "PHYSICAL_ASIO=NOT_RUN",
+              "REAL_COMMERCIAL_DAW=NOT_RUN",
+              "COMMERCIAL_RELEASE=NO_GO"
+          ) | Set-Content qa/testlab/PROVENANCE-P170-P171.txt
+          Write-Host 'Independent Test Lab technical evidence PASS. Private ROM/SF2/DAW/ASIO not covered.'
+
+      - name: Summarize actual PCM, negative controls, state and callback evidence
+        shell: pwsh
+        run: |
+          Copy-Item build-p133/p171-rt.csv qa/
+          Copy-Item build-p133/p170-audio qa/p170-audio -Recurse
+          Copy-Item build-p133/p170-paired qa/p170-paired -Recurse
+          Get-ChildItem build-p133 -Directory -Filter 'p170-negative-*' | ForEach-Object { Copy-Item $_.FullName qa/ -Recurse }
+          python tools/p170_evidence_summary.py build-p133 qa
+          if ($LASTEXITCODE -ne 0) { throw 'Incomplete P170/P171 numerical evidence' }
+
+      - name: Package validated Windows x64 VST3 preview (NOT a release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: P175-Dark-Filter-Windows-x64-VST3-TEST-${{ matrix.repetition }}
+          path: build-p133/VST3/Release/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Preserve independent numerical evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: P175-Dark-Filter-Full-Regression-${{ matrix.repetition }}
+          path: qa/
+          if-no-files-found: warn
+          retention-days: 14

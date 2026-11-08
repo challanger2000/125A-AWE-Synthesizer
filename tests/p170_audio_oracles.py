@@ -152,6 +152,28 @@ def main():
         check(harmonic(filtered,44100,.035,.1,1)>1e-4 and early>late*4,
               f'FILTER ADSR actually closes spectrum with absent SF2 route: early={early:.6g} late={late:.6g}')
         check(colour(dry,1.5,2)>late*4,'neutral filter route preserves bright original')
+        # P174 INDEPENDENT DARK-PATCH FALSIFICATION. A newly synthesized
+        # positive PEFE route cannot have a modulation peak BRIGHTER than the
+        # original patch if the stated contract is "peak at original cutoff".
+        # With a low initial SF2 filter generator the original depth=96
+        # clipped IFATN at register zero, then the 86Box chip raised highs
+        # 17x or more. Keep this actual PCM/spectral oracle in Release tests.
+        for dark_fc in [4000,6000,8000]:
+            dark_gens=[p for p in DRY if p[0]!=8]+[(8,dark_fc)]
+            dark_original,_=render(f'p174-dark-fc{dark_fc}-original',dark_gens)
+            dark_edited,dark_regs=render(f'p174-dark-fc{dark_fc}-filter',dark_gens,
+                [0]*4+[1,.5,1,1]+[0]*4)
+            base_high=harmonic(dark_original,44100,.035,.1,17)
+            edited_high=harmonic(dark_edited,44100,.035,.1,17)
+            check(edited_high<=base_high*1.10+1e-6,
+                  f'P174 no unintended high-frequency brightening above original low-cutoff patch: '
+                  f'fc={dark_fc}, base={base_high:.8g}, overlay={edited_high:.8g}, '
+                  f'PEFE={dark_regs["pefe"]&255}')
+            if dark_fc==6000:
+                dark_late=harmonic(dark_edited,44100,1.5,2,17)
+                check((dark_regs['pefe']&255)>0 and dark_late<edited_high*.7,
+                      f'P174 useful short filter-envelope sweep remains at dark cutoff: '
+                      f'peak={edited_high:.8g}, late={dark_late:.8g}')
         # Existing signed filter depths remain patch-owned; both must still
         # respond to the envelope timing, without inversion/removal of route.
         for route in [-4800,4800]:

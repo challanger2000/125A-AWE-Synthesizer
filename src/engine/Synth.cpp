@@ -979,11 +979,20 @@ void Synth::StartLayers(size_t bankIndex, std::span<const SoundFont::Region> reg
         const float filterEdit=std::max({m_guiControls[4],m_guiControls[5],
                                         m_guiControls[6],m_guiControls[7]});
         if(filterEdit>0.f && (v.pefe&0xFFu)==0) {
-            const int depth=int(std::lround(96.f*filterEdit));
-            v.pefe=static_cast<uint16_t>((v.pefe&0xFF00u)|depth);
-            // PEFE +/-127 spans six octaves, i.e. 255 cutoff register steps.
+            // The real EMU8000 filter has a nonnegative cutoff floor. A
+            // full six-octave PEFE sweep cannot be compensated when the
+            // original patch cutoff is already near that floor. Without
+            // limiting depth, the base register clips at zero and the
+            // modulation PEAK actually becomes much brighter than the
+            // user's original sound (verified with a dark synthetic SF2
+            // and genuine ROM-backed 86Box PCM). Limit the added route to
+            // the available original-cutoff headroom instead.
             const int cutoff=(v.ifatn>>8)&255;
-            v.ifatn=static_cast<uint16_t>((std::max(0,cutoff-2*depth)<<8)|(v.ifatn&255));
+            const int depth=std::min(int(std::lround(96.f*filterEdit)),cutoff/2);
+            v.pefe=static_cast<uint16_t>((v.pefe&0xFF00u)|depth);
+            // Signed PEFE depth 127 spans ~6 octaves (~245 cutoff steps);
+            // two native register steps per depth are a conservative bound.
+            v.ifatn=static_cast<uint16_t>(((cutoff-2*depth)<<8)|(v.ifatn&255));
         }
         // Span the remaining register range from the patch, so a nonzero
         // initial setting does not clip the entire upper half of a knob.
