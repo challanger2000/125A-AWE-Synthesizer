@@ -1,0 +1,55 @@
+name: P177 real native VST3 SF2 GUI load and first-note PCM
+on:
+  push:
+    branches: [qa/p177-controller-gui-first-note]
+permissions:
+  contents: read
+concurrency:
+  group: p177-native-first-note
+  cancel-in-progress: false
+jobs:
+  native-gui:
+    runs-on: windows-2022
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned VST3 SDK
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch v3.8.1_build_84 --recurse-submodules https://github.com/steinbergmedia/vst3sdk.git external/vst3sdk
+          if ($LASTEXITCODE -ne 0) { throw 'SDK clone failed' }
+          if ((git -C external/vst3sdk rev-parse HEAD).Trim() -ne '3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96') { throw 'SDK SHA mismatch' }
+      - name: Configure native Windows product and P177 host
+        shell: pwsh
+        run: |
+          cmake -S . -B build-p177 -G 'Visual Studio 17 2022' -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_EDITORHOST_TEST=OFF
+          if ($LASTEXITCODE -ne 0) { throw 'P177 CMake configure failed' }
+      - name: Build product DLL and real GUI plus audio host
+        shell: pwsh
+        run: |
+          New-Item -Force -ItemType Directory qa | Out-Null
+          cmake --build build-p177 --config Release --parallel 2 --target awe32_p177_ui_first_note_host 2>&1 | Tee-Object qa/build.txt
+          if ($LASTEXITCODE -ne 0) { throw 'P177 native host build failed' }
+      - name: Exercise real SF2 picker, Controller, browser host gestures, first PCM
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          ctest --test-dir build-p177 -C Release -R '^125A_p177_real_gui_load_first_note$' --output-on-failure --timeout 155 2>&1 | Tee-Object qa/ctest.txt
+          if ($LASTEXITCODE -ne 0) { throw 'P177 first-note GUI/PCM FAILED' }
+          if ((Get-Content qa/ctest.txt -Raw) -notmatch '100% tests passed, 0 tests failed out of 1') { throw 'Missing P177 success evidence' }
+      - name: Preserve source and independent verification scope
+        if: always()
+        shell: pwsh
+        run: |
+          "P177_SOURCE_SHA=$env:GITHUB_SHA" | Set-Content qa/provenance.txt
+          'P176_BASELINE_SHA=65bba76976115d8b3634a4a1316bc59d79ebab80' | Add-Content qa/provenance.txt
+          'PRIVATE_ROM_SF2=NOT_PROVIDED' | Add-Content qa/provenance.txt
+          'REAL_DAW_ASIO=NOT_RUN' | Add-Content qa/provenance.txt
+          'RELEASE=NO_GO' | Add-Content qa/provenance.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: P177-Real-GUI-First-Note-Regression
+          path: qa/
+          if-no-files-found: warn
+          retention-days: 14
