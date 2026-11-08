@@ -232,6 +232,12 @@ public:
             std::snprintf(label,sizeof(label),"%03d  NICHT VORHANDEN",program);
             next=label;
         }
+        if(program>=0) {
+            // COptionMenu::setValue(-1) intentionally rejects -1. Clear
+            // the protected native selected index explicitly: opening the
+            // popup must not highlight an unrelated real program either.
+            currentIndex=-1;
+        }
         if(next!=unavailableProgram_) {
             unavailableProgram_=std::move(next);
             invalid();
