@@ -100,6 +100,15 @@ public:
                                 if(program>127||bank>16383) {
                                     error="Preset catalog: bank/program not addressable";return false;
                                 }
+                                // Match the strict VST3 engine BEFORE the
+                                // controller publishes a catalog. Otherwise
+                                // a syntactically valid user SF2 in the two
+                                // ROM-reserved banks could appear in the
+                                // Browser while the audio engine rejects it.
+                                if(bank>=16382) {
+                                    error="Preset catalog: SF2 bank 16382/16383 reserved for explicit ROM";
+                                    return false;
+                                }
                                 std::string name=cleanName(p.data(),20);
                                 if(name.empty())name="Program "+std::to_string(program);
                                 candidate.push_back({static_cast<uint16_t>(bank),
