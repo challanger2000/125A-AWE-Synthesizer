@@ -48,12 +48,15 @@ jobs:
             Tee-Object -FilePath qa/ctest.txt
           if ($LASTEXITCODE -ne 0) { throw 'Full CTest failed' }
           $fullLog=Get-Content qa/ctest.txt -Raw
-          if ($fullLog -notmatch '100% tests passed, 0 tests failed out of (\\d+)' -or
-              [int]$Matches[1] -lt 46 -or
-              $fullLog -notmatch '125A_p166_exact_sf2_rom.+Passed') {
-              throw 'P166 sparse 77-program SF2, ROM and PCM CTest not evidenced'
+          if ($fullLog -notmatch '100% tests passed, 0 tests failed out of (\d+)') {
+              throw 'P166 entire CTest suite did not pass'
           }
-
+          $passed=[int]$Matches[1]
+          if ($passed -lt 47 -or
+              $fullLog -notmatch '125A_p166_exact_sf2_rom.+Passed' -or
+              $fullLog -notmatch '125A_p166_processor_missing_program.+Passed') {
+              throw "P166 dedicated 77-shape and actual VST3 Processor PCM tests missing: $passed"
+          }
           $log=Get-Content qa/ctest.txt -Raw
           if ($log -notmatch '100% tests passed' -or
               $log -notmatch '125A_p133_fx_register_modes' -or
@@ -109,6 +112,66 @@ jobs:
             throw "P160 incomplete compact GUI coverage: $($verdict.results.Count) verified interactions"
           }
           Write-Host "P165 all $($verdict.results.Count) real editor interactions PASS"
+
+      - name: Independent current P166 VST3 in 125A Plugin Test Lab (native host + state + GUI + isolation)
+        shell: pwsh
+        timeout-minutes: 18
+        run: |
+          $ErrorActionPreference='Stop'
+          $labSha='4267c86065bc8665b7af056f08af0a08760256d4'
+          git clone --depth 1 https://github.com/challanger2000/125A-Plugin-Test-Lab.git test-lab
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot clone independent Test Lab' }
+          git -C test-lab fetch --depth 1 origin $labSha
+          if ($LASTEXITCODE -ne 0) { throw 'Test Lab exact revision unavailable' }
+          git -C test-lab checkout --detach $labSha
+          if ($LASTEXITCODE -ne 0 -or (git -C test-lab rev-parse HEAD).Trim() -ne $labSha) {
+              throw 'Test Lab source SHA mismatch'
+          }
+          cmake -S test-lab -B build-testlab -G "Visual Studio 17 2022" -A x64
+          if ($LASTEXITCODE -ne 0) { throw 'Independent Test Lab configure failed' }
+          cmake --build build-testlab --config Release --parallel 4 --target TestLabHost TestLabStateStress TestLabGUI TestLabInstanceIsolation
+          if ($LASTEXITCODE -ne 0) { throw 'Independent Test Lab hosts compile failed' }
+          $hostNames=@('125A_Test_Lab_Host.exe','125A_Test_Lab_State_Stress.exe','125A_Test_Lab_GUI.exe','125A_Test_Lab_Instance_Isolation.exe')
+          $hosts=@()
+          foreach ($name in $hostNames) {
+              $located=@(Get-ChildItem build-testlab -File -Recurse -Filter $name)
+              if ($located.Count -ne 1) { throw "Missing or duplicate independent host: $name" }
+              $hosts+= $located[0].FullName
+          }
+          $bundle=(Resolve-Path 'build-p133/VST3/Release/125A_AWE_Synthesizer.vst3').Path
+          $modules=@(Get-ChildItem $bundle -Recurse -File -Filter '*.vst3')
+          if ($modules.Count -ne 1) { throw 'Built VST3 DLL absent or ambiguous' }
+          python test-lab/tests/run_plugin_quickcheck.py --plugin "$bundle" --host "$($hosts[0])" --stress-host "$($hosts[1])" --gui-host "$($hosts[2])" --dual-host "$($hosts[3])" --out qa/testlab --timeout 120
+          if ($LASTEXITCODE -ne 0) { throw 'Independent Test Lab quickcheck failed' }
+          $result=Get-Content qa/testlab/QUICKCHECK-RESULT.json -Raw | ConvertFrom-Json
+          $sha=(Get-FileHash $modules[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($result.schema -ne '125a-quickcheck-result-v1' -or
+              $result.status -ne 'TECHNICAL_PASS' -or
+              $result.release_approved -ne $false -or
+              $result.verified_module_sha256 -ne $sha) {
+              throw 'Independent Test Lab product SHA/status evidence mismatch'
+          }
+          foreach ($key in @('api_playback_save','sample_rate_buffer_matrix',
+              'native_audio_state_capture','fresh_process_project_recall',
+              'native_gui_lifecycle','same_process_dual_instance_lifecycle')) {
+              if ($result.coverage.$key -ne 'PASS') { throw "Test Lab real host failed: $key" }
+          }
+          if ($result.coverage.preset_semantics -ne 'NOT COVERED') {
+              throw 'Test Lab improperly claims to establish product preset semantics'
+          }
+          @(
+              "P166_AWE_SOURCE_SHA=$env:GITHUB_SHA",
+              "PINNED_INDEPENDENT_TEST_LAB_SHA=$labSha",
+              "ACTUAL_AWE_VST3_DLL_SHA256=$sha",
+              "GENERIC_TECHNICAL_HOST=TECHNICAL_PASS",
+              "PRODUCT_PRESET_SEMANTICS=SEPARATE_P166_CTESTS",
+              "USER_PRIVATE_77_PRESET_SF2=NOT_PROVIDED",
+              "PRIVATE_CREATIVE_WAVE_ROM=NOT_PROVIDED",
+              "PHYSICAL_ASIO=NOT_RUN",
+              "REAL_COMMERCIAL_DAW=NOT_RUN",
+              "COMMERCIAL_RELEASE=NO_GO"
+          ) | Set-Content qa/testlab/PROVENANCE-P166.txt
+          Write-Host 'Independent Test Lab technical evidence PASS. Private ROM/SF2/DAW/ASIO not covered.'
 
       - name: Package validated Windows x64 VST3 preview (NOT a release)
         uses: actions/upload-artifact@v4
