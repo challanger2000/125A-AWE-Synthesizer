@@ -25,8 +25,8 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force qa/p167 | Out-Null
-          & build-p167/src/engine/Release/awe32_p166_exact_presets_test.exe 2>&1 | Tee-Object qa/p167/adversarial-stdout.txt
-          $testExit=$LASTEXITCODE
+          $process=Start-Process -FilePath (Resolve-Path 'build-p167/src/engine/Release/awe32_p166_exact_presets_test.exe').Path -Wait -NoNewWindow -PassThru -RedirectStandardOutput qa/p167/adversarial-stdout.txt -RedirectStandardError qa/p167/adversarial-stderr.txt
+          $testExit=$process.ExitCode
           $lines=@(Get-Content qa/p167/adversarial-stdout.txt)
           if ($testExit -ne 1) { throw "Expected exact-one test failure exit 1; observed $testExit" }
           $fails=@($lines | Where-Object { $_ -match '^FAIL ' })
