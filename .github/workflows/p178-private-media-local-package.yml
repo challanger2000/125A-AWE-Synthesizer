@@ -1,0 +1,96 @@
+name: P178 private-original-media local Windows VST3 test kit
+on:
+  push:
+    branches: [qa/p178-private-media-local-acceptance]
+permissions:
+  contents: read
+concurrency:
+  group: p178-private-media-acceptance-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build-and-verify:
+    runs-on: windows-2022
+    timeout-minutes: 28
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch exactly pinned Steinberg VST3 SDK
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch v3.8.1_build_84 --recurse-submodules https://github.com/steinbergmedia/vst3sdk.git external/vst3sdk
+          if ($LASTEXITCODE -ne 0) { throw 'SDK clone failed' }
+          if ((git -C external/vst3sdk rev-parse HEAD).Trim() -ne '3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96') { throw 'Unexpected VST3 SDK revision' }
+      - name: Configure real product VST3 and owner-media host
+        shell: pwsh
+        run: |
+          cmake -S . -B build-p178 -G 'Visual Studio 17 2022' -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_EDITORHOST_TEST=OFF
+          if ($LASTEXITCODE -ne 0) { throw 'P178 CMake failed' }
+      - name: Build actual product, P171/P177/P178 hosts and validator
+        shell: pwsh
+        run: |
+          New-Item -Force -ItemType Directory qa | Out-Null
+          cmake --build build-p178 --config Release --parallel 2 --target awe32_p178_owner_media_probe awe32_p177_ui_first_note_host awe32_p171_vst3_load_host validator 2>&1 | Tee-Object qa/build.txt
+          if ($LASTEXITCODE -ne 0) { throw 'P178 real product / host compile failed' }
+      - name: Regress actual exported DLL through P171/P176/P177 and P178 positive and negative controls
+        shell: pwsh
+        timeout-minutes: 8
+        run: |
+          ctest --test-dir build-p178 -C Release --output-on-failure --timeout 150 -R '^125A_p17(1_exported_dll_first_note|6_exported_dll_sf2_loops|7_real_gui_load_first_note|8_.*)$' 2>&1 | Tee-Object qa/ctest.txt
+          if ($LASTEXITCODE -ne 0) { throw 'P171/P176/P177/P178 combined regression failed' }
+          if ((Get-Content qa/ctest.txt -Raw) -notmatch '100% tests passed, 0 tests failed out of 5') { throw 'P178 required five CTests not all executed' }
+      - name: Validate real exported AWE VST3 module (Steinberg)
+        shell: pwsh
+        run: |
+          $validator=(Get-ChildItem build-p178 -Filter validator.exe -File -Recurse | Where-Object { $_.FullName -match 'Release' } | Select-Object -First 1).FullName
+          $bundle=(Resolve-Path 'build-p178/VST3/Release/125A_AWE_Synthesizer.vst3').Path
+          if (-not $validator -or -not $bundle) { throw 'Actual validator/product bundle missing' }
+          & $validator -e $bundle 2>&1 | Tee-Object qa/validator.txt
+          if ($LASTEXITCODE -ne 0) { throw 'VST3 validator failure' }
+          if ((Get-Content qa/validator.txt -Raw) -notmatch 'Result: (\d+) tests passed, 0 tests failed') { throw 'Validator lacks completed result' }
+          if ([int]$Matches[1] -lt 500) { throw 'Incomplete Steinberg VST3 module validation' }
+      - name: Check private-probe positive signal and strict synthetic 77 rule scope
+        shell: pwsh
+        run: |
+          $exe=(Resolve-Path 'build-p178/Release/awe32_p178_owner_media_probe.exe').Path
+          $dll=(Get-ChildItem 'build-p178/VST3/Release/125A_AWE_Synthesizer.vst3' -Filter '*.vst3' -File -Recurse | Select-Object -First 1).FullName
+          if (-not $dll) { throw 'Actual exported VST3 binary missing' }
+          $assets=(Get-ChildItem $env:TEMP -Directory -Filter '125a-p128-*' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
+          if (-not $assets) { throw 'Synthetic P128 fixtures absent' }
+          & $exe $dll (Join-Path $assets 'zero.rom') (Join-Path $assets 'bank.sf2') 2>&1 | Tee-Object qa/p178-probe-stdout.txt
+          if ($LASTEXITCODE -ne 0) { throw 'P178 positive synthetic owner probe failed' }
+          $text=Get-Content qa/p178-probe-stdout.txt -Raw
+          if ($text -notmatch 'P178_RESULT passes=([1-9]\d*) failures=0 not_verified=0') { throw 'P178 audio results incomplete' }
+      - name: Package verified Windows EXE + BAT + VST3 only; never user ROM or SF2
+        shell: pwsh
+        run: |
+          $dest='qa/test-kit'
+          New-Item -ItemType Directory -Force $dest | Out-Null
+          Copy-Item 'build-p178/VST3/Release/125A_AWE_Synthesizer.vst3' $dest -Recurse
+          Copy-Item 'build-p178/Release/awe32_p178_owner_media_probe.exe' (Join-Path $dest '125A-P178-Media-Probe.exe')
+          Copy-Item 'tools/P178-LOCAL-TEST.bat' $dest
+          Copy-Item 'docs/P178-PRIVATE-LOCAL-MEDIA-ACCEPTANCE.md' (Join-Path $dest 'README-P178.txt')
+          $module=Get-ChildItem (Join-Path $dest '125A_AWE_Synthesizer.vst3') -Filter '*.vst3' -File -Recurse
+          if (@($module).Count -ne 1) { throw 'Bundle module count not one' }
+          @(
+            "P178_TEST_ONLY=true"
+            "SOURCE_SHA=$env:GITHUB_SHA"
+            'P177_VERIFIED_PRODUCT_SOURCE=25373c00fb041dc8a5df56e2fe5eec43c0d43c8e'
+            'PRIVATE_ROM_AND_SF2=NOT_UPLOADED'
+            'ORIGINAL_ASIO_DAW=NOT_RUN'
+            'FULL_AUDIT=NOT_COMPLETE'
+            'RELEASE=NO_GO'
+          ) | Set-Content (Join-Path $dest 'PROVENANCE.txt')
+          Get-FileHash @($module.FullName,(Join-Path $dest '125A-P178-Media-Probe.exe')) -Algorithm SHA256 | ForEach-Object { "{0}  {1}" -f $_.Hash,$_.Path } | Set-Content (Join-Path $dest 'SHA256SUMS.txt')
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: P178-Windows-PRIVATE-LOCAL-TEST-KIT
+          path: qa/test-kit/
+          if-no-files-found: warn
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: P178-Windows-QA-Evidence
+          path: qa/
+          if-no-files-found: warn
+          retention-days: 14
