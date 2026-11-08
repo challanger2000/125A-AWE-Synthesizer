@@ -1,3 +1,14 @@
+# P185 current task — independent Windows ETW / ASIO causes
+
+**Branch:** `qa/p185-independent-etw-asio`; adopted P184 baseline
+`3aaa2f736535dde3642ab7cea11d919059ff12bb`.
+[Issue #91](https://github.com/challanger2000/125A-AWE-Synthesizer/issues/91),
+[implementation / evidence / limits](docs/P185-ETW-ASIO-INTEGRATION.md).
+Universal tools live in Test Lab `feature/p185-independent-etw-asio`.
+Windows regressions and checked BAT packaging are in progress, not yet PASS.
+P184 is completed and is not repeated. Physical P185 is **NOT_RUN**;
+root cause **INCONCLUSIVE**, release **NO-GO**. AWE DSP/GUI and ASIO gates unchanged.
+
 # START HERE — 125A AWE Synthesizer
 
 ## P184 – echter A/B/A-ASIO-Gegenversuch abgeschlossen (8. November 2026)
