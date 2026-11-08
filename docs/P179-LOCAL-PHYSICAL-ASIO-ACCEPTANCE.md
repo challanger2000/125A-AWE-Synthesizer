@@ -90,6 +90,45 @@ Für die Nachanalyse genügt bevorzugt die neue `P179-ACCEPTANCE.json`;
 alternativ kann `ASIO-CALLBACK-DIAGNOSTICS.json` mitgeschickt werden.
 Private ROM- oder SoundFont-Dateien bleiben auf dem lokalen PC.
 
+## P180 – Auswertung der dritten echten ASIO-Sitzung
+
+Der reale P102-Diagnosebericht der nächsten Benutzersitzung enthält:
+
+- **Yamaha Steinberg USB ASIO**, 44.100 Hz, 512 Frames.
+- 1.000 angeforderte / 1.000 gelieferte ASIO-Callbacks.
+- 1.000 erfolgreich ausgeführte VST3-Prozessor-Callbacks, 0 DSP-Fehler.
+- 12 NoteOns / 12 NoteOffs; 1.019.251 nichtstille PCM-Samples.
+- 0 ASIO-XRUN/Overload/Resync-Meldungen, 0 ungültige PCM-Samples.
+- **1 Verletzung des Callback-Abstands:** maximal 62,6362 ms.
+- Maximale Callback-Laufzeit 5,7598 ms, unter dem Blockbudget
+  von 512 / 44100 = 11,60998 ms. Ausführungs-Deadlineverletzungen 0.
+
+**Fazit:** Tatsächliche VST3-Audioberechnung und MIDI-Ansteuerung waren
+innerhalb der 1.000 verifizierten Blöcke erfolgreich. Der strenge
+ASIO-Abnahme-Gate bleibt jedoch wegen des einzigen langen
+**Abstands zwischen** zwei Callbacks **NO-GO**. Es ist nicht nachgewiesen,
+ob die Verzögerung durch Windows Scheduling, Gerät/Treiber, USB oder
+andere Umstände ausgelöst wurde. Es ist weder ein nachgewiesener
+AWE-DSP-Fehler noch eine vollständige ASIO-PASS-Bescheinigung.
+
+Der gleichzeitig hochgeladene `P179-ACCEPTANCE.json` enthielt
+`diagnostics_verified=false` und die reine native `[P102 DIAGNOSTIC
+ONLY]`-Zeile als PowerShell-Fehler. Ursache im neu hinzugefügten Launcher:
+Windows PowerShell 5.1 interpretiert auf `2>&1` umgeleitete native
+Standardfehlerausgaben unter `$ErrorActionPreference='Stop'` als
+abbruchauslösende `NativeCommandError`-Records. Dadurch wurde die
+anschließende Überprüfung einer tatsächlich vorhandenen
+`ASIO-CALLBACK-DIAGNOSTICS.json` vorzeitig unterbrochen.
+
+P180 führt die beiden nativen Aufrufe über einen getrennten Wrapper:
+Dieser protokolliert die native Standard-/Fehlerausgabe vollständig,
+wertet weiterhin den **unveränderten nativen Prozess-Exitcode** aus
+und stellt die ursprüngliche PowerShell-Stop-Regel anschließend wieder
+her. Ein Windows-PowerShell-**5.1-Laufzeittest** muss beweisen, dass
+native stderr bei Exitcode 0 nicht fälschlich fehlschlägt und bei
+Exitcode 7 keinesfalls als Erfolg gilt. Die eigentlichen ASIO-Gates
+werden **nicht gelockert**; eine Diagnose allein bleibt
+`DIAGNOSTIC_ONLY_NOT_HARDWARE_PASS`.
 ## Abgrenzungen
 
 Das ist ein echter Hardware-ASIO-/MIDI-Test, jedoch **keine Aufnahme von

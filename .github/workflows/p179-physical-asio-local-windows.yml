@@ -76,6 +76,30 @@ jobs:
           if ($LASTEXITCODE -eq 0 -or (Test-Path $capPath)) { throw 'P101 accepted unregistered physical ASIO capability report' }
           Write-Host 'PASS native sample format, P101 buffer policy, and absent physical-driver rejection'
           exit 0
+      - name: Exercise actual Windows PowerShell 5.1 native stderr and return-code handling
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          . .\tools\P179-NATIVE-CALL.ps1
+          $root=Join-Path $env:RUNNER_TEMP 'p180-native-stderr-test'
+          New-Item -ItemType Directory -Force $root | Out-Null
+          $fail=Join-Path $root 'native-stderr-fail.cmd'
+          $good=Join-Path $root 'native-stderr-success.cmd'
+          [IO.File]::WriteAllLines($fail,[string[]]@('@echo off','echo P180_EXPECTED_DIAGNOSTIC_ON_STDERR 1>&2','exit /b 7'),[Text.Encoding]::ASCII)
+          [IO.File]::WriteAllLines($good,[string[]]@('@echo off','echo P180_EXPECTED_SUCCESS_MESSAGE 1>&2','exit /b 0'),[Text.Encoding]::ASCII)
+          $badLog=Join-Path $root 'native-fail.log'
+          $failCode=Invoke-P180NativeWithLog -Executable $fail -Arguments @() -LogPath $badLog
+          if ($failCode -ne 7 -or -not (Test-Path -LiteralPath $badLog) -or
+              -not (Get-Content -LiteralPath $badLog -Raw).Contains('P180_EXPECTED_DIAGNOSTIC_ON_STDERR')) {
+            throw 'Native stderr was turned into a terminating error, hidden or falsely passed' 
+          }
+          $goodLog=Join-Path $root 'native-success.log'
+          $okCode=Invoke-P180NativeWithLog -Executable $good -Arguments @() -LogPath $goodLog
+          if ($okCode -ne 0 -or -not (Get-Content -LiteralPath $goodLog -Raw).Contains('P180_EXPECTED_SUCCESS_MESSAGE')) {
+            throw 'Native stderr from successful child caused a false failure'
+          }
+          if ($ErrorActionPreference -ne 'Stop') { throw 'Native wrapper changed global stop-on-error policy' }
+          Write-Host 'PASS Windows PowerShell 5.1 real native-stderr capture; correct failing and successful exit codes'
       - name: Parse local Windows PowerShell and verify ASIO acceptance controls
         shell: pwsh
         run: |
@@ -84,6 +108,8 @@ jobs:
           $ast=[System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path 'tools/P179-ASIO-TEST.ps1').Path,[ref]$tokens,[ref]$syntaxErrors)
           if ($syntaxErrors.Count -ne 0) { $syntaxErrors | Format-List | Out-String | Write-Error; throw 'P179 local hardware script is not valid Windows PowerShell' }
           $content=Get-Content -LiteralPath 'tools/P179-ASIO-TEST.ps1' -Raw
+          $helper=Get-Content -LiteralPath 'tools/P179-NATIVE-CALL.ps1' -Raw
+          if (-not $helper.Contains('Invoke-P180NativeWithLog') -or -not $content.Contains('Invoke-P180NativeWithLog')) { throw 'P180 native stderr wrapper not wired to hardware and capability probes' }
           foreach($phrase in @('AWE32_ROM_PATH','AWE32_SF2_PATH','P179-SHA256SUMS.txt','asio.asio_callbacks','midi.note_ons','midi.nonzero_pcm_samples','deadline_misses','release_approved=$false','--asio-buffer-capabilities','125a-asio-driver-capability-v1','caps.selected_frames','caps.preferred_frames','--diagnostic-out','ASIO-CALLBACK-DIAGNOSTICS.json','asio_callback_counts','asio_cause_counts')) {
             if (-not $content.Contains($phrase)) { throw "Local P179 script missing independent gate $phrase" }
           }
@@ -99,6 +125,7 @@ jobs:
           Copy-Item $exe[0].FullName (Join-Path $dest '125A-Test-Lab-ASIO-MIDI.exe')
           Copy-Item 'tools/P179-ASIO-TEST.bat' $dest
           Copy-Item 'tools/P179-ASIO-TEST.ps1' $dest
+          Copy-Item 'tools/P179-NATIVE-CALL.ps1' $dest
           Copy-Item 'docs/P179-LOCAL-PHYSICAL-ASIO-ACCEPTANCE.md' (Join-Path $dest 'README-P179-ASIO.txt')
           Copy-Item 'asio-sdk/LICENSE.txt' (Join-Path $dest 'ASIO-SDK-LICENSE.txt')
           New-Item -ItemType Directory -Force (Join-Path $dest 'ASIO-HOST-SOURCE') | Out-Null

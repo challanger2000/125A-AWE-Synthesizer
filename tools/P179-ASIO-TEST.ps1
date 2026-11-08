@@ -25,6 +25,8 @@ try {
   if (-not [Environment]::Is64BitProcess) { throw 'Bitte eine 64-Bit-Windows-PowerShell verwenden.' }
   if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw 'ASIO-Testprogramm fehlt im Paket.' }
   if (-not (Test-Path -LiteralPath $dll -PathType Leaf)) { throw 'AWE-VST3-Modul fehlt im Paket.' }
+  if (-not (Test-Path -LiteralPath (Join-Path $root 'P179-NATIVE-CALL.ps1') -PathType Leaf)) { throw 'Verifizierter P179-Native-Wrapper fehlt.' }
+  . (Join-Path $root 'P179-NATIVE-CALL.ps1')
   $rom=ReadPath 'Original AWE32-ROM (*.raw), voller Pfad'
   $sf2=ReadPath 'Original SoundFont (*.sf2), voller Pfad'
   if (-not (Test-Path -LiteralPath $rom -PathType Leaf)) { throw 'Die angegebene ROM-Datei existiert nicht.' }
@@ -78,8 +80,8 @@ try {
   $capsPath=Join-Path $out 'ASIO-DRIVER-CAPABILITIES.json'
   $capArgs=@('--asio-buffer-capabilities','--driver-name',$selected.Name,
     '--driver-clsid',$selected.CLSID,'--nonce',$nonce,'--out',$capsPath)
-  & $exe @capArgs 2>&1 | Tee-Object -FilePath (Join-Path $out 'ASIO-CAPABILITY-LOG.txt')
-  if($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $capsPath -PathType Leaf)){
+  $capExit=Invoke-P180NativeWithLog -Executable $exe -Arguments $capArgs -LogPath (Join-Path $out 'ASIO-CAPABILITY-LOG.txt')
+  if($capExit -ne 0 -or -not (Test-Path -LiteralPath $capsPath -PathType Leaf)){
     throw 'Echter ASIO-Treiber konnte keine Puffer-/Sampleraten-Auskunft liefern.'
   }
   $caps=Get-Content -LiteralPath $capsPath -Raw | ConvertFrom-Json
@@ -119,8 +121,7 @@ try {
     '--callbacks','1000','--nonce',$nonce,'--out',$asioPath,
     '--midi-note','48','--midi-out',$midiPath,
     '--diagnostic-out',$diagnosticPath)
-  & $exe @args 2>&1 | Tee-Object -FilePath (Join-Path $out 'NATIVE-HOST-LOG.txt')
-  $nativeExit=$LASTEXITCODE
+  $nativeExit=Invoke-P180NativeWithLog -Executable $exe -Arguments $args -LogPath (Join-Path $out 'NATIVE-HOST-LOG.txt')
   # A diagnostic report NEVER establishes hardware PASS.
   if(Test-Path -LiteralPath $diagnosticPath -PathType Leaf){
     $diag=Get-Content -LiteralPath $diagnosticPath -Raw | ConvertFrom-Json
