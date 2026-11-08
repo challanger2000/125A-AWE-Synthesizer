@@ -7,8 +7,9 @@ geprüften P178-Paket und den erweiterten nativen ASIO-Host des 125A Test Labs.
 ## So benutzt du es
 
 1. Das GitHub-Artefakt `P179-AWE-PHYSICAL-ASIO-LOCAL-TEST` vollständig entpacken.
-2. Studio One/Fender Studio Pro und andere Programme, die dein Audient
-   iD14-ASIO-Gerät exklusiv verwenden, vorher beenden.
+2. Die DAW und andere Programme, die den ausgewählten USB-ASIO-Treiber
+   exklusiv verwenden, vorher beenden. Der zuletzt tatsächlich verwendete
+   Treiber war **Yamaha Steinberg USB ASIO**, nicht Audient.
 3. Monitore/Kopfhörer leise stellen. Das Testsignal ist auf -20 dBFS begrenzt.
 4. `P179-ASIO-TEST.bat` doppelklicken.
    Das aktualisierte Paket fragt **vor dem Streaming** die ASIO-Fähigkeiten
@@ -18,8 +19,9 @@ geprüften P178-Paket und den erweiterten nativen ASIO-Host des 125A Test Labs.
    Nicht unterstützte Größen oder Sampleraten führen zu NO-GO statt PASS.
 5. Lokale Dateipfade zur Original-ROM und zu einer bereits in P178
    bestandenen SF2-Datei eingeben, z. B. `Synth 512 Bank.sf2`.
-6. Der echte installierte Audient-ASIO-Treiber wird wenn eindeutig erkennbar
-   automatisch gewählt; andernfalls einen ASIO-Treiber aus der Liste wählen.
+6. Den tatsächlichen Audiointerface-ASIO-Treiber aus der Liste wählen,
+   falls nicht genau ein geeigneter Treiber erkannt wird. Im letzten
+   Testprotokoll stand **Yamaha Steinberg USB ASIO** mit exakt 512 Frames.
 7. Mit Enter den Test explizit starten.
 
 Keine Installation, kein Python, keine VM, keine Änderungen an Treibern.
@@ -62,6 +64,31 @@ früheren festen 256-Frame-Konfiguration. Daraus folgt **kein** DSP-FAIL;
 ASIO-MIDI-Audio und Hardware wurden damals nicht ausgeführt. P101 behebt
 nur die starre Auswahl, indem die tatsächlichen Gerätedaten ermittelt
 werden. Noch immer ist ein erfolgreicher Hardware-Lauf erforderlich.
+
+## Fehlerdiagnose nach dem zweiten echten Windows-Lauf
+
+P179 erkannte beim zuletzt verwendeten **Yamaha Steinberg USB ASIO** die
+tatsächlich zulässigen **512 Frames bei 44.100 Hz**. Das war korrekt;
+der Test scheiterte anschließend jedoch an der aggregierten Meldung
+`Physical ASIO real callback timing or DSP errors observed`.
+Es ist **nicht bekannt**, ob eine DSP-Fehlverarbeitung, ein
+ASIO-Overload/Resync, eine Aussetzer-Meldung, die Deadline-Uhr oder
+eine unerwartete Sampleratenänderung beteiligt war. Ohne die rohen
+Zähler darf keine Ursache behauptet werden.
+
+**Die korrigierte P102-Diagnose** erstellt nach dem echten Driver-Stop
+`ASIO-CALLBACK-DIAGNOSTICS.json` mit separaten, sessiongebundenen
+Zählern (Audio, MIDI, ASIO, Latenz, mögliche Fehlerarten). Auch wenn
+die volle Audioabnahme fehlschlägt, schreibt die `.bat` die überprüften
+Zähler zusätzlich in `P179-ACCEPTANCE.json`.
+Dieses neue Diagnosefile trägt ausdrücklich
+`DIAGNOSTIC_ONLY_NOT_HARDWARE_PASS` und niemals eine
+Release-/Hardware-Freigabe. Bei fehlendem ASIO-Gerät gibt es
+**keinen** vorgetäuschten Diagnose- oder PASS-Nachweis.
+
+Für die Nachanalyse genügt bevorzugt die neue `P179-ACCEPTANCE.json`;
+alternativ kann `ASIO-CALLBACK-DIAGNOSTICS.json` mitgeschickt werden.
+Private ROM- oder SoundFont-Dateien bleiben auf dem lokalen PC.
 
 ## Abgrenzungen
 

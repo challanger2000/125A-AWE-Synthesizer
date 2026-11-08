@@ -13,7 +13,7 @@ $reportFile=Join-Path $out 'P179-ACCEPTANCE.json'
 $report=@{schema='125a-p179-local-awe-asio-v1';status='NOT_RUN';
   original_rom_sf2='LOCAL_NOT_UPLOADED';daw_session_verified=$false;
   release_approved=$false;physical_asio_verified=$false;
-  native_midi_audio_verified=$false;errors=@()}
+  native_midi_audio_verified=$false;diagnostics_verified=$false;errors=@()}
 function Publish { $report | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $reportFile -Encoding UTF8 }
 function ReadPath([string]$title) {
   $inputPath=Read-Host $title
@@ -111,14 +111,63 @@ try {
   Write-Host ('ASIO-Treiber bestaetigt '+$frames+' Samples bei '+$rate+' Hz; bevorzugt '+$preferred+'.')
   $asioPath=Join-Path $out 'ASIO-CALLBACKS.json'
   $midiPath=Join-Path $out 'ASIO-MIDI-PCM.json'
+  $diagnosticPath=Join-Path $out 'ASIO-CALLBACK-DIAGNOSTICS.json'
   $env:AWE32_ROM_PATH=$rom
   $env:AWE32_SF2_PATH=$sf2
   $args=@('--physical-asio-probe','--plugin',$dll,'--driver-name',$selected.Name,
     '--driver-clsid',$selected.CLSID,'--rate',([string]$rate),'--frames',([string]$frames),
     '--callbacks','1000','--nonce',$nonce,'--out',$asioPath,
-    '--midi-note','48','--midi-out',$midiPath)
+    '--midi-note','48','--midi-out',$midiPath,
+    '--diagnostic-out',$diagnosticPath)
   & $exe @args 2>&1 | Tee-Object -FilePath (Join-Path $out 'NATIVE-HOST-LOG.txt')
-  if($LASTEXITCODE -ne 0){throw ('Echter ASIO-Host FAIL (Exitcode '+$LASTEXITCODE+'). Siehe NATIVE-HOST-LOG.txt')}
+  $nativeExit=$LASTEXITCODE
+  # A diagnostic report NEVER establishes hardware PASS.
+  if(Test-Path -LiteralPath $diagnosticPath -PathType Leaf){
+    $diag=Get-Content -LiteralPath $diagnosticPath -Raw | ConvertFrom-Json
+    if($diag.schema -cne '125a-asio-callback-diagnostic-v1' -or
+       $diag.status -cne 'DIAGNOSTIC_ONLY_NOT_HARDWARE_PASS' -or
+       $diag.nonce -cne $nonce -or
+       $diag.asio_driver_name -cne $selected.Name -or
+       $diag.asio_driver_clsid -ine $selected.CLSID -or
+       $diag.executor_sha256 -cne $executorHash -or
+       $diag.product_sha256 -cne $moduleHash -or
+       [int]$diag.sample_rate -ne $rate -or
+       [int]$diag.buffer_frames -ne $frames -or
+       [int]$diag.requested_callbacks -ne 1000 -or
+       -not [bool]$diag.observed_after_actual_driver_stop -or
+       [bool]$diag.physical_asio_verified -or
+       [bool]$diag.commercial_daw_verified -or
+       [bool]$diag.release_approved){
+      throw 'Die ASIO-Diagnose ist ungueltig oder gehoert zu einem anderen Testlauf.'
+    }
+    $report.diagnostics_verified=$true
+    $report.diagnostics_file='ASIO-CALLBACK-DIAGNOSTICS.json'
+    $report.asio_callback_counts=@{
+      total=[int64]$diag.asio_callbacks
+      successful=[int64]$diag.successful_process_callbacks
+      failed=[int64]$diag.failed_process_callbacks
+      deadline_misses=[int64]$diag.deadline_misses_total
+      callback_spacing_violations=[int64]$diag.callback_spacing_violations
+      callback_execution_over_budget=[int64]$diag.callback_execution_over_budget
+      xruns=[int64]$diag.hardware_asio_overload_or_resync_messages
+      rate_changes=[int64]$diag.sample_rate_change_notifications
+      midi_on=[int64]$diag.note_on_events
+      midi_off=[int64]$diag.note_off_events
+      pcm_nonzero_samples=[int64]$diag.nonzero_pcm_samples
+    }
+    $report.asio_cause_counts=@{
+      midi_event_failures=[int64]$diag.midi_event_failures
+      vst_process_errors=[int64]$diag.vst_process_returned_error
+      nonfinite_pcm=[int64]$diag.nonfinite_vst_pcm_samples
+      missing_asio_buffers=[int64]$diag.missing_asio_output_buffers
+      asio_converter_errors=[int64]$diag.asio_sample_write_failures
+      callback_exceptions=[int64]$diag.caught_callback_exceptions
+    }
+  }
+  if($nativeExit -ne 0){
+    throw ('Echter ASIO-Test NO-GO (Exitcode '+$nativeExit+'). Siehe ASIO-CALLBACK-DIAGNOSTICS.json und NATIVE-HOST-LOG.txt')
+  }
+  if(-not $report.diagnostics_verified){throw 'Echte ASIO-Hardwarediagnose fehlt trotz erfolgreichem Prozess.'}
   if(-not (Test-Path $asioPath) -or -not (Test-Path $midiPath)){throw 'Echte ASIO- und MIDI-PCM-Beweisdateien fehlen.'}
   $asio=Get-Content -LiteralPath $asioPath -Raw | ConvertFrom-Json
   $midi=Get-Content -LiteralPath $midiPath -Raw | ConvertFrom-Json
