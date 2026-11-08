@@ -63,7 +63,7 @@ jobs:
           git clone --depth 1 --branch audit/p98-real-host-param-gui-p169 https://github.com/challanger2000/125A-Plugin-Test-Lab.git testlab
           if($LASTEXITCODE -ne 0) {throw 'Independent Test Lab clone failed'}
           $sha=(git -C testlab rev-parse HEAD).Trim()
-          if($sha -ne 'b4ce5d97f62c081172e868334261fc870e3a0ed7') {
+          if($sha -ne 'fb5a8e997e4148f51cf784b8e2b6a712435f0f3e') {
             throw "Independent Test Lab SHA mismatch: $sha"
           }
           cmake -S testlab -B build-lab -G "Visual Studio 17 2022" -A x64
@@ -90,7 +90,7 @@ jobs:
           foreach($label in @('p168','p169')) {
             $module=(Resolve-Path "binaries/$label/125A_AWE_Synthesizer.vst3").Path
             $out=(Join-Path (Resolve-Path 'qa/p172').Path $label)
-            & $hostexe --capture-host-param-sequence "$module" 1000 "0,0.09448818897637795,0.4960629921259843,0" "$out"
+            & $hostexe --capture-host-param-sequence-reopen "$module" 1000 "0,0.09448818897637795,0.4960629921259843,0" "$out"
             if($LASTEXITCODE -ne 0) {throw "$label real product GUI host parameter sequence failed"}
             foreach($n in 0..3) {
               if(!(Test-Path (Join-Path $out "step-$n.bmp"))) {
@@ -117,14 +117,14 @@ jobs:
             'NEW_SOURCE=P169/99fb90fc855c4c7643e24816fa644fdc738c290f',
             'OLD_RUN=42435400626',
             'NEW_RUN=42438260642',
-            'LAB_SOURCE=b4ce5d97f62c081172e868334261fc870e3a0ed7',
+            'LAB_SOURCE=fb5a8e997e4148f51cf784b8e2b6a712435f0f3e',
             "AUDIT_SOURCE=$env:GITHUB_SHA",
-            'GUI_PATH=real native Test Lab Win32 IEditController setParamNormalized + VSTGUI IPlugView + GetDIBits',
+            'GUI_PATH=real native Test Lab Win32 IEditController setParamNormalized BEFORE fresh VSTGUI IPlugView attachment + GetDIBits',
             'ORACLE=old absent Program63 must keep incorrect Program0; corrected must paint explicit unavailable text',
             'SF2=ephemeral synthetic with Bank0 program0, program12 and absent program63',
             'REAL_PHYSICAL_ASIO=NOT_RUN',
             'FENDER_STUDIO_PRO=NOT_RUN',
-            'SYNTH_AUDIO=NOT_RUN',
+            'SYNTH_AUDIO=NOT_RUN, LIVE_ALREADY_OPEN_GUI_AUTOMATION=NOT_VERIFIED',
             'RELEASE=NO_GO'
           ) | Set-Content qa/p172/PROVENANCE.txt
 
