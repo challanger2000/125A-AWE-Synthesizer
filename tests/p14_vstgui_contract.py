@@ -103,8 +103,8 @@ assert 'm_guiControls[11]' in syn
 assert 'brand=MakeLabel({30,25,237,69},"125A",false)' not in b
 assert 'model=MakeLabel({30,76,238,105}' not in b
 assert 'engine=MakeLabel({30,118,239,141}' not in b
-assert 'programLabel_=MakeLabel({350,118,728,145},"NO PRESET",false)' in b
-assert 'hardwareInfoLabel_=MakeLabel({350,145,728,163},"ROM: ERFORDERLICH",true)' in b
+assert 'programLabel_=MakeLabel({370,118,728,145},"NO PRESET",false)' in b
+assert 'hardwareInfoLabel_=MakeLabel({370,145,728,163},"ROM: ERFORDERLICH",true)' in b
 # P165 retains any compatibility assets only as packaged resources, never as overlay views.
 assert (root/"src/vst3/resource/125A_Logo_Master_FINAL.svg").is_file()
 assert 'resource/125A_Logo_Master_FINAL.svg' in cmake
