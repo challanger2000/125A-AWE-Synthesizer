@@ -151,6 +151,15 @@ bool Synth::LoadBank(const std::string& path, std::string& error, bool samplesIn
     SoundFont::Bank bank = SoundFont::Load(path);
     if (!bank.valid) { error = bank.errorMessage; return false; }
     bank.samplesInRom = samplesInRom;
+    // P166: the VST3 reserves these two addressable banks for explicit
+    // ROM playback. Reject collisions instead of silently renumbering a
+    // user's SF2 or shadowing it with a ROM instrument.
+    if (m_strictPresetSelection && !samplesInRom)
+        for (const auto& preset : bank.presets)
+            if (preset.bank == 16383 || preset.bank == 16382) {
+                error = "SF2 bank 16382/16383 reserved for explicit ROM";
+                return false;
+            }
 
     if (midiBank >= 0 || midiDrumBank >= 0)
         for (SoundFont::Preset& p : bank.presets) {
@@ -1012,9 +1021,16 @@ void Synth::StartLayers(size_t bankIndex, std::span<const SoundFont::Region> reg
 
 int Synth::BankNumberFor(uint8_t channel) const
 {
-    // Channel 10 (index 9) is drums per GM. SoundFont has them in bank 128.
-    if (channel == 9) return kDrumBank;
     const auto& selection=m_channels[channel];
+    // Explicit GUI/host bank selection owns every MIDI channel, including
+    // channel 10. Untouched channel 10 retains the historic GM bank-128
+    // convention; a real CC0 selects the actual numbered bank thereafter.
+    if (m_strictPresetSelection) {
+        if (selection.browserBankActive) return selection.browserBank;
+        if (channel == 9 && selection.bankMsb == 0) return kDrumBank;
+        return selection.bankMsb;
+    }
+    if (channel == 9) return kDrumBank;
     return selection.browserBankActive?selection.browserBank:selection.bankMsb;
 }
 
@@ -1531,8 +1547,10 @@ void Synth::NoteOn(uint8_t channel, uint8_t note, uint8_t velocity,
     int chainLen = 0;
     chain[chainLen++] = bankNum;
     const bool drums = (bankNum == kDrumBank);
-    if (drums) chain[chainLen++] = -1;          // marker for (128, program 0)
-    if (bankNum != 0 && !drums) chain[chainLen++] = 0;
+    if (!m_strictPresetSelection) {
+        if (drums) chain[chainLen++] = -1;      // legacy bank-128 kit fallback
+        if (bankNum != 0 && !drums) chain[chainLen++] = 0;
+    }
 
     for (int pass = 0; pass < chainLen; ++pass)
     {
@@ -1559,6 +1577,11 @@ void Synth::NoteOn(uint8_t channel, uint8_t note, uint8_t velocity,
             return;
         }
     }
+
+    // VST3 P166: a missing SF2/ROM program means NO NEW VOICE.
+    // Do not substitute GM ROM, another SF2 program, a drumkit, or the
+    // synthetic sine. Keep already-playing release tails intact.
+    if (m_strictPresetSelection) return;
 
     // When the program is not in the bank, the driver takes the **first
     // preset of the bank**, not some substitute of its own. Measured on
@@ -1656,11 +1679,11 @@ void Synth::NoteOff(uint8_t channel, uint8_t note)
 void Synth::SelectBrowserBank(uint16_t bank)
 {
     if (bank > 16383u) return;
-    // Channel 10 deliberately retains its GM drum convention. Selecting
-    // bank 128 on any melodic channel also permits keyboard drum previews.
+    // VST3: explicit bank selection must affect all 16 channels.
+    // Legacy upstream mode retains channel 10's fixed GM drum default.
     for (size_t c = 0; c < m_channels.size(); ++c)
     {
-        if (c == 9) continue;
+        if (c == 9 && !m_strictPresetSelection) continue;
         m_channels[c].browserBank = bank;
         m_channels[c].browserBankActive = true;
     }

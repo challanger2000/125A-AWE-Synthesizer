@@ -1,6 +1,19 @@
 # START HERE — 125A AWE Synthesizer
 
 
+## P166 — SF2-Programme unvermischt, ROM ausschließlich explizit (8. November 2026, IN QA)
+
+**Arbeitsbranch:** `fix/p166-exact-sf2-rom-isolation` auf P165 `c729fda9cbf2c27723e7a0d5bd39e4e173c6db57`. **GUI bleibt P165 unverändert.** Ziel der Presetkorrektur: tatsächliche 77 SF2-Presets (im Nutzer-Metadatenbild 0..77 ohne 63) statt automatisch eingeblendeten 128 GM-Presets; bei MIDI-Programmwechsel auf nicht existierende Nummer KEIN ROM-, Bank-0- oder Sinus-Ersatzton.
+
+- **Ursachen:** `PresetCatalog::AppendRomGm` schrieb fehlende ROM-GM-Presets in SF2-Bank 0; `RomGmBank::LoadBanks` installierte dieselbe ROM-GM-Bank physisch als normalen Bank-0-Spieler; `Synth::NoteOn` produzierte zusätzlich eine Bank-0/erstes Preset/synthetische Stimme bei fehlender Nummer.
+- **Lösung:** Exakte SF2-Nummern, explizite ROM-Bänke 16383 (GM-Melodie) und 16382 (Drum), separate (physisch weiterhin erforderliche) Hardware-Wave-ROM; alle fehlenden SF2- und ROM-Programme im VST3 stumm, kein neuer Voice. Strict mode ausschließlich in VST3-`RomGmBank::LoadBanks` aktiviert; alte historische Treiber-/86Box-Referenzsemantik separat unverändert.
+- **Kompatibilität:** Der alte V11-Status, Bank- und Programm-ParamIDs, 16 MIDI-Channel-Programm-Host-Controls, Recall und Automation werden nicht umnummeriert. Als begrenzte technische Einschränkung sind die virtuell reservierten MIDI-Bänke 16382/16383 nicht gleichzeitig als Benutzer-SF2 verwendbar; Kollisionen werden mit Fehler statt stiller Überschreibung abgewiesen. Generische VST3-Host-Programmlisten behalten für MIDI-Kompatibilität den Nummernraum 0..127, ohne diese als tatsächlich verfügbare SF2-Sounds auszugeben.
+- **Pflichtgegenproben:** `tests/p166_exact_sf2_rom.cpp` (Original-77er Nummernbild als synthetische SoundFont, weitere sparse Banken, echte 86Box-Audioausgabe/Stille, ROM-Melodie/Drum, Negativprobe mit deaktivierter Strict-Auswahl, V11) und `125A_p166_processor_missing_program` (echter VST3-Prozess mit Host-Param-Queues und Recall), dazu kompletter Windows-VST3-Build/Validator/P165 real GUI und `125A-Plugin-Test-Lab` mit unabhängigen Windows-Hosts.
+- **Workflow:** `.github/workflows/p166-exact-sf2-rom-windows.yml`, exakte Repo-Referenzen/Evidenz in `docs/P166-EXACT-SF2-ROM-PRESET-ISOLATION.md`. Ein erfolgreicher P165-Test ersetzt **niemals** diese P166-Nachweise.
+- **Freigabegrenze:** Original-Private-SF2 mit ihren Audiosamples und Original-Creative-Wave-ROM sind nicht in CI vorhanden. Deshalb müssen ihre echte Wiedergabe, Hardwaretreue, reale DAW und physische ASIO-Abnahme als **NOT RUN** gelten. Bis dahin RELEASE-NO-GO.
+
+
+
 ## P165 — Original-Faceplate und professionelles Raster (7. November 2026, NO-GO BIS WINDOWS-TEST)
 
 **Branch:** `fix/p165-original-faceplate-layout`; Ausgangspunkt P164 `e89942ed8ec7d398c164ef1ad0a22aee81ddcc21`. Dies ist ein **GUI-Layout-Patch**, kein DSP-, MIDI-, Bank- oder ROM-Patch. **P165 ist noch nicht als VST3 gebaut/validiert.**

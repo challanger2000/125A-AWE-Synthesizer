@@ -60,9 +60,14 @@ if(125A_PROCESSOR_SDK_ROOT AND 125A_BUILD_ENGINE_PROBES)
     COMMAND awe32_p128_processor_order_test persistent-controls "${p128_assets}")
   add_test(NAME 125A_p128_sample_accurate_program_pcm
     COMMAND awe32_p128_processor_order_test midblock-program "${p128_assets}")
+  # P166: unlike the browser-only model, execute the exact extracted VST3
+  # process() with absent MIDI programs, host automation, real 86Box output
+  # and V11 project save/recall. No synthetic ROM copyright contamination.
+  add_test(NAME 125A_p166_processor_missing_program
+    COMMAND awe32_p128_processor_order_test p166-exact-presets "${p128_assets}")
   set_tests_properties(125A_p128_processor_order 125A_p128_processor_remove_engine
     125A_p128_persistent_controls 125A_p128_sample_accurate_program_pcm
-    PROPERTIES TIMEOUT 90)
+    125A_p166_processor_missing_program PROPERTIES TIMEOUT 90)
 
   add_test(NAME 125A_p133_fx_processor_modes
     COMMAND awe32_p128_processor_order_test fx-presets "${p128_assets}")

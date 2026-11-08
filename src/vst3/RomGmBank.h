@@ -45,18 +45,18 @@ struct Loaded {
 };
 inline Loaded LoadBanks(Synth& synth,const std::string& rom,const std::string& sf2) {
     Loaded result;
+    // Strict VST3 isolation: original GM sample data remains in the
+    // EMU8000's physical Wave-ROM. Its *preset descriptions* are loaded
+    // ONLY into the two explicitly selectable virtual ROM banks.
+    // In particular, NEVER install a GM preset into SF2 bank 0/128.
+    synth.SetStrictPresetSelection(true);
     const auto gm=AdjacentFile(rom);
-    bool gmPrimary=false;
-    if(!gm.empty()) {
-        if(ValidDescriptor(gm,result.gmError)) {
-            if(synth.LoadBank(gm,result.gmError,true,0))gmPrimary=true;
-        }
-    }
+    bool validGm=false;
+    if(!gm.empty())
+        validGm=ValidDescriptor(gm,result.gmError);
     if(!sf2.empty())
         result.sf2=synth.LoadBank(sf2,result.sf2Error);
-    // Real GM bank 0 first, then user SF2 to override, finally virtual
-    // browser banks 16383 + 16382. GM samples always address physical ROM.
-    if(gmPrimary) {
+    if(validGm) {
         std::string error;
         if(synth.LoadBank(gm,error,true,kBrowserBank,kBrowserDrums))
             result.gm=true;
