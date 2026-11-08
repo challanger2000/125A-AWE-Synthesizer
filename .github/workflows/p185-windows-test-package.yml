@@ -147,8 +147,25 @@ jobs:
         with:
           name: P185-AWE-ETW-ASIO-Windows-BAT
           path: package/
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 30
+      - name: Retrieve the exact uploaded user artifact for a service roundtrip
+        uses: actions/download-artifact@v4
+        with:
+          name: P185-AWE-ETW-ASIO-Windows-BAT
+          path: SERVICE roundtrip path with spaces
+      - name: Validate the actual user-download contents through its BAT
+        shell: powershell
+        run: |
+          $env:CI='true'
+          & cmd.exe /d /c '"SERVICE roundtrip path with spaces\P185-ETW-ASIO.bat" -CheckOnly'
+          if ($LASTEXITCODE -ne 0) { throw 'Actual GitHub artifact lost required files or hashes' }
+          $r=@(Get-ChildItem 'SERVICE roundtrip path with spaces' -Recurse -Filter P185-ACCEPTANCE.json | ForEach-Object {Get-Content $_.FullName -Raw | ConvertFrom-Json})
+          if ($r.Count -ne 1 -or $r[0].physical_asio -cne 'NOT_RUN' -or $r[0].release_approved) { throw 'Roundtrip fabricated hardware certification' }
+          @{artifact_service_roundtrip='PASS';awe_integration=$env:GITHUB_SHA;testlab_source=$env:TESTLAB_SHA;physical_asio='NOT_RUN';release_approved=$false} | ConvertTo-Json | Set-Content evidence/P185-ARTIFACT-ROUNDTRIP.json
+          Write-Host "::notice::P185_USER_ARTIFACT_ROUNDTRIP=PASS ZIP=${{ steps.kit.outputs.artifact-url }}"
+          exit 0
       - uses: actions/upload-artifact@v4
         if: always()
         with:
