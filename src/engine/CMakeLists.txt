@@ -72,7 +72,8 @@ add_test(NAME 125A_sf2_audio_integration COMMAND awe32_sf2_audio_integration_tes
 add_executable(awe32_p166_exact_presets_test
   "${PROJECT_SOURCE_DIR}/tests/p166_exact_sf2_rom.cpp")
 target_include_directories(awe32_p166_exact_presets_test PRIVATE
-  "${CMAKE_CURRENT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/src/vst3" "${UPSTREAM_SRC}")
+  "${CMAKE_CURRENT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/src/vst3"
+  "${PROJECT_SOURCE_DIR}/src/opl3" "${UPSTREAM_SRC}")
 target_link_libraries(awe32_p166_exact_presets_test PRIVATE awe32_chip_safety)
 target_compile_features(awe32_p166_exact_presets_test PRIVATE cxx_std_23)
 add_test(NAME 125A_p166_exact_sf2_rom COMMAND awe32_p166_exact_presets_test)
