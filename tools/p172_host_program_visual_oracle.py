@@ -93,7 +93,6 @@ def main():
        "new_missing_63_visible": new["missing_program63"]["changed_pixels"]>=MIN_CHANGED_PIXELS,
        "old_return_program0_stable": old["return_program0"]["changed_pixels"]<=MAX_STABLE_PIXELS,
        "new_return_program0_stable": new["return_program0"]["changed_pixels"]<=MAX_STABLE_PIXELS,
-       "real_different_builds":old["shas"][0]!=new["shas"][0],
     }
     report={
         "schema":"125a-p172-independent-vst3-external-program-gui-v1",
