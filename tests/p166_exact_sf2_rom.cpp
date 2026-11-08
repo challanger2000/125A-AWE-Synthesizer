@@ -139,6 +139,7 @@ struct Heard {
     bool note=false;
     bool audio=false;
     uint64_t energy=0;
+    uint64_t pcmFingerprint=1469598103934665603ULL;
     size_t banks=0;
 };
 Heard Play(const fs::path& rom,const fs::path& sf2,
@@ -165,7 +166,11 @@ Heard Play(const fs::path& rom,const fs::path& sf2,
     Heard h;h.ready=true;h.banks=synth.BankCount();h.note=Held(synth)!=0;
     std::vector<int16_t> pcm(32768,0);
     synth.RenderBlock(pcm.data(),16384);
-    for(const auto v:pcm)h.energy+=uint64_t(std::abs(int(v)));
+    for(const auto v:pcm) {
+        h.energy+=uint64_t(std::abs(int(v)));
+        h.pcmFingerprint^=uint16_t(v);
+        h.pcmFingerprint*=1099511628211ULL;
+    }
     h.audio=h.energy>1000;
     return h;
 }
@@ -277,6 +282,22 @@ int main(){
        "MIDI CC0 overrides global browser bank with exact target selection");
     ok&=Check(available.banks==2&&rom63.banks==2,
        "engine loads only real SF2 and virtual GM ROM bank, NO physical GM bank 0");
+
+    // Independent P167 adversarial test. MIDI channel 10 defaults to GM
+    // percussion, but a *real explicit* CC0=0 must select bank zero.
+    // This exercises the actual 86Box stereo PCM and checks the chosen
+    // waveform, not just 'audio present' (both banks have valid presets).
+    const auto ch10Bank0=Play(rom,sparse,0,0,9);
+    const auto ch10Drums=Play(rom,sparse,128,0,9);
+    const auto ch10Cc0=Play(rom,sparse,128,0,9,0);
+    ok&=Check(ch10Bank0.ready&&ch10Drums.ready&&ch10Cc0.ready&&
+          ch10Bank0.audio&&ch10Drums.audio&&ch10Cc0.audio&&
+          ch10Bank0.pcmFingerprint!=ch10Drums.pcmFingerprint,
+          "P167 independent control: ch10 SF2 bank0 and drum128 produce distinct real PCM");
+    ok&=Check(ch10Cc0.ready && ch10Cc0.pcmFingerprint==ch10Bank0.pcmFingerprint &&
+          ch10Cc0.pcmFingerprint!=ch10Drums.pcmFingerprint,
+          "P167 adversarial: explicit channel10 MIDI CC0=0 must override drum bank128, exact PCM");
+
     // Project state preserves sparse bank/program identifiers. The actual
     // production VST3 processor concurrency/host tests run separately.
     AWE125::AssetState::Data state;
