@@ -97,6 +97,16 @@ assert 'programMenu_=new GoldHardwareMenu({261,234,552,273},this,kDirectPreset)'
 assert 'RebuildActiveMenus();' in b and 'SyncActiveMenuSelection();' in b
 assert 'sf_.Find(bank_,id)' in b
 assert 'ChooseExistingProgram(' in b
+# P169: missing external MIDI program is explicitly visible, not silently
+# painted as first existing SF2 instrument. The popup retains only real IDs.
+assert 'SetUnavailableProgram(int program)' in b
+assert 'const bool missing=current==activePrograms_.end();' in b
+assert 'missing?int(program_):-1' in b
+assert 'if(!missing)programMenu_->setValue(' in b
+assert 'currentIndex=-1;' in b  # no unrelated native preset highlighted
+assert 'if(item || !unavailableProgram_.empty())' in b
+assert '"%03d  NICHT VORHANDEN"' in b
+
 assert 'kActiveBank=3109,kDirectPreset=3110' in h
 assert 'm_guiControls[11]' in syn
 # P165 retains any compatibility assets only as packaged resources, never as overlay views.
@@ -216,7 +226,9 @@ assert '"125A_AWE_Gold_Logo_236x147.png" PNG DISCARDABLE' in (root/"src/vst3/res
 # neither native popup handling nor selected-item binding is replaced.
 assert 'class GoldHardwareMenu final : public COptionMenu' in b
 assert 'const CMenuItem* item=getCurrent();' in b
-assert 'ctx->drawString(item->getTitle().data(),textRect,kLeftText);' in b
+assert 'const auto title=unavailableProgram_.empty()' in b
+assert 'std::string(item->getTitle().data()) : unavailableProgram_' in b
+assert 'ctx->drawString(title.c_str(),textRect,kLeftText);' in b
 assert 'ctx->setClipRect(textRect);' in b
 assert 'inPopup?CColor(8,8,9)' in b
 assert b.count('new GoldHardwareMenu(')==5
