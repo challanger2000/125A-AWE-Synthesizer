@@ -16,8 +16,12 @@ import struct
 import sys
 
 # independent screen region from owner-approved P165/P169 geometry:
-# live hardware menu x=261..552, y=179..218; keep border/arrow out.
-TEXT_BOX=(279,186,511,212)
+# P165 uses ORIGINAL 1000x708 faceplate. The hardware menu is x=261..552,
+# y=234..273 (NOT the older P164 visual y=179..218). The previous P172
+# attempt cropped the WRONG old Y, reporting 0 changed pixels even when the
+# actual new P169 menu clearly rendered "063 NICHT VORHANDEN".
+# This source-independent rectangle excludes the bezel, arrow, and image.
+TEXT_BOX=(279,241,511,266)
 COLOR_THRESHOLD=24
 MIN_CHANGED_PIXELS=100
 MAX_STABLE_PIXELS=24
@@ -98,8 +102,8 @@ def main():
         "schema":"125a-p172-independent-vst3-external-program-gui-v1",
         "product_baseline":"P168 at 8ad695055cdaa0dafc99e3b1d1d61b83d9f30f14",
         "product_fix":"P169 at 99fb90fc855c4c7643e24816fa644fdc738c290f",
-        "test_surface":"native VST3 controller param1000, live editor HWND bitmap; synthetic bank0 {0,12} and absent 63",
-        "not_covered":["physical ASIO","Fender Studio Pro","on-screen native popup menu highlight","ROM/EMU8000 audio"],
+        "test_surface":"native VST3 controller param1000, freshly attached real editor HWND bitmap for each host value; synthetic bank0 {0,12} and absent 63",
+        "not_covered":["physical ASIO","Fender Studio Pro","on-screen native popup menu highlight", "already-open editor host automation","ROM/EMU8000 audio"],
         "old":old,"new":new,"assertions":predicates,
         "conclusion":"PASS" if all(predicates.values()) else "FAIL"
     }
