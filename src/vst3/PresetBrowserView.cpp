@@ -462,18 +462,22 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     // already contains them. Only native transparent status labels follow.
     // Native dynamic status, bank/program and filename remain on top.
 
+    // P168 owner DAW screenshot: the faceplate LCD has a nontransparent
+    // ~16px left metal/bezel strip. Starting live text at x=350 physically
+    // clips the first character on all four rows. The LCD's native raster
+    // is unchanged: keep live text >= x=370, with no overlay background.
     // P152: the amber LCD owns the complete live status line, including
     // the current filename. Its labels remain real host-driven VSTGUI views.
-    auto* lcd=MakeLabel({350,96,570,112},"EMU8000  |  SOUNDFONT ENGINE",true);
+    auto* lcd=MakeLabel({370,96,570,112},"EMU8000  |  SOUNDFONT ENGINE",true);
     lcd->setFontColor(CColor(55,42,9,255));
     fileLabel_=MakeLabel({575,96,728,112},"",false);
     fileLabel_->setFont(kNormalFontSmall);
     fileLabel_->setFontColor(CColor(65,46,12,255));
     fileLabel_->setTextTruncateMode(CTextLabel::kTruncateTail);
-    programLabel_=MakeLabel({350,118,728,145},"NO PRESET",false);
+    programLabel_=MakeLabel({370,118,728,145},"NO PRESET",false);
     programLabel_->setFont(kNormalFontBig);
     programLabel_->setFontColor(CColor(41,31,6,255));
-    hardwareInfoLabel_=MakeLabel({350,145,728,163},"ROM: ERFORDERLICH",true);
+    hardwareInfoLabel_=MakeLabel({370,145,728,163},"ROM: ERFORDERLICH",true);
     hardwareInfoLabel_->setFontColor(CColor(53,40,9,255));
     hardwareInfoLabel_->setTextTruncateMode(CTextLabel::kTruncateTail);
 
@@ -608,7 +612,7 @@ PresetBrowserView::PresetBrowserView(const CRect& rect,
     empty_->setFontColor(CColor(204,167,108,255));
 
     buildingPanel_=nullptr;
-    hint_=MakeLabel({350,166,728,184},
+    hint_=MakeLabel({370,166,728,184},
         "SF2-Audiostatus noch nicht vom Prozessor bestaetigt.",true);
     hint_->setTextTruncateMode(CTextLabel::kTruncateTail);
     SetPage(0);
