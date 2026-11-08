@@ -72,6 +72,28 @@ if(125A_PROCESSOR_SDK_ROOT AND 125A_BUILD_ENGINE_PROBES)
       "$<TARGET_FILE:awe32_p177_ui_first_note_host>"
       "$<TARGET_FILE:125A_AWE_Synthesizer>" "${p128_assets}")
     set_tests_properties(125A_p177_real_gui_load_first_note PROPERTIES TIMEOUT 155)
+    # P178: self-contained PRIVATE Windows asset acceptance EXE for owner BAT.
+    # Build/test only with generated synthetic media on public CI.
+    add_executable(awe32_p178_owner_media_probe
+      "${PROJECT_SOURCE_DIR}/tests/p178_owner_original_media_probe.cpp"
+      "${125A_PROCESSOR_SDK_ROOT}/public.sdk/source/common/memorystream.cpp")
+    target_include_directories(awe32_p178_owner_media_probe PRIVATE
+      "${125A_PROCESSOR_SDK_ROOT}" "${PROJECT_SOURCE_DIR}/src/vst3")
+    target_link_libraries(awe32_p178_owner_media_probe PRIVATE sdk sdk_hosting ole32)
+    target_compile_features(awe32_p178_owner_media_probe PRIVATE cxx_std_23)
+    add_dependencies(awe32_p178_owner_media_probe 125A_AWE_Synthesizer p128_assets)
+    add_test(NAME 125A_p178_private_acceptance_synthetic_positive
+      COMMAND awe32_p178_owner_media_probe
+        "$<TARGET_FILE:125A_AWE_Synthesizer>"
+        "${p128_assets}/zero.rom" "${p128_assets}/bank.sf2")
+    set_tests_properties(125A_p178_private_acceptance_synthetic_positive PROPERTIES TIMEOUT 150)
+    add_test(NAME 125A_p178_reject_absent_private_rom
+      COMMAND awe32_p178_owner_media_probe
+        "$<TARGET_FILE:125A_AWE_Synthesizer>"
+        "${p128_assets}/absent-private-rom-do-not-create.raw"
+        "${p128_assets}/bank.sf2")
+    set_tests_properties(125A_p178_reject_absent_private_rom PROPERTIES
+      WILL_FAIL TRUE TIMEOUT 20)
   endif()
   add_executable(awe32_p128_processor_order_test
     "${PROJECT_SOURCE_DIR}/tests/p128_processor_order.cpp"
