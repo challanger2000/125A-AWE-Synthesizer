@@ -1,3 +1,11 @@
+> **Nachtrag P186, 9. November 2026:** Der Besitzer hat P185 inzwischen lokal
+> ausgeführt. Das zurückgegebene INCONCLUSIVE / ETW_NOT_AVAILABLE_OR_UNDECODABLE
+> mit physical_asio=NOT_RUN ist ein belegter Berichtsfehler nach durchlaufenem
+> Start-/Dateipfad; es beweist keine ausgebliebenen Callbacks. Die tatsächlichen
+> Rohzähler liegen hier noch nicht vor. Die folgenden NOT_RUN-Angaben waren der
+> frühere Vorabstand, keine neue Auswertung des Nutzerlaufs. Siehe
+> [P186-Bericht](P186-ETW-DIAGNOSTICS-AND-STATUS.md). Keine Releasefreigabe.
+
 # P185 – geprüfte Windows-ETW-/ASIO-Testumgebung
 
 Auftrag: [Issue #91](https://github.com/challanger2000/125A-AWE-Synthesizer/issues/91).

@@ -1,3 +1,16 @@
+# P186 aktuell – bestehende P185-Daten diagnostizieren, kein neuer Hardwaretest
+
+Branch `qa/p186-etw-diagnostics`; Basis `4d56729788bcf065fbae1c13f5b79b831601d492`.
+[Auftrag #92](https://github.com/challanger2000/125A-AWE-Synthesizer/issues/92),
+[Fehler, Prüfmatrix und Grenzen](docs/P186-ETW-DIAGNOSTICS-AND-STATUS.md).
+Der Besitzer hat P185 ausgeführt. Der alte Default NOT_RUN war für einen bereits
+gestarteten Referenzversuch irreführend; ohne Original-capture.json/asio.json wird
+keine tatsächliche Callbackzahl oder Windows-/USB-/Treiberursache behauptet.
+Diese Nutzerdateien sind hier weiterhin NOT_PROVIDED. Die neue P186-BAT analysiert
+nur den vorhandenen Lauf; kein neuer ASIO-/ETW-Test. Windows P186 pending.
+AWE-Klangkern, P184-Nachweise und alle Zeitgrenzen unverändert. Ursache
+INCONCLUSIVE, AWE-Realtime NOT_RUN, Release NO_GO. Ältere Einleitungen sind Historie.
+
 # P185 current task — independent Windows ETW / ASIO causes
 
 **Branch:** `qa/p185-independent-etw-asio`; adopted P184 baseline

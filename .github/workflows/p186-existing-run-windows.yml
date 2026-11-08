@@ -1,0 +1,157 @@
+name: P186 checked existing-data Windows BAT package no new hardware test
+on:
+  push:
+    branches: [qa/p186-etw-diagnostics]
+    paths: ['.github/workflows/p186-existing-run-windows.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: p186-awe-package-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  package:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    env:
+      TESTLAB_SHA: dfcb4527f1f46904c73c5f7f113b81c9c41ef70a
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: challanger2000/125A-Plugin-Test-Lab
+          ref: dfcb4527f1f46904c73c5f7f113b81c9c41ef70a
+          fetch-depth: 0
+          path: lab
+      - name: Read the exact original P185 software artifact for historical binary pins
+        uses: actions/download-artifact@v4
+        with:
+          name: P185-AWE-ETW-ASIO-Windows-BAT
+          run-id: 42531433260
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: original-p185
+      - name: Validate preservation and derive a trusted original-source profile
+        shell: pwsh
+        run: |
+          git diff --exit-code 4d56729788bcf065fbae1c13f5b79b831601d492 -- src CMakeLists.txt docs/P184-REAL-ASIO-THREE-WAY-REFERENCE-RESULT.md
+          if ($LASTEXITCODE -ne 0) { throw 'P186 changed protected AWE runtime/P184 evidence' }
+          if ((git -C lab rev-parse HEAD).Trim() -cne $env:TESTLAB_SHA) { throw 'Test Lab source pin mismatch' }
+          git -C lab diff --exit-code 59762ae67a5878f4bade2e000672497acde4f763 -- src CMakeLists.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Native adaptation before owner counters is forbidden' }
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          $m=Get-Content original-p185/P185-PACKAGE.json -Raw | ConvertFrom-Json
+          if ($m.schema -cne '125a-p185-package-v1' -or $m.testlab_source -cne '59762ae67a5878f4bade2e000672497acde4f763') { throw 'Wrong original P185 source profile' }
+          foreach ($name in @('125A_Test_Lab_Physical_ASIO.exe','125A_QA_ASIO_Reference_MIDI.vst3','125A_Test_Lab_ETW.exe')) {
+            $entry=$m.files.PSObject.Properties[$name]
+            if (-not $entry -or (Get-FileHash -LiteralPath (Join-Path 'original-p185' $name)).Hash.ToLowerInvariant() -cne $entry.Value) { throw 'Original P185 binary profile does not match actual artifact bytes' }
+          }
+          $awe=@(Get-ChildItem original-p185/AWE-UNCHANGED.vst3 -Recurse -File -Filter '*.vst3')
+          if ($awe.Count -ne 1 -or $m.awe_source -cne 'cff9d91cdec5aa2574d039b23660fae0589c6878') { throw 'Original unchanged AWE provenance missing' }
+          $relative=$awe[0].FullName.Substring((Resolve-Path original-p185).Path.Length+1).Replace('\','/')
+          if ((Get-FileHash $awe[0].FullName).Hash.ToLowerInvariant() -cne $m.files.PSObject.Properties[$relative].Value) { throw 'Original AWE hash mismatch' }
+          $profile=@{source_sha=$m.testlab_source;executor_sha256=$m.files.'125A_Test_Lab_Physical_ASIO.exe';product_sha256=$m.files.'125A_QA_ASIO_Reference_MIDI.vst3';driver_clsid='{CB7F9FFD-A33B-48B2-8BC0-437D94F37142}';source_artifact_run=42531433260;source_artifact_id=13637930245;profile_kind='ORIGINAL_P185_ARTIFACT'}
+          @{schema='125a-p186-source-profiles-v1';profiles=@($profile)} | ConvertTo-Json -Depth 8 | Set-Content evidence/P186-ORIGINAL-PROFILES.json
+          @{original_manifest_sha256=(Get-FileHash original-p185/P185-PACKAGE.json).Hash.ToLowerInvariant();original_awe_sha256=(Get-FileHash $awe[0].FullName).Hash.ToLowerInvariant();original_p185_source=$m.testlab_source;owner_raw='NOT_PROVIDED';new_hardware_test='NOT_RUN'} | ConvertTo-Json | Set-Content evidence/P186-PROVENANCE.json
+      - name: Build actual Windows native hosts and real reference VST3 controls
+        shell: pwsh
+        run: |
+          git clone --no-checkout https://github.com/audiosdk/asio.git lab/asio-sdk
+          if ($LASTEXITCODE -ne 0) { throw 'ASIO SDK clone failed' }
+          git -C lab/asio-sdk checkout --detach 496a0765b8bb9c26f764f22f9a9712a937177db2
+          if ($LASTEXITCODE -ne 0) { throw 'ASIO SDK pin failed' }
+          cmake -S lab -B build-p186 -G 'Visual Studio 17 2022' -A x64 "-DASIO_SDK_DIR=$env:GITHUB_WORKSPACE/lab/asio-sdk"
+          if ($LASTEXITCODE -ne 0) { throw 'P186 native configure failed' }
+          if ((git -C build-p186/_deps/vst3sdk-src rev-parse HEAD).Trim() -cne '3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96') { throw 'VST3 SDK pin mismatch' }
+          cmake --build build-p186 --config Release --parallel 4 --target TestLabETW TestLabPhysicalASIO QAASIOReferenceMidi QAASIOReferenceMidiBroken 2>&1 | Tee-Object evidence/build.txt
+          if ($LASTEXITCODE -ne 0) { Get-Content evidence/build.txt | Select-String 'error [A-Z]+[0-9]+' | Select-Object -First 10 | ForEach-Object {Write-Host "::error::$($_.Line)"}; throw 'P186 Windows native build failed' }
+      - name: Actual native controls and adversarial PowerShell 5.1 reporting
+        shell: powershell
+        run: |
+          try {
+            & ./lab/tests/p185_windows.ps1 -Build build-p186 -Evidence evidence
+            if ($LASTEXITCODE -ne 0) { throw 'Native Windows controls failed' }
+            & ./lab/tests/p186_reporting.ps1 -Evidence evidence
+            $cases=Get-Content evidence/P186-REPORTING-TESTS.json -Raw | ConvertFrom-Json
+            if ($cases.Count -ne 42 -or @($cases | Where-Object {$_.status -cne 'PASS' -or $_.hardware -cne 'NOT_RUN'}).Count) { throw 'P186 adversarial evidence incomplete' }
+          } catch {Write-Host "::error::P186_CONTROLS $($_.Exception.Message) $($_.ScriptStackTrace)"; throw}
+      - name: Real BAT regression with an explicitly synthetic original-defect fixture
+        shell: powershell
+        run: |
+          try {
+            $p=Get-Content evidence/synthetic-profile.json -Raw | ConvertFrom-Json
+            @{schema='125a-p186-source-profiles-v1';profiles=@($p)} | ConvertTo-Json -Depth 8 | Set-Content evidence/P186-SYNTHETIC-PROFILES.json
+            & ./lab/tools/p186/Build-P186-Package.ps1 -Destination synthetic-fixture-package -ProfilePath evidence/P186-SYNTHETIC-PROFILES.json -TestlabSource $env:TESTLAB_SHA
+            Compress-Archive -Path synthetic-fixture-package/* -DestinationPath synthetic-fixture.zip
+            Expand-Archive synthetic-fixture.zip 'P186 fixture BAT path with spaces'
+            & ./lab/tests/p186_package.ps1 -Package 'P186 fixture BAT path with spaces' -Raw 'evidence/legacy/synthetic-never-hardware' -Evidence evidence
+            if ($LASTEXITCODE -ne 0) { throw 'Actual P186 existing-data BAT failed' }
+          } catch {Write-Host "::error::P186_FIXTURE_PACKAGE $($_.Exception.Message) $($_.ScriptStackTrace)"; throw}
+      - name: Produce and test the real offline-only user ZIP against its original P185 profile
+        shell: powershell
+        run: |
+          try {
+            & ./lab/tools/p186/Build-P186-Package.ps1 -Destination package -ProfilePath evidence/P186-ORIGINAL-PROFILES.json -TestlabSource $env:TESTLAB_SHA -AweSource $env:GITHUB_SHA
+            $cases=Get-Content evidence/P186-REPORTING-TESTS.json -Raw | ConvertFrom-Json
+            @{schema='125a-p186-checked-windows-tool-v1';testlab_source=$env:TESTLAB_SHA;awe_integration=$env:GITHUB_SHA;native_controls='PASS';reporting_cases=$cases.Count;fixture_hardware='NOT_RUN';owner_raw='NOT_PROVIDED';new_hardware_test='NOT_RUN';release_approved=$false} | ConvertTo-Json | Set-Content package/P186-WINDOWS-QA.json
+            $m=Get-Content package/P186-PACKAGE.json -Raw | ConvertFrom-Json
+            $m.files | Add-Member -NotePropertyName 'P186-WINDOWS-QA.json' -NotePropertyValue (Get-FileHash package/P186-WINDOWS-QA.json).Hash.ToLowerInvariant()
+            $m | ConvertTo-Json -Depth 10 | Set-Content package/P186-PACKAGE.json -Encoding UTF8
+            Compress-Archive -Path package/* -DestinationPath P186-OFFLINE-Windows.zip
+            Expand-Archive P186-OFFLINE-Windows.zip 'P186 actual user ZIP with spaces'
+            . ./lab/tests/p186_bat_process.ps1
+            $bat=(Resolve-Path 'P186 actual user ZIP with spaces/P186-EXISTING-RUN.bat').Path
+            $run=Invoke-P186TestBat $bat '-CheckOnly'
+            if ($run.exit_code -ne 0) { throw 'User ZIP CheckOnly failed' }
+            $run=Invoke-P186TestBat $bat '-Cancel'
+            if ($run.exit_code -ne 2) { throw 'User ZIP cancel lost errorlevel' }
+            # Production pins must reject the synthetic source instead of trusting its reported SHA.
+            $raw=(Resolve-Path 'evidence/legacy/synthetic-never-hardware').Path
+            $bat=(Resolve-Path 'P186 actual user ZIP with spaces/P186-EXISTING-RUN.bat').Path
+            $run=Invoke-P186TestBat $bat ('-ExistingRun "'+$raw+'"')
+            if ($run.exit_code -ne 3) { throw 'Production profile accepted an unrelated fixture as success' }
+            $r=@(Get-ChildItem 'P186 actual user ZIP with spaces' -Recurse -Filter P186-ACCEPTANCE.json | ForEach-Object {Get-Content $_.FullName -Raw | ConvertFrom-Json})
+            if ($r.Count -ne 1 -or $r[0].error_code -cne 'SOURCE_SHA_MISMATCH' -or $r[0].physical_asio -cne 'REFERENCE_ATTEMPTED_UNVERIFIED' -or $r[0].reference_identity_validated -or $r[0].PSObject.Properties['callbacks'] -or $r[0].release_approved) { throw 'Production profile fabricated verified callbacks' }
+            Add-Content 'P186 actual user ZIP with spaces/P185-DIAGNOSTICS.ps1' '# intentional integrity mutation'
+            $run=Invoke-P186TestBat $bat '-CheckOnly'
+            if ($run.exit_code -ne 3) { throw 'User ZIP tamper accepted' }
+            @{source=$env:GITHUB_SHA;lab=$env:TESTLAB_SHA;reporting_cases=$cases.Count;zip_actual_bat='PASS';production_sha_mismatch='REJECTED';owner_raw='NOT_PROVIDED';new_hardware_test='NOT_RUN';cause='INCONCLUSIVE';release_approved=$false} | ConvertTo-Json | Set-Content evidence/P186-INTEGRATION.json
+            Write-Host "::notice::P186_USER_PACKAGE source=$env:GITHUB_SHA lab=$env:TESTLAB_SHA cases=$($cases.Count) owner_raw=NOT_PROVIDED new_hardware=NOT_RUN release=NO_GO"
+            exit 0
+          } catch {Write-Host "::error::P186_PRODUCTION_PACKAGE $($_.Exception.Message) $($_.ScriptStackTrace)"; throw}
+      - uses: actions/upload-artifact@v4
+        id: kit
+        with:
+          name: P186-AWE-EXISTING-RUN-OFFLINE-Windows-BAT
+          path: package/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/download-artifact@v4
+        with:
+          name: P186-AWE-EXISTING-RUN-OFFLINE-Windows-BAT
+          path: P186 actual artifact service roundtrip
+      - name: Run the actual uploaded artifact BAT without starting hardware
+        shell: powershell
+        run: |
+          . ./lab/tests/p186_bat_process.ps1
+          $bat=(Resolve-Path 'P186 actual artifact service roundtrip/P186-EXISTING-RUN.bat').Path
+          $run=Invoke-P186TestBat $bat '-CheckOnly'
+          if ($run.exit_code -ne 0) { throw 'Actual downloaded artifact failed integrity' }
+          if (@(Get-ChildItem 'P186 actual artifact service roundtrip' -File -Filter '*.exe').Count) { throw 'User artifact exposes audio executables' }
+          @{artifact_service_roundtrip='PASS';awe_source=$env:GITHUB_SHA;lab=$env:TESTLAB_SHA;owner_raw='NOT_PROVIDED';new_hardware_test='NOT_RUN';release_approved=$false} | ConvertTo-Json | Set-Content evidence/P186-SERVICE-ROUNDTRIP.json
+          Write-Host "::notice::P186_ARTIFACT_ROUNDTRIP=PASS ZIP=${{ steps.kit.outputs.artifact-url }} new_hardware=NOT_RUN"
+          exit 0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: P186-AWE-Windows-Reporting-Evidence
+          path: |
+            evidence/*.json
+            evidence/*.txt
+            evidence/legacy/P185-ADVERSARIAL.json
+            evidence/native-etw-local/*.json
+            evidence/native-etw-local/*.csv
+          if-no-files-found: warn
+          retention-days: 30

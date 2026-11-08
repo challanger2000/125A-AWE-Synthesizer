@@ -1,3 +1,15 @@
+# P186 current development navigation (9 November 2026)
+
+Repository: challanger2000/125A-AWE-Synthesizer. Windows x64 VST3 only.
+Pre-release v0.1.0; NO owner-approved Windows FULL release or Gumroad ZIP.
+Current QA branch: qa/p186-etw-diagnostics, adopted P185 source 4d56729788bcf065fbae1c13f5b79b831601d492.
+Read START-HERE.md and docs/P186-ETW-DIAGNOSTICS-AND-STATUS.md first.
+P186 corrects reporting and reanalyzes existing raw JSON; no new hardware run,
+no native Win11 decoder adaptation until actual owner counters are known.
+Owner capture.json/asio.json NOT_PROVIDED here. Cause INCONCLUSIVE, release NO_GO.
+AWE src/CMake, original ROM/SF2 behavior, GUI, P184 and strict timing unchanged.
+Older development milestones below are historical, not current branch authority.
+
 # 125A AWE Synthesizer — development guidance
 Status: pre-release engineering baseline v0.1.0, NO approved Windows FULL release, NO Gumroad ZIP.
 Repository: challanger2000/125A-AWE-Synthesizer
