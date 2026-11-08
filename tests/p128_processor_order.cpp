@@ -458,10 +458,13 @@ void exactMissingPresetProcessorRegression() {
             check(persisted.bank==bank&&persisted.program==missing,
                 "P166 invalid program retains its exact host/V11 number");
             const auto engine=rig.p->engines_.Read();
-            check(engine.get()&&engine.get()->synth &&
-                  std::none_of(engine.get()->synth->CaptureHeldNotes().begin(),
-                               engine.get()->synth->CaptureHeldNotes().end(),
-                               [](const Synth::HeldNote& n){return n.sequence!=0;}),
+            bool noHeldVoices=false;
+            if(engine.get()&&engine.get()->synth) {
+                const auto held=engine.get()->synth->CaptureHeldNotes();
+                noHeldVoices=std::none_of(held.begin(),held.end(),
+                    [](const Synth::HeldNote& n){return n.sequence!=0;});
+            }
+            check(noHeldVoices,
                 "P166 missing program allocates no actual chip voice");
         }
     }
