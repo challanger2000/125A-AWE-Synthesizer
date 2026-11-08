@@ -1,0 +1,64 @@
+name: P167 audit-only actual VST3 Processor MIDI channel10 zero-bank PCM falsification
+on:
+  push:
+    branches: [audit/p167-p166-adversarial-test-gate]
+    paths:
+      - tests/p128_processor_order.cpp
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  real-processor:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pinned Steinberg SDK and immutable Processor source
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch v3.8.1_build_84 --recurse-submodules https://github.com/steinbergmedia/vst3sdk.git external/vst3sdk
+          if ($LASTEXITCODE -ne 0 -or (git -C external/vst3sdk rev-parse HEAD).Trim() -ne '3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96') { throw 'SDK provenance failed' }
+      - name: Build EXACT shipping P166 VST3 Processor compiled into SDK host harness
+        shell: pwsh
+        run: |
+          cmake -S . -B build-p167 -G "Visual Studio 17 2022" -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_EDITORHOST_TEST=OFF
+          if ($LASTEXITCODE -ne 0) { throw 'P167 Processor config failed' }
+          cmake --build build-p167 --config Release --parallel 2 --target awe32_p128_processor_order_test
+          if ($LASTEXITCODE -ne 0) { throw 'P167 actual Processor binary compile failed' }
+      - name: Actual host process PCM must reveal explicit MIDI CC0=0 vs untouched drum default
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force qa/p167 | Out-Null
+          $assets=Join-Path $env:RUNNER_TEMP '125a-p167-audit-generated'
+          python tests/p128_synthetic_assets.py "$assets"
+          if ($LASTEXITCODE -ne 0) { throw 'Independent known-distinct SF2 assets could not be generated' }
+          $exes=@(Get-ChildItem build-p167 -Filter 'awe32_p128_processor_order_test.exe' -Recurse -File)
+          if ($exes.Count -ne 1) { throw "Ambiguous actual P128 host: $($exes.Count)" }
+          $process=Start-Process -FilePath $exes[0].FullName -ArgumentList @('p167-channel10-bank-zero',"$assets") -Wait -NoNewWindow -PassThru -RedirectStandardOutput qa/p167/processor-stdout.txt -RedirectStandardError qa/p167/processor-stderr.txt
+          $lines=@(Get-Content qa/p167/processor-stdout.txt)
+          $passes=@($lines | Where-Object { $_ -match '^PASS P167' })
+          $fails=@($lines | Where-Object { $_ -match '^FAIL P167' })
+          if ($process.ExitCode -ne 1 -or $passes.Count -ne 1 -or $fails.Count -ne 1 -or
+              $fails[0] -notmatch 'actual VST3 Processor channel10 explicit CC0=0 selects bank0' -or
+              $lines[-1] -ne 'RESULT checks=2 failed=1') {
+              throw "Actual VST3 Processor falsification not isolated as intended: exit $($process.ExitCode), checks $($lines -join '; ')"
+          }
+          @(
+            "P167_PROCESSOR_NEGATIVE_CONTROL=DETECTED",
+            "P166_PRODUCT_RELEASE=NO_GO",
+            "P166_PRODUCT_SOURCE_SHA=6395d4cf1d027ae2f01b73ed2a6e658121a469c9",
+            "AUDIT_HEAD_SHA=$env:GITHUB_SHA",
+            "TEST_MODE=extracted original 125A Processor from Factory.cpp + Steinberg SDK",
+            "AUDIO=real 86Box synth PCM within host process()",
+            "POSITIVE=PASS independently distinct bank0 and bank128 reference PCM",
+            "NEGATIVE=FAIL explicit MIDI channel10 CC0=0 must select bank0; actual remains bank128"
+          ) | Set-Content qa/p167/PROCESSOR-PROVENANCE.txt
+          Write-Host 'P167 audit SUCCESS means intentional P166 Processor behavior FAILURE caught with independent PCM.'
+      - name: Upload exact evidence for adverse host path
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: P167-Actual-VST3-Processor-Ch10-CC0-PCM-Falsification
+          path: qa/p167/
+          if-no-files-found: warn
+          retention-days: 7
