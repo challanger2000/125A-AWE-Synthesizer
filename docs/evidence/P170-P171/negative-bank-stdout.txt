@@ -1,0 +1,21 @@
+PASS 77-shape SF2 metadata parsed: 
+PASS 77 exact presets, absent 63 and 78+, original program IDs retained
+PASS independently generated SF1 129-preset ROM descriptor valid: 
+PASS ROM catalog append: 
+PASS browser contains exactly 77 SF2 + two separate explicit ROM banks
+PASS PREV NEXT wrap, skip hole, direct selection preserves real IDs
+PASS missing SF2 program renders explicit unavailable label, not ROM name
+PASS sparse unsorted multi-bank SF2 keeps physical bank/program numbers
+PASS reserved ROM-bank collision rejected by catalog/engine, prior catalog atomic
+PASS SF2 program 64 drives an actual audible 86Box voice
+PASS missing 63/100 produce NO voice and digital silence (not GM, not sine)
+PASS explicit ROM GM program 63 and ROM drumkit are audible; missing ROM drum silent
+PASS negative-control: disabling strict mode reintroduces wrong fallback voice
+PASS other sparse bank supports only existing programs, no bank-0 GM substitution
+PASS MIDI CC0 overrides global browser bank with exact target selection
+PASS engine loads only real SF2 and virtual GM ROM bank, NO physical GM bank 0
+PASS untouched channel10 retains GM drum128 default
+PASS P167 independent control: ch10 SF2 bank0 and drum128 produce distinct real PCM
+FAIL P167 adversarial: explicit channel10 MIDI CC0=0 must override drum bank128, exact PCM
+PASS V11 save/reload retains sparse bank/program and channel automation state
+P166_EXACT_PRESETS_FAIL

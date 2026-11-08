@@ -1,0 +1,49 @@
+{
+  "product_source_sha": "b02e02d472544eb2122533f9b8d7dc9d0b97f68a",
+  "original_run_id": "42479356487",
+  "raw_csv_sha256": "0c93af66a70e9043144ea58f616c2c51987f5ced5eb108e77fd7e3a511cba543",
+  "trace_meta": {
+    "process_trace_result": 0,
+    "events_lost": 0,
+    "buffers_lost": 0,
+    "perf_frequency": 10000000,
+    "events": 3386847,
+    "target_cswitch": 8130,
+    "target_samples": 22142,
+    "target_heap": 0
+  },
+  "decoder_control_passed": true,
+  "callbacks": 14400,
+  "callbacks_with_complete_context": 14400,
+  "deadline_misses": [
+    {
+      "frames": "128",
+      "notes": "30",
+      "scenario": "1",
+      "block": "173",
+      "wall_us": "3959",
+      "deadline_us": "2902.49",
+      "held_identities": "30",
+      "late": "1",
+      "thread_cycles": "3752008",
+      "start_core": "3",
+      "end_core": "0",
+      "qpc_start": "4425925686",
+      "qpc_end": "4425965277",
+      "qpc_frequency": "10000000",
+      "pid": "724",
+      "tid": "1088",
+      "qpc_window_us": 3959.1,
+      "scheduled_us": 1494.2,
+      "off_cpu_us": 2464.9,
+      "ready_us": 2464.9,
+      "waiting_us": 0.0,
+      "coverage_complete": true,
+      "attribution": "READY_PREEMPTION_SUFFICIENT"
+    }
+  ],
+  "heap_attribution": "NOT RUN",
+  "pure_dsp_attribution": "NOT ESTABLISHED BY CSWITCH",
+  "physical_asio": "NOT RUN",
+  "commercial_release": "NO-GO"
+}

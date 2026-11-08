@@ -1,0 +1,72 @@
+{
+  "control_passed": true,
+  "trace_meta": {
+    "process_trace_result": 0,
+    "events_lost": 0,
+    "buffers_lost": 0,
+    "perf_frequency": 10000000,
+    "events": 200945,
+    "target_cswitch": 32,
+    "target_samples": 67,
+    "target_heap": 0
+  },
+  "rows": [
+    {
+      "phase": "busy",
+      "qpc_start": "2540243954",
+      "qpc_end": "2540543954",
+      "qpc_frequency": "10000000",
+      "pid": "3272",
+      "tid": "5996",
+      "qpc_window_us": 30000.0,
+      "scheduled_us": 30000.0,
+      "off_cpu_us": 0.0,
+      "ready_us": 0.0,
+      "waiting_us": 0.0,
+      "coverage_complete": true
+    },
+    {
+      "phase": "sleep",
+      "qpc_start": "2540552753",
+      "qpc_end": "2540904828",
+      "qpc_frequency": "10000000",
+      "pid": "3272",
+      "tid": "5996",
+      "qpc_window_us": 35207.5,
+      "scheduled_us": 42.8,
+      "off_cpu_us": 35164.7,
+      "ready_us": 0.0,
+      "waiting_us": 35164.7,
+      "coverage_complete": true
+    },
+    {
+      "phase": "busy",
+      "qpc_start": "2540905031",
+      "qpc_end": "2541205031",
+      "qpc_frequency": "10000000",
+      "pid": "3272",
+      "tid": "5996",
+      "qpc_window_us": 30000.0,
+      "scheduled_us": 29985.9,
+      "off_cpu_us": 14.1,
+      "ready_us": 14.1,
+      "waiting_us": 0.0,
+      "coverage_complete": true
+    },
+    {
+      "phase": "sleep",
+      "qpc_start": "2541205126",
+      "qpc_end": "2541529795",
+      "qpc_frequency": "10000000",
+      "pid": "3272",
+      "tid": "5996",
+      "qpc_window_us": 32466.9,
+      "scheduled_us": 27.0,
+      "off_cpu_us": 32439.9,
+      "ready_us": 0.0,
+      "waiting_us": 32439.9,
+      "coverage_complete": true
+    }
+  ],
+  "scope": "separate decoder calibration on this Windows runner, not retroactive heap coverage"
+}

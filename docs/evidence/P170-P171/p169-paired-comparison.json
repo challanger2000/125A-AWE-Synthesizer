@@ -1,0 +1,115 @@
+{
+  "baseline_defects": [
+    "held pad becomes audible <=50ms click before NoteOff (44100 Hz), last=2.999977s",
+    "held pad becomes audible <=50ms click before NoteOff (48000 Hz), last=2.999979s",
+    "held pad becomes audible <=50ms click before NoteOff (96000 Hz), last=2.999990s",
+    "AMP shortening monotone: [0.6506575963718821, 0.5558730158730159, 0.5566893424036281, 0.5577324263038549, 0.5719954648526077, 0.6100226757369615, 0.8828798185941044]",
+    "AMP 0->1% has no absolute-rate jump",
+    "AMP decay audio sweep [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]",
+    "AMP release audio sweep [0.02167550299158963, 0.0, 0.0, 3.728006970454341e-05, 0.00379020708698928, 0.014600889832691442, 0.03403973427615834]",
+    "AMP release zero-rate fallback remains monotone [0.004820567460234382, 0.0, 0.0, 0.03403973427615834]",
+    "FILTER ADSR actually closes spectrum with absent SF2 route: early=0.405943 late=0.411266",
+    "neutral filter route preserves bright original",
+    "FILTER attack spectral sweep [0.41152522928227747, 0.41152522928227747, 0.41152522928227747, 0.41152522928227747, 0.41152522928227747, 0.41152522928227747, 0.41152522928227747]",
+    "FILTER decay spectral sweep [0.4115586338150096, 0.4115586338150096, 0.4115586338150096, 0.4115586338150096, 0.4115586338150096, 0.4115586338150096, 0.4115586338150096]",
+    "FILTER sustain spectral sweep [0.4110751830965829, 0.4110751830965829, 0.4110751830965829, 0.4110751830965829, 0.4110751830965829, 0.4110751830965829, 0.4110751830965829]",
+    "FILTER release spectral sweep [0.4097362149669925, 0.4097362149669925, 0.4097362149669925, 0.4097362149669925, 0.4097362149669925, 0.4097362149669925, 0.4097362149669925]",
+    "cutoff retains audible headroom above 75% on a nonneutral patch",
+    "resonance retains audible headroom above 50% on a nonneutral patch",
+    "reverb retains audible headroom above 50% on a nonneutral patch",
+    "chorus retains audible headroom above 50% on a nonneutral patch",
+    "reverb retains audible headroom with MIDI send already present",
+    "chorus retains audible headroom with MIDI send already present",
+    "mode3 exits short-tail loop at NoteOff; mode1 retains loop during release",
+    "mode3 exits only after sustain-pedal release, not at held NoteOff",
+    "SF2 endAddrsOffset truncates actual one-shot PCM",
+    "SF2 endAddrsCoarseOffset truncates actual one-shot PCM"
+  ],
+  "neutral_pcm_bitexact": [
+    {
+      "label": "pad-neutral-44100",
+      "sha256": "1acc8d5b505a0dadff31fdd01b9b26f527128e3a5562ae07ec6792436eb0d54a"
+    },
+    {
+      "label": "pad-neutral-48000",
+      "sha256": "0639a202b98f89a5dca2de172da58b82619016a5fbbfde41329071ff21e7e784"
+    },
+    {
+      "label": "pad-neutral-96000",
+      "sha256": "001bfbe3b8ca77ff5f94b7c8dbec630d223a4b2e34ba8be828950ca965d5421a"
+    },
+    {
+      "label": "attack-0",
+      "sha256": "1acc8d5b505a0dadff31fdd01b9b26f527128e3a5562ae07ec6792436eb0d54a"
+    },
+    {
+      "label": "sustain-0",
+      "sha256": "bee0805d6a29f40c7e2ec090cdcbd728fcee9afbabd54714c1c8f9309bbf2ba7"
+    },
+    {
+      "label": "release-0",
+      "sha256": "94f42dddfa1db7f821f8800bb0e2da58568dc7a8723f0569368db8127295b357"
+    },
+    {
+      "label": "release-zero-rate-0",
+      "sha256": "2697ebd723c6d7a09dc3e54cd58d3de1824770fb6fea10921e4b77ca435f3c40"
+    },
+    {
+      "label": "filter-neutral",
+      "sha256": "0fe489bdb7dfec5460ac20a9a6fc08e531a49825de9391bdce30955fa3152d8d"
+    },
+    {
+      "label": "filter-route--4800",
+      "sha256": "f850546ccd8f68f13ad86873262f6673e5df31db1629ba58217eddb5cfc63f3e"
+    },
+    {
+      "label": "filter-route-4800",
+      "sha256": "65b050eecab1e7b59dc283f5bc3cc8fd676e0d1a357f51d6653a083f8ea92e57"
+    },
+    {
+      "label": "cutoff-0",
+      "sha256": "0fe489bdb7dfec5460ac20a9a6fc08e531a49825de9391bdce30955fa3152d8d"
+    },
+    {
+      "label": "headroom-cutoff-original",
+      "sha256": "ec0a739648dae16447932e439f49cdd21ec1687fde8526e21a42b12872244ad8"
+    },
+    {
+      "label": "headroom-resonance-original",
+      "sha256": "c59fed3b3567112e93bc73ec402deb4a3715cceb8f2a9cd1209a0941461b006d"
+    },
+    {
+      "label": "headroom-reverb-original",
+      "sha256": "883d1d89a67b184076ef46bf7463cda4ba24f8f351cdf101bc7d5f3833112cab"
+    },
+    {
+      "label": "headroom-chorus-original",
+      "sha256": "38e12b9e9ec27e0113a57e58c0df9f8e4f079392cf61de6ce21b802c4a59bc9e"
+    },
+    {
+      "label": "headroom-midi-reverb-original",
+      "sha256": "561faea1b4b225ec9d899189629f8489733b5d412eea487fec3afc5ae52f5727"
+    },
+    {
+      "label": "headroom-midi-chorus-original",
+      "sha256": "bf33c818f76bed302ba06971feccaa1031c200e573a6b90fb863028d3a42741d"
+    },
+    {
+      "label": "reverb-send-0",
+      "sha256": "f2cc13ce964cfb104d1957f2961c58d56da6c3149e69d5b9cd5340ace8397ee7"
+    },
+    {
+      "label": "chorus-send-0",
+      "sha256": "f2cc13ce964cfb104d1957f2961c58d56da6c3149e69d5b9cd5340ace8397ee7"
+    },
+    {
+      "label": "loop-0",
+      "sha256": "17cfb2909f7d6ff42222c996c5cbe39fbd601b5f749c9c8611280670f24a006d"
+    },
+    {
+      "label": "loop-1",
+      "sha256": "a28a33d28b45d1a70c343864821a371982a38684da3960fe70d2ab1e287dcb3e"
+    }
+  ],
+  "compared_bytes": 11782800
+}

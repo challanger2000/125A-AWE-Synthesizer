@@ -1,0 +1,42 @@
+{
+  "source_sha": "b02e02d472544eb2122533f9b8d7dc9d0b97f68a",
+  "baseline_sha": "99fb90fc855c4c7643e24816fa644fdc738c290f",
+  "sdk_sha": "3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96",
+  "platform": "Linux x64 GCC 14.2.0; synthetic media only",
+  "native_ctest": {
+    "passed": 53,
+    "failed": 0,
+    "seconds": 257.21
+  },
+  "awe_asan_ubsan_lsan_ctest": {
+    "passed": 39,
+    "failed": 0,
+    "seconds": 644.61,
+    "cxxflags": "-fsanitize=address,undefined -fno-omit-frame-pointer -O1 -g",
+    "environment": {
+      "ASAN_OPTIONS": "detect_leaks=1:halt_on_error=1",
+      "UBSAN_OPTIONS": "halt_on_error=1"
+    },
+    "exclusions": [
+      "OPL3 probes (legacy CQM UB separately disclosed)",
+      "test-only intentional mutants",
+      "external SDK validator registration selftest (leaks separately disclosed)",
+      "optional P169 baseline comparison (covered uninstrumented)"
+    ]
+  },
+  "audio_cases": 116,
+  "audio_checks": 40,
+  "all_audio_checks_passed": true,
+  "neutral_bitexact_cases": 21,
+  "neutral_bitexact_pcm_bytes": 11782800,
+  "negative_mutations_detected": 8,
+  "tsan": "NOT RUN",
+  "real_original_media": "NOT RUN",
+  "physical_asio": "NOT RUN",
+  "full_audit": "NOT COMPLETE",
+  "commercial_release": "NO-GO",
+  "supplementary_preliminary_traces": {
+    "legacy_cqm": "Historical vendor source unchanged by P170/P171; negative signed shift in cqm.c:277; separate FAIL",
+    "external_sdk": "Pinned SDK 3.8.1 sanitizer registration selftest: 6124 bytes in 95 allocations; separate FAIL"
+  }
+}

@@ -1,0 +1,40 @@
+PASS held pad becomes audible <=50ms click before NoteOff (44100 Hz), last=0.045079s
+PASS neutral pad remains sustained (44100 Hz)
+PASS held pad becomes audible <=50ms click before NoteOff (48000 Hz), last=0.045062s
+PASS neutral pad remains sustained (48000 Hz)
+PASS held pad becomes audible <=50ms click before NoteOff (96000 Hz), last=0.045073s
+PASS neutral pad remains sustained (96000 Hz)
+PASS AMP shortening monotone: [0.6506575963718821, 0.6419501133786848, 0.6071201814058957, 0.4909750566893424, 0.2994557823129252, 0.16006802721088437, 0.02471655328798186]
+PASS AMP 0->1% has no absolute-rate jump
+PASS AMP decay audio sweep [0.006989227313460857, 0.006614328750384191, 0.0056316739392874475, 0.0018842639519646763, 3.248234824354819e-05, 0.0, 0.0]
+PASS AMP sustain audio sweep [0.04340410885151102, 0.03980258219269901, 0.02580833947725227, 0.00497487631801088, 0.00018593349393592653, 2.208222022499348e-05, 0.0]
+PASS AMP release audio sweep [0.02167550299158963, 0.021160380498548022, 0.019302102048552955, 0.011582790949702706, 0.0021045307786660946, 6.0430109853678335e-05, 0.0]
+PASS AMP release zero-rate fallback remains monotone [0.004820567460234382, 0.004441707981294945, 0.00379020708698928, 0.0]
+PASS FILTER ADSR actually closes spectrum with absent SF2 route: early=0.201681 late=0.00408943
+PASS neutral filter route preserves bright original
+PASS existing signed filter route retained and envelope audible (-4800)
+PASS existing signed filter route retained and envelope audible (4800)
+PASS FILTER attack spectral sweep [0.027179495393856282, 0.03579464826431782, 0.10785538827030433, 0.2701289145380804, 0.4038213669920211, 0.4053288528464007, 0.4053264295318775]
+PASS FILTER decay spectral sweep [0.1713933364307685, 0.16174238975305952, 0.13676637096387192, 0.06425318585875125, 0.005208044503910081, 0.004195383998681944, 0.004195383998681944]
+PASS FILTER sustain spectral sweep [0.404997913213524, 0.40536264721883886, 0.40784533399747475, 0.41258883815508246, 0.1253677273295643, 0.022815537813070722, 0.004051582352331142]
+PASS FILTER release spectral sweep [0.08004838845965097, 0.07188181503947293, 0.05767268334105919, 0.01930754170540459, 0.0039718346826757315, 0.003972654977393496, 0.003972654977393496]
+PASS cutoff reduction spectral sweep [0.4104524427661551, 0.40325268757907345, 0.4063221422359797, 0.4009285092076257, 0.041584263934980714, 0.004400554498624546, 0.001101954870052765]
+PASS resonance boosts near-cutoff harmonic relative to fundamental [0.42976582046592204, 0.7093698396709243, 1.649285396369478, 2.701119408883207, 4.921617030281279]
+PASS cutoff retains audible headroom above 75% on a nonneutral patch
+PASS resonance retains audible headroom above 50% on a nonneutral patch
+FAIL reverb retains audible headroom above 50% on a nonneutral patch
+PASS chorus retains audible headroom above 50% on a nonneutral patch
+PASS reverb fixture confirms actual patch plus channel MIDI send before audio comparison
+FAIL reverb retains audible headroom with MIDI send already present
+PASS chorus fixture confirms actual patch plus channel MIDI send before audio comparison
+PASS chorus retains audible headroom with MIDI send already present
+PASS reverb send increases measured wet tail [0.0, 0.0011227976960627827, 0.00283158363434265, 0.00565021584286513]
+PASS reverb maximum send retains dry output
+PASS chorus send changes actual stereo PCM
+PASS chorus measured wet residual grows with send [0.0, 0.018097880136145945, 0.045421240210382706, 0.09048841671685658]
+PASS chorus maximum send retains dry output
+PASS one-shot finishes; continuous loop holds before NoteOff
+PASS mode3 exits short-tail loop at NoteOff; mode1 retains loop during release
+PASS mode3 exits only after sustain-pedal release, not at held NoteOff
+PASS SF2 endAddrsOffset truncates actual one-shot PCM
+PASS SF2 endAddrsCoarseOffset truncates actual one-shot PCM

@@ -1,7 +1,10 @@
 # 125A AWE Synthesizer — development guidance
 Status: pre-release engineering baseline v0.1.0, NO approved Windows FULL release, NO Gumroad ZIP.
 Repository: challanger2000/125A-AWE-Synthesizer
-Current development branch: fix/p170-p171-audio-corrections (P169 baseline; P170/P171 validation).
+Current development branch: fix/p170-p171-audio-corrections (P169 baseline; P170/P171 Windows functional checks passed).
+Validated product/test source: b02e02d472544eb2122533f9b8d7dc9d0b97f68a.
+RT callback matrix FAIL: 1/28800, trace-proven ready preemption in that miss;
+physical ASIO/DAW NOT RUN, FULL AUDIT NOT COMPLETE, RELEASE NO-GO.
 Read the first P170/P171 section of START-HERE.md and docs/P170-P171-AUDIO-CORRECTIONS.md
 for current exact evidence and open gates. Milestones below are historical.
 Upstream baseline: turican0/AWE32Emu commit 17b0578fe59909dfaa784b5531d6d1a3a80729ce.

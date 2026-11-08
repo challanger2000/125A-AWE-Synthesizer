@@ -2,8 +2,10 @@
 
 Stand 2026-11-08. Branch `fix/p170-p171-audio-corrections`.
 **Entwicklungsprüfung; kein FULL AUDIT, kein Release, kein Merge.**
-Windows-Nachweise des neuen Stands werden nach Abschluss der beiden vollständigen
-Windows-Jobs unten ergänzt. Vorher gelten sie als **NOT RUN**.
+Endgültiger Produkt-/Teststand `b02e02d472544eb2122533f9b8d7dc9d0b97f68a`:
+Windows A/B funktional bestanden. **RT-Matrix: FAIL (1/28.800 Deadlines)**;
+der einzelne Ausreißer ist per verlustfreiem ETW durch Ready-Preemption
+hinreichend erklärt. Physische Echtzeit-Zielrechnerabnahme: **NOT RUN**.
 
 ## Übernommene Basis und Prüfvertrag
 
@@ -122,6 +124,15 @@ reproduzierten dies; sie bestätigen vor dem Audiovergleich ausdrücklich die
 tatsächlich geschriebenen kombinierten Original-Sendwerte 242/241.
 Keine Änderung der Filter-/Reverb-/Chorus-DSP-Rechenregeln.
 
+Beispielwerte der endgültigen nativen PCM-Probe: Die neue Filterroute senkt
+das obere/untere Harmonischenverhältnis von 0,201681 auf 0,00408943; P169
+blieb bei 0,405943 → 0,411266. Der Resonanz-Sweep erhöht das Verhältnis
+der fünften Harmonischen zur Grundschwingung von 0,429766 auf 4,92162.
+Die Reverb-Tail-RMS bei 0/20/50/100% beträgt 0 / 0,001123 / 0,002832 /
+0,005650; der vom trockenen Signal abgezogene Chorus-Rest 0 / 0,018098 /
+0,045421 / 0,090488. Das sind synthetische spektrale Stichproben und
+Zeitfenster, kein lückenloser Hardware-Frequenzgangvergleich.
+
 ## Keine unbelegten Produktänderungen
 
 - Cutoff bleibt **Cutoff Reduction**: 0% Original, 100% tiefster Hardware-Cutoff.
@@ -184,6 +195,9 @@ Messabschnitt in Bewegung. Die ursprüngliche neutrale Fixture bleibt bytegleich
 der Zeitmessung. Windows zusätzlich rohe Threadzyklen, Kernnummern, QPC-Beginn/
 -Ende/Frequenz und PID/TID. Zyklen werden nicht in angebliche CPU-ms umgerechnet.
 Median/p99/Maximum/Misses und Held-Min/Max werden pro Zelle ausgewiesen.
+Das verwendete obere p99 ist der sortierte Wert am nullbasierten Index
+`floor(0,99 * N)` (bei N=200: Index198); alle 200 Werte bleiben erhalten.
+Solche kurzen Zellen begründen keine statistische Langzeit-Tailgarantie.
 Diese Zeitmessung verwendet den quellidentisch extrahierten Processor mit
 leeren Test-Hooks im Testprogramm, **nicht die exportierte Shipping-DLL**.
 Die zusätzliche DLL-Probe prüft deren Funktion, nicht deren Callbackzeiten.
@@ -198,7 +212,8 @@ unverändert 1/16/30 zugeordnete Identitäten; sie benutzt keine Retrigger, die
 andere gehaltene Stimmen stehlen könnten. Für die Recall-/Retrigger-Zellen gilt: diese Fälle dürfen nicht als
 Beschleunigung gegenüber voll klingenden 30-Stimmen-Zellen interpretiert werden.
 Dies sind Offline-Laborzeiten ohne ASIO/MMCSS. Optional aufgezeichnetes WPR-
-GeneralProfile wird archiviert, ohne unanalysierte Schedulerursachen zu behaupten.
+GeneralProfile wurde anschließend im separaten Auditbranch kausal ausgewertet;
+Einzelheiten und vollständige Grenzen stehen im Nachweis unten.
 C++-`new`-Audit P130 bleibt aktiv; er deckt **nicht** malloc/realloc/HeapAlloc ab.
 
 ## Abnahme- und Vollständigkeitsmatrix
@@ -246,13 +261,154 @@ Selbsttest des instrumentierten Linux-SDK meldete zusätzlich 6.124 Leak-Bytes
 in 95 Registrierungs-/Testobjekten; auch dieser externe Tool-Lauf ist kein
 Sanitizer-PASS. Die 37 tatsächlichen AWE-Projektziele wurden separat erfolgreich
 instrumentiert gebaut. AWE-spezifische
-ASan/UBSan/Leakprüfungen werden getrennt ausgewiesen.
+ASan/UBSan/Leakprüfungen am endgültigen Quellstand
+`b02e02d472544eb2122533f9b8d7dc9d0b97f68a`: **39/39 PASS**, 644,61 s,
+Leak-Erkennung aktiv, UBSan/ASan jeweils mit sofortigem Fehlerabbruch.
+Keine ThreadSanitizer-Abnahme. Der uninstrumentierte vollständige lokale Lauf
+bestand **53/53 in 257,21 s**. Ausgaben, 116 synthetische PCM-Messfälle mit
+40 Signalentscheidungen, acht Negativkontrollen und Vorherdaten liegen dauerhaft
+unter [docs/evidence/P170-P171](evidence/P170-P171/README.md).
 
 **Kommerzielle Freigabe: NO-GO. FULL AUDIT: NOT COMPLETE.
-Echtzeit-Zielrechnerabnahme: NOT RUN.** Ein grüner Windows-Lauf ändert diese
+Echtzeit-Callbackmatrix: FAIL (1/28.800); Zielrechnerabnahme: NOT RUN.** Ein grüner Windows-Lauf ändert diese
 Beweisgrenzen nicht. Keine eigenmächtige Promotion nach main oder Releasepaket.
 
 ## Exakte neue Ausführungsnachweise
 
-Wird nach Abschluss der Windows-Matrix mit Quell-SHA, beiden Run-/Jobnachweisen,
-VST3-PE-Hashes, CTest-/Validator-/GUI-/Test-Lab-Zahlen und Callbackstatistik ergänzt.
+Die Korrekturen sind ausschließlich auf `fix/p170-p171-audio-corrections`:
+
+- `6eeee366dd23f82106a29772e4297395997be8b3`: F01–F05, echte PCM-Orakel,
+  Testmutanten und eigene Windows-Matrix.
+- `568da06bd47838740818c2ab9f2dfaa11f599426`: tatsächliche Release-Rate0-
+  Ersatzrate als Ausgangspunkt, mit reproduzierter Vorherregression.
+- `330eaa28c9bc29d93ebe34e76c2521905a0f7038`: bewegte Filter-Haltelast
+  bei allen drei Stimmenzahlen, zusätzliche Retrigger-/Recall-Last.
+- **Endgültiger geprüfter Produkt-/Teststand
+  `b02e02d472544eb2122533f9b8d7dc9d0b97f68a`**: F06 einschließlich
+  MIDI-Send-Anteil, Pedal-/Coarse-End-/Held-Automation-Gegenproben,
+  acht Mutanten, dauerhafte öffentliche Roh-CSV-Zusammenfassung.
+
+Die früheren Windows-Matrizen
+[42440416814](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42440416814),
+[42440868070](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42440868070)
+und [42441854447](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42441854447)
+waren erfolgreich, sind aber **kein Endnachweis des danach geänderten Stands**.
+Die endgültige Windows-Matrix
+[42479356487 SUCCESS](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42479356487)
+prüfte genau diesen Stand. Alle unten ausgewiesenen Produktprüfungen sind in
+beiden Jobs erfolgreich; Deadline-Misses sind eine separate Messentscheidung
+und werden nicht durch den grünen Workflow überschrieben.
+
+| Nachweis | Windows A | Windows B |
+|---|---:|---:|
+| Job | [128727698242](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42479356487/job/128727698242) | [128727698005](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42479356487/job/128727698005) |
+| vollständige CTests | 62/62 | 62/62 |
+| tatsächlicher VST3-Modulvalidator | 537/537 | 537/537 |
+| EditorHost-Smokes | 3/3 | 3/3 |
+| reale Win32-GUI-/Pixelentscheidungen | 99/99 | 99/99 |
+| unverändertes Test Lab | TECHNICAL_PASS | TECHNICAL_PASS |
+| Callback-Messwerte | 14.400 | 14.400 |
+| Deadlineüberschreitungen | 0 | **1** |
+
+Beide Läufe: acht erkannte Negativmutanten, 40 positive Audioentscheidungen,
+21 bitgleiche Neutralfälle/11.782.800 Bytes gegenüber P169, echte exportierte
+VST3-DLL mit Controller für neun First-Note-Fälle. Test Lab exakt
+`4267c86065bc8665b7af056f08af0a08760256d4`, ohne Repositoryänderung;
+sechs generische Host-/State-/GUI-/Instanzbereiche PASS, `preset_semantics`
+bleibt dort ausdrücklich NOT COVERED. Produktspezifische Klangentscheidungen
+liegen in den gesonderten P170/P171-Orakeln.
+
+Tatsächlich vom Test Lab geladene VST3-PE-SHA-256:
+
+- A: `eaef9ce93d40708b05836dcc2b879242ed698089452f37afcb80847c99bf8eeb`
+- B: `49039da8c39da09b92fd909a258711817477facd7be61ff87500699f16a29f40`
+
+Testpakete, **keine Releases**:
+[P170-P171-Windows-x64-VST3-TEST-A](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42479356487/artifacts/13617630557) und
+[P170-P171-Windows-x64-VST3-TEST-B](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42479356487/artifacts/13616744624).
+Vollständige synthetische PCM-/GUI-/ETL-/Test-Lab-Rohbeweise:
+[Full-Regression-A](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42479356487/artifacts/13617056974) und
+[Full-Regression-B](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42479356487/artifacts/13616968364).
+Actions-Aufbewahrung: Testpaket sieben Tage, QA 14 Tage. Dauerhafte numerische
+Beweise und Artefaktdigests stehen unter `docs/evidence/P170-P171`.
+
+### 128 Frames / 30 gestartete Identitäten: alle sechs Lastarten
+
+Alle Zeiten in µs, jeweils 200 Callbacks. Das Budget beträgt 2.902,49 µs.
+Eine Reduktion der gehaltenen Last bei Recall/Retrigger ist kein Performancegewinn.
+
+| Lauf | Last | Median | oberes p99 | Maximum | Misses | Held min–max |
+|---|---|---:|---:|---:|---:|---:|
+| A | Render | 805.90 | 1138.80 | 1188.10 | 0 | 30–30 |
+| A | Save | 807.10 | 1306.80 | 1310.30 | 0 | 30–30 |
+| A | Save+Recall | 185.50 | 1146.90 | 1212.70 | 0 | 0–30 |
+| A | MIDI/Pitch+Recall | 191.95 | 1201.00 | 1239.40 | 0 | 0–30 |
+| A | bewegter Filter, gehalten | 1536.30 | 2004.30 | 2065.20 | 0 | 30–30 |
+| A | Filter/FX/Retrigger+Recall | 833.10 | 1577.90 | 1658.70 | 0 | 0–12 |
+| B | Render | 657.20 | 945.80 | 970.00 | 0 | 30–30 |
+| B | Save | 950.65 | 1901.30 | 3959.00 | 1 | 30–30 |
+| B | Save+Recall | 157.10 | 931.90 | 1241.20 | 0 | 0–30 |
+| B | MIDI/Pitch+Recall | 161.40 | 927.30 | 965.70 | 0 | 0–30 |
+| B | bewegter Filter, gehalten | 1275.95 | 1751.30 | 1924.10 | 0 | 30–30 |
+| B | Filter/FX/Retrigger+Recall | 906.20 | 1326.30 | 1878.90 | 0 | 0–12 |
+
+Alle 72 Zellen pro Lauf einschließlich 256/512/1024 Frames und 1/16 Stimmen
+stehen mit Median/p99/Max/Misses/Held-Min/Max in `windows-*-summary.json`.
+Die bewegte Filter-Haltelast behielt in beiden Läufen in **allen zwölf Zellen**
+exakt die geforderten 1/16/30 Identitäten. Recall-Zellen fielen bis auf null,
+128/30 mit dichtem Retrigger sogar auf 0–12: diese Zeilen sind kein fairer
+CPU-Vergleich mit durchgehend klingenden 30 Stimmen.
+
+### Kausaler ETW-Nachaudit des einzelnen Deadline-Ausreißers
+
+Audit-only Branch `audit/p171-etw-b02e02d`, Decoder-/Analysestand
+`dce06d3d3de3517082588800f4706e96cd619a5d`;
+[Windows-Audit 42480859178 SUCCESS](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42480859178).
+Er lädt exakt die ursprünglichen A/B-QA-Artefakte und verifiziert deren zuvor
+veröffentlichte Summary- und Roh-CSV-Hashes. Keine ersetzte Stressmessung.
+TDH decodiert rohe QPC-CSwitch-Ereignisse. Zwei Schlaf- und zwei Busy-Kontrollen
+je Decoderlauf bestanden, ebenso analytische Gegenproben für falsche Uhr,
+Eventverlust, fehlende Intervallgrenzen, Waiting und Ready-Preemption.
+Die Kalibrierung liegt auf dem Auswertungsrunner, nicht rückwirkend im Originaltrace.
+
+Originaltrace A: 2.383.622 Ereignisse, 2.124 relevante CSwitch;
+B: 3.386.847 Ereignisse, 8.130 relevante CSwitch.
+Beide: **0 verlorene Events/Buffers**, QPC 10 MHz und lückenlose
+On-/Off-Intervallabdeckung für sämtliche **14.400/14.400** Callbackfenster.
+
+Der einzige Miss ist in B, 128/30/Save, Block173, PID724/TID1088:
+
+| Messgröße | µs |
+|---|---:|
+| ursprüngliche Callback-Wandzeit | 3.959,0 |
+| äußeres QPC-Fenster | 3.959,1 |
+| Audiobudget | 2.902,49 |
+| eingeplante Threadlaufzeit | 1.494,2 |
+| Off-CPU, Zustand Ready | **2.464,9** |
+| Waiting | 0,0 |
+
+Der Thread wechselt von Kern3 auf Kern0. Ready-Off-CPU ist größer als der
+Budgetüberschuss; die eingeplante Laufzeit bleibt unter Budget. Damit ist
+**READY_PREEMPTION_SUFFICIENT** für diesen konkreten Ausreißer nachgewiesen.
+Es ist kein Beleg eines Plugin-Lock-Wartens; die eingeplante Zeit enthält
+Interrupts und sonstige Ausführung und ist **keine reine DSP-Zeit**.
+Kein spekulativer DSP-Eingriff und keine veränderte Messpriorität zur kosmetischen
+Entfernung des Ausreißers. Unbeobachtete Zielrechner-/ASIO-/Langzeitbedingungen
+bleiben offen. GeneralProfile begründet weiterhin **keinen vollständigen
+malloc/realloc/HeapAlloc-Nachweis**.
+
+**Entscheidung:** Funktionale Windows-Abnahme PASS im beschriebenen Umfang.
+Deadlinefreie Callbackmatrix **FAIL (1/28.800)** trotz erklärtem Scheduleranteil.
+Echte Zielrechner-Echtzeitabnahme **NOT RUN**, FULL AUDIT NOT COMPLETE,
+RELEASE NO-GO. Die separate Auditdiagnostik wird nicht in den Produktbranch gemergt.
+
+Die vollständigen ursprünglichen Callback-CSVs sind dauerhaft als
+`docs/evidence/P170-P171/windows-A-callbacks.csv.gz` und `windows-B-callbacks.csv.gz`
+abgelegt: je 14.400 ungefilterte Zeilen, Original-QPC/PID/TID/Kerne/Zyklen/Last und
+Wandzeit. Ihre bereits im ursprünglichen Lauf veröffentlichten SHA-256 wurden
+nach Rekonstruktion geprüft und **sämtliche 72 Zellstatistiken je Lauf** lokal
+aus diesen Rohzeilen exakt nachgerechnet. Publikationsstand des separaten Audits:
+`93441628edc0c5d9bb341c9f5f423dab2914ea8c`,
+[Sicherungslauf 42481489720](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42481489720).
+Die ETL-/CSwitch-/Kontroll-Rohdateien liegen zusätzlich in den 30-Tage-Artefakten
+`P171-ETW-Original-b02e02d-A/B` des kausalen Audits 42480859178.

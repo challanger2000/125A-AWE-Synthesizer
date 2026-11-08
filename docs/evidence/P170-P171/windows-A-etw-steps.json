@@ -1,0 +1,72 @@
+[
+  {
+    "name": "Set up job",
+    "number": "1",
+    "conclusion": "success",
+    "started-at": "2026-11-08T12:34:04Z",
+    "completed-at": "2026-11-08T12:34:05Z"
+  },
+  {
+    "name": "Run actions/checkout@v4",
+    "number": "2",
+    "conclusion": "success",
+    "started-at": "2026-11-08T12:34:05Z",
+    "completed-at": "2026-11-08T12:34:10Z"
+  },
+  {
+    "name": "Download the original final-source QA trace, not a replacement run",
+    "number": "3",
+    "conclusion": "success",
+    "started-at": "2026-11-08T12:34:10Z",
+    "completed-at": "2026-11-08T12:34:20Z"
+  },
+  {
+    "name": "Verify exact original source, summary and callback population",
+    "number": "4",
+    "conclusion": "success",
+    "started-at": "2026-11-08T12:34:20Z",
+    "completed-at": "2026-11-08T12:34:22Z"
+  },
+  {
+    "name": "Build audit-only native TDH ETW decoder and challenge analysis",
+    "number": "5",
+    "conclusion": "success",
+    "started-at": "2026-11-08T12:34:22Z",
+    "completed-at": "2026-11-08T12:34:39Z"
+  },
+  {
+    "name": "Independently calibrate decoder with actual Windows sleep and busy intervals",
+    "number": "6",
+    "conclusion": "success",
+    "started-at": "2026-11-08T12:34:39Z",
+    "completed-at": "2026-11-08T12:34:59Z"
+  },
+  {
+    "name": "Decode original ETL and attribute every measured original deadline miss",
+    "number": "7",
+    "conclusion": "success",
+    "started-at": "2026-11-08T12:34:59Z",
+    "completed-at": "2026-11-08T12:35:06Z"
+  },
+  {
+    "name": "Preserve raw switches, calibrated result and original CSV",
+    "number": "8",
+    "conclusion": "success",
+    "started-at": "2026-11-08T12:35:06Z",
+    "completed-at": "2026-11-08T12:35:10Z"
+  },
+  {
+    "name": "Post Run actions/checkout@v4",
+    "number": "16",
+    "conclusion": "success",
+    "started-at": "2026-11-08T12:35:10Z",
+    "completed-at": "2026-11-08T12:35:12Z"
+  },
+  {
+    "name": "Complete job",
+    "number": "17",
+    "conclusion": "success",
+    "started-at": "2026-11-08T12:35:12Z",
+    "completed-at": "2026-11-08T12:35:12Z"
+  }
+]

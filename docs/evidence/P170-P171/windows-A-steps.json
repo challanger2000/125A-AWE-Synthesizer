@@ -1,0 +1,121 @@
+[
+  {
+    "name": "Set up job",
+    "number": "1",
+    "conclusion": "success",
+    "started-at": "2026-11-08T12:15:19Z",
+    "completed-at": "2026-11-08T12:15:20Z"
+  },
+  {
+    "name": "Run actions/checkout@v4",
+    "number": "2",
+    "conclusion": "success",
+    "started-at": "2026-11-08T12:15:20Z",
+    "completed-at": "2026-11-08T12:15:25Z"
+  },
+  {
+    "name": "Fetch pinned Steinberg SDK",
+    "number": "3",
+    "conclusion": "success",
+    "started-at": "2026-11-08T12:15:25Z",
+    "completed-at": "2026-11-08T12:15:52Z"
+  },
+  {
+    "name": "Verify original faceplate, undistorted geometry and aligned controls",
+    "number": "4",
+    "conclusion": "success",
+    "started-at": "2026-11-08T12:15:52Z",
+    "completed-at": "2026-11-08T12:15:58Z"
+  },
+  {
+    "name": "Pin the P169 pre-fix source for identical-stimulus PCM comparison",
+    "number": "5",
+    "conclusion": "success",
+    "started-at": "2026-11-08T12:15:58Z",
+    "completed-at": "2026-11-08T12:15:59Z"
+  },
+  {
+    "name": "Configure full production VST3 and engine tests",
+    "number": "6",
+    "conclusion": "success",
+    "started-at": "2026-11-08T12:15:59Z",
+    "completed-at": "2026-11-08T12:16:20Z"
+  },
+  {
+    "name": "Build all tests and production VST3",
+    "number": "7",
+    "conclusion": "success",
+    "started-at": "2026-11-08T12:16:20Z",
+    "completed-at": "2026-11-08T12:20:19Z"
+  },
+  {
+    "name": "Run full CTests plus 77-preset sparse/ROM exact-PCM regression",
+    "number": "8",
+    "conclusion": "success",
+    "started-at": "2026-11-08T12:20:19Z",
+    "completed-at": "2026-11-08T12:26:08Z"
+  },
+  {
+    "name": "Validate actual AWE VST3 module with Steinberg validator",
+    "number": "9",
+    "conclusion": "success",
+    "started-at": "2026-11-08T12:26:08Z",
+    "completed-at": "2026-11-08T12:26:10Z"
+  },
+  {
+    "name": "Exercise compact SYNTH/BROWSER real VST3 GUI in EditorHost three times",
+    "number": "10",
+    "conclusion": "success",
+    "started-at": "2026-11-08T12:26:10Z",
+    "completed-at": "2026-11-08T12:26:47Z"
+  },
+  {
+    "name": "P165 original-faceplate pixel fidelity plus SYNTH BROWSER and 12 knobs",
+    "number": "11",
+    "conclusion": "success",
+    "started-at": "2026-11-08T12:26:47Z",
+    "completed-at": "2026-11-08T12:27:38Z"
+  },
+  {
+    "name": "Independent current P170-P171 VST3 in 125A Plugin Test Lab (native host + state + GUI + isolation)",
+    "number": "12",
+    "conclusion": "success",
+    "started-at": "2026-11-08T12:27:38Z",
+    "completed-at": "2026-11-08T12:28:45Z"
+  },
+  {
+    "name": "Summarize actual PCM, negative controls, state and callback evidence",
+    "number": "13",
+    "conclusion": "success",
+    "started-at": "2026-11-08T12:28:45Z",
+    "completed-at": "2026-11-08T12:28:47Z"
+  },
+  {
+    "name": "Package validated Windows x64 VST3 preview (NOT a release)",
+    "number": "14",
+    "conclusion": "success",
+    "started-at": "2026-11-08T12:28:47Z",
+    "completed-at": "2026-11-08T12:28:49Z"
+  },
+  {
+    "name": "Preserve independent numerical evidence",
+    "number": "15",
+    "conclusion": "success",
+    "started-at": "2026-11-08T12:28:49Z",
+    "completed-at": "2026-11-08T12:29:16Z"
+  },
+  {
+    "name": "Post Run actions/checkout@v4",
+    "number": "30",
+    "conclusion": "success",
+    "started-at": "2026-11-08T12:29:16Z",
+    "completed-at": "2026-11-08T12:29:18Z"
+  },
+  {
+    "name": "Complete job",
+    "number": "31",
+    "conclusion": "success",
+    "started-at": "2026-11-08T12:29:18Z",
+    "completed-at": "2026-11-08T12:29:18Z"
+  }
+]

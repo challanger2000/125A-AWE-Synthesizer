@@ -1,0 +1,112 @@
+Internal ctest changing into directory: /tmp/p170-native
+Test project /tmp/p170-native
+      Start 43: 125A_p170_pcm_audio_oracles
+      Start 42: 125A_p166_exact_sf2_rom
+ 1/53 Test #42: 125A_p166_exact_sf2_rom .................   Passed    0.45 sec
+      Start 22: 125A_p171_state_rt_stress
+ 2/53 Test #22: 125A_p171_state_rt_stress ...............   Passed   19.99 sec
+      Start 25: 125A_p130_no_cpp_new_on_audio_thread
+ 3/53 Test #25: 125A_p130_no_cpp_new_on_audio_thread ....   Passed    5.09 sec
+      Start 26: 125A_p128_filter_cache_pcm
+ 4/53 Test #43: 125A_p170_pcm_audio_oracles .............   Passed   28.49 sec
+      Start 21: 125A_p171_first_note_bank_pcm
+ 5/53 Test #26: 125A_p128_filter_cache_pcm ..............   Passed    3.88 sec
+      Start 41: 125A_sf2_audio_integration
+ 6/53 Test #41: 125A_sf2_audio_integration ..............   Passed    0.98 sec
+      Start 15: 125A_p128_processor_order
+ 7/53 Test #21: 125A_p171_first_note_bank_pcm ...........   Passed    2.76 sec
+      Start 44: 125A_p171_synthetic_rom_level
+ 8/53 Test #44: 125A_p171_synthetic_rom_level ...........   Passed    0.14 sec
+      Start 19: 125A_p166_processor_missing_program
+ 9/53 Test #15: 125A_p128_processor_order ...............   Passed    1.14 sec
+      Start 18: 125A_p128_sample_accurate_program_pcm
+10/53 Test #19: 125A_p166_processor_missing_program .....   Passed    0.15 sec
+      Start 45: 125A_p121_pitchbend_audio
+11/53 Test #18: 125A_p128_sample_accurate_program_pcm ...   Passed    0.09 sec
+      Start 24: 125A_p134_cc120_physical_stop
+12/53 Test #45: 125A_p121_pitchbend_audio ...............   Passed    0.10 sec
+      Start 39: 125A_render_rates
+13/53 Test #39: 125A_render_rates .......................   Passed    0.07 sec
+      Start 20: 125A_p167_channel10_explicit_zero
+14/53 Test #24: 125A_p134_cc120_physical_stop ...........   Passed    0.13 sec
+      Start 23: 125A_p133_fx_processor_modes
+15/53 Test #20: 125A_p167_channel10_explicit_zero .......   Passed    0.06 sec
+      Start  2: 125A_p14_vstgui_contract
+16/53 Test #23: 125A_p133_fx_processor_modes ............   Passed    0.07 sec
+      Start  1: 125A_source_baseline_contract
+17/53 Test  #2: 125A_p14_vstgui_contract ................   Passed    0.04 sec
+      Start 40: 125A_box_rate_fifo
+18/53 Test  #1: 125A_source_baseline_contract ...........   Passed    0.03 sec
+      Start  9: 125A_p119_engine_exchange
+19/53 Test #40: 125A_box_rate_fifo ......................   Passed    0.04 sec
+      Start 47: 125A_p128_note_handoff
+20/53 Test  #9: 125A_p119_engine_exchange ...............   Passed    0.03 sec
+      Start 17: 125A_p128_persistent_controls
+21/53 Test #47: 125A_p128_note_handoff ..................   Passed    0.03 sec
+      Start 36: 125A_engine_safety
+22/53 Test #17: 125A_p128_persistent_controls ...........   Passed    0.01 sec
+      Start 53: 125A_cqm_backend_audio
+23/53 Test #53: 125A_cqm_backend_audio ..................   Passed    0.02 sec
+      Start 51: 125A_opl3_ibk_bank
+24/53 Test #36: 125A_engine_safety ......................   Passed    0.02 sec
+      Start 16: 125A_p128_processor_remove_engine
+25/53 Test #16: 125A_p128_processor_remove_engine .......   Passed    0.01 sec
+      Start 50: 125A_opl3_midi_audio
+26/53 Test #51: 125A_opl3_ibk_bank ......................   Passed    0.01 sec
+      Start 49: 125A_opl3_register_audio
+27/53 Test #50: 125A_opl3_midi_audio ....................   Passed    0.01 sec
+      Start 52: 125A_opl3_rhythm_audio
+28/53 Test #49: 125A_opl3_register_audio ................   Passed    0.01 sec
+      Start 10: 125A_p120_engine_retirement
+29/53 Test #10: 125A_p120_engine_retirement .............   Passed    0.00 sec
+      Start 14: 125A_p122_state_snapshot
+30/53 Test #52: 125A_opl3_rhythm_audio ..................   Passed    0.01 sec
+      Start 37: 125A_p118_parser_bounds
+31/53 Test #14: 125A_p122_state_snapshot ................   Passed    0.00 sec
+      Start 48: 125A_p133_fx_register_modes
+32/53 Test #37: 125A_p118_parser_bounds .................   Passed    0.00 sec
+      Start 12: 125A_p19_master_logo
+33/53 Test #48: 125A_p133_fx_register_modes .............   Passed    0.00 sec
+      Start  3: 125A_asset_state
+34/53 Test #12: 125A_p19_master_logo ....................   Passed    0.00 sec
+      Start 46: 125A_p90_sf2_driver_registers
+35/53 Test  #3: 125A_asset_state ........................   Passed    0.00 sec
+      Start  6: 125A_p117_synthgm_catalog
+36/53 Test #46: 125A_p90_sf2_driver_registers ...........   Passed    0.00 sec
+      Start 13: 125A_p122_browser_bank_command
+37/53 Test  #6: 125A_p117_synthgm_catalog ...............   Passed    0.00 sec
+      Start 38: 125A_sf2_selection
+38/53 Test #13: 125A_p122_browser_bank_command ..........   Passed    0.00 sec
+      Start 11: 125A_p120_midi_automation
+39/53 Test #38: 125A_sf2_selection ......................   Passed    0.00 sec
+      Start  4: 125A_p116_master_volume
+40/53 Test #11: 125A_p120_midi_automation ...............   Passed    0.00 sec
+      Start  5: 125A_p117_direct_presets
+41/53 Test  #4: 125A_p116_master_volume .................   Passed    0.00 sec
+      Start  8: 125A_p119_midi_live_state
+42/53 Test  #5: 125A_p117_direct_presets ................   Passed    0.00 sec
+      Start  7: 125A_p118_midi_mapping
+43/53 Test  #8: 125A_p119_midi_live_state ...............   Passed    0.00 sec
+44/53 Test  #7: 125A_p118_midi_mapping ..................   Passed    0.00 sec
+      Start 34: 125A_p170_detect_mutant_headroom
+45/53 Test #34: 125A_p170_detect_mutant_headroom ........   Passed   27.92 sec
+      Start 33: 125A_p170_detect_mutant_pedal
+46/53 Test #33: 125A_p170_detect_mutant_pedal ...........   Passed   28.04 sec
+      Start 35: 125A_p170_pinned_baseline_pcm
+47/53 Test #35: 125A_p170_pinned_baseline_pcm ...........   Passed   55.97 sec
+      Start 28: 125A_p170_detect_mutant_amp
+48/53 Test #28: 125A_p170_detect_mutant_amp .............   Passed   29.14 sec
+      Start 29: 125A_p170_detect_mutant_filter
+49/53 Test #29: 125A_p170_detect_mutant_filter ..........   Passed   27.45 sec
+      Start 30: 125A_p170_detect_mutant_loop
+50/53 Test #30: 125A_p170_detect_mutant_loop ............   Passed   28.25 sec
+      Start 31: 125A_p170_detect_mutant_end
+51/53 Test #31: 125A_p170_detect_mutant_end .............   Passed   27.76 sec
+      Start 27: 125A_p170_detect_mutant_bank
+52/53 Test #27: 125A_p170_detect_mutant_bank ............   Passed    0.50 sec
+      Start 32: 125A_p170_detect_mutant_rom
+53/53 Test #32: 125A_p170_detect_mutant_rom .............   Passed    0.19 sec
+
+100% tests passed, 0 tests failed out of 53
+
+Total Test time (real) = 257.21 sec

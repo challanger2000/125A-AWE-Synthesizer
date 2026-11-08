@@ -1,0 +1,2 @@
+FAIL ROM attenuation PCM follows source amplitude and Win95 16-unit compensation
+{"synthetic_only":true,"sf2_rms":0.08285,"rom_rms":0.0927901,"sf2_peak":0.356171,"rom_peak":0.398956,"delta_db":0.984177,"expected_db":-5.01564}

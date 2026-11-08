@@ -1,0 +1,3 @@
+PASS P167 independent control: channel10 distinct SF2 bank0 versus bank128 PCM
+FAIL P167 actual VST3 Processor channel10 explicit CC0=0 selects bank0 PCM
+RESULT checks=2 failed=1
