@@ -221,6 +221,21 @@ class GoldHardwareMenu final : public COptionMenu {
 public:
     GoldHardwareMenu(const CRect& rect, IControlListener* listener, int32_t tag)
         : COptionMenu(rect,listener,tag) {}
+    // Externally selected MIDI programs can be absent from this SoundFont.
+    // Preserve the real phdr list and show the absent ID on the closed
+    // hardware display; never pretend the first existing patch was chosen.
+    void SetUnavailableProgram(int program) {
+        std::string next;
+        if(program >= 0) {
+            char label[48]{};
+            std::snprintf(label,sizeof(label),"%03d  NICHT VORHANDEN",program);
+            next=label;
+        }
+        if(next!=unavailableProgram_) {
+            unavailableProgram_=std::move(next);
+            invalid();
+        }
+    }
     void draw(CDrawContext* ctx) override {
         ctx->saveGlobalState();
         const auto fillRounded=[&](const CRect& r,CCoord radius,
@@ -275,18 +290,22 @@ public:
         // The currently selected item is always native data, never drawn
         // into a bitmap. Explicit clip keeps long SF2 names out of the arrow.
         const CMenuItem* item=getCurrent();
-        if(item) {
+        if(item || !unavailableProgram_.empty()) {
             CRect textRect=well;
             textRect.left+=thin?8.:11.;
             textRect.right=edge-5.;
             ctx->setFont(getFont());
             ctx->setFontColor(CColor(244,200,118));
             ctx->setClipRect(textRect);
-            ctx->drawString(item->getTitle().data(),textRect,kLeftText);
+            const auto title=unavailableProgram_.empty()
+                ? std::string(item->getTitle().data()) : unavailableProgram_;
+            ctx->drawString(title.c_str(),textRect,kLeftText);
         }
         ctx->restoreGlobalState();
         setDirty(false);
     }
+private:
+    std::string unavailableProgram_;
 };
 
 static void StyleGoldMenu(COptionMenu* menu) {
@@ -783,7 +802,11 @@ void PresetBrowserView::SyncActiveMenuSelection() {
     }
     if(programMenu_) {
         const auto current=std::find(activePrograms_.begin(),activePrograms_.end(),program_);
-        programMenu_->setValue(current==activePrograms_.end()?0.f:
+        const bool missing=current==activePrograms_.end();
+        programMenu_->SetUnavailableProgram(missing?int(program_):-1);
+        // Do not invent a selectable SF2 preset. The native popup still
+        // offers only the soundfont's real phdr entries.
+        if(!missing)programMenu_->setValue(
             static_cast<float>(current-activePrograms_.begin()));
     }
 }
