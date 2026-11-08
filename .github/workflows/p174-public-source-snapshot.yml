@@ -1,0 +1,34 @@
+name: P174 public source snapshot for offline private-media audit
+on:
+  push:
+    branches: [audit/p174-private-media-local-independent]
+    paths:
+      - .github/workflows/p174-public-source-snapshot.yml
+permissions:
+  contents: read
+jobs:
+  public-source-only:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify source pin and export public tracked source only
+        shell: bash
+        run: |
+          set -euo pipefail
+          pin=b02e02d472544eb2122533f9b8d7dc9d0b97f68a
+          test "$(git rev-parse HEAD^)" = "$pin"
+          git archive --format=tar "$pin" | gzip -9 > P174-public-source-b02e02d.tar.gz
+          sha256sum P174-public-source-b02e02d.tar.gz > P174-sha256.txt
+          echo "Pinned committed public sources only; NO ROM/SBK/SF2, NO user media" 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: P174-Public-Pinned-Source-Offline-Audit
+          path: |
+            P174-public-source-b02e02d.tar.gz
+            P174-sha256.txt
+          if-no-files-found: error
+          retention-days: 3
