@@ -103,6 +103,7 @@ assert 'SetUnavailableProgram(int program)' in b
 assert 'const bool missing=current==activePrograms_.end();' in b
 assert 'missing?int(program_):-1' in b
 assert 'if(!missing)programMenu_->setValue(' in b
+assert 'currentIndex=-1;' in b  # no unrelated native preset highlighted
 assert 'if(item || !unavailableProgram_.empty())' in b
 assert '"%03d  NICHT VORHANDEN"' in b
 
