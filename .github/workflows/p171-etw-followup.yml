@@ -1,0 +1,82 @@
+name: P171 causal ETW follow-up of frozen b02e02d callbacks
+on:
+  push:
+    branches: [audit/p171-etw-b02e02d]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  decode-original-trace:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        repetition: [A, B]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download the original final-source QA trace, not a replacement run
+        uses: actions/download-artifact@v4
+        with:
+          name: P170-P171-Full-Regression-${{ matrix.repetition }}
+          run-id: 42479356487
+          github-token: ${{ github.token }}
+          path: original
+      - name: Verify exact original source, summary and callback population
+        shell: pwsh
+        env:
+          P171_REPETITION: ${{ matrix.repetition }}
+        run: |
+          python -c "import os,pathlib,json,hashlib; p=pathlib.Path('original'); s=(p/'P170-P171-SUMMARY.json').read_bytes(); expected={'A':'dc20c5830f6550cd97180f6e03276a876f36c563f3f051c9a77a738028b469b6','B':'b22ce81ac161013b2134f90646cb394c984c577ae725cfc4ddeef4b554002650'}; j=json.loads(s); assert hashlib.sha256(s).hexdigest()==expected[os.environ['P171_REPETITION']]; assert j['source_sha']=='b02e02d472544eb2122533f9b8d7dc9d0b97f68a'; assert j['measured_callbacks']==14400; assert hashlib.sha256((p/'p171-rt.csv').read_bytes()).hexdigest()==j['raw_csv_sha256']; assert (p/'p170-cpu-scheduler.etl').stat().st_size>0; print('Original source, raw CSV and published summary verified')"
+          if ($LASTEXITCODE -ne 0) { throw 'Original evidence mismatch' }
+      - name: Build audit-only native TDH ETW decoder and challenge analysis
+        shell: pwsh
+        run: |
+          cmake -S tools/p171_etw -B build-etw -G 'Visual Studio 17 2022' -A x64
+          if ($LASTEXITCODE -ne 0) { throw 'Decoder configure failed' }
+          cmake --build build-etw --config Release --parallel 2
+          if ($LASTEXITCODE -ne 0) { throw 'Decoder build failed' }
+          python tools/p171_etw/test_analysis.py
+          if ($LASTEXITCODE -ne 0) { throw 'Causal analysis negative controls failed' }
+      - name: Independently calibrate decoder with actual Windows sleep and busy intervals
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force qa/control | Out-Null
+          'base,size,path' | Set-Content qa/modules.csv
+          $started=$false
+          try {
+            wpr.exe -start GeneralProfile -filemode 2>&1 | Out-File qa/control/wpr-start.txt
+            if ($LASTEXITCODE -ne 0) { throw 'No GeneralProfile positive control available' }
+            $started=$true
+            & build-etw/Release/p171_etw_control.exe qa/control/callbacks.csv
+            if ($LASTEXITCODE -ne 0) { throw 'Control process failed' }
+          } finally {
+            if ($started) {
+              wpr.exe -stop qa/control/cpu.etl 2>&1 | Out-File qa/control/wpr-stop.txt
+              if ($LASTEXITCODE -ne 0) { throw 'Positive-control trace stop failed' }
+            }
+          }
+          & build-etw/Release/p171_etw_reader.exe qa/control/cpu.etl qa/control/callbacks.csv qa/modules.csv qa/control/decoded
+          if ($LASTEXITCODE -ne 0) { throw 'Control trace decode failed' }
+          python tools/p171_etw/analyze.py control qa/control/callbacks.csv qa/control/decoded qa/control
+          if ($LASTEXITCODE -ne 0) { throw 'Sleep/busy trace controls failed' }
+      - name: Decode original ETL and attribute every measured original deadline miss
+        shell: pwsh
+        run: |
+          & build-etw/Release/p171_etw_reader.exe original/p170-cpu-scheduler.etl original/p171-rt.csv qa/modules.csv qa/original-decoded
+          if ($LASTEXITCODE -ne 0) { throw 'Original trace decode failed' }
+          $summary=Get-Content original/P170-P171-SUMMARY.json -Raw | ConvertFrom-Json
+          python tools/p171_etw/analyze.py audit original/p171-rt.csv qa/original-decoded qa/analysis --control qa/control/result.json --expected-csv-sha $summary.raw_csv_sha256
+          if ($LASTEXITCODE -ne 0) { throw 'Original trace analysis incomplete' }
+          Copy-Item original/P170-P171-SUMMARY.json qa/original-summary.json
+          Copy-Item original/p171-rt.csv qa/original-callbacks.csv
+          @("AUDIT_SOURCE_SHA=$env:GITHUB_SHA",'ORIGINAL_PRODUCT_SOURCE_SHA=b02e02d472544eb2122533f9b8d7dc9d0b97f68a','ORIGINAL_RUN=42479356487','NO_NEW_PRODUCT_BINARY=TRUE','HEAP_ATTRIBUTION=NOT_RUN','SCHEDULED_RUNTIME_IS_NOT_PURE_DSP=TRUE') | Set-Content qa/provenance.txt
+      - name: Preserve raw switches, calibrated result and original CSV
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: P171-ETW-Original-b02e02d-${{ matrix.repetition }}
+          path: qa/
+          if-no-files-found: error
+          retention-days: 30

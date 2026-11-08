@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.20)
+project(P171_EtwEvidence LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
+add_executable(p171_etw_reader etw_reader.cpp)
+target_link_libraries(p171_etw_reader PRIVATE tdh dbghelp advapi32)
+add_executable(p171_etw_control control.cpp)
