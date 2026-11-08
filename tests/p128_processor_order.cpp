@@ -440,12 +440,73 @@ void cc120PhysicalStopRegression() {
     }
     check(otherChannelSounds,"P134: channel 1 CC120 does not silence channel 2");
 }
+
+void exactMissingPresetProcessorRegression() {
+    // This is the exact extracted shipping VST3 Processor, with actual
+    // synthetic 86Box ROM and independently generated noncontiguous SF2.
+    // No UI/candidate catalog mocks: process(), host parameters, event
+    // ordering, V11 getState and setState are all exercised.
+    for(unsigned bank:{0u,5u,128u}) {
+        for(unsigned missing:{63u,100u}) {
+            const State wanted=state(bank,missing);
+            Rig rig(wanted);
+            const auto actual=sound(*rig.p);
+            check(!audible(actual),
+                "P166 actual Processor missing SF2 program: no PCM bank "+
+                std::to_string(bank)+" program "+std::to_string(missing));
+            const State persisted=save(*rig.p);
+            check(persisted.bank==bank&&persisted.program==missing,
+                "P166 invalid program retains its exact host/V11 number");
+            const auto engine=rig.p->engines_.Read();
+            check(engine.get()&&engine.get()->synth &&
+                  std::none_of(engine.get()->synth->CaptureHeldNotes().begin(),
+                               engine.get()->synth->CaptureHeldNotes().end(),
+                               [](const Synth::HeldNote& n){return n.sequence!=0;}),
+                "P166 missing program allocates no actual chip voice");
+        }
+    }
+    // Explicitly listed SF2 bank 5, program 9 is still musical.
+    Rig valid(state(5,9));
+    check(audible(sound(*valid.p)),"P166 real VST3 Processor bank5 program9 audible");
+    // Accepted channel-specific Program Change is NOT allowed to inherit
+    // the global program or an unrelated ROM instrument for a missing slot.
+    {
+        Rig missing(state(0,7));
+        Block editOnly(0);
+        editOnly.param(MidiProgramRouting::ParamID(3),63./127.);
+        editOnly.run(*missing.p);
+        const auto st=save(*missing.p);
+        check((st.channelProgramMask&(1u<<3))!=0 &&
+              st.channelPrograms[3]==63 && st.program==7,
+              "P166 V11 host per-channel program 63 preserved exactly");
+        auto silence=sound(*missing.p,3);
+        check(!audible(silence),
+              "P166 MIDI channel4 ProgramChange=63 cannot trigger ROM/GM audio");
+    }
+    // State save/reload must carry the unavailable 63 rather than remapping
+    // to ROM or to the first SF2 preset.
+    {
+        Rig rig(state(5,9));
+        require(recall(*rig.p,state(0,63))==kResultOk,
+                "P166 absent program project recall");
+        const auto roundtrip=save(*rig.p);
+        check(roundtrip.bank==0&&roundtrip.program==63,
+              "P166 V11 project recall keeps the exact absent MIDI program number");
+        // A new fresh project with that recalled tuple must be silent.
+        Rig fresh(roundtrip);
+        check(!audible(sound(*fresh.p)),
+              "P166 exact absent program survives project close/reopen silently");
+    }
+}
+
 int main(int argc,char** argv) {
     try {
         if(argc!=3)return 2;
         assetsDir=argv[2];
         if(std::string(argv[1])=="cc120-stop") cc120PhysicalStopRegression();
         else if(std::string(argv[1])=="fx-presets") fxPresetAutomationRecall();
+        else if(std::string(argv[1])=="p166-exact-presets")
+            exactMissingPresetProcessorRegression();
         else if(std::string(argv[1])=="midblock-program") midblockProgramRace();
         else if(std::string(argv[1])=="persistent-controls") persistentControlWriterCollision();
         else if(std::string(argv[1])=="nullswap") {
