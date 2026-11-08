@@ -74,12 +74,47 @@ try {
   $rng=[System.Security.Cryptography.RandomNumberGenerator]::Create()
   try{$rng.GetBytes($random)}finally{$rng.Dispose()}
   $nonce=([BitConverter]::ToString($random)).Replace('-','').ToLowerInvariant()
+  # Query the installed IASIO driver before audio: do not guess 256 frames.
+  $capsPath=Join-Path $out 'ASIO-DRIVER-CAPABILITIES.json'
+  $capArgs=@('--asio-buffer-capabilities','--driver-name',$selected.Name,
+    '--driver-clsid',$selected.CLSID,'--nonce',$nonce,'--out',$capsPath)
+  & $exe @capArgs 2>&1 | Tee-Object -FilePath (Join-Path $out 'ASIO-CAPABILITY-LOG.txt')
+  if($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $capsPath -PathType Leaf)){
+    throw 'Echter ASIO-Treiber konnte keine Puffer-/Sampleraten-Auskunft liefern.'
+  }
+  $caps=Get-Content -LiteralPath $capsPath -Raw | ConvertFrom-Json
+  if($caps.schema -cne '125a-asio-driver-capability-v1' -or
+     $caps.nonce -cne $nonce -or $caps.driver_name -cne $selected.Name -or
+     $caps.driver_clsid -ine $selected.CLSID -or
+     $caps.executor_sha256 -cne $executorHash -or
+     [bool]$caps.physical_audio_callbacks -or [bool]$caps.release_approved){
+    throw 'ASIO-Geraeteauskunft hat ungueltige Identitaet, Sitzung oder Herkunft.'
+  }
+  $frames=[int]$caps.selected_frames
+  $rate=[int]$caps.selected_rate
+  $minimum=[int]$caps.minimum_frames
+  $maximum=[int]$caps.maximum_frames
+  $preferred=[int]$caps.preferred_frames
+  $step=[int]$caps.granularity
+  $validFrames=$frames -ge 64 -and $frames -le 4096 -and
+    $minimum -gt 0 -and $maximum -ge $minimum -and
+    $frames -ge $minimum -and $frames -le $maximum -and (
+    ($step -eq -1 -and ($frames -band ($frames-1)) -eq 0) -or
+    ($step -eq 0 -and $frames -eq $preferred) -or
+    ($step -gt 0 -and (($frames-$minimum) % $step) -eq 0))
+  if(-not $validFrames){throw 'Ungestuetze ASIO-Puffergroesse vom Treiber gemeldet.'}
+  if(-not (($rate -eq 44100 -and $caps.rate_44100) -or
+           ($rate -eq 48000 -and $caps.rate_48000) -or
+           ($rate -eq 96000 -and $caps.rate_96000))){
+    throw 'ASIO-Samplerate nicht vom Treiber bestaetigt.'
+  }
+  Write-Host ('ASIO-Treiber bestaetigt '+$frames+' Samples bei '+$rate+' Hz; bevorzugt '+$preferred+'.')
   $asioPath=Join-Path $out 'ASIO-CALLBACKS.json'
   $midiPath=Join-Path $out 'ASIO-MIDI-PCM.json'
   $env:AWE32_ROM_PATH=$rom
   $env:AWE32_SF2_PATH=$sf2
   $args=@('--physical-asio-probe','--plugin',$dll,'--driver-name',$selected.Name,
-    '--driver-clsid',$selected.CLSID,'--rate','44100','--frames','256',
+    '--driver-clsid',$selected.CLSID,'--rate',([string]$rate),'--frames',([string]$frames),
     '--callbacks','1000','--nonce',$nonce,'--out',$asioPath,
     '--midi-note','48','--midi-out',$midiPath)
   & $exe @args 2>&1 | Tee-Object -FilePath (Join-Path $out 'NATIVE-HOST-LOG.txt')
@@ -93,7 +128,7 @@ try {
      $asio.product_sha256 -cne $moduleHash -or $midi.product_sha256 -cne $moduleHash -or
      $asio.executor_sha256 -cne $executorHash -or $midi.executor_sha256 -cne $executorHash -or
      $asio.asio_driver_name -cne $selected.Name -or $midi.asio_driver_name -cne $selected.Name -or
-     [int]$asio.sample_rate -ne 44100 -or [int]$asio.buffer_frames -ne 256 -or
+     [int]$asio.sample_rate -ne $rate -or [int]$asio.buffer_frames -ne $frames -or
      [int]$asio.completed_callbacks -lt 1000 -or [int]$asio.asio_callbacks -lt 1000 -or
      [int]$asio.asio_callbacks -ne [int]$asio.completed_callbacks -or
      [int]$asio.deadline_misses -ne 0 -or [int]$asio.xruns -ne 0 -or
@@ -107,8 +142,10 @@ try {
   $report.physical_asio_verified=$true
   $report.native_midi_audio_verified=$true
   $report.driver=$selected.Name
-  $report.sample_rate=44100
-  $report.buffer_frames=256
+  $report.sample_rate=$rate
+  $report.buffer_frames=$frames
+  $report.driver_preferred_frames=$preferred
+  $report.capability_query='REAL_IASIO_GETBUFFERSIZE'
   $report.callbacks=[int]$asio.asio_callbacks
   $report.midi_notes=[int]$midi.note_ons
   $report.pcm_peak=[double]$midi.peak_before_safety_ceiling
