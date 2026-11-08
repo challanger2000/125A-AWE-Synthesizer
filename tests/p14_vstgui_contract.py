@@ -226,7 +226,9 @@ assert '"125A_AWE_Gold_Logo_236x147.png" PNG DISCARDABLE' in (root/"src/vst3/res
 # neither native popup handling nor selected-item binding is replaced.
 assert 'class GoldHardwareMenu final : public COptionMenu' in b
 assert 'const CMenuItem* item=getCurrent();' in b
-assert 'ctx->drawString(item->getTitle().data(),textRect,kLeftText);' in b
+assert 'const auto title=unavailableProgram_.empty()' in b
+assert 'std::string(item->getTitle().data()) : unavailableProgram_' in b
+assert 'ctx->drawString(title.c_str(),textRect,kLeftText);' in b
 assert 'ctx->setClipRect(textRect);' in b
 assert 'inPopup?CColor(8,8,9)' in b
 assert b.count('new GoldHardwareMenu(')==5
