@@ -1,5 +1,37 @@
 # START HERE — 125A AWE Synthesizer
 
+## P182 – physische ASIO-Referenz-Gegenprobe (8. November 2026)
+
+**P182 ist jetzt vollständig gebaut, aber der unabhängige lokale
+A/B/A-Hardwareversuch noch NICHT gelaufen.**
+[Windows-CI #42522058749](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42522058749):
+verifiziert die unveränderte P178-AWE-VST3-DLL, den exakten
+P182-Test-Lab-Host-Quellstand
+`7683cf3f9de2e8795371ffa38f24a70e6a40cf2d`, den
+source-built QA-MIDI-Sinus bei Note 48, das Windows-PowerShell-
+5.1-Klassifizierungs-Selftest, negative physische IASIO-Gerätetests,
+Original-SHA256-Manifest sowie die Paketierung in einem Windows-ZIP.
+
+**Einmaliger physischer Test:** neuestes
+`P182-ASIO-REFERENCE-COMPARISON`-Paket entpacken,
+DAW schließen, Monitore/Kopfhörer leise stellen,
+`P182-ASIO-COMPARE.bat` ausführen und den vorhandenen
+echten ASIO-Treiber (bisher: Yamaha Steinberg USB ASIO) auswählen.
+Drei *nacheinander* gestartete IASIO-Sessions:
+**REFERENCE-A → Original AWE → REFERENCE-B**, jeweils
+1.000 MIDI/PCM-Audiocallbacks, identischer Host und Puffer,
+separate Nonces, vollständige P181-Start-Zeitspur.
+Danach genügt `P182-LOCAL-RESULT-*/P182-COMPARISON.json`.
+
+**Wichtig:** Der Vergleich selbst ist
+`DIAGNOSTIC_ONLY`, nie Hardware-/DAW-/Release-PASS.
+Die vorbestehende reale P181-Zeitverletzung bei Callback 2 und
+das strenge ASIO-Timing-NO-GO bleiben vollständig erhalten.
+Keine AWE-Audio-Engine-Modifikation, kein Merge, kein
+unabhängiger FULL AUDIT.
+[Prüfvertrag](docs/P182-INDEPENDENT-ASIO-REFERENCE.md).
+
+
 **Aktuelle reale Hardware-Evidenz (P181, 8. November 2026):**
 [ausgewertete ASIO-Callback-Zeitspur](docs/P179-LOCAL-PHYSICAL-ASIO-ACCEPTANCE.md).
 Die einzige Zeitverletzung der dritten echten Sitzung lag beim **dritten**

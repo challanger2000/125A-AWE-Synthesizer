@@ -31,7 +31,7 @@ if($OfflineSelfTest) {
   exit 0
 }
 function New-P182Nonce {
-  $bytes=New-Object byte[] 24
+  $bytes=[byte[]]::new(24)
   $rng=[Security.Cryptography.RandomNumberGenerator]::Create()
   try{$rng.GetBytes($bytes)}finally{$rng.Dispose()}
   return ([BitConverter]::ToString($bytes)).Replace('-','').ToLowerInvariant()
