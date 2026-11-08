@@ -985,24 +985,31 @@ void Synth::StartLayers(size_t bankIndex, std::span<const SoundFont::Region> reg
             const int cutoff=(v.ifatn>>8)&255;
             v.ifatn=static_cast<uint16_t>((std::max(0,cutoff-2*depth)<<8)|(v.ifatn&255));
         }
+        // Span the remaining register range from the patch, so a nonzero
+        // initial setting does not clip the entire upper half of a knob.
         if(m_guiControls[8]>0.f) {
             const int cutoff=(v.ifatn>>8)&0xFF;
             v.ifatn=static_cast<uint16_t>((std::max(0,cutoff-int(std::lround(
-                m_guiControls[8]*255.f)))<<8)|(v.ifatn&0xFF));
+                m_guiControls[8]*cutoff)))<<8)|(v.ifatn&0xFF));
         }
         if(m_guiControls[9]>0.f) {
             const int q=static_cast<int>((v.ccca>>28)&0xF);
             const auto improved=static_cast<uint32_t>(std::min(15,
-                q+int(std::lround(m_guiControls[9]*15.f))));
+                q+int(std::lround(m_guiControls[9]*(15-q)))));
             v.ccca=(v.ccca&0x0FFFFFFFu)|(improved<<28);
         }
-        if(m_guiControls[10]>0.f)
+        if(m_guiControls[10]>0.f) {
+            const int available=std::max(0,255-
+                int(m_channels[channel].reverbSend)*90/100-int(v.reverbSend));
             v.reverbSend=static_cast<uint8_t>(std::min(255,int(v.reverbSend)+
-                int(std::lround(m_guiControls[10]*255.f))));
+                int(std::lround(m_guiControls[10]*available))));
+        }
         if(m_guiControls[11]>0.f) {
             const auto current=static_cast<int>((v.csl>>Emu8000::kChorusShift)&0xFF);
+            const int available=std::max(0,255-
+                int(m_channels[channel].chorusSend)*90/100-current);
             const auto boosted=static_cast<uint32_t>(std::min(255,current+
-                int(std::lround(m_guiControls[11]*255.f))));
+                int(std::lround(m_guiControls[11]*available))));
             v.csl=(v.csl&Emu8000::kLoopAddressMask)|
                 (boosted<<Emu8000::kChorusShift);
         }

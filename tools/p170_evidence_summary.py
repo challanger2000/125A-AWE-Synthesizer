@@ -49,6 +49,17 @@ summary={
     'physical_asio':'NOT RUN','private_original_media':'NOT RUN',
     'etw':json.loads((qa/'etw-status.json').read_text(encoding='utf-8-sig')),
     'full_audit':'NOT COMPLETE','adversarial_review':'SELF_CHALLENGE','commercial_release':'NO-GO'}
+csv_bytes=(build/'p171-rt.csv').read_bytes()
+summary['raw_csv_sha256']=hashlib.sha256(csv_bytes).hexdigest()
+# Preserve retrievable raw numeric rows in the run's folded job summary as
+# well as in its artifact. This contains synthetic-test timings, no media.
+job_summary=os.environ.get('GITHUB_STEP_SUMMARY')
+if job_summary:
+    packed=base64.b64encode(zlib.compress(csv_bytes,9)).decode()
+    if len(packed)>800000:raise RuntimeError('raw timing summary exceeds safe summary size')
+    with open(job_summary,'a',encoding='utf-8') as f:
+        f.write('<details><summary>P170/P171 raw callback CSV (zlib/base64, SHA-256 verified)</summary>\n\n```text\n')
+        f.write('P170_RAW_CSV_SHA_'+summary['raw_csv_sha256']+':'+packed+'\n```\n\n</details>\n')
 data=json.dumps(summary,separators=(',',':')).encode()
 (qa/'P170-P171-SUMMARY.json').write_bytes(data)
 digest=hashlib.sha256(data).hexdigest();encoded=base64.b64encode(zlib.compress(data,9)).decode()

@@ -18,7 +18,7 @@ for defect in ['<=50ms click','0->1%','FILTER ADSR','mode3 exits','endAddrsOffse
     if not any(defect in label for label in failures):raise RuntimeError('baseline did not reproduce '+defect)
 compared=[];size=0
 for row in after['rows']:
-    if any(row['controls']) or row['label'] in ['loop-3','one-shot-end-offset']:continue
+    if any(row['controls']) or row['label'] in ['loop-3','loop-3-sustain','one-shot-end-offset','one-shot-coarse-end']:continue
     a=(out/'before'/(row['label']+'.s16le')).read_bytes()
     b=(out/'after'/(row['label']+'.s16le')).read_bytes()
     if a!=b:raise RuntimeError('unintended neutral PCM change '+row['label'])

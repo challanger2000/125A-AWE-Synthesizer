@@ -105,6 +105,23 @@ Release verwenden denselben Endwert. Die Gegenprobe enthält die erforderlichen
 Null-Guardworte am effektiven Ende und wieder hörbare Samples dahinter; damit
 unterscheidet sie ein wirklich falsches Ende von einer ohnehin stillen Datei.
 
+### F06: obere Reglerbereiche bei nichtneutralen Patches wirkungslos
+
+Der alte volle additive Offset erreichte die Registergrenze vorzeitig: Cutoff
+bei 75%, Q und beide Sends bei 50% erzeugten bei geeigneten nichtneutralen
+Patches dasselbe tatsächliche PCM wie 100%. Der neue relative Eingriff benutzt
+nur den verbleibenden Weg zum jeweiligen Hardware-Endpunkt. 0% bleibt das
+Original; 100% erreicht weiterhin denselben Endpunkt. Damit funktionieren auch
+die oberen Reglerbereiche, vorbehaltlich der endlichen Hardware-Quantisierung.
+Die neue Gegenprobe verwendet SF2-Cutoff9000, Q100 und Sends500 und wird gegen
+P169 sowie durch eine gezielte Reverb-Kennlinien-Reversion falsifiziert.
+Bei den Sends wird auch der bereits vorhandene Kanalanteil aus CC91/93 vom
+verbleibenden Bereich abgezogen. Ohne diesen Schritt sättigte selbst die erste
+relative Korrektur mit CC127 wieder vorzeitig. Zwei weitere PCM-Gegenproben
+reproduzierten dies; sie bestätigen vor dem Audiovergleich ausdrücklich die
+tatsächlich geschriebenen kombinierten Original-Sendwerte 242/241.
+Keine Änderung der Filter-/Reverb-/Chorus-DSP-Rechenregeln.
+
 ## Keine unbelegten Produktänderungen
 
 - Cutoff bleibt **Cutoff Reduction**: 0% Original, 100% tiefster Hardware-Cutoff.
@@ -130,21 +147,24 @@ Transport `p170_audio_render.cpp` schreibt tatsächlich vom 86Box-Chip gerendert
 int16-Stereo-PCM. Entscheidungen benutzen RMS-Zeitfenster, harmonische Projektion,
 absolute Dauer und erste/letzte Signalausgabe. Kein Vergleich nur auf „Parameter
 hat sich verändert“. Sweeps: 0/1/5/20/50/75/100% für AMP-/Filter-ADSR und Cutoff;
-zusätzlicher Q-/Send-Sweep. 44,1/48/96 kHz und 128/256/511-Frame-Blöcke.
+zusätzlicher Q-/Send-Sweep, nichtneutrale Patch-Ausgangswerte, CC64-Pedal und
+feiner/grober Sample-Endoffset. 44,1/48/96 kHz und 128/256/511-Frame-Blöcke.
 
-Sechs separat kompilierte Testmutanten: (1) alte CC0-Null-Verwechslung,
+Acht separat kompilierte Testmutanten: (1) alte CC0-Null-Verwechslung,
 (2) AMP-Attack/Delay/Hold nicht verbunden, (3) neue Filterroute getrennt,
 (4) alte 20-Worte-Loopbeschränkung, (5) Endoffset ignoriert, (6) ROM-Kompensation
-entfernt. Testcode verlangt gezielte **akustische FAILs mit Exitcode 1**;
+entfernt, (7) Sustainpedal ignoriert, (8) früh sättigende Reverb-Kennlinie
+wiederhergestellt. Testcode verlangt gezielte **akustische FAILs mit Exitcode 1**;
 Crash/Setupfehler/Timeout gelten nicht als erkannte Mutation. Der positive
 Produktlauf wird vorher ausgeführt. Mutantdateien entstehen ausschließlich im
 Buildverzeichnis; keine davon wird in die VST3 eingebunden.
 
 `p170_compare_baseline.py` kompiliert die **gepinnte P169-Quelle** neben dem
 Kandidaten und führt identische Stimuli aus. Alte Fehler müssen reproduziert
-werden; unbetroffene Neutralfälle müssen bytegleich bleiben. In der ersten
-lokalen Gegenprobe: **14 Neutralfälle / 8.078.400 PCM-Bytes bitgleich**.
-Modus-3-Release und Endoffset sind bewusst korrigierte Ausnahmen.
+werden; unbetroffene Neutralfälle müssen bytegleich bleiben. In der abschließenden
+lokalen Gegenprobe: **21 Neutralfälle / 11.782.800 PCM-Bytes bitgleich**.
+Modus-3-Release einschließlich Pedal und die Endoffset-Fälle sind bewusst
+korrigierte Ausnahmen.
 
 `p171_processor_contract.cpp` benutzt den unverändert extrahierten tatsächlichen
 Processor, echte Steinberg-Queues und EventLists. 16 Kanäle × Bank0/5,
@@ -164,6 +184,12 @@ Messabschnitt in Bewegung. Die ursprüngliche neutrale Fixture bleibt bytegleich
 der Zeitmessung. Windows zusätzlich rohe Threadzyklen, Kernnummern, QPC-Beginn/
 -Ende/Frequenz und PID/TID. Zyklen werden nicht in angebliche CPU-ms umgerechnet.
 Median/p99/Maximum/Misses und Held-Min/Max werden pro Zelle ausgewiesen.
+Diese Zeitmessung verwendet den quellidentisch extrahierten Processor mit
+leeren Test-Hooks im Testprogramm, **nicht die exportierte Shipping-DLL**.
+Die zusätzliche DLL-Probe prüft deren Funktion, nicht deren Callbackzeiten.
+Damit wird die neue Matrix nicht als unmittelbarer DLL-/ASIO-Zeitnachweis
+ausgegeben; ältere P139/P140-DLL-Messungen ersetzen diesen Nachweis ebenfalls
+nicht für den geänderten P170/P171-Stand.
 
 **Recall und dichtes Retriggern können die gehaltene Last reduzieren**:
 Auch Creative Voice-Stealing bei noch lauten freigegebenen Stimmen wird im
@@ -186,7 +212,7 @@ C++-`new`-Audit P130 bleibt aktiv; er deckt **nicht** malloc/realloc/HeapAlloc a
 | erste Note | synthetische tatsächliche Processor-/exportierte DLL-Ausgabe | Original-Nutzerproblem nicht reproduziert |
 | Loops/Endoffset | Modi0/1/3, kurze Tail, PCM + Loop-/End-Mutant | keine vollständige Original-SF2-Presetabnahme |
 | ROM-Pegel | analytischer synthetischer Vergleich + Kompensations-Mutant | Original-ROM/SYNTHGM/private SF2 NOT RUN |
-| State/Automation | bestehende P122/P128/P133 + P171-Konkurrenzstress | keine kommerzielle DAW-Projektsitzung |
+| State/Automation | bestehende P122/P128/P133 + P171-Konkurrenzstress, gehaltene Note bei Overlay-Automation | keine kommerzielle DAW-Projektsitzung |
 | RT / Speicher | Callback-Rohdaten, bestehender C++-Heaptest, ASan/UBSan/LSan | kein Zielrechner-/vollständiger Windows-Heapnachweis |
 | GUI | P165/P168/P169 übernommen, voller Win32-EditorHost-/Pixel-Retest | persönliche Nutzer-DAW-Abnahme NOT RUN |
 | Test Lab | unabhängig gepinnte unveränderte Hosts, Produkt-DLL-Hash | generisches `preset_semantics=NOT COVERED` bleibt ehrlich |
@@ -207,7 +233,7 @@ Lautheits-/Loop-/First-Note-Vergleiche sowie Ziel-DAW und physisches ASIO bleibe
 **NOT RUN**. Kein Ausweichen auf einen anderen SF2-Player als angeblichen
 Hardwarebeweis und keine Veröffentlichung privater Samples.
 
-Lokaler vollständiger Release-CTest-Lauf: **51/51 PASS**, einschließlich sechs
+Lokaler vollständiger Release-CTest-Lauf: **53/53 PASS**, einschließlich acht
 akustisch erkannten Mutanten und gepinnter Vorher-/Nachher-Gegenprobe. Dies ist
 kein Windows-Modulvalidator-Ergebnis.
 

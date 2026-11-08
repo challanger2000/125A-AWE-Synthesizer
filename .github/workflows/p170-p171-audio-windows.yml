@@ -79,10 +79,12 @@ jobs:
               throw 'P170-P171 entire CTest suite did not pass'
           }
           $passed=[int]$Matches[1]
-          if ($passed -lt 60 -or
+          if ($passed -lt 62 -or
               $fullLog -notmatch '125A_p171_exported_dll_first_note.+Passed' -or
               $fullLog -notmatch '125A_p170_pinned_baseline_pcm.+Passed' -or
               $fullLog -notmatch '125A_p170_detect_mutant_rom.+Passed' -or
+              $fullLog -notmatch '125A_p170_detect_mutant_pedal.+Passed' -or
+              $fullLog -notmatch '125A_p170_detect_mutant_headroom.+Passed' -or
               $fullLog -notmatch '125A_p166_exact_sf2_rom.+Passed' -or
               $fullLog -notmatch '125A_p166_processor_missing_program.+Passed') {
               throw "P170-P171 dedicated 77-shape and actual VST3 Processor PCM tests missing: $passed"

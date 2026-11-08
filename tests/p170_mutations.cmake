@@ -10,7 +10,7 @@ if(125A_BUILD_ENGINE_PROBES AND 125A_P170_MUTATION_TESTS)
   set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/src/engine/Synth.cpp" "${PROJECT_SOURCE_DIR}/src/engine/SoundFont.cpp"
     "${PROJECT_SOURCE_DIR}/tests/p170_mutations.py")
-  foreach(kind IN ITEMS bank amp filter loop end rom)
+  foreach(kind IN ITEMS bank amp filter loop end rom pedal headroom)
     if(kind STREQUAL end)
       set(file SoundFont.cpp)
     else()

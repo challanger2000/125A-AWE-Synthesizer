@@ -14,7 +14,10 @@ else:
     result=subprocess.run([sys.executable,str(Path(__file__).with_name('p170_audio_oracles.py')),exe,str(directory)],
                           capture_output=True,text=True,timeout=600)
     expected={'amp':['<=50ms click','AMP decay audio sweep'],
-              'filter':['filter'],'loop':['mode3 exits'],'end':['endAddrsOffset']}[kind]
+              'filter':['filter'],'loop':['mode3 exits'],
+              'end':['endAddrsOffset','endAddrsCoarseOffset'],
+              'pedal':['mode3 exits only after sustain-pedal'],
+              'headroom':['reverb retains audible headroom']}[kind]
     data=directory/'measurements.json'
     failures=[]
     if data.exists():

@@ -10,6 +10,8 @@ mutations={
     'loop':('Synth.cpp','((bank && bank->version==SoundFont::Version::Sf2) ||', '((false) ||'),
     'end':('SoundFont.cpp','int64_t(s.end)+g.Get(Gen::EndAddrsOffset,0)+\n        int64_t(32768)*g.Get(Gen::EndAddrsCoarseOffset,0)', 'int64_t(s.end)'),
     'rom':('Synth.cpp','if (sampleInRom && ((drv', 'if (false && sampleInRom && ((drv'),
+    'pedal':('Synth.cpp','if (m_channels[channel].sustain)\n        {', 'if (false && m_channels[channel].sustain)\n        {'),
+    'headroom':('Synth.cpp','m_guiControls[10]*available', 'm_guiControls[10]*255.f'),
 }
 for mutant,(file,old,new) in mutations.items():
     source=(root/'src/engine'/file).read_text()

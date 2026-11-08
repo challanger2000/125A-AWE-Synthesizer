@@ -50,6 +50,19 @@ void banksAndFirstNotes() {
     require(loadSf2(*retained.p,(assetsDir/"absent.sf2").string()),"error ACK path");
     check(same(before,save(*retained.p))&&sound(*retained.p)==referenceSound(before,0),
         "P171 rejected load preserves first-note PCM and project state");
+    {
+        Rig edited,original;bool identical=true,heard=false;
+        for(int n=0;n<8;++n) {
+            Block a,b;
+            if(!n){a.note();b.note();}
+            if(n==3)for(int k=0;k<12;++k)a.param(kGuiFirstID+k,.8);
+            const auto x=a.run(*edited.p),y=b.run(*original.p);
+            identical&=x==y;heard|=audible(x);
+        }
+        auto saved=save(*edited.p);
+        check(identical&&heard&&std::all_of(saved.controls.begin(),saved.controls.end(),[](auto v){return v==8000;}),
+              "P171 accepted overlays persist while held-note PCM preserves documented NoteOn-only semantics");
+    }
 }
 
 void stress(const std::filesystem::path& output) {

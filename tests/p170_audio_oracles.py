@@ -6,8 +6,10 @@ copy of the implementation's parameter mapping. No assert (Release safe).
 """
 import argparse
 import array
+import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import struct
 import subprocess
@@ -31,11 +33,13 @@ def chunk(tag, data):
     return tag.encode('ascii')+u32(len(data))+data+(b'\0' if len(data) & 1 else b'')
 
 
-def sf2(path, generators, end=4096, loop_start=256, loop_end=3840, guard_at=None):
+def sf2(path, generators, end=None, loop_start=256, loop_end=None, guard_at=None,words=4096):
     # Three harmonics provide separately measurable low/mid/high references.
     pcm=[round(6000*math.sin(2*math.pi*n/256)
                +2500*math.sin(2*math.pi*5*n/256)
-               +1500*math.sin(2*math.pi*17*n/256)) for n in range(4096)]
+               +1500*math.sin(2*math.pi*17*n/256)) for n in range(words)]
+    if end is None:end=words
+    if loop_end is None:loop_end=words-256
     if guard_at is not None:
         pcm[guard_at:guard_at+46]=[0]*46
     info=chunk('ifil',u16(2,1))+chunk('INAM',b'125A independent audio oracle\0')
@@ -84,15 +88,20 @@ def main():
         print(('PASS ' if value else 'FAIL ')+label,flush=True)
     with tempfile.TemporaryDirectory(prefix='125a-p170-') as directory:
         root=Path(directory);rom=root/'zero.rom';rom.write_bytes(bytes(1048576))
-        def render(label,gens=DRY,controls=None,rate=44100,block=128,off=2.5,**sample):
+        def render(label,gens=DRY,controls=None,rate=44100,block=128,off=2.5,pedal=None,cc91=0,cc93=0,**sample):
             font=root/'oracle.sf2';sf2(font,gens,**sample);target=root/'pcm.bin'
             result=subprocess.run([args.renderer,str(rom),str(font),str(target),str(rate),
-                str(block),str(off),*[str(v) for v in (controls or [0]*12)]],
-                capture_output=True,text=True,timeout=45)
+                str(block),str(off),*[str(v) for v in (controls or [0]*12)],
+                *([] if pedal is None else [str(pedal)])],
+                capture_output=True,text=True,timeout=45,
+                env=dict(os.environ,P170_ORACLE_CC91=str(cc91),P170_ORACLE_CC93=str(cc93)))
             if result.returncode:raise RuntimeError(result.stdout+result.stderr)
             regs=json.loads(result.stdout.strip().splitlines()[-1]);pcm=array.array('h',target.read_bytes())
             if sys.byteorder!='little':pcm.byteswap()
             rows.append(dict(label=label,rate=rate,block=block,controls=controls or [0]*12,
+                sf2_generators=gens,sample_overrides=sample,note_off_s=off,pedal_release_s=pedal,
+                midi_cc91=cc91,midi_cc93=cc93,sf2_sha256=hashlib.sha256(font.read_bytes()).hexdigest(),
+                pcm_sha256=hashlib.sha256(target.read_bytes()).hexdigest(),
                 registers=regs,rms_early=rms(pcm,rate,.03,.08),rms_late=rms(pcm,rate,1.5,2),
                 peak=max(map(abs,pcm))/32768))
             # Synthetic data only; retain every actual sample for falsification.
@@ -180,6 +189,26 @@ def main():
             pcm,_=render(f'resonance-{value}',controls=[0]*8+[.5,value,0,0])
             resonance.append(harmonic(pcm,44100,.3,.5,5)/max(1e-9,harmonic(pcm,44100,.3,.5,1)))
         check(resonance[-1]>resonance[0]*1.5,'resonance boosts near-cutoff harmonic relative to fundamental '+str(resonance))
+        # A nonzero patch setting must not make the whole upper control
+        # range a clipped dead zone. Compare actual PCM, not knob readback.
+        for index,generator,title,mid in [(8,(8,9000),'cutoff',.75),(9,(9,100),'resonance',.5),
+                                          (10,(16,500),'reverb',.5),(11,(15,500),'chorus',.5)]:
+            gens=[p for p in DRY if p[0]!=generator[0]]+[generator]
+            render(f'headroom-{title}-original',gens)
+            a=[0]*12;b=[0]*12;a[index]=mid;b[index]=1
+            middle,_=render(f'headroom-{title}-middle',gens,a)
+            maximum,_=render(f'headroom-{title}-max',gens,b)
+            check(middle!=maximum,f'{title} retains audible headroom above {mid*100:g}% on a nonneutral patch')
+        for index,op,title,controls in [(10,16,'reverb',{'cc91':127}),(11,15,'chorus',{'cc93':127})]:
+            gens=[p for p in DRY if p[0]!=op]+[(op,500)]
+            _,initial_regs=render(f'headroom-midi-{title}-original',gens,**controls)
+            actual_send=((initial_regs['ptrx']>>8)&255) if index==10 else ((initial_regs['csl']>>24)&255)
+            check(actual_send==(242 if index==10 else 241),
+                  title+' fixture confirms actual patch plus channel MIDI send before audio comparison')
+            a=[0]*12;b=[0]*12;a[index]=.5;b[index]=1
+            middle,_=render(f'headroom-midi-{title}-middle',gens,a,**controls)
+            maximum,_=render(f'headroom-midi-{title}-max',gens,b,**controls)
+            check(middle!=maximum,f'{title} retains audible headroom with MIDI send already present')
         fx={}
         for index,title in [(10,'reverb'),(11,'chorus')]:
             for amount in [0,.2,.5,1]:
@@ -192,6 +221,13 @@ def main():
                       'reverb send increases measured wet tail '+str(tail))
             else:
                 check(fx[title,0]!=fx[title,1],'chorus send changes actual stereo PCM')
+                lo,hi=int(.05*44100)*2,int(.2*44100)*2
+                original=fx[title,0][lo:hi]
+                wet=[math.sqrt(sum((x-y)**2 for x,y in zip(original,fx[title,a][lo:hi]))/(hi-lo))/32768
+                     for a in [0,.2,.5,1]]
+                check(wet[1]>1e-4 and all(b>=a*.95 for a,b in zip(wet,wet[1:]))
+                      and .4<wet[2]/max(wet[3],1e-9)<.6,
+                      'chorus measured wet residual grows with send '+str(wet))
             # A send preserves the dry attack. It never promises 100% wet.
             check(rms(fx[title,1],44100,.03,.04)>.001,title+' maximum send retains dry output')
         looped={}
@@ -205,9 +241,16 @@ def main():
         # full 4096-word duration plus existing FIFO latency after NoteOff.
         check(rms(looped[1][0],44100,1.15,1.25)>.0001 and rms(looped[3][0],44100,1.15,1.25)<1e-4,
               'mode3 exits short-tail loop at NoteOff; mode1 retains loop during release')
+        held,_=render('loop-3-sustain',[p for p in DRY if p[0] not in (38,54)]+[(38,0),(54,3)],
+                      off=1.,pedal=1.5,loop_end=4080)
+        check(rms(held,44100,1.1,1.2)>.001 and rms(held,44100,1.65,1.75)<1e-4,
+              'mode3 exits only after sustain-pedal release, not at held NoteOff')
         # End offset must truncate a one-shot independently of the header end.
         short,_=render('one-shot-end-offset',[p for p in DRY if p[0]!=54]+[(54,0),(1,-3072)],guard_at=1024)
         check(rms(short,44100,.07,.12)<1e-4,'SF2 endAddrsOffset truncates actual one-shot PCM')
+        coarse,_=render('one-shot-coarse-end',[p for p in DRY if p[0]!=54]+[(54,0),(12,-1)],
+                        words=36864,guard_at=4096)
+        check(rms(coarse,44100,.15,.3)<1e-4,'SF2 endAddrsCoarseOffset truncates actual one-shot PCM')
     (out/'measurements.json').write_text(json.dumps({'rows':rows,'checks':checks},indent=2))
     return 0 if all(c['pass'] for c in checks) else 1
 

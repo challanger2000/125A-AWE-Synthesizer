@@ -4,9 +4,9 @@
 
 **Aktueller Arbeitsbranch: `fix/p170-p171-audio-corrections`**, auf P169 `99fb90fc855c4c7643e24816fa644fdc738c290f` mit P166/P168 und originaler P165-Faceplate. Die folgenden älteren „aktuellen“ Abschnitte sind Historie. `main` ist keine Entwicklungsbasis.
 
-- Konkrete PCM-Reproduktionen und Korrekturen: Kanal10/CC0=0, sprunghafte und gegenläufige AMP-/Filter-Zeitoverlays, fehlende reale Filterroute, SF2-Modus3 bei kurzem Loop-Nachlauf und ignorierter Sample-Endoffset. Keine Chorus-DSP-Änderung, kein willkürlicher ROM-Gain.
+- Konkrete PCM-Reproduktionen und Korrekturen: Kanal10/CC0=0, sprunghafte und gegenläufige AMP-/Filter-Zeitoverlays, fehlende reale Filterroute, SF2-Modus3 bei kurzem Loop-Nachlauf und ignorierter Sample-Endoffset sowie vorzeitig sättigende Cutoff-/Q-/Send-Kennlinien. Keine Chorus-DSP-Änderung, kein willkürlicher ROM-Gain.
 - 0% bleibt Original; A/D/R steigern das **Verkürzen**, Sustain steigert die Absenkung. AMP A/D/S/R auf 100% erzeugt im langen Test-Pad einen rund 45-ms-Klick einschließlich FIFO. Klangoverlays gelten bei **neuem NoteOn**; alte nichtnull V11-Overlaywerte erhalten bewusst korrigierte Bedeutung. Cutoff bleibt Reduction, FX bleiben Sends.
-- [Vollständiger Korrektur-/Orakel-/Grenzenbericht](docs/P170-P171-AUDIO-CORRECTIONS.md). Sechs echte Negativmutanten, gepinnter alter/neuer 86Box-PCM-Vergleich, alle 16 MIDI-Kanäle, erste Note nach Load, komplette Windows-Matrix A/B mit Validator/GUI/Test Lab vorbereitet. Neue Windows-Ergebnisse bis zum Abschluss **NOT RUN**; keine älteren grünen Zahlen als neuen Nachweis ausgeben.
+- [Vollständiger Korrektur-/Orakel-/Grenzenbericht](docs/P170-P171-AUDIO-CORRECTIONS.md). Acht echte Negativmutanten, gepinnter alter/neuer 86Box-PCM-Vergleich, alle 16 MIDI-Kanäle, erste Note nach Load, komplette Windows-Matrix A/B mit Validator/GUI/Test Lab vorbereitet. Neue Windows-Ergebnisse bis zum Abschluss **NOT RUN**; keine älteren grünen Zahlen als neuen Nachweis ausgeben.
 - **Offen:** Der gemeldete erste SF2-Ton und extreme Original-ROM-Pegel sind mit den hier fehlenden Originaldateien nicht abschließend reproduziert. Physischer Zielrechner/ASIO, Nutzer-DAW, kompletter Windows-malloc/Heap-Nachweis und zweiter unabhängiger Auditor **NOT RUN**. **Kein FULL AUDIT, kein Release, kein Merge.**
 
 
