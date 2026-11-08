@@ -79,6 +79,13 @@ def main():
             if proc.returncode!=0 or "P177_GUI_PCM_PASS" not in stdout:
                 raise RuntimeError(f"P177 real end-to-end PCM FAIL: {proc.returncode}")
             print("P177_PASS native_file_picker/controller/host_edit/first_PCM",flush=True)
+        except Exception:
+            # An early native host failure must be visible in the CI log.
+            # Otherwise a missing HWND is incorrectly blamed on Win32 input.
+            if proc.poll() is None:proc.terminate()
+            output,_=proc.communicate(timeout=5)
+            print("P177_NATIVE_HOST_DIAGNOSTIC:\\n"+output,flush=True)
+            raise
         finally:
             if proc.poll() is None:
                 proc.terminate()
