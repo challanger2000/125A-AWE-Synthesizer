@@ -57,5 +57,19 @@ for unchanged in [
     "MakeButton({808,513,960,549}"]:
     assert unchanged in cpp, f"Existing approved control geometry changed: {unchanged}"
 
+
+# P168 owner DAW screenshot falsification: transparent LCD text must NOT start
+# inside the original metal bezel (x ~350..364). This is a source/layout
+# contract only; actual Windows EditorHost pixel and DAW acceptance are separate.
+lcd_rows = [
+    "MakeLabel({370,96,570,112}",
+    "MakeLabel({370,118,728,145}",
+    "MakeLabel({370,145,728,163}",
+    "hint_=MakeLabel({370,166,728,184}",
+]
+assert all(anchor in cpp for anchor in lcd_rows), "P168: LCD text returned into left metal bezel"
+assert "MakeLabel({350,96,570,112}" not in cpp, "P168: first LCD row clips at x350"
+assert "hint_=MakeLabel({350,166,728,184}" not in cpp, "P168: status row clips at x350"
+
 print("P165 STRUCTURAL PASS: original image, unchanged lower controls,")
 print("  8 equally high buttons, 8-9px gutters and complete faceplate enforced.")
