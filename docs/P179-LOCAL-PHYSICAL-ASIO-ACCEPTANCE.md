@@ -1,3 +1,76 @@
+## P181 – Original-ASIO-Zeitspur real ausgewertet (8. November 2026)
+
+**Nachweisquelle:** Lokal von der Person ausgeführtes P181-Windows-Paket,
+Original-ROM/SF2 bleiben ausschließlich lokal. Der unabhängige Test-Lab-Host
+hat die VST3-DLL mit SHA-256
+`db2460cd4f066222f494f5dfbe941565dedc6632529431c878afa968a3d44b3c`
+über das real registrierte **Yamaha Steinberg USB ASIO**
+(`{CB7F9FFD-A33B-48B2-8BC0-437D94F37142}`) benutzt.
+44.100 Hz / 512 Frames, Blockperiode **11,60998 ms**.
+
+**Fakten aus den zugehörigen P181-Originalberichten**:
+- 1.000 / 1.000 tatsächlich gestartete und erfolgreiche VST3-`process()`-Callbacks,
+  0 fehlgeschlagene Verarbeitung, 0 Treiber-Overload-/Resync-Meldungen,
+  0 Sampleratenwechsel, 0 ungültige PCM-Werte, 0 überlange
+  Callback-*Ausführungen*.
+- 12/12 MIDI NoteOn/NoteOff, **1.019.251** Nicht-Null-PCM-Samples,
+  Peak **0,891785** vor der Sicherheitsbegrenzung.
+- **Ein** Startabstand verletzt das strenge Timing-Gate:
+  Callback **Index 2 (der dritte Callback)** beginnt
+  bei **76,8006 ms** relativ zum ersten. Sein Abstand zum vorherigen
+  Callback beträgt **64,4333 ms** (6,44 × grob 10 ms,
+  beziehungsweise 5,55 × die 11,61-ms-Pufferzeit).
+- Callback Index 1 beginnt bei **12,3673 ms** und endet bei ca.
+  **16,5800 ms**; der dritte beginnt bei **76,8006 ms**:
+  etwa **60,2206 ms** zwischen dem Ende der vorangehenden Berechnung
+  und dem Start des dritten Callbacks.
+- Dauer des auffälligen dritten Callbacks selbst **4,3576 ms**;
+  die benachbarten Callbacks bleiben unter **4,6 ms**.
+  Die maximale Callback-Dauer des gesamten 1000er-Laufs war
+  **5,9467 ms** und damit unter der Pufferzeit.
+- Thread-ID in der erfassten Umgebung unverändert **7548**.
+  ASIO-Doppelpuffer-Indices **0,1,0,1,0,1,0**;
+  bei den sieben erfassten Callbacks bleibt die MIDI-NoteOn-Anzahl
+  **1**, NoteOff **0**; keine neuen Treiber-Overload-Meldungen.
+- Die P181-Zeitspur ist ausdrücklich **vollständig**: 1.000/1.000
+  dokumentierte Callback-Slots, 0 Overflow, nur **1** markierter
+  Startabstand, einschließlich aller übrigen 993 nicht separat
+  exportierten Slots. Innerhalb dieser Sitzung wurden nach Index 2
+  keine weiteren Verletzungen der bestehenden **2×Blockbudget-
+  Startabstandsregel** registriert.
+- `P179-ACCEPTANCE.json` bestätigt `timing_trace_verified=true`,
+  `diagnostics_verified=true`, aber
+  `physical_asio_verified=false`, `release_approved=false`.
+
+**Einordnung:** Der beobachtete Timingausreißer liegt ganz am Anfang
+des Gerätestreams, *zwischen* zwei Callback-Starts und **außerhalb
+der eigentlichen VST3-Verarbeitungsdauer**. Ein Anlauf-/Scheduling-/
+Treiberinitialisierungsproblem ist daher plausibler als ein
+AWE-Rechenzeitproblem. **Die konkrete Ursache ist NICHT bewiesen**
+(keine unabhängige ETW-/USB-Stack-Traces oder Treiber-Logs).
+Die beiden vorherigen lokalen P179/P180-Sitzungen zeigten ebenfalls
+je eine Startabstandsverletzung (62,6362 / 58,8728 ms), aber
+**keine** vollständige QPC-Fensterspur; sie dürfen daher nicht
+pauschal als dieselbe frühe Startposition eingestuft werden.
+
+**Wichtig für spätere Audits:** Keinen AWE-DSP-Patch aufgrund
+dieser Startabstandsverletzung erfinden. Nicht einfach 2×Puffer-Gate
+erhöhen, den Anlauf-Callback ohne neue, separat nachgewiesene
+Methodik aus dem bestehenden Test streichen oder einen
+`PHYSICAL_ASIO_PASS` daraus ableiten. Falls weitere Ursachenforschung
+notwendig ist, zuerst einen unabhängigen Startup-ASIO-Gegenversuch
+mit leerem/neutralem VST3 und **derselben Yamaha-ASIO-Hardware**
+und gegebenenfalls eine echte Windows-ETW-Aufzeichnung verwenden.
+Den Kaltstart strikt getrennt von der kontinuierlichen
+Steady-State-Phase auswerten; beide Teilgates separat dokumentieren,
+nicht nachträglich miteinander verrechnen.
+
+**Abnahme bleibt:** MIDI/VST3-Audio innerhalb der gemessenen
+Callbacks technisch nachgewiesen; strenge ASIO-Zeitabnahme
+**FAIL/NO-GO**, Hardware-Audio-Ausgang nicht separat aufgenommen,
+DAW-Test, EMU8000-Hardware-Klangvergleich, unabhängiger FULL AUDIT
+und Release weiterhin **offen**.
+
 # P179 — echte ASIO-Callbacks mit AWE-MIDI und Original-SF2
 
 Dieses Paket ist ein **lokaler Windows-Hardwaretest**, kein Plugin-Release.

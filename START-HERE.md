@@ -1,5 +1,18 @@
 # START HERE — 125A AWE Synthesizer
 
+**Aktuelle reale Hardware-Evidenz (P181, 8. November 2026):**
+[ausgewertete ASIO-Callback-Zeitspur](docs/P179-LOCAL-PHYSICAL-ASIO-ACCEPTANCE.md).
+Die einzige Zeitverletzung der dritten echten Sitzung lag beim **dritten**
+ASIO-Callback (Index 2), **64,4333 ms** Startabstand bei 512 Samples/
+44,1 kHz. Die tatsächliche Ausführung dauerte nur **4,3576 ms**.
+1.000/1.000 DSP-Prozesse und MIDI-Audio waren erfolgreich, ASIO-XRUN-
+Meldungen 0. Kein nachgewiesener AWE-DSP-Fehler, Ursachenattribution
+zu Windows/USB/Treiber **offen**. Der strenge ursprüngliche
+ASIO-Timing-Gate ist **FAIL/NO-GO**; kein Merge, kein Release, kein
+FULL AUDIT. **Die bereits durchgeführten identischen Hardwaretests
+nicht nochmals unbegründet anfordern.**
+
+
 ## P177 – reale Windows-SF2-Auswahl → erster Ton bestanden (8. November 2026)
 
 **Branch `qa/p177-controller-gui-first-note`, geprüfter Produkt-/P177-Teststand `25373c00fb041dc8a5df56e2fe5eec43c0d43c8e`**, Draft [PR #88](https://github.com/challanger2000/125A-AWE-Synthesizer/pull/88) – **kein Merge und kein Release**. P177 ist eine zusätzliche native Testintegration; **keine Änderungen am Synth-, ROM-, Filter-, SoundFont-, Controller- oder GUI-Produktionscode**.
