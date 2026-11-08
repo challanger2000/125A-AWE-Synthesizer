@@ -24,8 +24,14 @@ jobs:
           run-id: 42480859178
           github-token: ${{ github.token }}
           path: decoded-original
-      - name: Preserve every unchanged callback row with bounded notices and original SHA
-        run: python3 tools/p171_etw/publish_raw.py decoded-original/original-callbacks.csv ${{ matrix.partition }} ${{ matrix.repetition }}
+      - name: Preserve original numeric rows, annotations 1-10
+        run: python3 tools/p171_etw/publish_raw.py decoded-original/original-callbacks.csv ${{ matrix.partition }} ${{ matrix.repetition }} 0
+      - name: Preserve original numeric rows, annotations 11-20
+        run: python3 tools/p171_etw/publish_raw.py decoded-original/original-callbacks.csv ${{ matrix.partition }} ${{ matrix.repetition }} 1
+      - name: Preserve original numeric rows, annotations 21-30
+        run: python3 tools/p171_etw/publish_raw.py decoded-original/original-callbacks.csv ${{ matrix.partition }} ${{ matrix.repetition }} 2
+      - name: Preserve original numeric rows, annotations 31-40
+        run: python3 tools/p171_etw/publish_raw.py decoded-original/original-callbacks.csv ${{ matrix.partition }} ${{ matrix.repetition }} 3
   decode-original-trace:
     runs-on: windows-2022
     timeout-minutes: 25
