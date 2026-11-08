@@ -84,6 +84,13 @@ public:
     void NoteOff(uint8_t channel, uint8_t note);
     void ChannelPressure(uint8_t channel, uint8_t value);
     void ProgramChange(uint8_t channel, uint8_t program);
+    // The VST3 instrument uses strict SF2/ROM isolation. The original
+    // upstream game/driver fallback remains available to reference tools;
+    // it must never leak into user-selected VST3 bank/program slots.
+    void SetStrictPresetSelection(bool enabled) noexcept {
+        m_strictPresetSelection = enabled;
+    }
+    bool StrictPresetSelection() const noexcept { return m_strictPresetSelection; }
     // Plugin browser selection. 0..16383 (128 is the standard SF2 drum bank).
     // Does not modify audio/MIDI engine until note-on and allocates nothing.
     // Incoming MIDI bank-select CC0 can subsequently override per channel.
@@ -230,6 +237,7 @@ private:
     uint32_t m_hostRate = 44100; // host clock; chip always runs at 44100 Hz
     Emu8000Core m_core;
     std::vector<LoadedBank> m_banks;
+    bool m_strictPresetSelection = false; // plugin explicitly enables this
     std::array<float,kGuiControlCount> m_guiControls{};
     // A fixed per-instance scratch area for selecting SF2/SBK layers at NoteOn.
     std::array<SoundFont::Region, kMaxRegionsPerNote> m_regionScratch{};
