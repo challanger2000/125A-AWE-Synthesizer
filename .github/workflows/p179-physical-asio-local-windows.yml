@@ -1,0 +1,233 @@
+name: P182 real ASIO reference AWE reference Windows local test kit
+on:
+  push:
+    branches: [qa/p179-native-asio-instrument-kit]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  prepare-local-kit:
+    runs-on: windows-2022
+    timeout-minutes: 26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Retrieve exactly validated P178 original-media AWE test bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: P178-Windows-PRIVATE-LOCAL-TEST-KIT
+          run-id: 42496568131
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: p178-verified
+      - name: Verify archived P178 VST3 binary and provenance before any reuse
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'p178-verified/PROVENANCE.txt')) { throw 'P178 proven source metadata missing' }
+          $provenance=Get-Content 'p178-verified/PROVENANCE.txt' -Raw
+          if ($provenance -notmatch 'SOURCE_SHA=cff9d91cdec5aa2574d039b23660fae0589c6878') { throw 'P178 artifact source SHA mismatch' }
+          $binary=(Get-ChildItem 'p178-verified/125A_AWE_Synthesizer.vst3' -Recurse -File -Filter '*.vst3' | Select-Object -First 1)
+          if (-not $binary -or $binary.Name -ne '125A_AWE_Synthesizer.vst3') { throw 'Verified P178 binary missing' }
+          $manifest=Get-Content 'p178-verified/SHA256SUMS.txt' -Raw
+          $hash=(Get-FileHash -LiteralPath $binary.FullName -Algorithm SHA256).Hash
+          if ($manifest -notmatch [Regex]::Escape($hash)) { throw 'Product DLL SHA256 does not match P178 signed-off test manifest' }
+          $ownerExe=Get-Item -LiteralPath 'p178-verified/125A-P178-Media-Probe.exe'
+          $ownerHash=(Get-FileHash -LiteralPath $ownerExe.FullName -Algorithm SHA256).Hash
+          if ($manifest -notmatch [Regex]::Escape($ownerHash)) { throw 'Original media probe does not match P178 tested binary' }
+          Write-Host 'P178 verified Windows DLL and media probe hash-checked'
+      - name: Clone audited Test Lab P100 ASIO-MIDI native source at exact commit
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch qa/p100-asio-instrument-midi https://github.com/challanger2000/125A-Plugin-Test-Lab.git lab-p100
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot fetch native ASIO host' }
+          if ((git -C lab-p100 rev-parse HEAD).Trim() -cne 'e154eb8efe37cfd21c7be4aad84650d7f778962c') { throw 'Native Test Lab source not exactly pinned' }
+      - name: Fetch original ASIO SDK at separately pinned GPLv3 reference
+        shell: pwsh
+        run: |
+          git clone --no-checkout https://github.com/audiosdk/asio.git asio-sdk
+          if ($LASTEXITCODE -ne 0) { throw 'ASIO source unavailable' }
+          git -C asio-sdk checkout --detach 496a0765b8bb9c26f764f22f9a9712a937177db2
+          if ($LASTEXITCODE -ne 0 -or (git -C asio-sdk rev-parse HEAD).Trim() -cne '496a0765b8bb9c26f764f22f9a9712a937177db2') { throw 'Wrong ASIO SDK source' }
+      - name: Build native ASIO driver MIDI event host on Windows x64
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force qa | Out-Null
+          cmake -S lab-p100 -B build-lab-p179 -G 'Visual Studio 17 2022' -A x64 "-DASIO_SDK_DIR=$env:GITHUB_WORKSPACE/asio-sdk"
+          if ($LASTEXITCODE -ne 0) { throw 'P179 native ASIO configure failed' }
+          cmake --build build-lab-p179 --config Release --parallel 4 --target TestLabPhysicalASIO QAASIOReferenceMidi QAASIOReferenceMidiBroken 2>&1 | Tee-Object qa/build.txt
+          if ($LASTEXITCODE -ne 0) { throw 'P179 native ASIO MIDI host compile failed' }
+      - name: Reject missing physical ASIO device with real product VST3
+        shell: pwsh
+        run: |
+          $exe=@(Get-ChildItem build-lab-p179 -Recurse -File -Filter '125A_Test_Lab_Physical_ASIO.exe')
+          if ($exe.Count -ne 1) { throw 'Exactly one native ASIO executor required' }
+          $plugin=(Get-ChildItem p178-verified -Filter '125A_AWE_Synthesizer.vst3' -Recurse -File | Select-Object -First 1).FullName
+          & $exe[0].FullName --sample-format-selftest
+          if ($LASTEXITCODE -ne 0) { throw 'ASIO sample converter self-test failed' }
+          & $exe[0].FullName --buffer-choice-selftest
+          if ($LASTEXITCODE -ne 0) { throw 'P101 real ASIO buffer chooser selftest failed' }
+          & $exe[0].FullName --timing-trace-selftest
+          if ($LASTEXITCODE -ne 0) { throw 'P181 ASIO trace window selftest failed' }
+          $badAsio=(Join-Path $env:RUNNER_TEMP 'P179-FORBIDDEN-ASIO.json')
+          $badMidi=(Join-Path $env:RUNNER_TEMP 'P179-FORBIDDEN-MIDI.json')
+          $diag=(Join-Path $env:RUNNER_TEMP 'P179-FORBIDDEN-ASIO-DIAGNOSTIC.json')
+          $trace=(Join-Path $env:RUNNER_TEMP 'P179-FORBIDDEN-ASIO-TIMING-TRACE.json')
+          $args=@('--physical-asio-probe','--plugin',$plugin,'--driver-name','No physical P179 device','--driver-clsid','{00000000-0000-0000-0000-000000000000}','--rate','44100','--frames','256','--callbacks','1000','--nonce','0123456789abcdef0123456789abcdef0123456789abcdef','--out',$badAsio,'--midi-note','48','--midi-out',$badMidi,'--diagnostic-out',$diag,'--timing-trace-out',$trace)
+          $PSNativeCommandUseErrorActionPreference=$false
+          & $exe[0].FullName @args
+          if ($LASTEXITCODE -eq 0 -or (Test-Path $badAsio) -or (Test-Path $badMidi) -or (Test-Path $diag) -or (Test-Path $trace)) { throw 'False physical-ASIO PASS without device' }
+          $capPath=(Join-Path $env:RUNNER_TEMP 'P179-FORBIDDEN-ASIO-CAPABILITIES.json')
+          & $exe[0].FullName --asio-buffer-capabilities --driver-name 'No physical P179 device' --driver-clsid '{00000000-0000-0000-0000-000000000000}' --nonce '0123456789abcdef0123456789abcdef0123456789abcdef' --out $capPath
+          if ($LASTEXITCODE -eq 0 -or (Test-Path $capPath)) { throw 'P101 accepted unregistered physical ASIO capability report' }
+          $referenceFiles=@(Get-ChildItem build-lab-p179 -Filter '125A_QA_ASIO_Reference_MIDI.vst3' -Recurse -File)
+          if ($referenceFiles.Count -ne 1) { throw 'P182 exactly one real reference VST3 DLL required' }
+          $refNativeProof=(Join-Path $env:RUNNER_TEMP 'P182-FORBIDDEN-REFERENCE-ASIO.json')
+          $refNativeMidi=(Join-Path $env:RUNNER_TEMP 'P182-FORBIDDEN-REFERENCE-MIDI.json')
+          $refNativeDiagnostic=(Join-Path $env:RUNNER_TEMP 'P182-FORBIDDEN-REFERENCE-DIAGNOSTIC.json')
+          $refNativeTrace=(Join-Path $env:RUNNER_TEMP 'P182-FORBIDDEN-REFERENCE-TRACE.json')
+          $refArgs=@('--physical-asio-probe','--plugin',$referenceFiles[0].FullName,
+            '--driver-name','P182 Nonexistent Reference Device',
+            '--driver-clsid','{00000000-0000-0000-0000-000000000000}',
+            '--rate','44100','--frames','512','--callbacks','1000',
+            '--nonce','0123456789abcdef0123456789abcdef0123456789abcdef',
+            '--out',$refNativeProof,'--midi-note','48','--midi-out',$refNativeMidi,
+            '--diagnostic-out',$refNativeDiagnostic,'--timing-trace-out',$refNativeTrace)
+          & $exe[0].FullName @refArgs
+          if ($LASTEXITCODE -eq 0 -or (Test-Path $refNativeProof) -or
+              (Test-Path $refNativeMidi) -or (Test-Path $refNativeDiagnostic) -or
+              (Test-Path $refNativeTrace)) { throw 'P182 reference manufactured physical hardware proof' }
+          # P183: actual source-built reference module must survive the same
+          # VST3 initialize/setup/setProcessing/MIDI48/process/stop path as ASIO.
+          # A deliberate setProcessing failure must be detected, NOT accepted.
+          & $exe[0].FullName --vst3-reference-lifecycle-selftest --plugin $referenceFiles[0].FullName
+          if ($LASTEXITCODE -ne 0) { throw 'P183 source-built reference VST3 lifecycle failed' }
+          $brokenRef=@(Get-ChildItem build-lab-p179 -Filter '125A_QA_ASIO_Reference_MIDI_Broken.vst3' -Recurse -File)
+          if ($brokenRef.Count -ne 1) { throw 'P183 broken reference lifecycle negative fixture missing' }
+          $PSNativeCommandUseErrorActionPreference=$false
+          $brokenOutput=(& $exe[0].FullName --vst3-reference-lifecycle-selftest --plugin $brokenRef[0].FullName 2>&1 | Out-String)
+          if ($LASTEXITCODE -eq 0 -or -not $brokenOutput.Contains('P183 reference setProcessing(true) failed')) {
+            throw 'P183 negative VST3 with broken setProcessing passed unexpectedly'
+          }
+          Write-Host 'PASS P183 real reference lifecycle + MIDI PCM and intentional VST3 processing failure rejected'
+          Write-Host 'PASS native sample format, P101 buffer policy, and absent physical-driver rejection'
+          exit 0
+      - name: Exercise actual Windows PowerShell 5.1 native stderr and return-code handling
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          . .\tools\P179-NATIVE-CALL.ps1
+          $root=Join-Path $env:RUNNER_TEMP 'p180-native-stderr-test'
+          New-Item -ItemType Directory -Force $root | Out-Null
+          $fail=Join-Path $root 'native-stderr-fail.cmd'
+          $good=Join-Path $root 'native-stderr-success.cmd'
+          [IO.File]::WriteAllLines($fail,[string[]]@('@echo off','echo P180_EXPECTED_DIAGNOSTIC_ON_STDERR 1>&2','exit /b 7'),[Text.Encoding]::ASCII)
+          [IO.File]::WriteAllLines($good,[string[]]@('@echo off','echo P180_EXPECTED_SUCCESS_MESSAGE 1>&2','exit /b 0'),[Text.Encoding]::ASCII)
+          $badLog=Join-Path $root 'native-fail.log'
+          $failCode=Invoke-P180NativeWithLog -Executable $fail -Arguments @() -LogPath $badLog
+          if ($failCode -ne 7 -or -not (Test-Path -LiteralPath $badLog) -or
+              -not (Get-Content -LiteralPath $badLog -Raw).Contains('P180_EXPECTED_DIAGNOSTIC_ON_STDERR')) {
+            throw 'Native stderr was turned into a terminating error, hidden or falsely passed' 
+          }
+          $goodLog=Join-Path $root 'native-success.log'
+          $okCode=Invoke-P180NativeWithLog -Executable $good -Arguments @() -LogPath $goodLog
+          if ($okCode -ne 0 -or -not (Get-Content -LiteralPath $goodLog -Raw).Contains('P180_EXPECTED_SUCCESS_MESSAGE')) {
+            throw 'Native stderr from successful child caused a false failure'
+          }
+          if ($ErrorActionPreference -ne 'Stop') { throw 'Native wrapper changed global stop-on-error policy' }
+          Write-Host 'PASS Windows PowerShell 5.1 real native-stderr capture; correct failing and successful exit codes'
+      - name: Run P182 comparison classification controls with actual Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'tools/P182-ASIO-REFERENCE-COMPARE.ps1' -OfflineSelfTest
+          if ($LASTEXITCODE -ne 0) { throw 'P182 offline three-way classification regression' }
+          if (@(Get-ChildItem -Directory -Filter 'P182-LOCAL-RESULT-*').Count -gt 0) { throw 'Offline P182 check forged a hardware report' }
+      - name: Parse local Windows PowerShell and verify ASIO acceptance controls
+        shell: pwsh
+        run: |
+          $tokens=$null
+          $syntaxErrors=$null
+          $ast=[System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path 'tools/P179-ASIO-TEST.ps1').Path,[ref]$tokens,[ref]$syntaxErrors)
+          if ($syntaxErrors.Count -ne 0) { $syntaxErrors | Format-List | Out-String | Write-Error; throw 'P179 local hardware script is not valid Windows PowerShell' }
+          $content=Get-Content -LiteralPath 'tools/P179-ASIO-TEST.ps1' -Raw
+          $helper=Get-Content -LiteralPath 'tools/P179-NATIVE-CALL.ps1' -Raw
+          if (-not $helper.Contains('Invoke-P180NativeWithLog') -or -not $content.Contains('Invoke-P180NativeWithLog')) { throw 'P180 native stderr wrapper not wired to hardware and capability probes' }
+          foreach($phrase in @('AWE32_ROM_PATH','AWE32_SF2_PATH','P179-SHA256SUMS.txt','asio.asio_callbacks','midi.note_ons','midi.nonzero_pcm_samples','deadline_misses','release_approved=$false','--asio-buffer-capabilities','125a-asio-driver-capability-v1','caps.selected_frames','caps.preferred_frames','--diagnostic-out','ASIO-CALLBACK-DIAGNOSTICS.json','asio_callback_counts','asio_cause_counts','--timing-trace-out','ASIO-CALLBACK-TIMING-TRACE.json','timing_trace_events','timing_trace_verified')) {
+            if (-not $content.Contains($phrase)) { throw "Local P179 script missing independent gate $phrase" }
+          }
+          $p182Tokens=$null
+          $p182Errors=$null
+          $p182Ast=[System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path 'tools/P182-ASIO-REFERENCE-COMPARE.ps1').Path,[ref]$p182Tokens,[ref]$p182Errors)
+          if ($p182Errors.Count -ne 0) { $p182Errors | Format-List | Out-String | Write-Error; throw 'P182 comparison launcher syntax invalid' }
+          $p182=Get-Content 'tools/P182-ASIO-REFERENCE-COMPARE.ps1' -Raw
+          foreach($phrase in @('Classify-P182','New-P182Nonce','P182-REFERENCE-SHA256.txt','REFERENCE-A','REFERENCE-B','--physical-asio-probe','--timing-trace-out','--diagnostic-out','AWE32_ROM_PATH','AWE32_SF2_PATH','release_approved=$false','physical_asio_verified=$false')) {
+            if (-not $p182.Contains($phrase)) { throw "P182 source does not declare safety gate $phrase" }
+          }
+          Write-Host 'P179/P182 Windows PowerShell 5.1 parsing and fail-closed contracts PASS'
+      - name: Package Windows BAT/PowerShell + physically testable native EXE and exact P178 VST3
+        shell: pwsh
+        run: |
+          $dest='qa/local-kit'
+          New-Item -ItemType Directory -Force $dest | Out-Null
+          Copy-Item 'p178-verified/*' $dest -Recurse
+          $exe=@(Get-ChildItem build-lab-p179 -Recurse -File -Filter '125A_Test_Lab_Physical_ASIO.exe')
+          if ($exe.Count -ne 1) { throw 'Native ASIO executor ambiguity' }
+          Copy-Item $exe[0].FullName (Join-Path $dest '125A-Test-Lab-ASIO-MIDI.exe')
+          Copy-Item 'tools/P179-ASIO-TEST.bat' $dest
+          Copy-Item 'tools/P179-ASIO-TEST.ps1' $dest
+          Copy-Item 'tools/P179-NATIVE-CALL.ps1' $dest
+          Copy-Item 'tools/P182-ASIO-COMPARE.bat' $dest
+          Copy-Item 'tools/P182-ASIO-REFERENCE-COMPARE.ps1' $dest
+          Copy-Item 'docs/P182-INDEPENDENT-ASIO-REFERENCE.md' (Join-Path $dest 'README-P182-ASIO-COMPARISON.txt')
+          $referenceDlls=@(Get-ChildItem build-lab-p179 -Filter '125A_QA_ASIO_Reference_MIDI.vst3' -Recurse -File)
+          if ($referenceDlls.Count -ne 1) { throw 'P182 independent MIDI reference DLL missing/ambiguous' }
+          $referenceRoot=Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $referenceDlls[0].FullName))
+          if ((Split-Path -Leaf $referenceRoot) -cne '125A_QA_ASIO_Reference_MIDI.vst3') { throw 'Reference VST3 bundle layout invalid' }
+          Copy-Item -LiteralPath $referenceRoot -Destination (Join-Path $dest '125A_QA_ASIO_Reference_MIDI.vst3') -Recurse
+          $referencePackageDll=Join-Path $dest '125A_QA_ASIO_Reference_MIDI.vst3/Contents/x86_64-win/125A_QA_ASIO_Reference_MIDI.vst3'
+          if (-not (Test-Path -LiteralPath $referencePackageDll -PathType Leaf)) { throw 'P182 reference DLL did not survive packaging' }
+          $referenceSha=(Get-FileHash -LiteralPath $referencePackageDll -Algorithm SHA256).Hash.ToLowerInvariant()
+          & (Join-Path $dest '125A-Test-Lab-ASIO-MIDI.exe') --vst3-reference-lifecycle-selftest --plugin $referencePackageDll
+          if ($LASTEXITCODE -ne 0) { throw 'P183 ZIP-contained reference module lifecycle failed after packaging' }
+          ($referenceSha+'  125A_QA_ASIO_Reference_MIDI.vst3') | Set-Content (Join-Path $dest 'P182-REFERENCE-SHA256.txt')
+          Copy-Item 'lab-p100/tests/asio_reference_midi_fixture.cpp' (Join-Path $dest 'P182-REFERENCE-SOURCE.cpp')
+          Copy-Item 'docs/P179-LOCAL-PHYSICAL-ASIO-ACCEPTANCE.md' (Join-Path $dest 'README-P179-ASIO.txt')
+          Copy-Item 'asio-sdk/LICENSE.txt' (Join-Path $dest 'ASIO-SDK-LICENSE.txt')
+          New-Item -ItemType Directory -Force (Join-Path $dest 'ASIO-HOST-SOURCE') | Out-Null
+          Copy-Item 'lab-p100/src/physical_asio.cpp' (Join-Path $dest 'ASIO-HOST-SOURCE/physical_asio.cpp')
+          Copy-Item 'lab-p100/src/asio_buffer_probe.inc' (Join-Path $dest 'ASIO-HOST-SOURCE/asio_buffer_probe.inc')
+          Copy-Item 'lab-p100/src/asio_live_diagnostics.inc' (Join-Path $dest 'ASIO-HOST-SOURCE/asio_live_diagnostics.inc')
+          Copy-Item 'lab-p100/src/asio_timing_trace.inc' (Join-Path $dest 'ASIO-HOST-SOURCE/asio_timing_trace.inc')
+          Copy-Item 'lab-p100/src/asio_reference_lifecycle.inc' (Join-Path $dest 'ASIO-HOST-SOURCE/asio_reference_lifecycle.inc')
+          Copy-Item 'lab-p100/docs/P183-REFERENCE-LIFECYCLE-REGRESSION.md' (Join-Path $dest 'ASIO-HOST-SOURCE/P183-LIFECYCLE-TEST.txt')
+          Copy-Item 'lab-p100/docs/P181-ASIO-CALLBACK-TIMING-TRACE.md' (Join-Path $dest 'ASIO-HOST-SOURCE/P181-CALLBACK-TRACE.txt')
+          Copy-Item 'lab-p100/docs/P102-REAL-ASIO-FAILURE-TELEMETRY.md' (Join-Path $dest 'ASIO-HOST-SOURCE/P102-DIAGNOSTICS.txt')
+          Copy-Item 'lab-p100/CMakeLists.txt' (Join-Path $dest 'ASIO-HOST-SOURCE/CMakeLists.txt')
+          Copy-Item 'lab-p100/docs/P100-PHYSICAL-ASIO-MIDI.md' (Join-Path $dest 'ASIO-HOST-SOURCE/README.txt')
+          @(
+            "P179_SOURCE_SHA=$env:GITHUB_SHA"
+            'AWE_P178_EXACT_VALIDATED_SOURCE=cff9d91cdec5aa2574d039b23660fae0589c6878'
+            'ASIO_HOST_EXACT_SOURCE=e154eb8efe37cfd21c7be4aad84650d7f778962c'
+            'ASIO_SDK_SOURCE=496a0765b8bb9c26f764f22f9a9712a937177db2'
+            'ORIGINAL_ROM_SF2=NEVER_IN_CLOUD'
+            'PHYSICAL_ASIO_SESSION=NOT_RUN_IN_CLOUD'
+            'REAL_DAW_SESSION=NOT_RUN'
+            'RELEASE=NO_GO'
+          ) | Set-Content (Join-Path $dest 'P179-PROVENANCE.txt')
+          $plugin=(Get-ChildItem $dest -Filter '125A_AWE_Synthesizer.vst3' -Recurse -File | Select-Object -First 1).FullName
+          @($plugin,(Join-Path $dest '125A-Test-Lab-ASIO-MIDI.exe')) | ForEach-Object {
+            $f=Get-FileHash -LiteralPath $_ -Algorithm SHA256
+            "{0}  {1}" -f $f.Hash,([IO.Path]::GetFileName($f.Path))
+          } | Set-Content (Join-Path $dest 'P179-SHA256SUMS.txt')
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: P182-ASIO-REFERENCE-COMPARISON
+          path: qa/local-kit/
+          if-no-files-found: warn
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: P179-Windows-ASIO-Build-and-Negative-Evidence
+          path: qa/build.txt
+          if-no-files-found: warn
+          retention-days: 14
