@@ -47,7 +47,11 @@ def send_paced_frame(fd, payload: bytes, conn, send, pace_ms=25):
 
 
 def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
-              send, key, type_path, screenshot, report, pcm_fifo=None, programs=(0,), note=48, creative_bank=1, preset_names=None, midi_channel=0):
+              send, key, type_path, screenshot, report, pcm_fifo=None, programs=(0,), note=48, creative_bank=1, preset_names=None, midi_channel=0, p210_sweep=False):
+    if p210_sweep:
+        return run_p210_real_driver_sweep(conn,out,trace,fifo_base,send,
+                                         screenshot,report,pcm_fifo,programs,
+                                         note,creative_bank,midi_channel)
     if not programs or len(programs)>2 or any(not 0<=v<=127 for v in programs):
         raise ValueError("Select one or two valid MIDI program numbers")
     if not 0<=note<=127 or not 0<=creative_bank<=127 or not 0<=midi_channel<=15:
@@ -170,3 +174,74 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
             "notes":"A screenshot verifies the actual guest process, register activity and audio must separately confirm MIDI route"}
     report["p64_original_win95_midi"]=result
     return result
+
+
+def run_p210_real_driver_sweep(conn, out, trace, fifo_base, send,
+                               screenshot, report, pcm_fifo, programs,
+                               note, creative_bank, midi_channel):
+    """RESEARCH ONLY. Play 14 distinct generated SF2 presets through the
+    actual Win95 guest Creative WinMM endpoint with 86Box EMU8000 I/O tap.
+    This never synthesizes MIDI on the host and never writes EMU registers.
+    A separate CSV window is frozen for every note, not just the first.
+    """
+    if (len(programs)!=14 or len(set(programs))!=14 or note!=59
+            or midi_channel!=0 or creative_bank!=1):
+        raise ValueError("P210 exact controlled note59 bank1 14-program sweep required")
+    from p63_send_guest_midi import frame, demo_messages
+    send(conn,"step 2000")
+    screenshot(conn,out,"p210-creative-guest-autostart.png",report)
+    def rowcount():
+        return max(0,len(trace.read_text(encoding="utf8",errors="replace").splitlines())-1) if trace.is_file() else -1
+    before=rowcount()
+    if before < 0:
+        raise RuntimeError("P210 missing authentic 86Box EMU8000 port-trace instrument")
+    fd=connect_linux_86box_fifo(fifo_base)
+    pcm=PcmReceiver(pcm_fifo) if pcm_fifo else None
+    if pcm:pcm.start()
+    windows=[]
+    uart_frames=0
+    uart_bytes=0
+    pcm_report=None
+    try:
+        for program in programs:
+            for message in demo_messages(channel=midi_channel,bank=creative_bank,
+                                         program=program,note=note,velocity=100):
+                uart_bytes+=send_paced_frame(fd,message,conn,send)
+                uart_frames+=1
+            send(conn,"step 300")
+            start=rowcount()
+            if start<0:raise RuntimeError("P210 I/O trace disappeared")
+            uart_bytes+=send_paced_frame(fd,frame(0x90|midi_channel,note,100),conn,send)
+            uart_frames+=1
+            send(conn,"step 850")
+            uart_bytes+=send_paced_frame(fd,frame(0x80|midi_channel,note,0),conn,send)
+            uart_frames+=1
+            send(conn,"step 550")
+            end=rowcount()
+            if end<=start:
+                raise RuntimeError("P210 original driver had no port writes on program "+str(program))
+            windows.append({"program":program,"note":note,"velocity":100,
+                            "start_row":start,"end_row":end,
+                            "window_isolated":True})
+    finally:
+        os.close(fd)
+        if pcm:pcm_report=pcm.stop()
+    after=rowcount()
+    if len(windows)!=14 or after<=before:
+        raise RuntimeError("P210 complete source-driver sweep missing")
+    original={
+        "p89_original_first_note_trace_window":dict(windows[0]),
+        "p210_original_creative_register_windows":windows,
+        "p84_midi_channel_0_based":midi_channel,
+        "p75_original_private_sf2_test":False,
+        "p75_program_results":[],
+        "p74_uart_bytes_injected":uart_bytes,
+        "p74_uart_frames_injected":uart_frames,
+        "original_creative_midi_activity_register_write_delta":after-before,
+        "original_creative_wavetable_audio":None,
+        "direct_86box_pcm_fifo":pcm_report,
+        "raw_private_audio_published":False,
+        "p210_real_win95_driver_sweep":True,
+        "notes":"Original Creative SBAWE.VXD and WinMM in Windows95 guest, 86Box tap, no physical board"}
+    report["p64_original_win95_midi"]=original
+    return original
