@@ -1,0 +1,86 @@
+name: P190 frozen ETW callback attribution (audit-only)
+on:
+  push:
+    branches: [audit/p190-rt-etw-20261109]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  attribute-original-p190:
+    runs-on: windows-2022
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download exact frozen P190 full-regression evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: P190-FX-Zero-Dry-Full-Regression-A
+          run-id: 42571191825
+          github-token: ${{ github.token }}
+          path: original
+      - name: Reject any substitute or incomplete original timing data
+        shell: pwsh
+        run: |
+          python -c "import json,pathlib,hashlib,csv; p=pathlib.Path('original'); j=json.loads((p/'P170-P171-SUMMARY.json').read_text()); assert j['source_sha']=='bc565cfc238ece6f59af6ef6e7cc950136688b8d'; assert j['run_id']=='42571191825'; assert j['measured_callbacks']==14400 and j['deadline_misses']==1; assert j['rt_scope'].startswith('offline shared Windows runner'); raw=(p/'p171-rt.csv').read_bytes(); assert hashlib.sha256(raw).hexdigest()==j['raw_csv_sha256']; rows=list(csv.DictReader(raw.decode('utf-8-sig').splitlines())); assert len(rows)==14400; late=[r for r in rows if r['late']=='1']; assert len(late)==1 and [late[0][x] for x in ('frames','notes','scenario','block')]==['128','30','4','1']; etw=json.loads((p/'etw-status.json').read_text()); assert etw['recorded'] is True and (p/'p170-cpu-scheduler.etl').stat().st_size>30000000; print('P190 original evidence SHA and exact single deadline row VERIFIED')"
+          if ($LASTEXITCODE -ne 0) { throw 'Original P190 frozen evidence mismatch' }
+      - name: Build pinned tested Windows TDH decoder and negative controls
+        shell: pwsh
+        run: |
+          cmake -S tools/p171_etw -B build-etw -G 'Visual Studio 17 2022' -A x64
+          if ($LASTEXITCODE -ne 0) { throw 'Decoder configure failed' }
+          cmake --build build-etw --config Release --parallel 2
+          if ($LASTEXITCODE -ne 0) { throw 'Decoder build failed' }
+          python tools/p171_etw/test_analysis.py
+          if ($LASTEXITCODE -ne 0) { throw 'Decoder analysis negative controls failed' }
+      - name: Validate ETW decoder with independent sleep/busy Windows control
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force qa/control | Out-Null
+          'base,size,path' | Set-Content qa/modules.csv
+          $recording=$false
+          try {
+            wpr.exe -start GeneralProfile -filemode 2>&1 | Out-File qa/control/wpr-start.txt
+            if ($LASTEXITCODE -ne 0) { throw 'ETW positive control failed to start' }
+            $recording=$true
+            & build-etw/Release/p171_etw_control.exe qa/control/callbacks.csv
+            if ($LASTEXITCODE -ne 0) { throw 'ETW calibration emitter failed' }
+          } finally {
+            if ($recording) {
+              wpr.exe -stop qa/control/cpu.etl 2>&1 | Out-File qa/control/wpr-stop.txt
+              if ($LASTEXITCODE -ne 0) { throw 'ETW calibration stop failed' }
+            }
+          }
+          & build-etw/Release/p171_etw_reader.exe qa/control/cpu.etl qa/control/callbacks.csv qa/modules.csv qa/control/decoded
+          if ($LASTEXITCODE -ne 0) { throw 'ETW positive control trace could not be decoded' }
+          python tools/p171_etw/analyze.py control qa/control/callbacks.csv qa/control/decoded qa/control
+          if ($LASTEXITCODE -ne 0) { throw 'ETW positive control failed, no causal claims permitted' }
+      - name: Attribute only original P190 deadline miss with frozen ETL
+        shell: pwsh
+        run: |
+          & build-etw/Release/p171_etw_reader.exe original/p170-cpu-scheduler.etl original/p171-rt.csv qa/modules.csv qa/original-decoded
+          if ($LASTEXITCODE -ne 0) { throw 'Frozen P190 ETW could not be decoded' }
+          $summary=Get-Content original/P170-P171-SUMMARY.json -Raw | ConvertFrom-Json
+          python tools/p171_etw/analyze.py audit original/p171-rt.csv qa/original-decoded qa/analysis --control qa/control/result.json --expected-csv-sha $summary.raw_csv_sha256 --product-sha bc565cfc238ece6f59af6ef6e7cc950136688b8d --run-id 42571191825
+          if ($LASTEXITCODE -ne 0) { throw 'Frozen P190 ETW callback coverage/positive control invalid' }
+          python -c "import json; j=json.load(open('qa/analysis/result.json')); late=j['deadline_misses']; assert len(late)==1; assert int(late[0]['block'])==1 and int(late[0]['scenario'])==4 and int(late[0]['frames'])==128; print('P190 CAUSAL_ETW:',late[0]['attribution'],'scheduled_us=',late[0]['scheduled_us'],'off_cpu_us=',late[0]['off_cpu_us'],'ready_us=',late[0]['ready_us'],'waiting_us=',late[0]['waiting_us'],'complete=',late[0]['coverage_complete'])"
+          if ($LASTEXITCODE -ne 0) { throw 'Frozen P190 ETW causal report invalid' }
+          Copy-Item original/P170-P171-SUMMARY.json qa/original-summary.json
+          Copy-Item original/p171-rt.csv qa/original-callbacks.csv
+          @(
+              'AUDIT_ONLY=TRUE',
+              'PRODUCT_SOURCE_SHA=bc565cfc238ece6f59af6ef6e7cc950136688b8d',
+              'ORIGINAL_P190_RUN=42571191825',
+              'ORIGINAL_MISSES=1/14400',
+              'SCHEDULED_RUNTIME_IS_NOT_PURE_DSP_PROOF=TRUE',
+              'PRIVATE_ASIO_NOT_RUN=TRUE',
+              'PRODUCT_CODE_CHANGED=FALSE'
+          ) | Set-Content qa/provenance.txt
+      - name: Preserve decoded ETW context and control evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: P190-ETW-Frozen-Run42571191825-Causal-Audit
+          path: qa/
+          if-no-files-found: warn
+          retention-days: 30
