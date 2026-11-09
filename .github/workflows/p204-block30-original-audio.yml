@@ -24,6 +24,9 @@ jobs:
           for n in 138 139 140; do
             curl -fLsS --retry 3 --max-time 120 "$base/recc$n.flac" -o "$RUNNER_TEMP/p204/recc$n.flac"
           done
+          for n in awetest.log recc138.flac recc139.flac recc140.flac; do
+            echo "P204 source file: $n size $(wc -c < "$RUNNER_TEMP/p204/$n") blob $(git hash-object "$RUNNER_TEMP/p204/$n")"
+          done
           test "$(git hash-object "$RUNNER_TEMP/p204/awetest.log")" = e9a03ff06a5494b791210f7d6c6427373ff7d03d
           test "$(git hash-object "$RUNNER_TEMP/p204/recc138.flac")" = f85f601bede930aa93b5670d4981800d56f21669
           test "$(git hash-object "$RUNNER_TEMP/p204/recc139.flac")" = 08fb1bb284e8f71da44c8607fef996e67feb293
