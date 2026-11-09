@@ -28,7 +28,8 @@ jobs:
           python3 -m py_compile tools/p196_sf2_generator_inspect.py
           python3 tools/p196_sf2_generator_inspect.py \
             --sf2 "$RUNNER_TEMP/sf-spec-test-p196.sf2" \
-            --out p196-evidence/P196-Original-SF2-Program-1-2-Generators.json
+            --programs 0,1,2,7,8,10,11 \
+            --out p196-evidence/P197-Original-SF2-Generator-Forensics.json
       - name: Upload only generator metadata, never sample bytes
         if: always()
         uses: actions/upload-artifact@v4
