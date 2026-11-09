@@ -9,6 +9,7 @@ on:
       - 'tools/p102_*'
       - 'tools/p103_*'
       - 'tools/p105_*'
+      - 'tools/p194_*'
       - 'src/engine/CMakeLists.txt'
       - 'src/engine/Synth.cpp'
       - 'docs/P193-CT4390-REFERENCE-FIDELITY.md'
@@ -126,6 +127,15 @@ jobs:
             --events "$RUNNER_TEMP/p97/events.tsv" \
             --p97-report p97-evidence/P97-AWE64-Gold-versus-125A-264s.json \
             --out p97-evidence/P105-Filter-and-Release-Diagnostics.json
+      - name: P194 attribute low-bass mismatch to absolute section powers and validate EG1 peak evidence
+        run: |
+          "$RUNNER_TEMP/p97/venv/bin/python" -m py_compile tools/p194_residual_attribution.py
+          "$RUNNER_TEMP/p97/venv/bin/python" tools/p194_residual_attribution.py \
+            --reference "$RUNNER_TEMP/p97/CT4390.flac" \
+            --native "$RUNNER_TEMP/p97/native-264s.wav" \
+            --p97-report p97-evidence/P97-AWE64-Gold-versus-125A-264s.json \
+            --p102-report p97-evidence/P102-Amp-Mod-Envelope-Phases.json \
+            --out p97-evidence/P194-Absolute-Low-Band-Attribution.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
