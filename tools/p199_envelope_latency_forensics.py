@@ -193,7 +193,8 @@ def main():
         "median_abs_attack_shape_error_db":
             round(float(np.median(np.abs(early_err))),3) if len(early_err) else None,
         "phase_2_amplitude_median_differences_from_p102":
-            {p:sections[p]["level_difference_db"] for p in ("attack","hold","decay","sustain")},
+            {p:next(x for x in phase["EG2_amp"]["phases"] if x["phase"]==p)["level_difference_db"]
+             for p in ("attack","hold","decay","sustain")},
         "caveat":"Second simultaneous note58 sampleID42 (+24 semitones, fast-decay layer) means composite attack is not direct isolated chip EG2 shape."
     }
     print("P199 EG2 attack relative to hold: median signed %.3fdB / median abs %.3fdB; %d active 10ms windows; TWO original layers" %
