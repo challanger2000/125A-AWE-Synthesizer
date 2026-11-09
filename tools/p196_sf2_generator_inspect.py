@@ -8,10 +8,16 @@ import json
 from pathlib import Path
 import struct
 
-OPS = {39:"keynumToVolEnvHold",40:"keynumToVolEnvDecay",
-       43:"keyRange",46:"keynum",47:"velocity",48:"initialAttenuation",
-       41:"instrument",53:"sampleID",54:"sampleModes",
-       56:"scaleTuning",58:"overridingRootKey"}
+OPS = {7:"modEnvToPitch",8:"initialFilterFc",9:"initialFilterQ",
+       25:"delayModEnv",26:"attackModEnv",27:"holdModEnv",28:"decayModEnv",
+       29:"sustainModEnv",30:"releaseModEnv",
+       33:"delayVolEnv",34:"attackVolEnv",35:"holdVolEnv",
+       36:"decayVolEnv",37:"sustainVolEnv",38:"releaseVolEnv",
+       39:"keynumToVolEnvHold",40:"keynumToVolEnvDecay",
+       41:"instrument",43:"keyRange",46:"keynum",47:"velocity",
+       48:"initialAttenuation",51:"coarseTune",52:"fineTune",
+       53:"sampleID",54:"sampleModes",56:"scaleTuning",
+       58:"overridingRootKey"}
 
 
 def chunks(data, start, end):
@@ -31,7 +37,12 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--sf2", required=True)
     p.add_argument("--out", required=True)
+    p.add_argument("--programs", default="1,2",
+                   help="Comma-separated original bank 0 program IDs to inspect")
     a = p.parse_args()
+    selected = {int(x) for x in a.programs.split(",")}
+    if any(i<0 or i>127 for i in selected):
+        raise ValueError("Invalid program")
     data = Path(a.sf2).read_bytes()
     if data[:4] != b"RIFF" or data[8:12] != b"sfbk":
         raise ValueError("Not a RIFF SoundFont bank")
@@ -74,7 +85,7 @@ def main():
                 if op in OPS:
                     if op == 43:
                         value=[val&255,(val>>8)&255]
-                    elif op in (51,53):
+                    elif op in (41,53):
                         value=val&65535
                     else:
                         value=val
@@ -84,7 +95,7 @@ def main():
     result=[]
     for k in range(len(phdr)-1):
         name,prog,bank,idx=phdr[k]
-        if bank != 0 or prog not in (1,2):
+        if bank != 0 or prog not in selected:
             continue
         pzones=zonelist(pbag,pgen,idx,phdr[k+1][3])
         ins=[]
@@ -97,12 +108,12 @@ def main():
                         "zones":zonelist(ibag,igen,inst[iid][1],inst[iid+1][1])})
         result.append({"program":prog,"name":name,"bank":bank,
                        "preset_zones":pzones,"instruments":ins})
-    if len(result)!=2:
-        raise ValueError("Expected test #3/#4 programs 1 and 2")
+    if {r["program"] for r in result} != selected:
+        raise ValueError("Requested SoundFont programs missing or ambiguous: "+str(selected))
     for item in result:
         scale=[z["generator"].get("scaleTuning") for i in item["instruments"]
                for z in i["zones"] if "scaleTuning" in z["generator"]]
-        print("P196 program",item["program"],item["name"],
+        print("P197 program",item["program"],item["name"],
               "instrument scaleTuning values",scale,
               "all special generators",
               [(i["name"],z["generator"]) for i in item["instruments"] for z in i["zones"]])
