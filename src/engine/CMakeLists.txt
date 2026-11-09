@@ -30,6 +30,22 @@ if(AWE125_P193_CT4390_REFERENCE_FX)
   target_compile_definitions(awe32_chip_safety PRIVATE
     AWE125_P193_CT4390_REFERENCE_FX)
 endif()
+# P198 is never shipping: allow only historical FX reference mode with VST3 OFF.
+# Compare possible original Win95 SF2 attenuation scaling without globally
+# retuning any productive preset or regression baseline.
+set(AWE125_P198_ATTEN_SCALE "" CACHE STRING
+  "Research-only alternative to 0.4 SF2 attenuation conversion")
+if(NOT "${AWE125_P198_ATTEN_SCALE}" STREQUAL "")
+  if(125A_BUILD_VST3 OR NOT AWE125_P193_CT4390_REFERENCE_FX)
+    message(FATAL_ERROR "P198 attenuation variant requires native-only P193 CT4390 reference")
+  endif()
+  if(NOT (AWE125_P198_ATTEN_SCALE STREQUAL "0.50" OR
+          AWE125_P198_ATTEN_SCALE STREQUAL "0.53"))
+    message(FATAL_ERROR "P198 experiment restricted to predeclared 0.50/0.53 candidates")
+  endif()
+  target_compile_definitions(awe32_chip_safety PRIVATE
+    AWE125_P198_ATTEN_SCALE=${AWE125_P198_ATTEN_SCALE})
+endif()
 if(WIN32)
   target_compile_definitions(awe32_chip_safety PRIVATE _CRT_SECURE_NO_WARNINGS)
 else()
