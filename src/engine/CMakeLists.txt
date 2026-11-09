@@ -16,6 +16,20 @@ target_include_directories(awe32_chip_safety PRIVATE
   "${UPSTREAM_SRC}"
 )
 target_compile_definitions(awe32_chip_safety PRIVATE AWE32EMU_WITH_86BOX)
+
+# P193: CT4390 reference recordings used the Creative Win95 patch/CC effect
+# sends, not the P190 commercial 0%=dry contract. Build a dedicated native
+# offline oracle that bypasses the 125A GUI overrides. Never apply it to VST3.
+option(AWE125_P193_CT4390_REFERENCE_FX
+  "Native-only historical CT4390 comparison: original Creative FX sends" OFF)
+if(AWE125_P193_CT4390_REFERENCE_FX)
+  if(125A_BUILD_VST3)
+    message(FATAL_ERROR
+      "P193 historical FX comparison must never be built into the product VST3")
+  endif()
+  target_compile_definitions(awe32_chip_safety PRIVATE
+    AWE125_P193_CT4390_REFERENCE_FX)
+endif()
 if(WIN32)
   target_compile_definitions(awe32_chip_safety PRIVATE _CRT_SECURE_NO_WARNINGS)
 else()
@@ -144,6 +158,10 @@ add_executable(awe32_p97_midi_renderer "../../tools/p97_midi_renderer.cpp")
 target_include_directories(awe32_p97_midi_renderer PRIVATE "." "include" "../../upstream/AWE32Emu/AWE32Emu/src" "../../upstream/AWE32Emu/AWE32Emu/src/86box/include")
 target_link_libraries(awe32_p97_midi_renderer PRIVATE awe32_chip_safety)
 set_target_properties(awe32_p97_midi_renderer PROPERTIES CXX_STANDARD 23)
+if(AWE125_P193_CT4390_REFERENCE_FX)
+  target_compile_definitions(awe32_p97_midi_renderer PRIVATE
+    AWE125_P193_CT4390_REFERENCE_FX)
+endif()
 
 # P128: audible, allocation-free note transfer at engine publication boundaries.
 add_executable(awe32_p128_note_handoff_test "${PROJECT_SOURCE_DIR}/tests/p128_note_handoff.cpp")
