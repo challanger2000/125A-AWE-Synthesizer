@@ -20,8 +20,8 @@ P97 coarse whole-recording envelope alignment uses **50ms increments** and found
 
 | Metric | EG2 amplitude / note 58 | EG1-to-pitch test / note 59 |
 |---|---:|---:|
-| P102 native-minus-hardware sustain | -0.897 dB | -0.146 dB |
-| P102 native-minus-hardware release | +1.55 dB | +2.285 dB |
+| P102 native-minus-hardware sustain | -0.897 dB | -0.151 dB |
+| P102 native-minus-hardware release | +1.545 dB | +2.280 dB |
 | Release minus sustain excess | **+2.442 dB** | **+2.431 dB** |
 | Real hardware release slope | -99.616 dB/s | -98.468 dB/s |
 | Native release slope | -97.623 dB/s | -97.584 dB/s |
