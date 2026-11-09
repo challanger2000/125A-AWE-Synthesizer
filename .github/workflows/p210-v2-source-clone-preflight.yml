@@ -1,0 +1,45 @@
+name: P210 v2 verify 14 presets appended to previously Creative-accepted original public SF2
+on:
+  push:
+    branches: [research/p206-original-eg1-registers]
+    paths:
+      - 'tools/p210_clone_verified_sf2.py'
+      - '.github/workflows/p210-v2-source-clone-preflight.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate-original-source-compatible-sf2:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch SHA-pinned original verified SoundFont Spec Test v3.0
+        run: |
+          curl -fLsS --retry 3 --max-time 90 \
+            https://raw.githubusercontent.com/mrbumpy409/SoundFont-Spec-Test/67c0405ea9/sf_spec_test.sf2 \
+            -o "$RUNNER_TEMP/accepted.sf2"
+          test "$(git hash-object "$RUNNER_TEMP/accepted.sf2")" = 4768c4a0215abf49c7a2bb51ada5ba3494faa1c5
+      - name: Create derived 14-program EG1 source copy; verify all original source samples and instrument records unchanged
+        run: |
+          python3 -m py_compile tools/p210_clone_verified_sf2.py
+          python3 tools/p210_clone_verified_sf2.py \
+            --source "$RUNNER_TEMP/accepted.sf2" \
+            --out "$RUNNER_TEMP/p210-verified-variants.sf2" \
+            --manifest "$RUNNER_TEMP/p210-verified-manifest.json"
+          python3 - <<'PY'
+          import json,os,hashlib
+          from pathlib import Path
+          from tools.p83_generic_sf2 import inspect_sf2
+          root=Path(os.environ["RUNNER_TEMP"])
+          b=(root/"p210-verified-variants.sf2").read_bytes()
+          r=inspect_sf2(b)
+          m=json.loads((root/"p210-verified-manifest.json").read_text())
+          assert r["preset_count"]==20 and r["instrument_count"]==25 and r["sample_count"]==44
+          assert m["preserved_original_audio_samples"] and len(m["programs"])==14
+          assert hashlib.sha256(b).hexdigest()==m["sf2_sha256"]
+          print("P210 source-clone preflight PASS; SHA",m["sf2_sha256"])
+          PY
+      - name: Purge source and derived public sample bytes
+        if: always()
+        run: rm -f "$RUNNER_TEMP/accepted.sf2" "$RUNNER_TEMP/p210-verified-variants.sf2" "$RUNNER_TEMP/p210-verified-manifest.json"
