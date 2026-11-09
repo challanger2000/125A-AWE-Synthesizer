@@ -53,13 +53,14 @@ std::string Safe(const std::string& raw) {
 void Usage() {
     std::cerr<<"Usage: awe32_p86_generic_sf2_probe --sf2 bank.sf2 --rom awe32.raw"
              <<" --out directory [--bank 0..16383] [--programs 0,17]"
-             <<" [--note 0..127] [--velocity 1..127] [--trace-dir path]\n";
+             <<" [--note 0..127] [--velocity 1..127] [--trace-dir path]"
+             <<" [--duration-ms 2000..6000 (default 2000)]\n";
 }
 }
 int main(int argc,char** argv) {
     namespace fs=std::filesystem;
     fs::path sf2,rom,out="125A-P86-Original-SF2-Audition",traceDir;
-    int bank=0,note=36,velocity=100;
+    int bank=0,note=36,velocity=100,durationMs=2000;
     std::vector<int> programs{0,17};
     for(int arg=1;arg<argc;arg+=2) {
         if(arg+1>=argc){Usage();return 2;}
@@ -71,6 +72,7 @@ int main(int argc,char** argv) {
         else if(flag=="--bank"&&Number(value,0,16383,bank)){}
         else if(flag=="--note"&&Number(value,0,127,note)){}
         else if(flag=="--velocity"&&Number(value,1,127,velocity)){}
+        else if(flag=="--duration-ms"&&Number(value,2000,6000,durationMs)){}
         else if(flag=="--programs"){
             programs.clear(); size_t start=0;
             do {
@@ -131,7 +133,9 @@ int main(int argc,char** argv) {
         }
         synth.NoteOn(0,static_cast<uint8_t>(note),
                      static_cast<uint8_t>(velocity));
-        constexpr uint32_t frames=88200;
+        // P209: native research only. The 2-second P86 default remains unchanged.
+        const uint32_t frames=static_cast<uint32_t>(
+            static_cast<uint64_t>(44100)*static_cast<uint64_t>(durationMs)/1000u);
         std::vector<int16_t> pcm(static_cast<size_t>(frames)*2,0);
         synth.RenderBlock(pcm.data(),frames);
         synth.NoteOff(0,static_cast<uint8_t>(note));

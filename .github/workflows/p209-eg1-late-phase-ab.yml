@@ -1,0 +1,82 @@
+name: P209 native original SF2 late EG1 audio A-B
+on:
+  push:
+    branches: [research/p206-original-eg1-registers]
+    paths:
+      - 'tools/p86_generic_sf2_probe.cpp'
+      - 'tools/p209_eg1_late_phase_ab.py'
+      - '.github/workflows/p209-eg1-late-phase-ab.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-eg1-attack-vs-hold:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check independent negative controls
+        run: |
+          python3 -m py_compile tools/p209_eg1_late_phase_ab.py
+          python3 tools/p209_eg1_late_phase_ab.py --self-test
+      - name: Obtain ephemeral public SF2 and original EMU8000 ROM
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/p209" p209-evidence
+          curl -fLsS --retry 3 --max-time 90 \
+            https://raw.githubusercontent.com/mrbumpy409/SoundFont-Spec-Test/67c0405ea9/sf_spec_test.sf2 \
+            -o "$RUNNER_TEMP/p209/spec.sf2"
+          test "$(git hash-object "$RUNNER_TEMP/p209/spec.sf2")" = 4768c4a0215abf49c7a2bb51ada5ba3494faa1c5
+          curl -fLsS --retry 3 --max-time 90 \
+            https://raw.githubusercontent.com/86Box/roms/master/sound/creative/awe32.raw \
+            -o "$RUNNER_TEMP/p209/awe32.raw"
+          test "$(stat -c %s "$RUNNER_TEMP/p209/awe32.raw")" = 1048576
+      - name: Build real native 86Box chip baseline and separate research hypothesis
+        shell: bash
+        run: |
+          set -euo pipefail
+          for kind in baseline candidate; do
+            mode=OFF
+            if [ "$kind" = candidate ]; then mode=ON; fi
+            cmake -S . -B "build-p209-$kind" -G Ninja -DCMAKE_BUILD_TYPE=Release \
+              -D125A_BUILD_VST3=OFF -D125A_BUILD_ENGINE_PROBES=ON \
+              -D125A_BUILD_OPL3_PROBES=OFF -DAWE125_P208_SF2_HOLD_SUSTAIN="$mode"
+            cmake --build "build-p209-$kind" --target awe32_p86_generic_sf2_probe --parallel 4
+          done
+      - name: Render original note59 5.5 seconds through both actual native chip cores
+        shell: bash
+        run: |
+          set -euo pipefail
+          for kind in baseline candidate; do
+            mkdir -p "$RUNNER_TEMP/p209/$kind/audio" "$RUNNER_TEMP/p209/$kind/trace"
+            "build-p209-$kind/src/engine/awe32_p86_generic_sf2_probe" \
+              --rom "$RUNNER_TEMP/p209/awe32.raw" \
+              --sf2 "$RUNNER_TEMP/p209/spec.sf2" \
+              --out "$RUNNER_TEMP/p209/$kind/audio" \
+              --trace-dir "$RUNNER_TEMP/p209/$kind/trace" \
+              --bank 0 --programs 0 --note 59 --velocity 100 --duration-ms 5500
+          done
+      - name: Compare authenticated Creative registers and EARLY-versus-LATE real PCM
+        shell: bash
+        run: |
+          set -euo pipefail
+          old="$(find "$RUNNER_TEMP/p209/baseline/audio" -name '*.wav' -type f -print -quit)"
+          new="$(find "$RUNNER_TEMP/p209/candidate/audio" -name '*.wav' -type f -print -quit)"
+          test -s "$old" && test -s "$new"
+          python3 tools/p209_eg1_late_phase_ab.py \
+            --fixture tests/fixtures/p208_original_creative_note59_oracle.json \
+            --baseline-trace "$RUNNER_TEMP/p209/baseline/trace/B0_P0_N59_native-port-write.trace" \
+            --candidate-trace "$RUNNER_TEMP/p209/candidate/trace/B0_P0_N59_native-port-write.trace" \
+            --baseline-wav "$old" --candidate-wav "$new" \
+            --out p209-evidence/P209-late-original-note59-native-AB.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: P209-Native-EMU8000-Late-Phase-PCM-Evidence
+          path: p209-evidence/*.json
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Remove temporary source bank ROM and WAV
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/p209"
