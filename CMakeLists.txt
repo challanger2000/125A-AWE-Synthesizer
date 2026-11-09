@@ -43,6 +43,13 @@ target_include_directories(awe32_asset_state_test PRIVATE src/vst3)
 target_compile_features(awe32_asset_state_test PRIVATE cxx_std_23)
 add_test(NAME 125A_asset_state COMMAND awe32_asset_state_test)
 
+# P190 SDK-independent FX send contract: a 0% global send MUST be dry
+# even if an SF2 generator or MIDI CC91/CC93 carries a nonzero send.
+add_executable(awe32_p190_fx_zero_dry tests/p190_fx_zero_dry.cpp)
+target_include_directories(awe32_p190_fx_zero_dry PRIVATE src/engine)
+target_compile_features(awe32_p190_fx_zero_dry PRIVATE cxx_std_23)
+add_test(NAME 125A_p190_fx_zero_dry COMMAND awe32_p190_fx_zero_dry)
+
 # P116 SDK-independent master-volume smoothing and mute behavior.
 add_executable(awe32_p116_master_volume_test tests/p116_master_volume.cpp)
 target_include_directories(awe32_p116_master_volume_test PRIVATE src/vst3)

@@ -27,7 +27,7 @@ struct Data {
     uint32_t chorusPreset=kDefaultChorusPreset;
     uint32_t channelProgramMask=0; // bits 0..15: per-channel MIDI program overrides
     std::array<uint32_t,16> channelPrograms{}; // defaults resolved to global program
-    std::array<uint32_t,kControlCount> controls{}; // 0 = original SF2, 10000 = full overlay
+    std::array<uint32_t,kControlCount> controls{}; // 0..9: 0 = original SF2; FX sends 10/11: 0 = dry, 10000 = full
     bool pathsSpecified=false;
     std::string romPath;
     std::string sf2Path;

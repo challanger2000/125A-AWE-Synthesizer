@@ -225,12 +225,32 @@ def main():
             gens=[p for p in DRY if p[0]!=op]+[(op,500)]
             _,initial_regs=render(f'headroom-midi-{title}-original',gens,**controls)
             actual_send=((initial_regs['ptrx']>>8)&255) if index==10 else ((initial_regs['csl']>>24)&255)
-            check(actual_send==(242 if index==10 else 241),
-                  title+' fixture confirms actual patch plus channel MIDI send before audio comparison')
+            check(actual_send==0,
+                  title+' GUI 0 explicitly kills nonzero SF2 and channel MIDI send')
             a=[0]*12;b=[0]*12;a[index]=.5;b[index]=1
             middle,_=render(f'headroom-midi-{title}-middle',gens,a,**controls)
             maximum,_=render(f'headroom-midi-{title}-max',gens,b,**controls)
             check(middle!=maximum,f'{title} retains audible headroom with MIDI send already present')
+        # P190: mono SF2 instrument with strong stored chorus and reverb sends.
+        # An explicit zero must force both EMU8000 send bytes to zero even
+        # with MIDI CC91/93 at maximum. Verify actual chip PCM stereo width.
+        original_gens=[g for g in DRY if g[0] not in (15,16)]+[(15,900),(16,900)]
+        dry,dry_regs=render('p190-mono-bass-dry',original_gens,
+                            controls=[0]*12,cc91=127,cc93=127,off=.25)
+        wet,wet_regs=render('p190-mono-bass-wet',original_gens,
+                            controls=[0]*10+[1,1],cc91=127,cc93=127,off=.25)
+        check(((dry_regs['ptrx']>>8)&255)==0 and
+              ((dry_regs['csl']>>24)&255)==0,
+              'P190 dry zeroed real EMU8000 PTRX/CSL sends despite SF2+CC')
+        check(((wet_regs['ptrx']>>8)&255)==255 and
+              ((wet_regs['csl']>>24)&255)==255,
+              'P190 maximum FX levels reach actual EMU8000 send registers')
+        lo,hi=round(.04*44100),round(.2*44100)
+        def width(pcm):
+            return math.sqrt(sum((pcm[2*i]-pcm[2*i+1])**2
+                                 for i in range(lo,hi))/max(1,hi-lo))/32768
+        check(width(dry)<max(.001,width(wet)*.12) and width(wet)>.001,
+              f'P190 dry mono bass resists unwanted stereo effect widening (dry={width(dry)}, wet={width(wet)})')
         fx={}
         for index,title in [(10,'reverb'),(11,'chorus')]:
             for amount in [0,.2,.5,1]:

@@ -17,8 +17,15 @@ failures=[c['label'] for c in before['checks'] if not c['pass']]
 for defect in ['<=50ms click','0->1%','FILTER ADSR','mode3 exits','endAddrsOffset']:
     if not any(defect in label for label in failures):raise RuntimeError('baseline did not reproduce '+defect)
 compared=[];size=0
+# P190 intentionally changes send behavior only when the actual SF2/MIDI
+# generator has an FX send. Do not suppress other neutral PCM changes.
+p190_intentional_non_neutral={
+    'p190-mono-bass-dry','p190-mono-bass-wet',
+    'headroom-reverb-original','headroom-chorus-original',
+    'headroom-midi-reverb-original','headroom-midi-chorus-original',
+}
 for row in after['rows']:
-    if any(row['controls']) or row['label'] in ['loop-3','loop-3-sustain','one-shot-end-offset','one-shot-coarse-end']:continue
+    if any(row['controls']) or row['label'] in ['loop-3','loop-3-sustain','one-shot-end-offset','one-shot-coarse-end'] or row['label'] in p190_intentional_non_neutral:continue
     a=(out/'before'/(row['label']+'.s16le')).read_bytes()
     b=(out/'after'/(row['label']+'.s16le')).read_bytes()
     if a!=b:raise RuntimeError('unintended neutral PCM change '+row['label'])

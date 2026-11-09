@@ -1,3 +1,18 @@
+# P190 – Bass-Mono und FX 0 % AUS (Entwicklungsauftrag)
+
+Eigentümer meldet: Bei Chorus/Reverb GUI=0 bleibt ein Effektanteil
+aus ursprünglichen SF2-/CC-Sends aktiv, sodass ein Mono-Bass stereo-wet
+klingt. Der ursprüngliche Code nannte die Regler ausdrücklich
+"Send Boost" und 0 nur "no extra boost", nicht bypass.
+P190 arbeitet deshalb an absoluten Send-Leveln auf
+`PTRX[15:8]` und `CSL[31:24]`, inkl. Echtzeitänderung bei
+gehaltenen Stimmen und neutraler Mono-PCM-Abnahme.
+[Verifizierbarer Entwicklerplan](docs/P190-ZERO-FX-SEND.md).
+V11-Altprojekt-Migration bis zum tatsächlichen Nachweis offen:
+**Release NO-GO; P189 ETW-Diagnose getrennt halten.**
+
+---
+
 # START HERE — 125A AWE Synthesizer
 
 ## P177 – reale Windows-SF2-Auswahl → erster Ton bestanden (8. November 2026)

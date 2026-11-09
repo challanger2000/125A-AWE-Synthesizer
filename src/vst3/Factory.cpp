@@ -1975,7 +1975,7 @@ public:
             STR16("Amp Release Shorten"),STR16("Filter Attack Shorten"),STR16("Filter Decay Shorten"),
             STR16("Filter Sustain Reduction"),STR16("Filter Release Shorten"),
             STR16("Filter Cutoff Reduction"),STR16("Filter Resonance Boost"),
-            STR16("Reverb Send Boost"),STR16("Chorus Send Boost")};
+            STR16("Reverb Send Level"),STR16("Chorus Send Level")};
         for(int i=0;i<kGuiCount;++i)
             parameters.addParameter(new RangeParameter(labels[i],kGuiFirstID+i,
                 STR16("%"),0.,100.,0.,100));

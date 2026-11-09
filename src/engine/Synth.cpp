@@ -1,4 +1,5 @@
 #include "Synth.h"
+#include "FxSendLevel.h"
 #include "VxdPanClock.h"
 #include "I18n.h"
 #include <cstdio>
@@ -281,12 +282,34 @@ bool Synth::LoadBank(const std::string& path, std::string& error, bool samplesIn
 }
 
 // Control IDs 0..11: amp ADSR, mod-envelope ADSR, cutoff, resonance,
-// reverb send and chorus send. The 0 position is strictly transparent to the
-// original hardware-calibrated SF2 register conversion.
+// absolute reverb/chorus sends. P190: zero on either FX control MUST override
+// nonzero preset/CC sends. This prevents a mono bass becoming stereo-wet
+// with both GUI controls displaying zero.
 void Synth::SetGuiControl(int index, float normalized) noexcept
 {
-    if(index>=0 && index<kGuiControlCount && std::isfinite(normalized))
-        m_guiControls[static_cast<size_t>(index)] = std::clamp(normalized,0.f,1.f);
+    if(index<0 || index>=kGuiControlCount || !std::isfinite(normalized)) return;
+    const float next=std::clamp(normalized,0.f,1.f);
+    if(m_guiControls[static_cast<size_t>(index)]==next) return;
+    m_guiControls[static_cast<size_t>(index)]=next;
+    // The actual EMU8000 send bits are in CSL[31:24] and PTRX[15:8].
+    // Apply live knob changes to held/releasing voices as well as future
+    // NoteOns. Bounded 32-voice hardware-register writes, no allocation.
+    if(index==10 || index==11) {
+        for(int voice=0; voice<NoteVoices(); ++voice) {
+            if(!m_alloc[voice].inUse && !m_core.IsVoiceActive(voice)) continue;
+            if(index==10) {
+                const uint32_t old=m_core.ReadDriver(Reg::PTRX,voice);
+                const uint32_t amount=AWE125::FxSendLevel::Apply(
+                    m_alloc[voice].originalReverbSend,next);
+                m_core.Write(Reg::PTRX,voice,(old&0xFFFF00FFu)|(amount<<8));
+            } else {
+                const uint32_t old=m_core.ReadDriver(Reg::CSL,voice);
+                const uint32_t amount=AWE125::FxSendLevel::Apply(
+                    m_alloc[voice].originalChorusSend,next);
+                m_core.Write(Reg::CSL,voice,(old&0x00FFFFFFu)|(amount<<24));
+            }
+        }
+    }
 }
 float Synth::GuiControl(int index) const noexcept
 {
@@ -1007,21 +1030,9 @@ void Synth::StartLayers(size_t bankIndex, std::span<const SoundFont::Region> reg
                 q+int(std::lround(m_guiControls[9]*(15-q)))));
             v.ccca=(v.ccca&0x0FFFFFFFu)|(improved<<28);
         }
-        if(m_guiControls[10]>0.f) {
-            const int available=std::max(0,255-
-                int(m_channels[channel].reverbSend)*90/100-int(v.reverbSend));
-            v.reverbSend=static_cast<uint8_t>(std::min(255,int(v.reverbSend)+
-                int(std::lround(m_guiControls[10]*available))));
-        }
-        if(m_guiControls[11]>0.f) {
-            const auto current=static_cast<int>((v.csl>>Emu8000::kChorusShift)&0xFF);
-            const int available=std::max(0,255-
-                int(m_channels[channel].chorusSend)*90/100-current);
-            const auto boosted=static_cast<uint32_t>(std::min(255,current+
-                int(std::lround(m_guiControls[11]*available))));
-            v.csl=(v.csl&Emu8000::kLoopAddressMask)|
-                (boosted<<Emu8000::kChorusShift);
-        }
+        // FX levels are applied to the final patch+CC send in StartVoice,
+        // after driver-accurate channel scaling. Never add an SF2 send back
+        // behind a GUI knob set to zero.
     }
 
     if (Awe32::IsDosLike(m_core.DriverVariant()))
@@ -1221,12 +1232,16 @@ void Synth::StartVoice(int voice, uint8_t channel, uint8_t note, uint8_t velocit
     // CC93, so that measurement does not decide it - but the stored value is
     // prepared the same way there.
     const int chChorus = ch.chorusSend * 90 / 100;
-    const int chorus = std::clamp(
+    const int originalChorus = std::clamp(
         static_cast<int>((vp.csl >> Emu8000::kChorusShift) & 0xFF) + chChorus, 0, 255);
+    const int chReverb = ch.reverbSend * 90 / 100;
+    const int originalReverb = std::clamp(static_cast<int>(vp.reverbSend) + chReverb, 0, 255);
+    m_alloc[voice].originalReverbSend=static_cast<uint8_t>(originalReverb);
+    m_alloc[voice].originalChorusSend=static_cast<uint8_t>(originalChorus);
+    const int chorus=AWE125::FxSendLevel::Apply(originalChorus,m_guiControls[11]);
+    const int reverb=AWE125::FxSendLevel::Apply(originalReverb,m_guiControls[10]);
     const uint32_t csl = (static_cast<uint32_t>(chorus) << Emu8000::kChorusShift)
                        | (vp.csl & Emu8000::kLoopAddressMask);
-    const int chReverb = ch.reverbSend * 90 / 100;
-    const int reverb = std::clamp(static_cast<int>(vp.reverbSend) + chReverb, 0, 255);
 
     // `dos`: SBAWE32.MDI adds the offset stored at the last bend event
     // (see PitchBendMdi), capped above and wrapping below.

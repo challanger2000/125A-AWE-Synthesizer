@@ -128,6 +128,9 @@ private:
         uint8_t velocity = 0;
         uint8_t releaseRate = 0x40;
         uint8_t releaseModRate = 0;
+        // P190: unmodified SF2+CC sends, needed for sample-accurate live knob edits.
+        uint8_t originalReverbSend = 0;
+        uint8_t originalChorusSend = 0;
         uint32_t age = 0;
         uint64_t noteSequence = 0; // identity shared by all layers of a NoteOn
         int      basePitch = 0;   // IP without pitch bend
