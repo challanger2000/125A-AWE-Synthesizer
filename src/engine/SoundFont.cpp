@@ -1284,18 +1284,19 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
     }
     else
     {
-        // SF2 stores initialAttenuation in centibels. The Win95 Creative
-        // AWE hardware uses its historical *0.4 attenuation response*, not
-        // a modern SF2 player's nominal 1.0 dB per dB. The original
-        // SoundFont Spec Test #11 records +5 SF2 dB as approximately +2 dB
-        // attenuation on an AWE64 Gold; P103's 5-step hardware playback
-        // independently finds 2.258 dB per +5 SF2 dB, whereas the previous
-        // Win95 path rendered 4.250 dB. Preserve the legacy DOS family,
-        // whose converter and existing compatibility regressions are distinct.
-        // This corrects the SF2-to-register mapping; chip 0.375-dB IFATN
-        // quantization and verified Creative MIDI attenuation curves remain.
+        // P198: SF2 initialAttenuation centibels -> Creative IFATN units.
+        // The original CT4390 Gold/SoundFont Spec Test v3.0 uses the same
+        // sample (ID 43) and pitch across 5 separately attenuated notes.
+        // Hardware: 2.258 dB per +5 SF2 dB. P104's 0.4 approximation
+        // produced 1.700 dB/step; the independent P198 reference at 0.50
+        // produced 2.267 dB/step with <=0.05 dB middle/late per-note
+        // error. The alternate 0.53 showed >1 dB errors at intermediate
+        // notes despite an identical average slope (chip quantization).
+        // Preserve original 0.375 dB IFATN steps and DOS/SDK/SF1 mapping.
+        // This is analog hardware response calibration, not a VXD binary
+        // proof or permission to retune envelopes, EQ and effects.
         const double hardwareSf2AttenuationScale =
-            (drv == Awe32::Driver::Win95) ? 0.4 : 1.0;
+            (drv == Awe32::Driver::Win95) ? 0.50 : 1.0;
         vp.patchAttenUnits = static_cast<uint8_t>(std::clamp(
             static_cast<int>(std::lround(g.Get(Gen::InitialAttenuation, 0)
                        * hardwareSf2AttenuationScale
