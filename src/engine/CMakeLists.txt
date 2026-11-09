@@ -64,6 +64,19 @@ if(NOT "${AWE125_P201_MOD_ATTACK_SHAPE}" STREQUAL "")
   target_compile_definitions(awe32_chip_safety PRIVATE
     AWE125_P201_MOD_ATTACK_SHAPE=${AWE125_P201_MOD_ATTACK_SHAPE})
 endif()
+# P203: test only the slow, *unmeasured* EG1 rate range (0x00..0x0F).
+# Preserve every original AWETST25 Block-30 tested rate 0x10..0x3C bitwise.
+# Research-only: no commercial VST3 or unrelated driver/DOS/SF1 changes.
+option(AWE125_P203_SLOW_MOD_ATTACK
+  "Research-only CT4390 slow (<0x10) modulation-envelope shape candidate" OFF)
+if(AWE125_P203_SLOW_MOD_ATTACK)
+  if(125A_BUILD_VST3 OR NOT AWE125_P193_CT4390_REFERENCE_FX OR
+     NOT "${AWE125_P201_MOD_ATTACK_SHAPE}" STREQUAL "")
+    message(FATAL_ERROR
+      "P203 slow-mod candidate requires native-only P193 and excludes P201")
+  endif()
+  target_compile_definitions(awe32_chip_safety PRIVATE AWE125_P203_SLOW_MOD_ATTACK)
+endif()
 if(WIN32)
   target_compile_definitions(awe32_chip_safety PRIVATE _CRT_SECURE_NO_WARNINGS)
 else()
