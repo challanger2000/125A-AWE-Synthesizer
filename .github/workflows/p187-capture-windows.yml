@@ -18,8 +18,11 @@ jobs:
       TESTLAB_SHA: dfcb4527f1f46904c73c5f7f113b81c9c41ef70a
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           repository: challanger2000/125A-Plugin-Test-Lab
           ref: dfcb4527f1f46904c73c5f7f113b81c9c41ef70a
           path: lab
