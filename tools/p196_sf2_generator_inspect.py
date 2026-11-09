@@ -10,7 +10,7 @@ import struct
 
 OPS = {39:"keynumToVolEnvHold",40:"keynumToVolEnvDecay",
        43:"keyRange",46:"keynum",47:"velocity",48:"initialAttenuation",
-       51:"instrument",53:"sampleID",54:"sampleModes",
+       41:"instrument",53:"sampleID",54:"sampleModes",
        56:"scaleTuning",58:"overridingRootKey"}
 
 
