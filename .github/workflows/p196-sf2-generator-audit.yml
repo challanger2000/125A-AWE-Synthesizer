@@ -1,0 +1,42 @@
+name: P196 read-only SoundFont keynum and scale tuning generator audit
+on:
+  push:
+    branches: [research/p193-ct4390-fidelity]
+    paths:
+      - 'tools/p196_sf2_generator_inspect.py'
+      - '.github/workflows/p196-sf2-generator-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-sf2-generator-metadata:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch SHA-verified original public SoundFont (no private data)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p p196-evidence
+          curl -fLsS --retry 3 --max-time 90 \
+            https://raw.githubusercontent.com/mrbumpy409/SoundFont-Spec-Test/67c0405ea9/sf_spec_test.sf2 \
+            -o "$RUNNER_TEMP/sf-spec-test-p196.sf2"
+          test "$(git hash-object "$RUNNER_TEMP/sf-spec-test-p196.sf2")" = 4768c4a0215abf49c7a2bb51ada5ba3494faa1c5
+      - name: Check pgen and igen generator values for v3 test programs 1/2
+        run: |
+          python3 -m py_compile tools/p196_sf2_generator_inspect.py
+          python3 tools/p196_sf2_generator_inspect.py \
+            --sf2 "$RUNNER_TEMP/sf-spec-test-p196.sf2" \
+            --out p196-evidence/P196-Original-SF2-Program-1-2-Generators.json
+      - name: Upload only generator metadata, never sample bytes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: P196-Original-SoundFont-Generator-Metadata
+          path: p196-evidence/*.json
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Erase original test SoundFont
+        if: always()
+        run: rm -f "$RUNNER_TEMP/sf-spec-test-p196.sf2"
