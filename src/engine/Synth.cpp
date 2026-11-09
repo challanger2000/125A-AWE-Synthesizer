@@ -85,8 +85,15 @@ Synth::Synth(uint32_t sampleRate)
     : m_hostRate(sampleRate ? sampleRate : 44100), m_core(sampleRate)
 {
     BuildDefaultWaveform();
+    // P193 CT4390 audio oracle: the historical hardware recording has
+    // Creative patch/CC effects enabled. This is a dedicated, non-VST3
+    // reference build; regular 125A instances still start completely dry.
+#if defined(AWE125_P193_CT4390_REFERENCE_FX)
+    m_core.MuteEffectReturns(false,false);
+#else
     // New 125A GUI defaults are 0% reverb and chorus: no wet return.
     m_core.MuteEffectReturns(true,true);
+#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -1243,8 +1250,17 @@ void Synth::StartVoice(int voice, uint8_t channel, uint8_t note, uint8_t velocit
     const int originalReverb = std::clamp(static_cast<int>(vp.reverbSend) + chReverb, 0, 255);
     m_alloc[voice].originalReverbSend=static_cast<uint8_t>(originalReverb);
     m_alloc[voice].originalChorusSend=static_cast<uint8_t>(originalChorus);
+#if defined(AWE125_P193_CT4390_REFERENCE_FX)
+    // Use the exact original Creative Win95/SF2/CC register sends for the
+    // physical CT4390 comparison. 100% 125A GUI sends would force 255,
+    // which is NOT equivalent to the historical hardware behaviour.
+    // This branch is compiled exclusively into a special native QA binary.
+    const int chorus=originalChorus;
+    const int reverb=originalReverb;
+#else
     const int chorus=AWE125::FxSendLevel::Apply(originalChorus,m_guiControls[11]);
     const int reverb=AWE125::FxSendLevel::Apply(originalReverb,m_guiControls[10]);
+#endif
     const uint32_t csl = (static_cast<uint32_t>(chorus) << Emu8000::kChorusShift)
                        | (vp.csl & Emu8000::kLoopAddressMask);
 
