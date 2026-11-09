@@ -1,0 +1,53 @@
+name: P204 original AWE32 AWETST25 Block30 card-audio forensic
+on:
+  push:
+    branches: [research/p193-ct4390-fidelity]
+    paths:
+      - 'tools/p204_original_block30_audio.py'
+      - '.github/workflows/p204-block30-original-audio.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  real-awe32-block30:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch source-SHA-pinned unmodified original AWE32 recordings and exact hardware log
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/p204" p204-evidence
+          base='https://raw.githubusercontent.com/turican0/AWE32Emu/9ae2217b92af72f706c9631679cd43c3afff507f/recordings/2026-09-12/recc'
+          curl -fLsS --retry 3 --max-time 90 "$base/awetest.log" -o "$RUNNER_TEMP/p204/awetest.log"
+          for n in 138 139 140; do
+            curl -fLsS --retry 3 --max-time 120 "$base/recc$n.flac" -o "$RUNNER_TEMP/p204/recc$n.flac"
+          done
+          test "$(git hash-object "$RUNNER_TEMP/p204/awetest.log")" = e9a03ff06a5494b791210f7d6c6427373ff7d03d
+          test "$(git hash-object "$RUNNER_TEMP/p204/recc138.flac")" = f85f601bede930aa93b5670d4981800d56f21669
+          test "$(git hash-object "$RUNNER_TEMP/p204/recc139.flac")" = 08fb1bb284e8f71da44c8607fef996e67feb293
+          test "$(git hash-object "$RUNNER_TEMP/p204/recc140.flac")" = c7d220dddda348be0571f35b7642319230b04b28
+      - name: Isolate audio metadata analysis dependencies
+        run: |
+          python3 -m venv "$RUNNER_TEMP/p204/venv"
+          "$RUNNER_TEMP/p204/venv/bin/pip" -q install numpy soundfile
+      - name: Read eight original physical block30 mod-attack events and measure relative filter brightness
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/p204/venv/bin/python" -m py_compile tools/p204_original_block30_audio.py
+          "$RUNNER_TEMP/p204/venv/bin/python" tools/p204_original_block30_audio.py \
+            --log "$RUNNER_TEMP/p204/awetest.log" \
+            --recordings "$RUNNER_TEMP/p204" \
+            --out p204-evidence/P204-Physical-Block30-Filter-Brightness.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: P204-Original-AWE32-Block30-Only-Numerical-Observations
+          path: p204-evidence/*.json
+          retention-days: 14
+          if-no-files-found: error
+      - name: Erase original hardware recordings from runner
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/p204"
