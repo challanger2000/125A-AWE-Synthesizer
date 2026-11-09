@@ -20,6 +20,13 @@ int main() {
             previous=level;
         }
     }
+    // Historical additive FX mapping applies only to V1-V11 sessions.
+    for(int base:{0,1,28,64,127,242,255}) {
+        check(AWE125::FxSendLevel::ApplyLegacy(base,0.f)==base);
+        check(AWE125::FxSendLevel::ApplyLegacy(base,1.f)==255);
+        check(AWE125::FxSendLevel::ApplyLegacy(base,.5f)==
+              std::lround(base+(255.-base)*.5));
+    }
     // Nonzero SF2 generator plus maximum channel MIDI send must NEVER
     // override a user's explicitly dry GUI setting, for either FX bus.
     check(AWE125::FxSendLevel::Apply(255,0.f)==0);

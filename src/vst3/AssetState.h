@@ -10,7 +10,7 @@
 namespace AWE125::AssetState {
 // Legacy V1 was 3 x little-endian int32: "AWE1", version=1, Program.
 inline constexpr uint32_t kMagic = 0x31455741u;
-inline constexpr uint32_t kVersion = 11u; // V11 appends 8-way effect preset indices; V1-V10 migrate
+inline constexpr uint32_t kVersion = 12u; // V12 persists FX semantics; V1-V11 migrate as Legacy
 inline constexpr int kControlCount = 12;
 inline constexpr uint32_t kControlScale = 10000u;
 inline constexpr uint32_t kFxMaxPreset = 7u;
@@ -25,6 +25,7 @@ struct Data {
     uint32_t masterVolume=MasterOutput::kDefault; // 10000=unity, 0=mute
     uint32_t reverbPreset=kDefaultReverbPreset;
     uint32_t chorusPreset=kDefaultChorusPreset;
+    bool legacyFx=false; // default V12: 0% is dry. V1-V11: preserve additive sends
     uint32_t channelProgramMask=0; // bits 0..15: per-channel MIDI program overrides
     std::array<uint32_t,16> channelPrograms{}; // defaults resolved to global program
     std::array<uint32_t,kControlCount> controls{}; // 0..9: 0 = original SF2; FX sends 10/11: 0 = dry, 10000 = full
@@ -61,7 +62,7 @@ template<class Sink> bool Write(Sink&& sink,const Data& d) {
            [&](){for(uint32_t v:d.controls)if(!word(v))return false;return true;}() &&
            word(d.masterVolume)&&word(d.channelProgramMask)&&
            [&](){for(uint32_t p:d.channelPrograms)if(!word(p))return false;return true;}() &&
-           word(d.reverbPreset)&&word(d.chorusPreset);
+           word(d.reverbPreset)&&word(d.chorusPreset)&&word(d.legacyFx?1u:0u);
 }
 template<class Source> bool Read(Source&& source,Data& target) {
     auto word=[&]()->std::pair<bool,uint32_t>{
@@ -77,6 +78,7 @@ template<class Source> bool Read(Source&& source,Data& target) {
        (version<1u||version>kVersion)||program>127)return false;
     Data candidate;
     candidate.program=program;
+    candidate.legacyFx=(version<12u);
     candidate.channelPrograms.fill(program);
     if(version==1u) {
         target=std::move(candidate); // valid old projects require default paths
@@ -136,6 +138,11 @@ template<class Source> bool Read(Source&& source,Data& target) {
         if(!okRev||!okCho||rev>kFxMaxPreset||cho>kFxMaxPreset)return false;
         candidate.reverbPreset=rev;
         candidate.chorusPreset=cho;
+    }
+    if(version>=12u) {
+        const auto [okMode,mode]=word();
+        if(!okMode||mode>1u)return false;
+        candidate.legacyFx=(mode==1u);
     }
     target=std::move(candidate); // atomic commit, after complete validation
     return true;

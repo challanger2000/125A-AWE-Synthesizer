@@ -24,7 +24,7 @@ bool writeState(MemoryStream& out,const State& s){auto sink=[&](const void* d,si
 bool readState(MemoryStream& in,State& s){in.seek(0,IBStream::kIBSeekSet,nullptr);auto source=[&](void* d,size_t n){int32 r=0;return in.read(d,n,&r)==kResultOk&&r==int32(n);};return AssetState::Read(source,s);}
 State save(Processor& p){MemoryStream out;require(p.getState(&out)==kResultOk,"getState");State s;require(readState(out,s),"read V10");return s;}
 tresult recall(Processor& p,const State& s){MemoryStream stream;require(writeState(stream,s),"write V10");return p.setState(&stream);}
-bool same(const State& a,const State& b){return a.bank==b.bank&&a.program==b.program&&a.channelPrograms==b.channelPrograms&&a.channelProgramMask==b.channelProgramMask&&a.masterVolume==b.masterVolume&&a.controls==b.controls&&a.reverbPreset==b.reverbPreset&&a.chorusPreset==b.chorusPreset&&a.pathsSpecified==b.pathsSpecified&&a.romPath==b.romPath&&a.sf2Path==b.sf2Path&&a.engine==b.engine;}
+bool same(const State& a,const State& b){return a.bank==b.bank&&a.program==b.program&&a.channelPrograms==b.channelPrograms&&a.channelProgramMask==b.channelProgramMask&&a.masterVolume==b.masterVolume&&a.controls==b.controls&&a.reverbPreset==b.reverbPreset&&a.chorusPreset==b.chorusPreset&&a.legacyFx==b.legacyFx&&a.pathsSpecified==b.pathsSpecified&&a.romPath==b.romPath&&a.sf2Path==b.sf2Path&&a.engine==b.engine;}
 struct Rig{
  std::unique_ptr<Processor> p=std::make_unique<Processor>();bool active=false;
  Rig(State s=state(),bool a=true,int rate=44100){require(p->initialize(nullptr)==kResultOk,"initialize");ProcessSetup setup{kRealtime,kSample32,1024,double(rate)};require(p->setupProcessing(setup)==kResultOk,"setup");require(recall(*p,s)==kResultOk,"initial recall");if(a){require(p->setActive(true)==kResultOk,"active");require(p->setProcessing(true)==kResultOk,"processing");active=true;}}
@@ -43,7 +43,7 @@ bool audible(const std::vector<float>& v){return std::any_of(v.begin(),v.end(),[
 // Independent PCM oracle: drive the production Synth directly with explicit
 // expected fields. A Processor routing mutation must never mutate its oracle.
 std::vector<float> referenceSound(const State& wanted,int channel) {
-    Synth syn(44100);std::string error;
+    Synth syn(44100);syn.SetLegacyFx(wanted.legacyFx);std::string error;
     syn.Core().SetDriver(Awe32::Driver::Win95);
     require(syn.Core().UseBox86Chip(wanted.romPath,error),"reference ROM");
     syn.Core().PowerOnInit();
