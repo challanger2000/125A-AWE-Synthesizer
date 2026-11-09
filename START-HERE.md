@@ -1,3 +1,44 @@
+# P187 – geprüftes neues ETW-/ASIO-Capture-BAT mit P186-Diagnose (9. November 2026)
+
+**Grund:** Der Benutzer hat `P185-LOCAL-*/RAW-LOCAL-ONLY` bereits gelöscht.
+Die reine P186-Offline-Auswertung kann diesen Lauf **nicht** mehr
+nachträglich untersuchen; die alte Ergebnisdatei ist
+`ETW_NOT_AVAILABLE_OR_UNDECODABLE`/`INCONCLUSIVE`, ohne
+konkrete Decoder-/Kontextwechselzahlen. Das ist keine nachgewiesene
+Windows-/Treiber-/AWE-Ursache.
+
+**P187 selbst fertig gebaut und geprüft:** Eine neue Referenz-ASIO-
+Aufzeichnung kombiniert die im Lab-P186-Branch bereits bestandene
+präzise Fehlerdiagnose mit dem ursprünglichen strengen ASIO-Host.
+Test Lab **`dfcb4527f1f46904c73c5f7f113b81c9c41ef70a`**,
+AWE-Paketquelle **`92c63b1ff88d1333d683069ab0295a49e6021146`**.
+[Windows #42539870510 SUCCESS](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42539870510):
+nativer Windows-ETW-/ASIO-Build und Laufzeit-Selftests, **36 P185
+Gegenproben, 42 P186 Fehlerbericht-Gegenproben**, unveränderte
+AWE-Regression **66/66 CTests, 537/537 Validator, 3 echte
+GUI-Smokes**, originales P178-Binary hashgeprüft, extrahierte
+BAT-CheckOnly-/Abbruch-/Tamper-Fälle sowie tatsächlicher
+GitHub-Artifact-Upload-/Download- und BAT-Roundtrip **bestanden**.
+Die verwendete Buildquelle ändert **weder AWE-DSP noch den
+nativen ETW-/ASIO-Decoder oder die ASIO-Grenzwerte**.
+
+[**Geprüftes P187-ZIP**](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42539870510/artifacts/13640907281):
+In Windows vollständig entpacken, DAW schließen, Abhörpegel senken,
+`P187-ETW-ASIO.bat` als Administrator starten, physisches
+Yamaha-Steinberg-ASIO-Gerät wählen und **explizit `START`**
+bestätigen. Nur **eine** neue, echte Referenz-Messung,
+kein ROM/SF2/Python. Danach genügt
+`P185-LOCAL-*/P185-ACCEPTANCE.json` mit konkreten ETW-Fehlerwerten
+und wahrheitsgetreuen abgestuften Referenzlauf-Zuständen, selbst
+falls ETW nicht decodierbar ist. ETL-Rohdaten bleiben lokal,
+kein automatischer Upload.
+
+**Zielrechner-P187 `NOT_RUN`, Ursache `INCONCLUSIVE`,
+AWE-Release `NO-GO`, kein FULL AUDIT, kein Merge.**
+[Vertrag und Bedienung](docs/P187-CAPTURE-DIAGNOSTICS.md).
+
+---
+
 # P186 aktuell – bestehende P185-Daten diagnostizieren, kein neuer Hardwaretest
 
 Branch `qa/p186-etw-diagnostics`; Basis `4d56729788bcf065fbae1c13f5b79b831601d492`.
