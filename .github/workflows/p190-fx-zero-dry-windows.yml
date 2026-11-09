@@ -232,3 +232,11 @@ jobs:
           path: qa/
           if-no-files-found: warn
           retention-days: 14
+
+      - name: P190 hard RT deadline gate (do not conflate functional PASS with RT PASS)
+        shell: pwsh
+        run: |
+          python tools/p190_rt_deadline_gate.py --self-test
+          if ($LASTEXITCODE -ne 0) { throw 'P190 RT gate selftest failed' }
+          python tools/p190_rt_deadline_gate.py qa/P170-P171-SUMMARY.json
+          if ($LASTEXITCODE -ne 0) { throw 'P190 RT deadline gate: NOT PASS; inspect saved raw callback evidence' }
