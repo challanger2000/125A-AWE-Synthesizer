@@ -25,7 +25,8 @@
 #pragma comment(lib,"tdh.lib")
 namespace fs=std::filesystem;
 static std::set<ULONG> tids;
-static std::ofstream switches,profiles,heaps,schemas;
+static std::ofstream switches,profiles,heaps,schemas,images,stacks;
+static std::set<ULONG> targetPids;
 static uint64_t allEvents=0,csEvents=0,profileEvents=0,heapEvents=0;
 static std::map<uint64_t,std::string> symbols;
 struct Schema {bool context=false,profile=false,heap=false;std::string provider,task,opcode;};
@@ -33,6 +34,16 @@ static std::map<std::string,Schema> cache;
 static std::string ascii(const wchar_t* s){std::string out;if(s)while(*s){out+=*s<128?char(*s):'?';++s;}return out;}
 static std::string clean(std::string s){for(auto& c:s)if(c==','||c=='\r'||c=='\n')c=';';return s;}
 static std::string key(EVENT_RECORD* r){auto& g=r->EventHeader.ProviderId;char text[160];snprintf(text,sizeof(text),"%08lx-%04x-%04x-%02x%02x%02x%02x%02x%02x%02x%02x/%u/%u/%u",g.Data1,g.Data2,g.Data3,g.Data4[0],g.Data4[1],g.Data4[2],g.Data4[3],g.Data4[4],g.Data4[5],g.Data4[6],g.Data4[7],r->EventHeader.EventDescriptor.Id,r->EventHeader.EventDescriptor.Opcode,r->EventHeader.EventDescriptor.Version);return text;}
+static std::string wide_property(EVENT_RECORD* r,const wchar_t* name) {
+    PROPERTY_DATA_DESCRIPTOR d{};
+    d.PropertyName=reinterpret_cast<ULONGLONG>(name);
+    d.ArrayIndex=ULONG_MAX;
+    ULONG n=0;
+    if(TdhGetPropertySize(r,0,nullptr,1,&d,&n)!=ERROR_SUCCESS||n<2||n>32768)return {};
+    std::vector<BYTE> bytes(n+2);
+    if(TdhGetProperty(r,0,nullptr,1,&d,n,bytes.data())!=ERROR_SUCCESS)return {};
+    return clean(ascii(reinterpret_cast<const wchar_t*>(bytes.data())));
+}
 static bool number(EVENT_RECORD* r,const wchar_t* name,uint64_t& out){
     PROPERTY_DATA_DESCRIPTOR d{};d.PropertyName=reinterpret_cast<ULONGLONG>(name);d.ArrayIndex=ULONG_MAX;
     ULONG size=0;if(TdhGetPropertySize(r,0,nullptr,1,&d,&size)!=ERROR_SUCCESS||size==0||size>8)return false;
@@ -68,6 +79,32 @@ static void WINAPI event(EVENT_RECORD* r){
         uint64_t state=UINT64_MAX,reason=UINT64_MAX;number(r,L"OldThreadState",state);number(r,L"OldThreadWaitReason",reason);
         switches<<time<<','<<r->BufferContext.ProcessorNumber<<','<<old<<','<<next<<','<<state<<','<<reason<<'\n';++csEvents;
     }
+    // Kernel ImageLoad/DCStart records are present in the ORIGINAL frozen ETL.
+    // Mapping sample IPs without a run-local image map is speculative.
+    if(s.provider=="MSNT_SystemTrace"&&s.task=="Image") {
+        uint64_t pid=0,base=0,size=0;
+        if(number(r,L"ProcessId",pid)&&targetPids.count(ULONG(pid))&&
+           number(r,L"ImageBase",base)&&number(r,L"ImageSize",size))
+            images<<time<<','<<pid<<','<<base<<','<<size<<','
+                  <<wide_property(r,L"FileName")<<','<<clean(s.opcode)<<'\n';
+    }
+    if(s.task=="StackWalk") {
+        uint64_t pid=0,thread=0;
+        if(number(r,L"StackProcess",pid)&&targetPids.count(ULONG(pid))&&
+           number(r,L"StackThread",thread)&&tids.count(ULONG(thread))) {
+            uint64_t sampleTime=0;
+            number(r,L"EventTimeStamp",sampleTime);
+            stacks<<time<<','<<sampleTime<<','<<pid<<','<<thread;
+            for(int k=1;k<=32;++k) {
+                wchar_t label[20]{};
+                swprintf_s(label,L"Stack%d",k);
+                uint64_t ip=0;
+                if(number(r,label,ip))stacks<<','<<ip;
+                else stacks<<',';
+            }
+            stacks<<'\n';
+        }
+    }
     uint64_t payloadTid=tid;if(!tids.count(tid)){if(!number(r,L"ThreadId",payloadTid)||!tids.count(ULONG(payloadTid)))return;}
     if(s.profile){uint64_t ip=0;if(number(r,L"InstructionPointer",ip)){profiles<<time<<','<<payloadTid<<','<<r->BufferContext.ProcessorNumber<<','<<ip<<','<<symbol(ip)<<'\n';++profileEvents;}}
     if(s.heap){uint64_t size=0,address=0;bool sized=number(r,L"AllocationSize",size)||number(r,L"AllocSize",size)||number(r,L"NewSize",size)||number(r,L"Size",size);number(r,L"BaseAddress",address)||number(r,L"AllocationBase",address)||number(r,L"Address",address);
@@ -81,12 +118,23 @@ int wmain(int argc,wchar_t** argv){
     auto column=std::find(header.begin(),header.end(),"tid");
     if(column==header.end()){std::cerr<<"CSV tid column absent\n";return 2;}
     const auto tidColumn=size_t(column-header.begin());
-    while(std::getline(f,line)){auto v=split(line);if(v.size()>tidColumn)tids.insert(ULONG(std::stoul(v[tidColumn])));}
+    const auto pidIt=std::find(header.begin(),header.end(),"pid");
+    if(pidIt==header.end()){std::cerr<<"CSV pid column absent\n";return 2;}
+    const auto pidColumn=size_t(pidIt-header.begin());
+    while(std::getline(f,line)){
+        auto v=split(line);
+        if(v.size()>tidColumn)tids.insert(ULONG(std::stoul(v[tidColumn])));
+        if(v.size()>pidColumn)targetPids.insert(ULONG(std::stoul(v[pidColumn])));
+    }
     if(tids.empty()){std::cerr<<"CSV target threads absent\n";return 2;}
     switches.open(out/"cswitch.csv");switches<<"qpc,cpu,old_tid,new_tid,old_state,old_wait_reason\n";
     profiles.open(out/"samples.csv");profiles<<"qpc,tid,cpu,ip,symbol\n";
     heaps.open(out/"heap.csv");heaps<<"qpc,tid,event,task,opcode,size_valid,size,address\n";
     schemas.open(out/"schemas.csv");schemas<<"key,provider,task,opcode,fields\n";
+    images.open(out/"images.csv");images<<"qpc,pid,base,size,path,opcode\n";
+    stacks.open(out/"stacks.csv");stacks<<"qpc,sample_qpc,pid,tid";
+    for(int k=1;k<=32;++k)stacks<<",ip"<<k;
+    stacks<<'\n';
     SymSetOptions(SYMOPT_DEFERRED_LOADS|SYMOPT_UNDNAME|SYMOPT_LOAD_LINES);SymInitialize(GetCurrentProcess(),nullptr,FALSE);
     std::ifstream mod(modules);std::getline(mod,line);std::set<uint64_t> bases;
     while(std::getline(mod,line)){auto v=split(line);if(v.size()<3)continue;auto base=std::stoull(v[0]);if(bases.insert(base).second)SymLoadModuleEx(GetCurrentProcess(),nullptr,v[2].c_str(),nullptr,base,DWORD(std::stoul(v[1])),nullptr,0);}
