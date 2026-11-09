@@ -54,3 +54,32 @@ Dateien nicht vorliegen. P184/P189-ASIO-NO-GO bleibt bestehen.
 
 **Keine VST3-Verkaufsfreigabe und kein FULL AUDIT aufgrund eines grünen
 Entwicklungsbuilds.**
+
+## P190 Windows-Gesamtabnahme und Klangtreue: nachgetragene Quellenkontrolle (09.11.2026)
+
+[Windows-Gesamtlauf #42550765204](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42550765204) wurde mit Quellstand f4e2624a3c6207f3f10aca255b067589b2c18efa erfolgreich abgeschlossen:
+- 67/67 CTests inklusive P190 FX-Send und korrigierter P171-Held-Note-Regression;
+- 537/537 Steinberg VST3-Validatorprüfungen am tatsächlichen Modul;
+- 3 EditorHost-Smokes und 99 tatsächliche GUI-Interaktionen;
+- unabhängiges universelles 125A Test Lab TECHNICAL_PASS;
+- 0/14.400 Callback-Deadlineüberschreitungen in der gemessenen künstlichen CI-Matrix.
+Die frühere P190-PCM-Gegenprobe zeigte eine normierte L/R-Effektivwertdifferenz von 0,000365 bei Dry und 0,096809 bei maximalen Effekten. Alle Nachweise beziehen sich auf synthetische Testdaten. NO-GO für Release, kein privater Original-ROM-/SF2-/DAW-/ASIO-Test.
+
+### Releaseblocker: alte V8–V11-Projekte dürfen nicht stillschweigend anders klingen
+
+Alte gespeicherte GUI-Send-Parameter 10/11 hatten die Bedeutung 0 = kein zusätzlicher Boost, aber SF2-/CC91-/CC93-Effekt-Sends blieben erhalten. P190 definiert dagegen 0 = absolut trocken. Ein unverändert geladener alter Wert 0 klingt nun anders. Alte Sends trotz sichtbarer Reglerstellung 0 weiterzugeben, wäre mit der ausdrücklichen Nutzervorgabe unvereinbar.
+
+Vor der Releasefreigabe ist eine ausdrücklich definierte V12-Migration mit sichtbar **nichtnulligen** effektiven Reglerwerten für alte wet-Projekte zu validieren. Eine feste Umrechnung der alten Reglerwerte mit der heutigen P190-Send-Kurve kann je nach SF2-/CC-Basis unterschiedlich klingen. Außerdem speichert der VST3-Host automatisierte alte Parameterwerte unabhängig vom Plugin-State: eine Plugin-interne State-Migration allein kann alte Host-Automation NICHT sicher konvertieren.
+
+Pflichtnachweise: V1/V7/V8/V9/V10/V11-Projekte mit trockenem und nassem SF2-/CC-Send, Erstnote, gehaltene und ausgelassene Stimmen, Controller-/Prozessor-Recall, Save/Reopen, alte Host-Automation, Zero-/Mid-/Max-Reglerwerte sowie fehlende Assets. Eine bei Live-Reglerwechsel 100 -> 0 eventuell weiterklingende alte Hall-/Chorus-Fahne ist separat zu falsifizieren: null neue Send-Register beweisen nicht, dass die alten Delay-Tails sofort vollständig stumm werden.
+
+**Bis zur vollständigen Abnahme: keine V12-Umsetzung auf Verdacht, kein Main-Merge, kein Verkauf.**
+
+### EMU8000 Fidelity: externe Empfehlungen gegen produktiven Code geprüft
+
+- src/engine/Synth.cpp nutzt für den historisch transkribierten Velocity-Cutoff je nach Treiber die Untergrenze 0x46 = 70, während [SoundFont-Spec-Test](https://github.com/mrbumpy409/SoundFont-Spec-Test) AWE-Verhalten ungefähr ab Velocity 64 beschreibt. Die dortige v3.0-Referenz prüft Werte 127/111/95/79/63/47/31/15 und kann **64 von 70 nicht unterscheiden**. Vor einer Änderung zusätzliche Velocities 63,64,65,69,70,71 und nachvollziehbare Register-/Spektralmessungen durchführen.
+- src/engine/snd_emu8k.c wählt standardmäßig vierpunktige kubische B-Spline-Interpolation (RESAMPLER_BSPLINE4), nicht lineare Interpolation. Filter und Effekte enthalten empirisch gefittete Modellanteile, sind keine bewiesen bitexakten internen Hardware-Algorithmen.
+- src/engine/Emu8000.cpp rendert das Chipmodell weiterhin auf dem nativen 44,1-kHz-Takt und resampelt erst für abweichende Host-Sampleraten. Eine pauschale Behauptung falsch laufender Hüllkurven/LFOs bei 48/96 kHz passt daher nicht zum vorhandenen Signalpfad.
+- Die echte AWE64-Gold-CT4390-Aufnahme ist bereits in docs/P97-AWE64-GOLD-AUDIO-COMPARISON.md untersucht. Gesamtvergleich: Envelope-Korrelation 0,95155, Wellenformkorrelation 0,01049 und relevante frequenzabhängige Abweichungen. Ein identisches Ergebnis von Plugin und 86Box beweist lediglich Port-/Emulationsgleichheit, keine Hardware-Parität. Einen globalen EQ nicht ohne kausalen trockenen Referenzvergleich ergänzen.
+
+**Quellenbewertung:** eigener produktiver Quellcode + P97-Evidenz; historische Hardware-Details ggf. durch unabhängige Referenzfenster bestätigen. Kein unnötiger Hardwarekauf.
