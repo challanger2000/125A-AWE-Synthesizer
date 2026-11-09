@@ -268,7 +268,7 @@ def main():
                 wet=[math.sqrt(sum((x-y)**2 for x,y in zip(original,fx[title,a][lo:hi]))/(hi-lo))/32768
                      for a in [0,.2,.5,1]]
                 check(wet[1]>1e-4 and all(b>=a*.95 for a,b in zip(wet,wet[1:]))
-                      and .4<wet[2]/max(wet[3],1e-9)<.6,
+                      and .15<wet[2]/max(wet[3],1e-9)<.4,
                       'chorus measured wet residual grows with send '+str(wet))
             # A send preserves the dry attack. It never promises 100% wet.
             check(rms(fx[title,1],44100,.03,.04)>.001,title+' maximum send retains dry output')

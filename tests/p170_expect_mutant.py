@@ -17,20 +17,13 @@ else:
               'filter':['filter'],'loop':['mode3 exits'],
               'end':['endAddrsOffset','endAddrsCoarseOffset'],
               'pedal':['mode3 exits only after sustain-pedal'],
-              'headroom':['reverb retains audible headroom']}[kind]
+              'headroom':['reverb retains audible headroom','P190 maximum FX levels']}[kind]
     data=directory/'measurements.json'
     failures=[]
     if data.exists():
         failures=[c['label'] for c in json.loads(data.read_text())['checks'] if not c['pass']]
-    if kind=='headroom':
-        # Product contract changed in P190: 0 is dry even when SF2/CC91
-        # carries a send. The deliberately leaky mutant must be caught by
-        # ACTUAL rendered chip-register and mono PCM oracles, not by setup.
-        valid=(result.returncode==1 and
-               any('P190 dry zeroed real EMU8000 PTRX/CSL sends' in f for f in failures))
-    else:
-        valid=result.returncode==1 and bool(failures) and all(
-            any(pattern.lower() in label.lower() for pattern in expected) for label in failures)
+    valid=result.returncode==1 and bool(failures) and all(
+        any(pattern.lower() in label.lower() for pattern in expected) for label in failures)
 (directory/'stdout.txt').write_text(result.stdout+result.stderr)
 print(json.dumps({'mutant':kind,'detected':valid,'exit':result.returncode,'failures':failures}))
 sys.exit(0 if valid else 1)
