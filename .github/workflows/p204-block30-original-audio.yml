@@ -29,7 +29,7 @@ jobs:
           done
           test "$(git hash-object "$RUNNER_TEMP/p204/awetest.log")" = e9a03ff06a5494b791210f7d6c6427373ff7d03d
           test "$(git hash-object "$RUNNER_TEMP/p204/recc138.flac")" = f85f601bede930aa93b5670d4981800d56f21669
-          test "$(git hash-object "$RUNNER_TEMP/p204/recc139.flac")" = 08fb1bb284e8f71da44c8607fef996e67feb293
+          test "$(git hash-object "$RUNNER_TEMP/p204/recc139.flac")" = 08fb1bb284e8f71da44c8607fef996e67feb293d
           test "$(git hash-object "$RUNNER_TEMP/p204/recc140.flac")" = c7d220dddda348be0571f35b7642319230b04b28
       - name: Isolate audio metadata analysis dependencies
         run: |
