@@ -313,7 +313,18 @@ emu8k_mod_attack_value(int32_t phase)
         x = 0.0;
     if (x > 1.0)
         x = 1.0;
-    return (int32_t) ((1.0 - pow(1.0 - x, 13.5)) * (double) (1 << 21));
+    /* P201 is an offline native-only hypothesis test against CT4390 analog:
+     * try a slower single-power envelope (3) or a fast-and-slow mixture (70).
+     * Defaults stay on the independently hardware-calibrated block-30 curve.
+     * Never compile these hypotheses in the VST3 or shipping synthesis path. */
+#if defined(AWE125_P201_MOD_ATTACK_SHAPE) && AWE125_P201_MOD_ATTACK_SHAPE == 3
+    const double amp = 1.0 - pow(1.0 - x, 3.0);
+#elif defined(AWE125_P201_MOD_ATTACK_SHAPE) && AWE125_P201_MOD_ATTACK_SHAPE == 70
+    const double amp = 0.70 * (1.0 - pow(1.0 - x, 7.0)) + 0.30 * x;
+#else
+    const double amp = 1.0 - pow(1.0 - x, 13.5);
+#endif
+    return (int32_t) (amp * (double) (1 << 21));
 }
 
 /* One decay/release step: ramp_amount_db_oct is Q16. */
