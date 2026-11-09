@@ -11,6 +11,7 @@ on:
       - 'tools/p105_*'
       - 'tools/p194_*'
       - 'tools/p195_*'
+      - 'tests/p90_sf2_driver_registers.cpp'
       - 'src/engine/CMakeLists.txt'
       - 'src/engine/Synth.cpp'
       - 'docs/P193-CT4390-REFERENCE-FIDELITY.md'
@@ -68,7 +69,8 @@ jobs:
         run: |
           cmake -S . -B build-p97 -G Ninja \
             -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_OPL3_PROBES=OFF -D125A_BUILD_VST3=OFF -DAWE125_P193_CT4390_REFERENCE_FX=ON
-          cmake --build build-p97 --target awe32_p97_midi_renderer --parallel 4
+          cmake --build build-p97 --target awe32_p97_midi_renderer awe32_p90_sf2_driver_registers_test --parallel 4
+          ctest --test-dir build-p97 --output-on-failure -R '^125A_p90_sf2_driver_registers$'
       - name: Render complete 264 seconds through the original EMU8000 chip
         run: |
           ./build-p97/src/engine/awe32_p97_midi_renderer \

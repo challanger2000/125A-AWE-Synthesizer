@@ -83,9 +83,12 @@ def main():
         emu = emu[-lag:]
     emu = emu * (10 ** (p97["hardware_to_native_global_gain_match_db"] / 20.0))
 
+    # Retain the exact previously defective time windows after the fix.
+    # Ranking-only selection would stop exercising cases once they improve.
+    pinned_regression_seconds = (21,24,25,26,34,35,36,37,38)
     seconds = [v["second_start"] for v in p194["seconds_sorted_by_absolute_net_excess"]
                if v["section"] in ("03_keynum_to_decay", "04_keynum_to_hold")]
-    seconds = sorted(set(seconds))
+    seconds = sorted(set(seconds).union(pinned_regression_seconds))
     if not set((21, 24, 34, 37, 38)).issubset(seconds):
         raise ValueError("P195 expected P194 outlier seconds missing")
 

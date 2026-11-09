@@ -87,8 +87,10 @@ def main():
             raise ValueError("P194/P97 spectrum mismatch in %d-%d Hz: %.3f vs %s" %
                              (lo, hi, deltas[k], expected))
     total_delta = float(global_emu[0] - global_ref[0])
-    if total_delta <= 0:
-        raise ValueError("Current P193 global 50-200 Hz excess not reproduced")
+    # The targeted fix may remove or reverse the former low-band excess.
+    # An attribution oracle must not fail merely because the anomaly improved.
+    if not np.isfinite(total_delta) or abs(total_delta) < 1e-12:
+        raise ValueError("Unstable/zero signed low-band energy difference")
 
     ranked = []
     for q in pools:
@@ -153,7 +155,7 @@ def main():
     Path(a.out).write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print("P194 verified global 50-200 Hz error: %.3f dB (%d active 1s windows)" %
           (deltas[0], len(every_second)))
-    print("P194 top contributions to actual low-band excess:")
+    print("P194 top signed contributions to the low-band difference:")
     for row in ranked[:10]:
         print("P194  %-26s %+7.2f%%  HW share %7.2f%%   local %8s dB" %
               (row["test"], row["contribution_to_global_excess_percent"],
