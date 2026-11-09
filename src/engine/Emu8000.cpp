@@ -1073,8 +1073,26 @@ void Emu8000Core::RenderVoice(int v, float* outL, float* outR,
         pitch += lfo1        * HiSigned(fmmod)   * kOct * kFmmodPitchOctaves;
         pitch += lfo2        * HiSigned(fm2frq2) * kOct * kFm2PitchOctaves;
 
-        const double increment = std::pow(2.0,
+        // The former path evaluated an expensive UCRT pow(2,..) on every
+        // native sample for all sounding SHADOW voices, even though the
+        // real 86Box chip owns the audible oscillator. Cache only an EXACTLY
+        // equal double input (never quantize pitch or alter DSP equations).
+        // The uncached build remains an independent PCM/register oracle.
+        double increment = 0.0;
+#if defined(AWE125_TEST_DISABLE_MIRROR_PITCH_CACHE)
+        increment = std::pow(2.0,
             (pitch - static_cast<double>(kPitchUnity)) / static_cast<double>(kPitchPerOctave));
+#else
+        if (vs.shadowPitchValid && pitch == vs.shadowPitchValue) {
+            increment = vs.shadowPitchIncrement;
+        } else {
+            increment = std::pow(2.0,
+                (pitch - static_cast<double>(kPitchUnity)) / static_cast<double>(kPitchPerOctave));
+            vs.shadowPitchValue = pitch;
+            vs.shadowPitchIncrement = increment;
+            vs.shadowPitchValid = true;
+        }
+#endif
 
         // P137: in authentic 86Box mode, the legacy floating-point sample,
         // filter, gain, pan and send outputs are *never* used: RenderBlock()

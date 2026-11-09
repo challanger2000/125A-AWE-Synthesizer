@@ -264,6 +264,12 @@ private:
         // The actual Box86 renderer still owns live audio and chip writes.
         uint32_t mirrorLastIp = 0xFFFFFFFFu;
         uint16_t mirrorCpfHi = 0;
+        // P192: exactly equal pitch inputs reuse the previous floating-point
+        // increment. Shadow/driver bookkeeping only; the authentic 86Box
+        // sample oscillator and filter remain completely untouched.
+        bool     shadowPitchValid = false;
+        double   shadowPitchValue = 0.0;
+        double   shadowPitchIncrement = 0.0;
         bool     playing = false;
         // Envelope generator engine on (DCYSUSV bit 7 clear), tracked like
         // 86Box env_engine_on: a note starts only on the off -> on transition.
