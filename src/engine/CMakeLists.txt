@@ -77,6 +77,16 @@ if(AWE125_P203_SLOW_MOD_ATTACK)
   endif()
   target_compile_definitions(awe32_chip_safety PRIVATE AWE125_P203_SLOW_MOD_ATTACK)
 endif()
+# P208 candidate cannot be compiled into VST3. Default remains unchanged.
+option(AWE125_P208_SF2_HOLD_SUSTAIN
+  "Research-only Win95 SoundFont EG1 hold/sustain converter experiment" OFF)
+if(AWE125_P208_SF2_HOLD_SUSTAIN)
+  if(125A_BUILD_VST3)
+    message(FATAL_ERROR "P208 research-only converter forbidden in product VST3")
+  endif()
+  target_compile_definitions(awe32_chip_safety PRIVATE
+    AWE125_P208_SF2_HOLD_SUSTAIN)
+endif()
 if(WIN32)
   target_compile_definitions(awe32_chip_safety PRIVATE _CRT_SECURE_NO_WARNINGS)
 else()

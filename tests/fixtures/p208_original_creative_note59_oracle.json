@@ -1,0 +1,56 @@
+{
+  "schema": "P208-real-original-Creative-note59-v1",
+  "provenance": {
+    "run": 42705889086,
+    "source": "actual Creative SBAWE.VXD Windows95 running on emulated AWE64 Gold",
+    "sf2_git_blob": "4768c4a0215abf49c7a2bb51ada5ba3494faa1c5",
+    "sf2_sha256": "2fda5e504ae9f515f1ad7d3f772f937939712bd8ef4459b400b5ab5bf250727f",
+    "bank": 0,
+    "program": 0,
+    "note": 59,
+    "velocity": 100
+  },
+  "original": {
+    "ATKHLD": [
+      29708
+    ],
+    "DCYSUS": [
+      16423,
+      32807
+    ],
+    "IP": [
+      57766
+    ],
+    "ENVVAL": [
+      31304
+    ],
+    "PEFE": [
+      32512
+    ]
+  },
+  "native_initial": {
+    "ATKHLD": [
+      29964
+    ],
+    "DCYSUS": [
+      16167,
+      32807
+    ],
+    "IP": [
+      57767
+    ],
+    "ENVVAL": [
+      31304
+    ],
+    "PEFE": [
+      32512
+    ]
+  },
+  "observed": {
+    "series": 32,
+    "equal": 29,
+    "different": 3,
+    "word_writes": 47,
+    "voices": 1
+  }
+}

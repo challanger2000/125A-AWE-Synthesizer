@@ -1450,8 +1450,17 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
         // Both have 0 = peak (full sustain); do not interpret the
         // modulation-envelope percentage as volume centibels.
         if (op == Gen::SustainModEnv)
+        {
+#ifdef AWE125_P208_SF2_HOLD_SUSTAIN
+            // P208 native-only hypothesis from P207 real Win95 driver:
+            // truncate SF2 permille*127/1000 instead of rounding.
+            if (drv == Awe32::Driver::Win95)
+                return std::clamp(127 - std::clamp<int>(g.value[op],0,1000)
+                                  * 127 / 1000, 0, 127);
+#endif
             return std::clamp(127 - static_cast<int>(std::lround(
                 std::clamp<int>(g.value[op],0,1000) * 127.0 / 1000.0)),0,127);
+        }
         return std::clamp(127 - static_cast<int>(std::lround(
             std::max<int>(g.value[op],0) / 10.0 / kSustainDbPerStep)),0,127);
     };
@@ -1502,9 +1511,33 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
         | DecayRateFromMs(keyScaled(Gen::DecayVolEnv, Gen::KeynumToVolEnvDecay, true)));
     vp.releaseRate = static_cast<uint8_t>(DecayRateFromMs(timeMs(Gen::ReleaseVolEnv, 0.0)));
 
+    // P208: unproven Win95 SF2 hypothesis, never enabled in product.
+    // Quantize timecents to the original VXD 725us delay scale first,
+    // then truncate to 92ms hold units, including keynum scaling.
+    auto modHold = [&]() -> int
+    {
+#ifdef AWE125_P208_SF2_HOLD_SUSTAIN
+        if (!sf1 && drv == Awe32::Driver::Win95)
+        {
+            const int base = g.Has(Gen::HoldModEnv)
+                ? g.value[Gen::HoldModEnv] : -12000;
+            const int scale = g.Get(Gen::KeynumToModEnvHold,0);
+            const int64_t shifted = static_cast<int64_t>(base)
+                + static_cast<int64_t>(60-key)*scale;
+            const int tc = static_cast<int>(
+                std::clamp<int64_t>(shifted,-12000,5484));
+            const int ticks = 0x8000 - DelayFromTimecents(tc);
+            const int steps = static_cast<int>(
+                static_cast<int64_t>(ticks)*725/92000);
+            return std::clamp(127-steps,0,127);
+        }
+#endif
+        return HoldFromMs(keyScaled(Gen::HoldModEnv,
+                                     Gen::KeynumToModEnvHold,false));
+    };
     vp.envval = delayReg(Gen::DelayModEnv);
     vp.atkhld = static_cast<uint16_t>(
-        (HoldFromMs(keyScaled(Gen::HoldModEnv, Gen::KeynumToModEnvHold, false)) << 8)
+        (modHold() << 8)
         | (g.Has(Gen::AttackModEnv)
                ? (!sf1 && drv == Awe32::Driver::Win95)
                    ? AttackRateFromSf2Timecents(g.value[Gen::AttackModEnv])
