@@ -1,0 +1,52 @@
+name: P210 verify Creative-compatible reference carrier and 14 controlled EG1 variants
+on:
+  push:
+    branches: [research/p206-original-eg1-registers]
+    paths:
+      - 'tools/p210_make_reference_carrier.py'
+      - '.github/workflows/p210-reference-carrier-preflight.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  original-source-carrier-preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download SHA pinned public original SF2 accepted by Creative in P207
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fLsS --retry 3 --max-time 90 \
+            'https://raw.githubusercontent.com/mrbumpy409/SoundFont-Spec-Test/67c0405ea9/sf_spec_test.sf2' \
+            -o "$RUNNER_TEMP/p210-original.sf2"
+          test "$(git hash-object "$RUNNER_TEMP/p210-original.sf2")" = 4768c4a0215abf49c7a2bb51ada5ba3494faa1c5
+      - name: Build and verify 6 original plus 14 EG1 variants without changing sample data
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile tools/p210_make_reference_carrier.py
+          python3 tools/p210_make_reference_carrier.py \
+            --reference "$RUNNER_TEMP/p210-original.sf2" \
+            --sf2 "$RUNNER_TEMP/p210-carrier.sf2" \
+            --manifest "$RUNNER_TEMP/p210-carrier.json"
+          python3 - <<'PY'
+          import os,json,hashlib
+          from pathlib import Path
+          from tools.p83_generic_sf2 import inspect_sf2
+          root=Path(os.environ["RUNNER_TEMP"])
+          raw=(root/"p210-carrier.sf2").read_bytes()
+          ref=(root/"p210-original.sf2").read_bytes()
+          meta=json.loads((root/"p210-carrier.json").read_text())
+          m=inspect_sf2(raw)
+          assert len(raw)>len(ref)>1000000
+          assert (m["preset_count"],m["instrument_count"],m["sample_count"])==(20,39,44),m
+          assert meta["source_sample_bytes_preserved"]
+          assert [p["program"] for p in meta["programs"]]==list(range(6,20))
+          assert hashlib.sha256(raw).hexdigest()==meta["sf2_sha256"]
+          print("P210 trusted original SoundFont carrier and 14 EG1 variants PASS")
+          PY
+      - name: Delete source and derived SF2/PCM after verification
+        if: always()
+        run: rm -f "$RUNNER_TEMP/p210-original.sf2" "$RUNNER_TEMP/p210-carrier.sf2" "$RUNNER_TEMP/p210-carrier.json"
