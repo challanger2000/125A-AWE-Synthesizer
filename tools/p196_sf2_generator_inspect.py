@@ -58,11 +58,11 @@ def main():
     phdr=[]
     for n in range(0,len(pdta[b"phdr"]),38):
         name,program,bank,idx=struct.unpack_from("<20sHHH",pdta[b"phdr"],n)
-        phdr.append((name.split(b"\\0")[0].decode("ascii","replace"),program,bank,idx))
+        phdr.append((name.split(b"\0")[0].decode("ascii","replace"),program,bank,idx))
     inst=[]
     for n in range(0,len(pdta[b"inst"]),22):
         name,idx=struct.unpack_from("<20sH",pdta[b"inst"],n)
-        inst.append((name.split(b"\\0")[0].decode("ascii","replace"),idx))
+        inst.append((name.split(b"\0")[0].decode("ascii","replace"),idx))
     def zonelist(bags_,gens_,start,stop):
         out=[]
         for i in range(start,stop):
@@ -106,7 +106,7 @@ def main():
               "instrument scaleTuning values",scale,
               "all special generators",
               [(i["name"],z["generator"]) for i in item["instruments"] for z in i["zones"]])
-    Path(a.out).write_text(json.dumps(result,indent=2)+"\\n",encoding="utf-8")
+    Path(a.out).write_text(json.dumps(result,indent=2)+"\n",encoding="utf-8")
 
 
 if __name__=="__main__":
