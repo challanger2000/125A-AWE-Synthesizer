@@ -91,3 +91,14 @@ The earlier gate proved new voice sends become zero but not that previously exci
 ### Nachprobe der unabhängigen P27-PCM-Prüfung
 
 Der erste Windows-Lauf nach Einbau des Return-Bypasses kompiliert, aber CTest 50 (SF2 Audio Integration) schlägt in zwei P27-Wet-Vergleichen fehl: Der synthetische Test schrieb positive CSL/PTRX-Sends DIREKT in den Chip, ließ aber die neuen Benutzer-FX-Regler auf 0% und forderte damit gleichzeitig einen stummen Effekt-Rückweg. Der ursprüngliche Test prüfte Wet-Sends, nicht die neue GUI-Bedienregel. Die P27-Fixture aktiviert nun VOR der Registermanipulation den zugehörigen GUI-Send-Regler (1.0 = wet); bei `0` bleibt die separate P190-Trockenprüfung verantwortlich. Diese Änderung ist ausdrücklich eine Reparatur der Test-Vorbedingung und kein Abschwächen eines kritischen Audioasserts: Wet-Chorus und Wet-Reverb müssen weiterhin nachweisbar anderen PCM erzeugen als Dry.
+
+## Verifizierte Windows-Gesamtprüfung der Rückweg-Korrektur
+
+**Geprüfter Quellstand:** `09e5ac7a9b99e5e4fd1c346f8161339fe74b4e53`. [P190 Windows-Actions #42556095257](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42556095257) **SUCCESS**:
+
+- **67/67 CTests**, einschließlich P190-Held-Note/Feedback-Tail-PCM-Gegenprobe mit drei Varianten (nur Reverb, nur Chorus, beide) und unabhängiger dauerhaft trockener Vergleichsinstanz nach 980-Frame-FIFO. Alle drei Fälle bestanden. Die separate ursprüngliche P27-Wet-Registerprobe weist weiterhin hörbar verändertes PCM nach, nachdem der GUI-Effektpfad ausdrücklich auf WET gesetzt wurde.
+- **537/537 Steinberg-VST3-Modulvalidator**; **3 GUI-Quick-Smokes** und **99/99 physische VSTGUI-Interaktionen**; **universelles Test Lab TECHNICAL_PASS**, dessen technische Statusdatei `release_approved=false` meldet.
+- **0/14.400** gemeldete Callback-Deadlinemisses in dieser künstlichen Windows-CI-Matrix, kein physischer ASIO-/MMCSS-Betrieb.
+- Artefakte: `P190-FX-Zero-Dry-Windows-x64-VST3-TEST-A` (GitHub Artifact ID 13648226418; Development-Preview, **kein Verkauf/Release**) und `P190-FX-Zero-Dry-Full-Regression-A` (Artifact ID 13648087065; 315,6 MB).
+
+**Reichweitengrenzen:** Der echte proprietäre User-ROM/SF2-Klang wurde nicht erneut auf dem Runner geprüft; die Studio-One-/Fender-Studio-Pro-Abnahme bleibt NOT RUN, ebenso vollständige reale AWE64-Parität. Für eine ganz unmittelbar nach der Steuerungsänderung bereits vorgerechnete Audioausgabe können bis zu 980 native Frames im Chip-FIFO verbleiben. Ein garantiert sample-sofortiger Wet-Stopp wird nicht behauptet. Die automatisierte Migration alter V8–V11-Projekte/Host-Automationskurven bleibt NICHT gelöst ([Issue #93](https://github.com/challanger2000/125A-AWE-Synthesizer/issues/93)). **RELEASE NO-GO**, keine Änderung an Main.

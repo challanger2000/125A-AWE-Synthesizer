@@ -1,3 +1,5 @@
+**P190 Wiedergabe-Nullpunkt aktuell auf `fix/p190-zero-fx-dry`, final geprüfter Produktstand `09e5ac7a9b99e5e4fd1c346f8161339fe74b4e53`**: [Windows-Run #42556095257](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42556095257) SUCCESS, 67/67 CTests, 537/537 VST3-Validator, 3 EditorHost-Smokes, 99 echte VSTGUI-Interaktionen, universelles Test Lab TECHNICAL_PASS, 0/14.400 Callback-Deadlineüberschreitungen in dieser CI-Matrix. P190 prüft nun zusätzlich, dass bei 100%->0% auch bereits angeregte Hall-/Chorus-Rückwege nach der internen 980-Frame-Pipeline dieselbe echte PCM wie ein dauerhaft trockenes Referenzsignal liefern. **NICHT FREIGEGEBEN**: Vor V12/Release ist die Altprojekt-/Host-Automations-Kompatibilität [Issue #93](https://github.com/challanger2000/125A-AWE-Synthesizer/issues/93) ungelöst. Reale Nutzer-ROM/SF2/DAW, Creative-Hardware-Klangidentität und P189 ASIO/ETW NO-GO bleiben getrennt.
+
 # P190 – Bass-Mono und FX 0 % AUS (Entwicklungsauftrag)
 
 Eigentümer meldet: Bei Chorus/Reverb GUI=0 bleibt ein Effektanteil
