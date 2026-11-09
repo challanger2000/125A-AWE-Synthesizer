@@ -160,7 +160,7 @@ jobs:
               throw 'Preflight did not prove admin/ETW and preserve no-hardware status'
             }
             $reports=@(Get-ChildItem 'P188 BAT path with spaces' -Recurse -Filter P185-ACCEPTANCE.json | ForEach-Object {Get-Content $_.FullName -Raw | ConvertFrom-Json})
-            if ($reports.Count -ne 2 -or @($reports | Where-Object {$_.physical_asio -cne 'NOT_RUN' -or $_.release_approved}).Count) { throw 'False hardware certification' }
+            if ($reports.Count -ne 0) { throw 'P188 ETW-only preflight falsely created a P185 audio acceptance report' }
             Add-Content 'P188 BAT path with spaces/P185-ANALYZE.ps1' '# deliberate tamper'
             & cmd.exe /d /c '"P188 BAT path with spaces\P188-ETW-ASIO.bat" -CheckOnly'
             if ($LASTEXITCODE -ne 3) { throw 'BAT failed to reject actual tamper' }
@@ -205,11 +205,11 @@ jobs:
             throw 'Downloaded P188 preflight produced false positive'
           }
           $r=@(Get-ChildItem 'SERVICE roundtrip path with spaces' -Recurse -Filter P185-ACCEPTANCE.json | ForEach-Object {Get-Content $_.FullName -Raw | ConvertFrom-Json})
-          if ($r.Count -ne 1 -or $r[0].physical_asio -cne 'NOT_RUN' -or $r[0].release_approved) { throw 'Roundtrip fabricated hardware certification' }
+          if ($r.Count -ne 0) { throw 'Downloaded P188 ETW-only preflight falsely created an audio acceptance report' }
           if (-not (Test-Path 'SERVICE roundtrip path with spaces/P185-DIAGNOSTICS.ps1') -or
               -not (Test-Path 'SERVICE roundtrip path with spaces/P188-ETW-ASIO.bat') -or
               -not (Test-Path 'SERVICE roundtrip path with spaces/P188-PREFLIGHT.ps1')) {
-            throw 'P187 actual downloaded GitHub ZIP dropped corrected reporter or launcher'
+            throw 'P188 actual downloaded GitHub ZIP dropped corrected reporter or launcher'
           }
           @{artifact_service_roundtrip='PASS';awe_integration=$env:GITHUB_SHA;testlab_source=$env:TESTLAB_SHA;physical_asio='NOT_RUN';release_approved=$false} | ConvertTo-Json | Set-Content evidence/P185-ARTIFACT-ROUNDTRIP.json
           Write-Host "::notice::P188_USER_ARTIFACT_ROUNDTRIP=PASS ZIP=${{ steps.kit.outputs.artifact-url }}"
