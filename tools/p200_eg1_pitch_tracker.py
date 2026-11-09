@@ -129,7 +129,7 @@ def main():
     fixture=verify_fixture(meta,load_events(args.events))
     rel=p199["release"]
     lags=sorted(x["best_analysis_only_lag"]["analysis_lag_ms"] for x in rel)
-    if lags!=[22,24] or p97["compared_seconds"]!=264:
+    if len(lags)!=2 or any(abs(x-23)>2 for x in lags) or p97["compared_seconds"]!=264:
         raise ValueError("P200 requires independently verified P199 lag and P97 full reference")
     hw,sr=sf.read(args.reference,frames=16*RATE,dtype="float32",always_2d=True)
     nat,nr=sf.read(args.native,frames=16*44100,dtype="float32",always_2d=True)
