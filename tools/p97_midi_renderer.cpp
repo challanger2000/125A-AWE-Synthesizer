@@ -211,7 +211,7 @@ int main(int argc,char** argv) {
                 "P193 FX oracle invalid: no intermediate physical Hall/Chorus "
                 "send registers were observed (check test SoundFont and driver)");
         std::cout<<"P193 CT4390 historical FX reference; intermediate Hall="
-                 <<partialHall<<" Chorus="<<partialChorus<<" register observations\\n";
+                 <<partialHall<<" Chorus="<<partialChorus<<" register observations\n";
         std::cout<<"P97 true 86Box EMU8000; "<<seconds<<"sec, "<<applied
                  <<" MIDI events, "<<nz<<" nonzero stereo PCM samples"
                  <<", peak "<<peak<<", RMS16 "
