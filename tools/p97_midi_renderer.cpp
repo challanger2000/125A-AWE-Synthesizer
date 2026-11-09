@@ -132,6 +132,14 @@ int main(int argc,char** argv) {
                    " --out WAV --seconds 1..300\n";return 2;
     }
     try {
+#if !defined(AWE125_P193_CT4390_REFERENCE_FX)
+        // The current P190 product correctly mutes all sends at GUI 0%.
+        // A dry render cannot be compared to the CT4390 Hall1/Chorus1
+        // capture. Fail closed rather than publish misleading PCM metrics.
+        throw std::runtime_error(
+            "Physical CT4390 reference requires -DAWE125_P193_CT4390_REFERENCE_FX=ON; "
+            "P190 default 0% FX is intentionally DRY");
+#endif
         std::string rom,sf2,tsv,out;int seconds=0;
         for(int i=1;i<argc;i+=2) {
             std::string k=argv[i],v=argv[i+1];
@@ -160,6 +168,7 @@ int main(int argc,char** argv) {
         header(wav,count);
         std::vector<int16_t> buffer(2048);
         uint64_t at=0,nz=0,peak=0,applied=0;
+        uint64_t partialHall=0,partialChorus=0;
         long double total=0;
         auto render=[&](uint64_t end) {
             end=std::min(end,count);
@@ -179,9 +188,30 @@ int main(int argc,char** argv) {
         for(const auto& e:midi) {
             if(e.frame>=count)break;
             render(e.frame);dispatch(synth,e);++applied;
+            // Test the actual chip registers AFTER the SF2/MIDI driver
+            // assigned voices. Both send dimensions must retain at least
+            // one hardware-like intermediate 1..254 value: forcing all
+            // nonzero sends to 255 (GUI at 100%) is not a valid oracle.
+            if(e.type=="note_on" && e.b>0) {
+                using Emu8000::Reg;
+                for(int v=0;v<32;++v) {
+                    const uint32_t ptrx=synth.Core().ReadDriver(Reg::PTRX,v);
+                    const uint32_t csl=synth.Core().ReadDriver(Reg::CSL,v);
+                    const uint32_t hall=(ptrx>>Emu8000::kReverbShift)&255u;
+                    const uint32_t chorus=(csl>>Emu8000::kChorusShift)&255u;
+                    partialHall+=(hall>0 && hall<255);
+                    partialChorus+=(chorus>0 && chorus<255);
+                }
+            }
         }
         render(count);
         if(!wav.good()||nz==0)throw std::runtime_error("PCM output missing/silent");
+        if(!partialHall || !partialChorus)
+            throw std::runtime_error(
+                "P193 FX oracle invalid: no intermediate physical Hall/Chorus "
+                "send registers were observed (check test SoundFont and driver)");
+        std::cout<<"P193 CT4390 historical FX reference; intermediate Hall="
+                 <<partialHall<<" Chorus="<<partialChorus<<" register observations\\n";
         std::cout<<"P97 true 86Box EMU8000; "<<seconds<<"sec, "<<applied
                  <<" MIDI events, "<<nz<<" nonzero stereo PCM samples"
                  <<", peak "<<peak<<", RMS16 "
