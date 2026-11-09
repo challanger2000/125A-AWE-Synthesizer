@@ -12,6 +12,7 @@ on:
       - 'tools/p194_*'
       - 'tools/p195_*'
       - 'tools/p197_*'
+      - 'tools/p199_*'
       - 'tools/p196_sf2_generator_inspect.py'
       - 'tests/p90_sf2_driver_registers.cpp'
       - 'src/engine/CMakeLists.txt'
@@ -164,6 +165,18 @@ jobs:
             --p97-report p97-evidence/P97-AWE64-Gold-versus-125A-264s.json \
             --sf2-metadata p97-evidence/P197-Original-Program0-Generators.json \
             --out p97-evidence/P197-Attenuation-Phase-Isolation.json
+      - name: P199 independent EG2/EG1 release-latency and two-voice volume-envelope attribution
+        run: |
+          "$RUNNER_TEMP/p97/venv/bin/python" -m py_compile tools/p199_envelope_latency_forensics.py
+          "$RUNNER_TEMP/p97/venv/bin/python" tools/p199_envelope_latency_forensics.py \
+            --reference "$RUNNER_TEMP/p97/CT4390.flac" \
+            --native "$RUNNER_TEMP/p97/native-264s.wav" \
+            --events "$RUNNER_TEMP/p97/events.tsv" \
+            --p97-report p97-evidence/P97-AWE64-Gold-versus-125A-264s.json \
+            --p102-report p97-evidence/P102-Amp-Mod-Envelope-Phases.json \
+            --p105-report p97-evidence/P105-Filter-and-Release-Diagnostics.json \
+            --sf2-metadata p97-evidence/P197-Original-Program0-Generators.json \
+            --out p97-evidence/P199-AWE64-Envelope-Capture-Latency.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
