@@ -153,5 +153,32 @@ int main() {
     ok&=check(p7a.ip==0xBFE9 && p7b.ip==0xCFEA &&
               p7c.ip==0xCFEE && p7d.ip==0xBFED,
               "P96 candidate matches 4 original Creative program7 pitch writes");
+    // P196: original, SHA-pinned SoundFont Spec Test v3.0 programs 1/2
+    // have scaleTuning=0 (validated by read-only RIFF/pgen/igen parser).
+    // MIDI C4/C3/C2 must affect envelope key-number scaling but NOT pitch.
+    r.gen.Set(Gen::OverridingRootKey,60);
+    r.gen.Set(Gen::CoarseTune,0);
+    r.gen.Set(Gen::FineTune,0);
+    r.gen.Set(Gen::ScaleTuning,0);
+    const auto zero36=MakeVoiceParams(sf2,r,36,127,base,0,Awe32::Driver::Win95);
+    const auto zero48=MakeVoiceParams(sf2,r,48,127,base,0,Awe32::Driver::Win95);
+    const auto zero60=MakeVoiceParams(sf2,r,60,127,base,0,Awe32::Driver::Win95);
+    ok&=check(zero36.ipCents==zero60.ipCents &&
+              zero48.ipCents==zero60.ipCents &&
+              zero36.ip==zero60.ip && zero48.ip==zero60.ip,
+              "P196 SF2 scaleTuning=0 preserves fixed pitch for C2/C3/C4");
+    r.gen.Set(Gen::ScaleTuning,100);
+    const auto full36=MakeVoiceParams(sf2,r,36,127,base,0,Awe32::Driver::Win95);
+    const auto full48=MakeVoiceParams(sf2,r,48,127,base,0,Awe32::Driver::Win95);
+    const auto full60=MakeVoiceParams(sf2,r,60,127,base,0,Awe32::Driver::Win95);
+    ok&=check(full36.ipCents==-2400 &&
+              full48.ipCents==-1200 && full60.ipCents==0,
+              "P196 SF2 default 100 cents/key preserves original pitch");
+    r.gen.Set(Gen::ScaleTuning,1);
+    Bank sf1=sf2;
+    sf1.version=Version::Sf1;
+    const auto legacySf1=MakeVoiceParams(sf1,r,48,127,base,0,Awe32::Driver::Win95);
+    ok&=check(legacySf1.ipCents==-600,
+              "P196 legacy SF1 scaleTuning=1 still halves key interval");
     return ok?0:1;
 }

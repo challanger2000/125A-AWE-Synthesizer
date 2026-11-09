@@ -1241,8 +1241,18 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
     // those were the last four mismatching notes of RELAX. For note 69 with
     // samplePitch 8781 it gives (69-60+60)*100 - 8781 = -1881, half is
     // -940 - exactly what the driver wrote.
+    const int scaleTuning = g.Get(Gen::ScaleTuning, 100);
     double pitchCents = (key - rootKey) * 100.0 + cents;
-    if (g.Get(Gen::ScaleTuning, 100) == 1)
+    // P196: real AWE64 Gold CT4390 SoundFont test #3/#4 uses
+    // SF2 scaleTuning=0 on the instrument zone. Hardware plays the
+    // key-number-dependent envelope tests at a fixed pitch. Previously
+    // C3/C2 erroneously rendered at 131/65 Hz rather than the same
+    // fixed source pitch, manufacturing 50-200 Hz bass energy.
+    // Preserve the exact P96 nonzero/default Win95 SF2 pitch vectors,
+    // and the original DOS/SF1 driver's scaleTuning==1 half step.
+    if (!sf1 && drv == Awe32::Driver::Win95 && scaleTuning == 0)
+        pitchCents = cents;
+    else if (scaleTuning == 1)
         pitchCents = static_cast<int>(pitchCents) / 2;
 
     // The sample rate is converted to cents separately - the driver has this
