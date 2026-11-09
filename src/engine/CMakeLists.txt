@@ -56,8 +56,10 @@ if(NOT "${AWE125_P201_MOD_ATTACK_SHAPE}" STREQUAL "")
       "P201 EG1 candidate is native-only and requires explicit P193 reference mode")
   endif()
   if(NOT (AWE125_P201_MOD_ATTACK_SHAPE STREQUAL "3" OR
-          AWE125_P201_MOD_ATTACK_SHAPE STREQUAL "70"))
-    message(FATAL_ERROR "P201 invalid research candidate; allowed 3,70")
+          AWE125_P201_MOD_ATTACK_SHAPE STREQUAL "70" OR
+          AWE125_P201_MOD_ATTACK_SHAPE STREQUAL "130" OR
+          AWE125_P201_MOD_ATTACK_SHAPE STREQUAL "140"))
+    message(FATAL_ERROR "P201 invalid research candidate; allowed 3,70,130,140")
   endif()
   target_compile_definitions(awe32_chip_safety PRIVATE
     AWE125_P201_MOD_ATTACK_SHAPE=${AWE125_P201_MOD_ATTACK_SHAPE})
