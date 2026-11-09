@@ -1,0 +1,57 @@
+name: P202 original AWETST25 block30 / Win95-SF2 slow EG1 source audit
+on:
+  push:
+    branches: [research/p193-ct4390-fidelity]
+    paths:
+      - 'tools/p202_block30_provenance.py'
+      - '.github/workflows/p202-block30-source-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  original-block30-provenance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Retrieve hash-pinned original Creative SoundFont and original AWE32Emu hardware sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/p202" p202-evidence
+          curl -fLsS --retry 3 --max-time 90 \
+            https://raw.githubusercontent.com/mrbumpy409/SoundFont-Spec-Test/67c0405ea9/sf_spec_test.sf2 \
+            -o "$RUNNER_TEMP/p202/original.sf2"
+          base='https://raw.githubusercontent.com/turican0/AWE32Emu/17b0578fe59909dfaa784b5531d6d1a3a80729ce'
+          curl -fLsS --retry 3 --max-time 60 "$base/tools/awetest/AWETEST.C" \
+            -o "$RUNNER_TEMP/p202/AWETEST.C"
+          curl -fLsS --retry 3 --max-time 60 "$base/AWE32Emu/src/Emu8000.cpp" \
+            -o "$RUNNER_TEMP/p202/original_Emu8000.cpp"
+          test "$(git hash-object "$RUNNER_TEMP/p202/original.sf2")" = 4768c4a0215abf49c7a2bb51ada5ba3494faa1c5
+          test "$(git hash-object "$RUNNER_TEMP/p202/AWETEST.C")" = cb696ab1778edec7b1389d25afbec58cb40601b6
+          test "$(git hash-object "$RUNNER_TEMP/p202/original_Emu8000.cpp")" = 6551c00fe68c2ddf4f000ee04c4c1f3f1f84ec76
+      - name: Verify original linked SF2 EG1 note and independent AWETST25 hardware register coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/p196_sf2_generator_inspect.py \
+            --sf2 "$RUNNER_TEMP/p202/original.sf2" --programs 0 \
+            --out p202-evidence/P202-Original-SF2-Preset-0.json
+          python3 -m py_compile tools/p202_block30_provenance.py
+          python3 tools/p202_block30_provenance.py \
+            --sf2-metadata p202-evidence/P202-Original-SF2-Preset-0.json \
+            --soundfont-cpp src/engine/SoundFont.cpp \
+            --awetest-c "$RUNNER_TEMP/p202/AWETEST.C" \
+            --upstream-emu "$RUNNER_TEMP/p202/original_Emu8000.cpp" \
+            --current-emu src/engine/snd_emu8k.c \
+            --out p202-evidence/P202-AWETST-Block30-Rate-Provenance.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: P202-AWETST25-CT4390-SF2-Source-Metadata
+          path: p202-evidence/*.json
+          retention-days: 14
+          if-no-files-found: error
+      - name: Delete downloaded source materials and original SoundFont
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/p202"
