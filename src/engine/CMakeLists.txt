@@ -159,3 +159,14 @@ target_include_directories(awe32_p133_fx_modes_test PRIVATE
 target_link_libraries(awe32_p133_fx_modes_test PRIVATE awe32_chip_safety)
 set_target_properties(awe32_p133_fx_modes_test PROPERTIES CXX_STANDARD 23)
 add_test(NAME 125A_p133_fx_register_modes COMMAND awe32_p133_fx_modes_test)
+
+# P192: optional isolated Windows DSP benchmark. Both baseline and candidate
+# link the real production EMU8000 engine, with no SF2/ROM shipped or
+# VST3 runtime dependency. The host/VST3 gate remains a separate obligation.
+option(125A_P192_BENCHMARK "Build isolated P192 30-voice pitch-cache benchmark" OFF)
+if(125A_P192_BENCHMARK)
+  add_executable(awe32_p192_bench "${PROJECT_SOURCE_DIR}/tests/p192_shadow_pitch_bench.cpp")
+  target_include_directories(awe32_p192_bench PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${UPSTREAM_SRC}")
+  target_link_libraries(awe32_p192_bench PRIVATE awe32_chip_safety)
+  target_compile_features(awe32_p192_bench PRIVATE cxx_std_23)
+endif()
