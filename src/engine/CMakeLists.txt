@@ -46,6 +46,22 @@ if(NOT "${AWE125_P198_ATTEN_SCALE}" STREQUAL "")
   target_compile_definitions(awe32_chip_safety PRIVATE
     AWE125_P198_ATTEN_SCALE=${AWE125_P198_ATTEN_SCALE})
 endif()
+# P201: isolated original-CT4390 envelope experiments; never link candidate
+# shaping into any product VST3, commercial DSP or default native renderer.
+set(AWE125_P201_MOD_ATTACK_SHAPE "" CACHE STRING
+  "Research-only original CT4390 EG1 attack waveform candidate (3 or 70)")
+if(NOT "${AWE125_P201_MOD_ATTACK_SHAPE}" STREQUAL "")
+  if(125A_BUILD_VST3 OR NOT AWE125_P193_CT4390_REFERENCE_FX)
+    message(FATAL_ERROR
+      "P201 EG1 candidate is native-only and requires explicit P193 reference mode")
+  endif()
+  if(NOT (AWE125_P201_MOD_ATTACK_SHAPE STREQUAL "3" OR
+          AWE125_P201_MOD_ATTACK_SHAPE STREQUAL "70"))
+    message(FATAL_ERROR "P201 invalid research candidate; allowed 3,70")
+  endif()
+  target_compile_definitions(awe32_chip_safety PRIVATE
+    AWE125_P201_MOD_ATTACK_SHAPE=${AWE125_P201_MOD_ATTACK_SHAPE})
+endif()
 if(WIN32)
   target_compile_definitions(awe32_chip_safety PRIVATE _CRT_SECURE_NO_WARNINGS)
 else()
