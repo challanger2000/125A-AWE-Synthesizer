@@ -73,8 +73,8 @@ def main():
     require(rates==expected,"hardware source tested rates changed")
     require("t.mod_atk = (unsigned) rate[i];" in awetest,
             "hardware test actually wrote the listed ATKHLD rates")
-    require("t.pefe   = 0x7F;" in awetest and
-            "t.smp     = &SMP_NOISE;" in awetest,
+    require(re.search(r"t\.pefe\s*=\s*0x7F;", awetest) is not None and
+            re.search(r"t\.smp\s*=\s*&SMP_NOISE;", awetest) is not None,
             "hardware test was noise-to-filter not pitch")
     for s in ('static constexpr double kModAttackExp = 13.5;',
               'vs.modLevel = 1.0 - std::pow(1.0 - x, kModAttackExp);',
