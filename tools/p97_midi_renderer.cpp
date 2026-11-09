@@ -292,7 +292,9 @@ int main(int argc,char** argv) {
         if(p206 && (!p206Completed || p206Count!=31 || !p206Out.good()))
             throw std::runtime_error("P206 note59 sample-clock register readback incomplete");
         if(!wav.good()||nz==0)throw std::runtime_error("PCM output missing/silent");
-        if(!partialHall || !partialChorus)
+        // P206 stops after the first 16 s: the P193 complete 264-s effect
+        // fixture is intentionally not included in this isolated note test.
+        if(!p206 && (!partialHall || !partialChorus))
             throw std::runtime_error(
                 "P193 FX oracle invalid: no intermediate physical Hall/Chorus "
                 "send registers were observed (check test SoundFont and driver)");
