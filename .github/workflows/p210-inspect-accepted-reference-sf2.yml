@@ -1,0 +1,54 @@
+name: P210 diagnose verified public original SF2 SoundFont structure before rebuilding research variants
+on:
+  push:
+    branches: [research/p206-original-eg1-registers]
+    paths:
+      - '.github/workflows/p210-inspect-accepted-reference-sf2.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inventory-public-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download previously accepted original v3 SoundFont with source hash check
+        run: |
+          curl -fLsS --retry 2 --max-time 90 \
+            https://raw.githubusercontent.com/mrbumpy409/SoundFont-Spec-Test/67c0405ea9/sf_spec_test.sf2 \
+            -o "$RUNNER_TEMP/p210-accepted.sf2"
+          test "$(git hash-object "$RUNNER_TEMP/p210-accepted.sf2")" = 4768c4a0215abf49c7a2bb51ada5ba3494faa1c5
+      - name: Inspect original legal SF2 preset and bank layout
+        run: |
+          python3 - <<'PY'
+          import os,struct
+          from pathlib import Path
+          from tools.p83_generic_sf2 import inspect_sf2,chunks
+          raw=Path(os.environ["RUNNER_TEMP"]+"/p210-accepted.sf2").read_bytes()
+          r=inspect_sf2(raw)
+          print("P210 original accepted Sf2", {k:r[k] for k in
+              ("preset_count","instrument_count","sample_count","sf2_version","sample_pcm_bytes","sm24_extension_present")})
+          print("P210 original phdr names",r["presets"][:64])
+          sec={}
+          for typ,part in chunks(raw,12,len(raw)):
+              if typ==b"LIST" and bytes(part[:4])==b"pdta":
+                  for c,d in chunks(part,4,len(part)):sec[c]=bytes(d)
+          phdr=sec[b"phdr"];pbag=sec[b"pbag"];pgen=sec[b"pgen"]
+          inst=sec[b"inst"];ibag=sec[b"ibag"];igen=sec[b"igen"]
+          print("P210 source record counts",{"phdr":len(phdr)//38,
+              "pbag":len(pbag)//4,"pgen":len(pgen)//4,
+              "inst":len(inst)//22,"ibag":len(ibag)//4,"igen":len(igen)//4})
+          for i in range(min(5,r["preset_count"])):
+              bag,=struct.unpack_from("<H",phdr,i*38+24)
+              nextbag,=struct.unpack_from("<H",phdr,(i+1)*38+24)
+              zones=[]
+              for j in range(bag,nextbag):
+                  start,=struct.unpack_from("<H",pbag,j*4)
+                  end,=struct.unpack_from("<H",pbag,(j+1)*4)
+                  zones.append([struct.unpack_from("<HH",pgen,k*4) for k in range(start,end)][:15])
+              print("P210 source preset",i,"bank",r["presets"][i]["bank"],"program",r["presets"][i]["program"],"zones",zones[:3])
+          PY
+      - name: Destroy original SoundFont source bytes
+        if: always()
+        run: rm -f "$RUNNER_TEMP/p210-accepted.sf2"
