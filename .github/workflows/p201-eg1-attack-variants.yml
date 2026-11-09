@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shape: ["3", "70"]
+        shape: ["130", "140"]
     runs-on: ubuntu-24.04
     timeout-minutes: 18
     steps:
