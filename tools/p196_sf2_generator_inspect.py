@@ -40,7 +40,7 @@ def main():
     p.add_argument("--programs", default="1,2",
                    help="Comma-separated original bank 0 program IDs to inspect")
     a = p.parse_args()
-    selected = {int(x) for x in a.programs.split(",")}
+    selected = set(range(128)) if a.programs == "all" else {int(x) for x in a.programs.split(",")}
     if any(i<0 or i>127 for i in selected):
         raise ValueError("Invalid program")
     data = Path(a.sf2).read_bytes()
@@ -108,7 +108,9 @@ def main():
                         "zones":zonelist(ibag,igen,inst[iid][1],inst[iid+1][1])})
         result.append({"program":prog,"name":name,"bank":bank,
                        "preset_zones":pzones,"instruments":ins})
-    if {r["program"] for r in result} != selected:
+    if not result:
+        raise ValueError("No matching SoundFont programs")
+    if a.programs != "all" and {r["program"] for r in result} != selected:
         raise ValueError("Requested SoundFont programs missing or ambiguous: "+str(selected))
     for item in result:
         scale=[z["generator"].get("scaleTuning") for i in item["instruments"]
