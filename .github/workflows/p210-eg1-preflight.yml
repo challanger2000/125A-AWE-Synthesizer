@@ -1,0 +1,52 @@
+name: P210 original Creative EG1 generated SF2 and independent oracle integrity
+on:
+  push:
+    branches: [research/p206-original-eg1-registers]
+    paths:
+      - 'tools/p210_*'
+      - 'tools/p48_86box_boot_win95.py'
+      - 'tools/p64_original_win95_midi_trial.py'
+      - '.github/workflows/p210-eg1-preflight.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  original-creative-research-preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax preflight of modified original driver harness
+        run: |
+          python3 -m py_compile \
+            tools/p210_make_eg1_sf2.py \
+            tools/p210_compare_creative_eg1.py \
+            tools/p48_86box_boot_win95.py \
+            tools/p64_original_win95_midi_trial.py
+      - name: Verify synthetic SF2 structure, generator payload and negative controls
+        run: |
+          python3 tools/p210_make_eg1_sf2.py --self-test
+          python3 tools/p210_compare_creative_eg1.py --self-test
+      - name: Write deterministic temporary 14-preset SF2 and validate it independently
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/p210_make_eg1_sf2.py \
+            --sf2 "$RUNNER_TEMP/p210-sweep.sf2" \
+            --manifest "$RUNNER_TEMP/p210-manifest.json"
+          python3 - <<'PY'
+          import json,hashlib,os
+          from pathlib import Path
+          from tools.p83_generic_sf2 import inspect_sf2
+          root=Path(os.environ["RUNNER_TEMP"])
+          data=(root/"p210-sweep.sf2").read_bytes()
+          report=inspect_sf2(data)
+          manifest=json.loads((root/"p210-manifest.json").read_text())
+          assert report["preset_count"]==14 and report["instrument_count"]==14 and report["sample_count"]==1,report
+          assert hashlib.sha256(data).hexdigest()==manifest["sf2_sha256"]
+          assert len({(x["hold_mod_env_tc"],x["sustain_mod_env_permille"]) for x in manifest["programs"]})==14
+          print("P210 synthetic SF2 deterministic validation PASS")
+          PY
+      - name: Destroy temporary test SF2 after validation
+        if: always()
+        run: rm -f "$RUNNER_TEMP/p210-sweep.sf2" "$RUNNER_TEMP/p210-manifest.json"
