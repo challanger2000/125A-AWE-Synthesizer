@@ -114,3 +114,18 @@ In P190 folgt nun nach **beiden Artefakt-Uploads** ein strikt prüfender `tools/
 **Fünf verifizierte Mono-/Polyphonie-/Sampleraten-A/B-Paare (1/16/30 Stimmen; 44,1/48/96 kHz) lieferten bitidentische RAW-PCM-Dateien UND bitidentische Voice-/Chipregister.** Bei 128 Frames und 30 Stimmen betrug der Median 770,0 µs (ungecacht) zu 685,6 µs (Cache), also ca. 10,96 % weniger. Ein ABBA-Repetitionslauf auf demselben Windows-Runner bestätigte das mit Medianratio 0,8908. Diese Zeiten stammen **ausschließlich aus dem isolierten Core-RenderBench**, nicht dem exportierten VST3-Prozessor. Die kommerzielle/ASIO/DAW-Releasefreigabe bleibt NO-GO.
 
 Der Patch ist deshalb in den P190-Produktbranch übernommen, aber eine **vollständige neue P190-VST3-/Validator-/GUI-/Test-Lab-/RT-Abnahme des gepinnten neuen Commit-SHAs ist Pflicht**, bevor daraus auch nur ein Windows-Labor-Echtzeitverdict abgeleitet werden darf. Einzelne virtuelle Runner-Ausreißer werden nicht nachträglich ignoriert oder aus Daten herausgefiltert.
+
+## P192 – gesamter Windows-P190-VST3-Produktbuild nach Optimierung PASS (09.11.2026)
+
+**Gepinnter Produkt-Quellstand:** `650a2c8408b7e068b84fd8a5d202e21dcaf17330`. [Windows-Gesamtlauf #42578678687](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42578678687) **SUCCESS**, explizite Quell-SHA/Modul-Provenienz. Die produktive AWE64-EMU-Klangerzeugung/FILTER/Chorus/Reverb/ROM-Mappings ist unveraendert; P192 cached nur eine exakt identische Doppelgenauigkeits-Pitch-Potenz im ausgangsseitig nicht benutzten Shadow-Renderer.
+
+- **67/67 CTests bestanden**, einschliesslich echter PCM-Pruefungen, Nullpunkt-/Wet-Tail-/Filter- und Baseline-/Gegenmutationspruefungen.
+- **537/537 Steinberg-VST3-Validatorpruefungen** am exportierten x64-VST3.
+- **99/99 GUI-Interaktionen** mit Original-Faceplate, 3 EditorHost-Quick-Smokes.
+- **Universelles 125A Test Lab: TECHNICAL_PASS**, Release-Flag dort ausdrücklich false.
+- **Echtzeitmessmatrix: 0/14.400 Deadlineueberschreitungen** in diesem Windows-2022-GitHub-Runner; die unveraenderte strenge Negativkontrolle des RT-Gates (0, 25, manipulierte / unvollstaendige Zellen) bestand, Endurteil **`PASS_LAB_ONLY`**.
+- **Windows-Entwicklungsbuild (kein Release):** GitHub-Actions-Artefakt `P190-FX-Zero-Dry-Windows-x64-VST3-TEST-A`, ID **13656691885**; vollstaendige Regressionen `P190-FX-Zero-Dry-Full-Regression-A`, ID **13656722011**.
+
+**Gegenproben:** Isoliertes P192-Same-Runner-ABBA [#42578406545](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42578406545), 5 PCM-/Chip-Register-Bitidentitaeten; in 128-Frame-/30-Voice-Renderengine 770,0 -> 685,6 µs Median (~11 %). Vorheriger P190-Run #42571191825 hatte beim alten Code 1/14.400 echten verifizierten Miss. Die separat echte ETW-Untersuchung war nicht als reiner Schedulerfehler erklaerbar; eine einzige aktuelle Null-Fehler-Matrix beweist keine universelle Ausreisserfreiheit.
+
+**Freigabestatus:** Windows-Labortests PASS, reale proprietaere 125A ROM-/77-SF2-Medien im kommerziellen Host, physische DAW-/ASIO-Bedingungen und finale Hardware-Klangparitaet **NOT RUN**. **Kein FULL AUDIT / keine kommerzielle Releasefreigabe / kein Merge nach main.**
