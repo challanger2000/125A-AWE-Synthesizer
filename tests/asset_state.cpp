@@ -37,15 +37,13 @@ int main() {
     d.masterVolume=4300; // 43%, preserved separately from SF2 overlays
     // Preserve the unchanged V10 and V9 binary layouts: V11 only appends
     // two uint32 effect preset indices, never inserts them into old saves.
-    const auto v12=encode(d);
-    Bytes v11(v12.begin(),v12.end()-4u);
-    v11[4]=11;
+    const auto v11=encode(d);
     Bytes v10(v11.begin(),v11.end()-8u);
     v10[4]=10;
     Bytes blob(v10.begin(),v10.end()-4u*17u);
     blob[4]=9;
     AssetState::Data out;
-    ok &= ck(!blob.empty()&&decode(blob,out)&&out.legacyFx&&out.program==104&&
+    ok &= ck(!blob.empty()&&decode(blob,out)&&out.program==104&&
              out.engine==2&&out.bank==128&&out.pathsSpecified&&out.romPath==d.romPath&&
              out.sf2Path==d.sf2Path&&out.ibkPath==d.ibkPath&&
              out.drumIbkPath==d.drumIbkPath&&out.controls==d.controls&&
@@ -62,7 +60,7 @@ int main() {
     v10Multi.resize(v10Multi.size()-8u);
     v10Multi[4]=10;
     AssetState::Data v10Restored;
-    ok &= ck(decode(v10Multi,v10Restored)&&v10Restored.legacyFx&&
+    ok &= ck(decode(v10Multi,v10Restored)&&
              v10Restored.reverbPreset==AssetState::kDefaultReverbPreset&&
              v10Restored.chorusPreset==AssetState::kDefaultChorusPreset&&
              v10Restored.channelProgramMask==0xffffu&&
@@ -112,11 +110,11 @@ int main() {
     }
     ok &= ck(ok,"FX V11: incomplete saves rejected without partial recall");
     auto badFx=v11Fx;
-    badFx[badFx.size()-12]=8;
+    badFx[badFx.size()-8]=8;
     AssetState::Data stable;stable.program=42;stable.reverbPreset=1;
     ok &= ck(!decode(badFx,stable)&&stable.program==42&&stable.reverbPreset==1,
              "FX V11: invalid Reverb 8 rejected atomically");
-    badFx=v11Fx;badFx[badFx.size()-8]=8;
+    badFx=v11Fx;badFx[badFx.size()-4]=8;
     ok &= ck(!decode(badFx,stable)&&stable.program==42&&stable.reverbPreset==1,
              "FX V11: invalid Chorus 8 rejected atomically");
     fx.reverbPreset=8;
@@ -127,29 +125,6 @@ int main() {
     AssetState::Data unchanged=multitimbral;unchanged.program=17;
     ok &= ck(!decode(v10Multi,unchanged)&&unchanged.program==17,
              "P120 corrupt channel program rejected without mutating recall");
-    // P191: V12 mode persists independently; older states restore legacy.
-    AssetState::Data modern=d;
-    modern.legacyFx=false;
-    AssetState::Data restoredMode;
-    ok &= ck(decode(encode(modern),restoredMode)&&!restoredMode.legacyFx,
-             "P191 new V12 absolute dry-mode round-trip");
-    modern.legacyFx=true;
-    ok &= ck(decode(encode(modern),restoredMode)&&restoredMode.legacyFx,
-             "P191 legacy V12 round-trip");
-    ok &= ck(decode(v11,restoredMode)&&restoredMode.legacyFx,
-             "P191 authentic V11 state automatically selects legacy FX mode");
-    const auto v12Mode=encode(modern);
-    bool completeV12=true;
-    for(size_t n=0;n<v12Mode.size();++n) {
-        Bytes part(v12Mode.begin(),v12Mode.begin()+n);
-        AssetState::Data stableState=d;stableState.program=19;
-        if(decode(part,stableState)||stableState.program!=19)completeV12=false;
-    }
-    ok &= ck(completeV12,"P191 all truncated V12 states rejected without partial commit");
-    auto invalidMode=v12Mode;invalidMode[invalidMode.size()-4]=2;
-    AssetState::Data stableState=d;stableState.program=19;
-    ok &= ck(!decode(invalidMode,stableState)&&stableState.program==19,
-             "P191 invalid V12 mode rejected atomically");
     // V9 only appends one uint32 volume word. V8 projects restore to unity.
     Bytes v8(blob.begin(),blob.end()-4);
     v8[4]=8;

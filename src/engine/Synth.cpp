@@ -287,38 +287,12 @@ bool Synth::LoadBank(const std::string& path, std::string& error, bool samplesIn
 // absolute reverb/chorus sends. P190: zero on either FX control MUST override
 // nonzero preset/CC sends. This prevents a mono bass becoming stereo-wet
 // with both GUI controls displaying zero.
-void Synth::SetLegacyFx(bool legacy) noexcept
-{
-    if(m_legacyFx==legacy)return;
-    m_legacyFx=legacy;
-    m_core.MuteEffectReturns(!legacy && m_guiControls[10]==0.f,
-                             !legacy && m_guiControls[11]==0.f);
-    // Explicit mode changes also update existing voices. Old project FX
-    // knob automation itself remains NoteOn-only as in pre-P190 builds.
-    for(int voice=0;voice<NoteVoices();++voice) {
-        if(!m_alloc[voice].inUse && !m_core.IsVoiceActive(voice))continue;
-        const int rev=legacy ? AWE125::FxSendLevel::ApplyLegacy(
-            m_alloc[voice].originalReverbSend,m_guiControls[10])
-                    : AWE125::FxSendLevel::Apply(
-            m_alloc[voice].originalReverbSend,m_guiControls[10]);
-        const int cho=legacy ? AWE125::FxSendLevel::ApplyLegacy(
-            m_alloc[voice].originalChorusSend,m_guiControls[11])
-                    : AWE125::FxSendLevel::Apply(
-            m_alloc[voice].originalChorusSend,m_guiControls[11]);
-        const uint32_t ptrx=m_core.ReadDriver(Reg::PTRX,voice);
-        const uint32_t csl=m_core.ReadDriver(Reg::CSL,voice);
-        m_core.Write(Reg::PTRX,voice,(ptrx&0xFFFF00FFu)|(uint32_t(rev)<<8));
-        m_core.Write(Reg::CSL,voice,(csl&0x00FFFFFFu)|(uint32_t(cho)<<24));
-    }
-}
-
 void Synth::SetGuiControl(int index, float normalized) noexcept
 {
     if(index<0 || index>=kGuiControlCount || !std::isfinite(normalized)) return;
     const float next=std::clamp(normalized,0.f,1.f);
     if(m_guiControls[static_cast<size_t>(index)]==next) return;
     m_guiControls[static_cast<size_t>(index)]=next;
-    if(m_legacyFx&&(index==10||index==11))return;
     if (index==10 || index==11)
         m_core.MuteEffectReturns(m_guiControls[10]==0.f,
                                  m_guiControls[11]==0.f);
@@ -1269,12 +1243,8 @@ void Synth::StartVoice(int voice, uint8_t channel, uint8_t note, uint8_t velocit
     const int originalReverb = std::clamp(static_cast<int>(vp.reverbSend) + chReverb, 0, 255);
     m_alloc[voice].originalReverbSend=static_cast<uint8_t>(originalReverb);
     m_alloc[voice].originalChorusSend=static_cast<uint8_t>(originalChorus);
-    const int chorus=m_legacyFx
-        ? AWE125::FxSendLevel::ApplyLegacy(originalChorus,m_guiControls[11])
-        : AWE125::FxSendLevel::Apply(originalChorus,m_guiControls[11]);
-    const int reverb=m_legacyFx
-        ? AWE125::FxSendLevel::ApplyLegacy(originalReverb,m_guiControls[10])
-        : AWE125::FxSendLevel::Apply(originalReverb,m_guiControls[10]);
+    const int chorus=AWE125::FxSendLevel::Apply(originalChorus,m_guiControls[11]);
+    const int reverb=AWE125::FxSendLevel::Apply(originalReverb,m_guiControls[10]);
     const uint32_t csl = (static_cast<uint32_t>(chorus) << Emu8000::kChorusShift)
                        | (vp.csl & Emu8000::kLoopAddressMask);
 

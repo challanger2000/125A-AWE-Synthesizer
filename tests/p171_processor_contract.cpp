@@ -90,51 +90,6 @@ void banksAndFirstNotes() {
 }
 
 
-
-void testP191LegacyV11RecallAndAutomation() {
-    // Build actual legacy V11 binary bytes, including old program/FX layout.
-    const auto project=state();
-    std::vector<unsigned char> bytes;
-    auto sink=[&](const void* v,size_t n){
-        const auto* p=static_cast<const unsigned char*>(v);
-        bytes.insert(bytes.end(),p,p+n);return true;
-    };
-    require(AssetState::Write(sink,project)&&bytes.size()>16,"V11 basis");
-    bytes.resize(bytes.size()-4);bytes[4]=11;
-    MemoryStream oldState;
-    int32 written=0;
-    require(oldState.write(bytes.data(),int32(bytes.size()),&written)==kResultOk
-            &&written==int32(bytes.size()),"write historical V11 stream");
-    require(oldState.seek(0,IBStream::kIBSeekSet,nullptr)==kResultOk,"rewind V11");
-    Rig legacy(project),modern(project);
-    require(legacy.p->setState(&oldState)==kResultOk,"V11 project recall");
-    check(save(*legacy.p).legacyFx&&!save(*modern.p).legacyFx,
-          "P191 V11 legacy additive and new V12 absolute dry");
-    // Note-level wet inputs are host MIDI CC91/93, never a fake DSP flag.
-    auto enableMidi=[](Processor& p){
-        Block cc(0);
-        cc.param(MidiControlMapping::ParamID(0,MidiControlMapping::Index(91)),1.);
-        cc.param(MidiControlMapping::ParamID(0,MidiControlMapping::Index(93)),1.);
-        cc.run(p);
-    };
-    enableMidi(*legacy.p);enableMidi(*modern.p);
-    const auto legacyPcm=sound(*legacy.p),dryPcm=sound(*modern.p);
-    check(audible(legacyPcm)&&audible(dryPcm)&&legacyPcm!=dryPcm,
-          "P191 old V11 CC wet PCM vs new absolute 0%=dry");
-    const auto saved=save(*legacy.p);
-    Rig reopened(saved);enableMidi(*reopened.p);
-    const auto reopenedPcm=sound(*reopened.p);
-    check(saved.legacyFx&&reopenedPcm==legacyPcm,
-          "P191 old V11 recall -> V12 save/reopen preserves PCM");
-    Block upgrade(0);upgrade.param(kFxSemanticsID,0.);upgrade.run(*legacy.p);
-    const auto upgraded=save(*legacy.p);
-    check(!upgraded.legacyFx&&upgraded.controls[10]==0&&upgraded.controls[11]==0,
-          "P191 explicit host mode automation selects absolute dry");
-    Rig converted(upgraded);enableMidi(*converted.p);
-    check(sound(*converted.p)==dryPcm,
-          "P191 upgraded V12 reproduces new absolute-dry PCM");
-}
-
 void testP190WetTailBypass() {
     // Previously 0 only zeroed NEW voice sends. Reverb/chorus feedback
     // from existing audio still escaped. Prove the real Box86 PCM return
@@ -260,7 +215,7 @@ int main(int argc,char** argv) {
     try {
         if(argc<3)return 2;assetsDir=argv[2];
         if(std::string(argv[1])=="stress"&&argc==4)stress(argv[3]);
-        else {banksAndFirstNotes();testP190WetTailBypass();testP191LegacyV11RecallAndAutomation();}
+        else {banksAndFirstNotes();testP190WetTailBypass();}
         std::cout<<"RESULT checks="<<checks<<" failed="<<failures<<'\n';
         return failures?1:0;
     } catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 2;}

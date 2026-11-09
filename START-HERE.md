@@ -1,4 +1,4 @@
-**P190 Wiedergabe-Nullpunkt aktuell auf `fix/p190-zero-fx-dry`, final geprüfter Produktstand `09e5ac7a9b99e5e4fd1c346f8161339fe74b4e53`**: [Windows-Run #42556095257](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42556095257) SUCCESS, 67/67 CTests, 537/537 VST3-Validator, 3 EditorHost-Smokes, 99 echte VSTGUI-Interaktionen, universelles Test Lab TECHNICAL_PASS, 0/14.400 Callback-Deadlineüberschreitungen in dieser CI-Matrix. P190 prüft nun zusätzlich, dass bei 100%->0% auch bereits angeregte Hall-/Chorus-Rückwege nach der internen 980-Frame-Pipeline dieselbe echte PCM wie ein dauerhaft trockenes Referenzsignal liefern. **NICHT FREIGEGEBEN**: Vor V12/Release ist die Altprojekt-/Host-Automations-Kompatibilität [Issue #93](https://github.com/challanger2000/125A-AWE-Synthesizer/issues/93) ungelöst. Reale Nutzer-ROM/SF2/DAW, Creative-Hardware-Klangidentität und P189 ASIO/ETW NO-GO bleiben getrennt.
+**P190 Wiedergabe-Nullpunkt aktuell auf `fix/p190-zero-fx-dry`, final geprüfter Produktstand `09e5ac7a9b99e5e4fd1c346f8161339fe74b4e53`**: [Windows-Run #42556095257](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42556095257) SUCCESS, 67/67 CTests, 537/537 VST3-Validator, 3 EditorHost-Smokes, 99 echte VSTGUI-Interaktionen, universelles Test Lab TECHNICAL_PASS, 0/14.400 Callback-Deadlineüberschreitungen in dieser CI-Matrix. P190 prüft nun zusätzlich, dass bei 100%->0% auch bereits angeregte Hall-/Chorus-Rückwege nach der internen 980-Frame-Pipeline dieselbe echte PCM wie ein dauerhaft trockenes Referenzsignal liefern. **NICHT FREIGEGEBEN**: Der bisherige Entwicklungsstand hatte keine veröffentlichte Vorgängerversion. Eine nicht benötigte P191-Legacy-Effektlogik wurde deshalb vollständig zurückgenommen. Neue und bisherige Entwicklungsprojektzustände verwenden ausschließlich den verbindlichen absoluten Effekt-Nullpunkt (Chorus/Reverb 0% = vollständig trocken). Reale Nutzer-ROM/SF2/DAW, Creative-Hardware-Klangidentität und P189 ASIO/ETW NO-GO bleiben getrennt.
 
 # P190 – Bass-Mono und FX 0 % AUS (Entwicklungsauftrag)
 
@@ -10,8 +10,7 @@ P190 arbeitet deshalb an absoluten Send-Leveln auf
 `PTRX[15:8]` und `CSL[31:24]`, inkl. Echtzeitänderung bei
 gehaltenen Stimmen und neutraler Mono-PCM-Abnahme.
 [Verifizierbarer Entwicklerplan](docs/P190-ZERO-FX-SEND.md).
-V11-Altprojekt-Migration bis zum tatsächlichen Nachweis offen:
-**Release NO-GO; P189 ETW-Diagnose getrennt halten.**
+Eine öffentlich ausgelieferte Vorgängerversion existiert nicht; daher ist eine Legacy-Effektemulation keine Produktanforderung. Die technische V11-State-Einlesbarkeit bleibt erhalten, aber FX=0 wird bewusst nach dem aktuellen 125A-Bedienvertrag interpretiert. **Release NO-GO** bis reale Ziel-DAW-/Klangabnahme; P189 ETW getrennt halten.
 
 ---
 

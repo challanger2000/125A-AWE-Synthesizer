@@ -39,11 +39,7 @@ werden: `PTRX[15:8]` für Hall und `CSL[31:24]` für Chorus.
 
 ## Verbindliche Abnahme und Grenzen
 
-Die Änderung ist **bewusst anders als die V11-SoundFont-Neutralstellung**.
-Vor einem Merge/Release sind eine explizite V11-Projektmigrationsstrategie
-und Legacy-Recall-/Save-/Automationtests erforderlich; alte Projekte
-dürfen nicht stillschweigend anders klingen. P190 ist daher zunächst
-nur ein **nicht freigegebener Fix-Kandidat**.
+Die Änderung ist **bewusst anders als die interne V11-SoundFont-Neutralstellung**. Es gibt aber keine veröffentlichte Vorgängerversion dieses 125A-Plugins und keine bekannte Bestandsinstallation, deren Altprojektklang ein Produktversprechen wäre. Darum gibt es **keinen Legacy-FX-Betriebsmodus**. Das interne State-Format bleibt mit vorhandenen V1–V11-Feldern lesbar, aber bei Chorus/Reverb 0% gilt für alle geladenen Daten derselbe absolute Trockenvertrag. P190 bleibt bis zur produktiven Abnahme ein **nicht freigegebener Fix-Kandidat**.
 
 Alle produktiven Windows-VST3-Builds müssen die gesamte CTest-Suite
 inklusive 125A_p190_fx_zero_dry, den VST3-Validator, 3 EditorHost-
@@ -65,15 +61,13 @@ Entwicklungsbuilds.**
 - 0/14.400 Callback-Deadlineüberschreitungen in der gemessenen künstlichen CI-Matrix.
 Die frühere P190-PCM-Gegenprobe zeigte eine normierte L/R-Effektivwertdifferenz von 0,000365 bei Dry und 0,096809 bei maximalen Effekten. Alle Nachweise beziehen sich auf synthetische Testdaten. NO-GO für Release, kein privater Original-ROM-/SF2-/DAW-/ASIO-Test.
 
-### Releaseblocker: alte V8–V11-Projekte dürfen nicht stillschweigend anders klingen
+### Entscheidung: keine historische Legacy-Effektlogik nötig
 
-Alte gespeicherte GUI-Send-Parameter 10/11 hatten die Bedeutung 0 = kein zusätzlicher Boost, aber SF2-/CC91-/CC93-Effekt-Sends blieben erhalten. P190 definiert dagegen 0 = absolut trocken. Ein unverändert geladener alter Wert 0 klingt nun anders. Alte Sends trotz sichtbarer Reglerstellung 0 weiterzugeben, wäre mit der ausdrücklichen Nutzervorgabe unvereinbar.
+Die früher diskutierte automatische V12-Migration war eine Fehlpriorisierung: Das 125A-AWE-Plugin besitzt **keinen veröffentlichten Vorgänger**. Nutzerziel ist ohne Ausnahme **0% = trocken**. Deshalb keine zusätzliche Legacy-Engine, kein Legacy-FX-Modus und keine neuen VST3-Parameter oder Versionssprünge zur Simulation von zuvor unveröffentlichten Entwicklungszuständen.
 
-Vor der Releasefreigabe ist eine ausdrücklich definierte V12-Migration mit sichtbar **nichtnulligen** effektiven Reglerwerten für alte wet-Projekte zu validieren. Eine feste Umrechnung der alten Reglerwerte mit der heutigen P190-Send-Kurve kann je nach SF2-/CC-Basis unterschiedlich klingen. Außerdem speichert der VST3-Host automatisierte alte Parameterwerte unabhängig vom Plugin-State: eine Plugin-interne State-Migration allein kann alte Host-Automation NICHT sicher konvertieren.
+Die alte V1–V11-State-Struktur wird zwar weiterhin eingelesen, aber die Effektregler werden bewusst als absolute P190-Pegel behandelt. Das ist eine dokumentierte Verhaltenskorrektur des unveröffentlichten Plugins, keine zugesicherte historische Audioidentität. Die allgemeinen Regressionen für State-Parsing, Recall, Save, Host-Automation sowie 100% -> 0% und noch aktive Effektfahnen bleiben verbindlich; eine künstliche **Legacy-Wet-Emulation** ist ausdrücklich ausgeschlossen.
 
-Pflichtnachweise: V1/V7/V8/V9/V10/V11-Projekte mit trockenem und nassem SF2-/CC-Send, Erstnote, gehaltene und ausgelassene Stimmen, Controller-/Prozessor-Recall, Save/Reopen, alte Host-Automation, Zero-/Mid-/Max-Reglerwerte sowie fehlende Assets. Eine bei Live-Reglerwechsel 100 -> 0 eventuell weiterklingende alte Hall-/Chorus-Fahne ist separat zu falsifizieren: null neue Send-Register beweisen nicht, dass die alten Delay-Tails sofort vollständig stumm werden.
-
-**Bis zur vollständigen Abnahme: keine V12-Umsetzung auf Verdacht, kein Main-Merge, kein Verkauf.**
+P191 wurde nur als nicht freigegebener Zwischenversuch auf dem Entwicklungsbranch erstellt und danach vollständig aus dem Produktbaum zurückgenommen. Keine Änderungen an Main. Die realen DAW-/ASIO- und Original-AWE64-Klangtests sind weiterhin nicht erledigt, also bleibt die **Releasefreigabe NO-GO**.
 
 ### EMU8000 Fidelity: externe Empfehlungen gegen produktiven Code geprüft
 
@@ -84,9 +78,9 @@ Pflichtnachweise: V1/V7/V8/V9/V10/V11-Projekte mit trockenem und nassem SF2-/CC-
 
 **Quellenbewertung:** eigener produktiver Quellcode + P97-Evidenz; historische Hardware-Details ggf. durch unabhängige Referenzfenster bestätigen. Kein unnötiger Hardwarekauf.
 
-## P190 next candidate: existing reverb/chorus tail return bypass (PENDING NEW CI)
+## P190 Rückweg-Abschaltung alter Chorus-/Reverb-Fahnen (Windows-geprüft)
 
-The earlier gate proved new voice sends become zero but not that previously excited delay/reverb feedback stops reaching the mixer. This candidate adds per-instance, runtime-only 125A return masks to the actual Box86 chip (not its unused float DSP), without rewriting the original Creative effect preset tables. The effect algorithm continues to run so its internal timebase stays coherent. The VST3 Processor integration CTest compares three wet-to-zero scenarios against an independently started always-dry PCM clone after the 980-frame chip FIFO latency. The local 125A adapter header shadows the upstream original unchanged. Any precomputed wet FIFO samples may remain audible until the declared chip latency passes; instantaneous muting at host event offset is not claimed. Release and migration remain NO-GO until run evidence.
+The earlier gate proved new voice sends become zero but not that previously excited delay/reverb feedback stops reaching the mixer. The subsequent Windows run #42556095257 has now passed this additional PCM condition. This candidate adds per-instance, runtime-only 125A return masks to the actual Box86 chip (not its unused float DSP), without rewriting the original Creative effect preset tables. The effect algorithm continues to run so its internal timebase stays coherent. The VST3 Processor integration CTest compares three wet-to-zero scenarios against an independently started always-dry PCM clone after the 980-frame chip FIFO latency. The local 125A adapter header shadows the upstream original unchanged. Any precomputed wet FIFO samples may remain audible until the declared chip latency passes; instantaneous muting at host event offset is not claimed. The run evidence is PASS for technical Windows regression; release remains NO-GO for other real-world acceptance criteria.
 
 ### Nachprobe der unabhängigen P27-PCM-Prüfung
 
@@ -101,8 +95,8 @@ Der erste Windows-Lauf nach Einbau des Return-Bypasses kompiliert, aber CTest 50
 - **0/14.400** gemeldete Callback-Deadlinemisses in dieser künstlichen Windows-CI-Matrix, kein physischer ASIO-/MMCSS-Betrieb.
 - Artefakte: `P190-FX-Zero-Dry-Windows-x64-VST3-TEST-A` (GitHub Artifact ID 13648226418; Development-Preview, **kein Verkauf/Release**) und `P190-FX-Zero-Dry-Full-Regression-A` (Artifact ID 13648087065; 315,6 MB).
 
-**Reichweitengrenzen:** Der echte proprietäre User-ROM/SF2-Klang wurde nicht erneut auf dem Runner geprüft; die Studio-One-/Fender-Studio-Pro-Abnahme bleibt NOT RUN, ebenso vollständige reale AWE64-Parität. Für eine ganz unmittelbar nach der Steuerungsänderung bereits vorgerechnete Audioausgabe können bis zu 980 native Frames im Chip-FIFO verbleiben. Ein garantiert sample-sofortiger Wet-Stopp wird nicht behauptet. Die automatisierte Migration alter V8–V11-Projekte/Host-Automationskurven bleibt NICHT gelöst ([Issue #93](https://github.com/challanger2000/125A-AWE-Synthesizer/issues/93)). **RELEASE NO-GO**, keine Änderung an Main.
+**Reichweitengrenzen:** Der echte proprietäre User-ROM/SF2-Klang wurde nicht erneut auf dem Runner geprüft; die Studio-One-/Fender-Studio-Pro-Abnahme bleibt NOT RUN, ebenso vollständige reale AWE64-Parität. Für eine ganz unmittelbar nach der Steuerungsänderung bereits vorgerechnete Audioausgabe können bis zu 980 native Frames im Chip-FIFO verbleiben. Ein garantiert sample-sofortiger Wet-Stopp wird nicht behauptet. Die frühere Legacy-Migrationsanforderung wurde zurückgenommen, weil es keine öffentlich ausgelieferte Vorgängerversion gibt. Ausschließlich absolute P190-Effektpegel bleiben vorgesehen. **RELEASE NO-GO** wegen weiter fehlender realer Klang-/DAW-/ASIO-Abnahme; Main unverändert.
 
-## P191 – Versionierte Altprojekt-Kompatibilität (noch NICHT abgenommen)
+## P191-Rücknahme / Versionsentscheidung
 
-V12 fügt an die unveränderte V11-Binärstruktur ein einziges geprüftes uint32-FX-Mode-Wort an (0 = Absolute Dry, 1 = Legacy additive). Ein geladenes V1–V11-Projekt wird als Legacy markiert, behält die alten VST3-Klassen-IDs, Effektregler-IDs und die originale additive SF2/CC91/93-Wirkung bei 0 Prozent; alte Knob-Automation betrifft weiterhin nur neue Noten. Neue V12-Projekte verwenden weiterhin P190 mit 0 Prozent absolut trocken einschließlich der alten Wet-Feedback-Tails. V12 Save/Recall speichert den Modus. Der neue sichtbare, hostautomatisierbare Parameter 1202 (FX Send Mode) bietet Absolute Dry und Legacy als explizite, kontrollierte Auswahl statt einer unsichtbaren Umrechnung. Die originale VSTGUI-Faceplate ist unverändert; der Hostparameter kennzeichnet den Legacy-Modus im DAW-Parametereditor. Im Legacy-Modus ist 0 Prozent weiterhin historisch WET, anders als bei neu erstellten Projekten. P191-Buildkandidat, Testabnahme ausstehend, kein Release und keine Main-Änderung.
+Rücknahmebasis des Produktionsbaums: vollständig geprüfter P190-Commit `09e5ac7a9b99e5e4fd1c346f8161339fe74b4e53` mit nachfolgender Dokumentation `2f3210e0f2fd0829b1addff1dc73a7f5c755f292`. Die beiden experimentellen P191-Commits werden in einem vorwärts gerichteten Revert ersetzt; im resultierenden Baum gibt es keinen V12-Modus, keinen Parameter 1202 und keine `ApplyLegacy`-Funktion. Die neue CI prüft exakt den wiederhergestellten P190-Produktbaum und die hier korrigierten Dokumente. Die alleinige alte Issue #93 ist kein Releaseblocker mehr.

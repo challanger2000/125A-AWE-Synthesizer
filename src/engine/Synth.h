@@ -29,8 +29,6 @@ public:
     explicit Synth(uint32_t sampleRate);
     // VST3 UI modifiers, applied only at NoteOn. 0 = original SF2 register.
     static constexpr int kGuiControlCount = 12;
-    void SetLegacyFx(bool legacy) noexcept;
-    bool LegacyFx() const noexcept {return m_legacyFx;}
     void SetGuiControl(int index, float normalized) noexcept;
     float GuiControl(int index) const noexcept;
 
@@ -245,7 +243,6 @@ private:
     std::vector<LoadedBank> m_banks;
     bool m_strictPresetSelection = false; // plugin explicitly enables this
     std::array<float,kGuiControlCount> m_guiControls{};
-    bool m_legacyFx=false;
     // A fixed per-instance scratch area for selecting SF2/SBK layers at NoteOn.
     std::array<SoundFont::Region, kMaxRegionsPerNote> m_regionScratch{};
     uint64_t m_regionOverflowCount = 0;
