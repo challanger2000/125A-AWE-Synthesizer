@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iomanip>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -127,9 +128,9 @@ void dispatch(Synth& synth,const Event& e) {
 }
 }
 int main(int argc,char** argv) {
-    if(argc!=11) {
+    if(argc!=11 && argc!=15) {
         std::cerr<<"Usage: awe32_p97_midi_renderer --rom ROM --sf2 SF2 --events TSV"
-                   " --out WAV --seconds 1..300\n";return 2;
+                   " --out WAV --seconds 1..300 [--p206-trace RAW --p206-readbacks TSV]\n";return 2;
     }
     try {
 #if !defined(AWE125_P193_CT4390_REFERENCE_FX)
@@ -140,15 +141,22 @@ int main(int argc,char** argv) {
             "Physical CT4390 reference requires -DAWE125_P193_CT4390_REFERENCE_FX=ON; "
             "P190 default 0% FX is intentionally DRY");
 #endif
-        std::string rom,sf2,tsv,out;int seconds=0;
+        std::string rom,sf2,tsv,out,p206Trace,p206Readbacks;int seconds=0;
         for(int i=1;i<argc;i+=2) {
             std::string k=argv[i],v=argv[i+1];
             if(k=="--rom")rom=v;else if(k=="--sf2")sf2=v;
             else if(k=="--events")tsv=v;else if(k=="--out")out=v;
             else if(k=="--seconds")seconds=std::stoi(v);
+            else if(k=="--p206-trace")p206Trace=v;
+            else if(k=="--p206-readbacks")p206Readbacks=v;
             else throw std::runtime_error("Unknown argument "+k);
         }
         if(seconds<1||seconds>300)throw std::runtime_error("Invalid duration");
+        const bool p206=!p206Trace.empty()&&!p206Readbacks.empty();
+        if((!p206Trace.empty()||!p206Readbacks.empty())&&!p206)
+            throw std::runtime_error("P206 requires both trace and readback paths");
+        if(p206 && seconds<14)
+            throw std::runtime_error("P206 needs at least 14 seconds of original MIDI");
         auto midi=events(tsv);
         const uint64_t count=uint64_t(seconds)*44100u;
         Synth synth(44100);
@@ -170,10 +178,46 @@ int main(int argc,char** argv) {
         uint64_t at=0,nz=0,peak=0,applied=0;
         uint64_t partialHall=0,partialChorus=0;
         long double total=0;
+        constexpr uint64_t p206NoteOn=418950; // 9.5s at 44.1k
+        constexpr uint64_t p206Step=4410;     // 100ms
+        std::ofstream p206Out;
+        uint64_t p206Next=0,p206Count=0;
+        int p206Voice=-1;
+        bool p206Active=false,p206Completed=false;
+        if(p206) {
+            p206Out.open(p206Readbacks,std::ios::binary|std::ios::trunc);
+            if(!p206Out)throw std::runtime_error("P206 readback output unavailable");
+            p206Out<<"relative_frame\tvoice\tatkhld\tenvval\tpefe\tip\tcpf\tptrx\tcvcf\n";
+        }
+        const auto p206Snapshot=[&]() {
+            using Emu8000::Reg;
+            auto& core=synth.Core();
+            const auto atk=core.ReadDriver(Reg::ATKHLD,p206Voice);
+            const auto env=core.ReadDriver(Reg::ENVVAL,p206Voice);
+            const auto pefe=core.ReadDriver(Reg::PEFE,p206Voice);
+            const auto ip=core.ReadDriver(Reg::IP,p206Voice);
+            const auto cpf=core.ReadDriver(Reg::CPF,p206Voice);
+            const auto ptrx=core.ReadDriver(Reg::PTRX,p206Voice);
+            const auto cvcf=core.ReadDriver(Reg::CVCF,p206Voice);
+            const auto hex=[&](uint32_t val,int n) {
+                std::ostringstream os;
+                os<<std::uppercase<<std::hex<<std::setfill('0')<<std::setw(n)<<val;
+                return os.str();
+            };
+            p206Out<<(at-p206NoteOn)<<'\t'<<p206Voice<<'\t'
+                    <<hex(atk,4)<<'\t'<<hex(env,4)<<'\t'
+                    <<hex(pefe,4)<<'\t'<<hex(ip,4)<<'\t'
+                    <<hex(cpf,8)<<'\t'<<hex(ptrx,8)<<'\t'
+                    <<hex(cvcf,8)<<'\n';
+            ++p206Count;
+        };
         auto render=[&](uint64_t end) {
             end=std::min(end,count);
             while(at<end) {
-                auto n=uint32_t(std::min<uint64_t>(1024,end-at));
+                uint64_t stop=end;
+                if(p206Active) stop=std::min(stop,p206Next);
+                if(stop<=at)throw std::runtime_error("P206 readback clock stalled");
+                auto n=uint32_t(std::min<uint64_t>(1024,stop-at));
                 synth.RenderBlock(buffer.data(),n);
                 wav.write(reinterpret_cast<const char*>(buffer.data()),
                           n*2*sizeof(int16_t));
@@ -183,11 +227,51 @@ int main(int argc,char** argv) {
                     total+=static_cast<long double>(x)*x;
                 }
                 at+=n;
+                if(p206Active && at==p206Next) {
+                    p206Snapshot();
+                    p206Next+=p206Step;
+                    if(p206Count==31) {
+                        synth.Core().CloseTrace();
+                        p206Active=false;
+                        p206Completed=true;
+                    }
+                }
             }
         };
         for(const auto& e:midi) {
             if(e.frame>=count)break;
-            render(e.frame);dispatch(synth,e);++applied;
+            render(e.frame);
+            const bool p206Target = p206 && e.frame==p206NoteOn &&
+                e.type=="note_on" && e.ch==0 && e.a==59 && e.b>0;
+            if(p206Target) {
+                if(p206Voice>=0)throw std::runtime_error("Repeated P206 note59 MIDI");
+                if(!synth.Core().OpenTrace(p206Trace.c_str()))
+                    throw std::runtime_error("Cannot open P206 native chip trace");
+            }
+            dispatch(synth,e);++applied;
+            if(p206Target) {
+                using Emu8000::Reg;
+                const auto& sf=synth.BankAt(synth.BankCount()-1);
+                const auto regions=sf.Select(0,0,59,e.b);
+                if(regions.size()!=1)
+                    throw std::runtime_error("P206 original note59 must select exactly one sample zone");
+                for(int v=0;v<32;++v) {
+                    const auto atk=synth.Core().Read(Reg::ATKHLD,v);
+                    const auto pefe=synth.Core().Read(Reg::PEFE,v);
+                    if((atk&127u)==0x0Cu && ((pefe>>8)&255u)==0x7Fu) {
+                        if(p206Voice>=0)
+                            throw std::runtime_error("P206 multiple matching EG1 note59 voices");
+                        p206Voice=v;
+                    }
+                }
+                if(p206Voice<0)
+                    throw std::runtime_error("P206 active note59 missing attack=0x0C/PEFE=0x7F");
+                if(synth.Core().Read(Reg::ENVVAL,p206Voice)!=0x7A48u)
+                    throw std::runtime_error("P206 original delay tc0 not ENVVAL=0x7A48");
+                p206Snapshot();
+                p206Next=at+p206Step;
+                p206Active=true;
+            }
             // Test the actual chip registers AFTER the SF2/MIDI driver
             // assigned voices. Both send dimensions must retain at least
             // one hardware-like intermediate 1..254 value: forcing all
@@ -205,6 +289,8 @@ int main(int argc,char** argv) {
             }
         }
         render(count);
+        if(p206 && (!p206Completed || p206Count!=31 || !p206Out.good()))
+            throw std::runtime_error("P206 note59 sample-clock register readback incomplete");
         if(!wav.good()||nz==0)throw std::runtime_error("PCM output missing/silent");
         if(!partialHall || !partialChorus)
             throw std::runtime_error(

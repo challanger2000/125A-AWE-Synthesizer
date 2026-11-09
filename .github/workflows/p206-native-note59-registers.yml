@@ -1,0 +1,74 @@
+name: P206 isolate public original SF2 test note59 86Box register writes and readback
+on:
+  push:
+    branches: [research/p206-original-eg1-registers]
+    paths:
+      - 'tools/p97_midi_renderer.cpp'
+      - 'tools/p206_audit_note59_registers.py'
+      - '.github/workflows/p206-native-note59-registers.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  original-public-SF2-native-chip:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch SHA-pinned original public SF2 and MIDI and ephemeral Wave ROM
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/p206" p206-evidence
+          base='https://raw.githubusercontent.com/mrbumpy409/SoundFont-Spec-Test/67c0405ea9'
+          curl -fLsS --retry 3 --max-time 90 "$base/sf_spec_test.sf2" -o "$RUNNER_TEMP/p206/original.sf2"
+          curl -fLsS --retry 3 --max-time 90 "$base/sf_spec_test.mid" -o "$RUNNER_TEMP/p206/original.mid"
+          test "$(git hash-object "$RUNNER_TEMP/p206/original.sf2")" = 4768c4a0215abf49c7a2bb51ada5ba3494faa1c5
+          test "$(git hash-object "$RUNNER_TEMP/p206/original.mid")" = c720631fb2f74f46ce4e2fb0c12be7905353fcfe
+          curl -fLsS --retry 3 --max-time 90 \
+            https://raw.githubusercontent.com/86Box/roms/master/sound/creative/awe32.raw \
+            -o "$RUNNER_TEMP/p206/awe32.raw"
+          test "$(stat -c %s "$RUNNER_TEMP/p206/awe32.raw")" = 1048576
+      - name: Verify negative mutations and original Creative VXD scalar delay/attack conversions
+        run: |
+          python3 -m py_compile tools/p206_audit_note59_registers.py
+          python3 tools/p206_audit_note59_registers.py --self-test
+      - name: Compile unmodified native 86Box core and research-only P97 note59 trace
+        run: |
+          cmake -S . -B build-p206 -G Ninja \
+            -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_OPL3_PROBES=OFF \
+            -D125A_BUILD_VST3=OFF -DAWE125_P193_CT4390_REFERENCE_FX=ON
+          cmake --build build-p206 --target awe32_p97_midi_renderer --parallel 4
+      - name: Reconstruct 44.1kHz MIDI timing of the unchanged original v3.0 test
+        run: |
+          python3 -m pip -q install mido
+          python3 tools/p97_prepare_midi.py \
+            --midi "$RUNNER_TEMP/p206/original.mid" \
+            --tsv "$RUNNER_TEMP/p206/events.tsv" \
+            --json p206-evidence/P206-original-MIDI-timing.json
+      - name: ACTUALLY render through the EMU8000 and trace note59 registers and live chip readbacks
+        run: |
+          build-p206/src/engine/awe32_p97_midi_renderer \
+            --rom "$RUNNER_TEMP/p206/awe32.raw" \
+            --sf2 "$RUNNER_TEMP/p206/original.sf2" \
+            --events "$RUNNER_TEMP/p206/events.tsv" \
+            --seconds 16 --out "$RUNNER_TEMP/p206/native16s.wav" \
+            --p206-trace "$RUNNER_TEMP/p206/note59-port.trace" \
+            --p206-readbacks "$RUNNER_TEMP/p206/note59-readbacks.tsv"
+      - name: Validate note-on bus and sample-clock chip readbacks against original P200 native-audio measurements
+        run: |
+          python3 tools/p206_audit_note59_registers.py \
+            --trace "$RUNNER_TEMP/p206/note59-port.trace" \
+            --readbacks "$RUNNER_TEMP/p206/note59-readbacks.tsv" \
+            --fixture tests/fixtures/p205_eg1_ct4390_p200_points.json \
+            --out p206-evidence/P206-Actual-Native-Note59-Register-Causality.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: P206-Derived-Native-EMU8000-Note59-Register-Metrics
+          path: p206-evidence/*.json
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Delete ephemeral SF2, ROM, MIDI, WAV and raw register logs
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/p206"
