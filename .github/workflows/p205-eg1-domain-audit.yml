@@ -1,0 +1,47 @@
+name: P205 CT4390 EG1 Hertz/Cent inverse audit (archived measured metadata only)
+on:
+  push:
+    branches: [research/p193-ct4390-fidelity]
+    paths:
+      - 'tools/p205_eg1_domain_audit.py'
+      - 'tests/fixtures/p205_eg1_ct4390_p200_points.json'
+      - 'docs/P205-EG1-HZ-CENTS-INVERSE-AUDIT.md'
+      - '.github/workflows/p205-eg1-domain-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  independent-original-metadata-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse and syntax-check analysis, standard library only
+        run: python3 -m py_compile tools/p205_eg1_domain_audit.py
+      - name: Verify equations and deliberately mutated original P200 metadata are rejected
+        run: python3 tools/p205_eg1_domain_audit.py --self-test
+      - name: Analyze original CT4390 P200 & P203 archived pitch evidence
+        run: python3 tools/p205_eg1_domain_audit.py --out p205-evidence/P205-EG1-CT4390-Domain-Audit.json
+      - name: Enforce falsification outcome (fail closed if conclusions change)
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('p205-evidence/P205-EG1-CT4390-Domain-Audit.json').read_text())
+          assert r['decision']['simple_cents_to_hz_counterfactual_improves_baseline_rmse'] is False
+          assert r['decision']['p203_empirical_candidate_monotone'] is False
+          assert r['decision']['production_dsp_change_justified'] is False
+          b=r['comparisons']['baseline']
+          assert b['actual_native']['n']==9
+          assert 85 < b['actual_native']['rmse_cents'] < 87
+          assert 93 < b['counterfactual_cent_to_hz']['rmse_cents'] < 95
+          assert r['p203_monotonicity']['negative_slope_intervals'] > 100
+          print('P205 original physical-reference *metadata* checks PASS; no DSP modification')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: P205-CT4390-Inverse-Domain-Archived-Metadata-Audit
+          path: p205-evidence/*.json
+          retention-days: 14
+          if-no-files-found: warn

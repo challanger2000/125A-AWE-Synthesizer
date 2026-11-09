@@ -1,0 +1,140 @@
+{
+  "schema": "125A-P205-EG1-pitch-measured-points-v1",
+  "source": "Archived original P200 multi-estimator FFT+ACF pitch reports; values are measured derived frequencies, not original recorded audio or copied sample data",
+  "original_reference": {
+    "model": "AWE64 Gold CT4390 analog output",
+    "sample_rate_hz": 48000,
+    "midi_note": 59,
+    "sample_id": 43,
+    "mod_env_to_pitch_cents": 1200,
+    "attack_mod_env_timecents": 0,
+    "delay_mod_env_timecents": 0,
+    "original_sf2_git_blob": "4768c4a0215abf49c7a2bb51ada5ba3494faa1c5",
+    "original_midi_git_blob": "c720631fb2f74f46ce4e2fb0c12be7905353fcfe",
+    "original_reference_flac_git_blob": "9d5fa80197dd6f6170c039cb840e613949546ba9",
+    "expected_p199_analysis_lag_ms": 23,
+    "p97_coarse_lag_ms": 0
+  },
+  "captures": {
+    "baseline": {
+      "run_id": 42685155427,
+      "artifact_id": 13703694431,
+      "run_head_sha": "bfa74df16d5119380d898502584ba9fcad5b34f0",
+      "hold_reference_hz": 738.629,
+      "hold_native_hz": 740.183,
+      "p200_original_med_abs_cents": 81.85,
+      "attack_rows": [
+        {
+          "t": 10.64,
+          "hw": 550.93,
+          "native": null
+        },
+        {
+          "t": 10.72,
+          "hw": 638.646,
+          "native": 677.827
+        },
+        {
+          "t": 10.8,
+          "hw": 674.692,
+          "native": 721.885
+        },
+        {
+          "t": 10.88,
+          "hw": 686.668,
+          "native": 735.513
+        },
+        {
+          "t": 10.96,
+          "hw": 696.261,
+          "native": 739.207
+        },
+        {
+          "t": 11.04,
+          "hw": 705.806,
+          "native": 739.978
+        },
+        {
+          "t": 11.12,
+          "hw": 711.747,
+          "native": 740.057
+        },
+        {
+          "t": 11.2,
+          "hw": 716.744,
+          "native": 740.057
+        },
+        {
+          "t": 11.28,
+          "hw": 721.743,
+          "native": 740.057
+        },
+        {
+          "t": 11.36,
+          "hw": 726.738,
+          "native": 740.057
+        }
+      ]
+    },
+    "slow_p203": {
+      "run_id": 42685310513,
+      "artifact_id": 13705190866,
+      "run_head_sha": "4d9afb4679df5918df07aff9cc611aee5a17f03a",
+      "hold_reference_hz": 738.629,
+      "hold_native_hz": 740.183,
+      "p200_original_med_abs_cents": 29.47,
+      "attack_rows": [
+        {
+          "t": 10.64,
+          "hw": 550.93,
+          "native": null
+        },
+        {
+          "t": 10.72,
+          "hw": 638.646,
+          "native": 661.15
+        },
+        {
+          "t": 10.8,
+          "hw": 674.692,
+          "native": 696.195
+        },
+        {
+          "t": 10.88,
+          "hw": 686.668,
+          "native": 704.233
+        },
+        {
+          "t": 10.96,
+          "hw": 696.261,
+          "native": 703.971
+        },
+        {
+          "t": 11.04,
+          "hw": 705.806,
+          "native": 702.792
+        },
+        {
+          "t": 11.12,
+          "hw": 711.747,
+          "native": 702.917
+        },
+        {
+          "t": 11.2,
+          "hw": 716.744,
+          "native": 704.844
+        },
+        {
+          "t": 11.28,
+          "hw": 721.743,
+          "native": 708.68
+        },
+        {
+          "t": 11.36,
+          "hw": 726.738,
+          "native": 714.47
+        }
+      ]
+    }
+  }
+}
