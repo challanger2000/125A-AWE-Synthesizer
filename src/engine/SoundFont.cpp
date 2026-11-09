@@ -1294,8 +1294,16 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
         // whose converter and existing compatibility regressions are distinct.
         // This corrects the SF2-to-register mapping; chip 0.375-dB IFATN
         // quantization and verified Creative MIDI attenuation curves remain.
+        // P198: explicitly test alternate attenuation scales on isolated
+        // real-AWE64 Gold analysis binaries only. Never ship this compile
+        // definition in the regular Windows VST3 or P190 CTest build.
+#if defined(AWE125_P198_ATTEN_SCALE)
+        const double hardwareSf2AttenuationScale =
+            (drv == Awe32::Driver::Win95) ? AWE125_P198_ATTEN_SCALE : 1.0;
+#else
         const double hardwareSf2AttenuationScale =
             (drv == Awe32::Driver::Win95) ? 0.4 : 1.0;
+#endif
         vp.patchAttenUnits = static_cast<uint8_t>(std::clamp(
             static_cast<int>(std::lround(g.Get(Gen::InitialAttenuation, 0)
                        * hardwareSf2AttenuationScale
