@@ -1,0 +1,41 @@
+name: P192 original EMU8000 shadow pitch-cache same-runner A/B
+on:
+  push:
+    branches: [perf/p192-shadow-pitch-cache]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  paired-engine:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure same-source disabled-cache and exact-input-cache engines
+        shell: pwsh
+        run: |
+          $opts=@('-G','Visual Studio 17 2022','-A','x64','-D125A_BUILD_VST3=OFF','-D125A_BUILD_ENGINE_PROBES=ON','-D125A_BUILD_OPL3_PROBES=OFF','-D125A_P170_MUTATION_TESTS=OFF','-D125A_P192_BENCHMARK=ON')
+          cmake -S . -B build-uncached @opts '-DCMAKE_CXX_FLAGS=/DAWE125_TEST_DISABLE_MIRROR_PITCH_CACHE'
+          if ($LASTEXITCODE -ne 0) { throw 'Uncached configure failed' }
+          cmake -S . -B build-optimized @opts
+          if ($LASTEXITCODE -ne 0) { throw 'Optimized configure failed' }
+      - name: Build identical engine targets with and without pitch cache
+        shell: pwsh
+        run: |
+          cmake --build build-uncached --config Release --target awe32_p192_bench --parallel 2
+          if ($LASTEXITCODE -ne 0) { throw 'Uncached build failed' }
+          cmake --build build-optimized --config Release --target awe32_p192_bench --parallel 2
+          if ($LASTEXITCODE -ne 0) { throw 'Optimized build failed' }
+      - name: PCM/reg bit-identity and ABBA within one Windows runner
+        shell: pwsh
+        run: |
+          python tools/p192_compare.py build-uncached/src/engine/Release/awe32_p192_bench.exe build-optimized/src/engine/Release/awe32_p192_bench.exe qa/p192
+          if ($LASTEXITCODE -ne 0) { throw 'P192 PCM/Register A/B fails; no optimization acceptance' }
+      - name: Preserve complete deterministic PCM and benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: P192-Pitch-Mirror-ABBA-PCM-and-Registers
+          path: qa/p192/
+          if-no-files-found: warn
+          retention-days: 14
