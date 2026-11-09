@@ -306,7 +306,7 @@ emu8k_attack_amp_index(int32_t phase)
 
 /* Modulation envelope attack is strongly convex (block 30): 1 - (1 - x)^13.5. */
 static inline int32_t
-emu8k_mod_attack_value(int32_t phase)
+emu8k_mod_attack_value(int32_t phase, int attack_rate)
 {
     double x = (double) phase / (double) (1 << 21);
     if (x < 0.0)
@@ -328,7 +328,18 @@ emu8k_mod_attack_value(int32_t phase)
 #else
     const double amp = 1.0 - pow(1.0 - x, 13.5);
 #endif
+#if defined(AWE125_P203_SLOW_MOD_ATTACK)
+    /* P203: ONLY for rate values BELOW independent AWETST25 block30
+     * measured coverage (lowest original test=0x10). The exact original
+     * Creative SF2 note59 uses 0x0C. This remains a nonshipping
+     * hardware-fit hypothesis, not proven silicon behaviour. */
+    const double candidate_amp = attack_rate < 0x10 ?
+        amp - 0.30 * x * (1.0 - x) : amp;
+    return (int32_t) (candidate_amp * (double) (1 << 21));
+#else
+    (void) attack_rate;
     return (int32_t) (amp * (double) (1 << 21));
+#endif
 }
 
 /* One decay/release step: ramp_amount_db_oct is Q16. */
@@ -1749,7 +1760,7 @@ emu8k_outw(uint16_t addr, uint16_t val, void *priv)
                         mod_env->ramp_amount_db_oct   = env_decay_to_dbs_or_oct[DCYSUS_DECAYRELEASE_GET(val)];
                         if (DCYSUS_IS_RELEASE(val)) {
                             if (mod_env->state == ENV_DELAY || mod_env->state == ENV_ATTACK || mod_env->state == ENV_HOLD) {
-                                mod_env->value_db_oct = emu8k_mod_attack_value(mod_env->value_amp_hz); /* AWE32Emu */
+                                mod_env->value_db_oct = emu8k_mod_attack_value(mod_env->value_amp_hz, ATKHLD_ATTACK(emu8k->voice[emu8k->cur_voice].atkhld)); /* AWE32Emu */
                                 if (mod_env->value_db_oct >= (1 << 21))
                                     mod_env->value_db_oct = (1 << 21) - 1;
                             }
@@ -2692,7 +2703,7 @@ emu8k_update_chunk(emu8k_t *emu8k)
                     case ENV_ATTACK:
                         /* Attack amount is in linear amplitude */
                         modenv->value_amp_hz += modenv->attack_amount_amp_hz;
-                        modenv->value_db_oct = emu8k_mod_attack_value(modenv->value_amp_hz); /* AWE32Emu: convex attack */
+                        modenv->value_db_oct = emu8k_mod_attack_value(modenv->value_amp_hz, ATKHLD_ATTACK(emu_voice->atkhld)); /* AWE32Emu: convex attack */
                         if (modenv->value_amp_hz >= (1 << 21)) {
                             modenv->value_amp_hz = 1 << 21;
                             modenv->value_db_oct = 1 << 21;
