@@ -1,3 +1,52 @@
+# P188 – geprüfter Administrator-/ETW-Praxistest vor ASIO (9. November 2026)
+
+**Zielrechnerbefund P187:** `StartTraceW` für Kernel- und User-ETW
+jeweils Windows-Fehler **5 = ERROR_ACCESS_DENIED**,
+`child_pid=0`, `asio.json` nicht vorhanden. Audiohardwarelauf
+tatsächlich `NOT_RUN`, AWE-Ursache `INCONCLUSIVE`. Nicht mit
+einem DSP-/ASIO-Timingfehler verwechseln.
+
+**Präzise Korrektur:** `P188-ETW-ASIO.bat` führt zuallererst eine
+echte erweiterte Administrator-/ETW-/QPC-/Kernel-Kontextwechsel-
+Vorprüfung aus. Bei fehlender Elevation nur per ausdrücklicher
+Windows-UAC-Bestätigung weiter. Keine Treiberänderung, kein ETW-
+Bypass. Bei Fehler wird **kein** ASIO-Prozess gestartet, sondern
+`P188-PREFLIGHT.json` mit fehlergetreuen Daten erzeugt.
+Nur bei bestandener Vorprüfung und nach ausdrücklicher
+`START`-Zustimmung wird ein einziger Referenz-ASIO-Versuch
+durchgeführt, dessen `P185-ACCEPTANCE.json` im P186-Test Lab
+die präzisen Diagnosen exportiert. `-CheckOnly` und
+`-PreflightOnly` benötigen keine Audiomessung.
+
+**Windows-CI und tatsächlicher GitHub-Artefaktdownload geprüft:**
+[Run #42541879944 – SUCCESS](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42541879944),
+36 P185 + 42 P186 Gegenproben, native ETW/VST3-Realkontrollen,
+**echter erfolgreicher ETW-Preflight auf Windows-2022**, BAT-Abbruch-/
+Manipulationsprüfung sowie ZIP-Download und erneute Vorprüfung
+am tatsächlich heruntergeladenen Paket **bestanden**.
+Historische AWE-Regression: 66/66 CTests, 537/537
+Validatorprüfungen, 3 EditorHost-Smokes unverändert bestanden.
+Kompilierter Quell-/Paketcommit
+`94683685e19163c0be1db11a999dfaf5c7eae757`,
+universeller Test-Lab-Quellpin
+`dfcb4527f1f46904c73c5f7f113b81c9c41ef70a`.
+Produkt-DSP, nativer ASIO-/ETW-Decoder, originaler P178-VST3
+und P184-Hardwaremessung **unverändert**.
+
+[**P188-Windows-BAT herunterladen**](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42541879944/artifacts/13642020608)
+– vollständig entpacken, DAW schließen, Lautstärke deutlich
+reduzieren und `P188-ETW-ASIO.bat` starten. Bei ETW-Fehlern nur
+`P188-PREFLIGHT.json` bereitstellen; bei erfolgreichem
+Referenzversuch `P185-ACCEPTANCE.json`. Keine ROM/SF2/Python,
+keine ETL-Dateien hochladen.
+
+**Echter P188-Zielrechner-Hardwarelauf `NOT_RUN`; trotz grüner CI
+weder Hardware- noch Releasefreigabe. Ursache `INCONCLUSIVE`,
+AWE-Release `NO-GO`, FULL AUDIT NOT COMPLETE, kein Merge.**
+[Anleitung / Grenzen](docs/P188-ETW-ADMIN-PREFLIGHT.md).
+
+---
+
 # P187 – geprüftes neues ETW-/ASIO-Capture-BAT mit P186-Diagnose (9. November 2026)
 
 **Grund:** Der Benutzer hat `P185-LOCAL-*/RAW-LOCAL-ONLY` bereits gelöscht.
