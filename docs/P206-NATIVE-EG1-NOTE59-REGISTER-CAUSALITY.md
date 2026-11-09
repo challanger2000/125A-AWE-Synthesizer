@@ -18,7 +18,7 @@ These predictions do not replace checking the ACTUAL original Creative Win95 reg
 
 ## Implemented research test
 
-The existing P97 native 86Box renderer now accepts optional --p206-trace and --p206-readbacks flags. Without both flags it has its original behavior. With the flags, it opens the native port-write trace immediately before original note59, checks the selected single voice against its actual ATKHLD/PEFE/ENVVAL registers, and polls the EMULATED chip through ReadDriver every 4410 sample frames over 3 seconds. The first read marks the boundary between initial raw note-on writes and diagnostic probe pointer traffic.
+The existing P97 native 86Box renderer now accepts optional --p206-trace and --p206-readbacks flags. Without both flags it has its original behavior. With the flags, it opens the native port-write trace immediately before original note59, checks the selected single voice against its actual ATKHLD/PEFE/ENVVAL registers, and polls the EMULATED chip through ReadDriver every 4410 sample frames over 3 seconds. The I/O trace is closed immediately after the native MIDI NoteOn dispatch and before any deliberate diagnostic readback, so driver-origin I/O reads remain preserved while later probe pointer traffic cannot pollute the note-on stream.
 
 The new P206 analyzer validates native note-on register values and sample timing, and compares readback CPF high-word motion to previously archived P200 native audio pitch bins. All audio, ROM and source bank files remain ephemeral; published evidence contains derived numeric data only. Four negative mutation checks reject incorrect attack, pitch depth, voice and sample timestamp.
 

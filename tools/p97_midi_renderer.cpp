@@ -268,6 +268,9 @@ int main(int argc,char** argv) {
                     throw std::runtime_error("P206 active note59 missing attack=0x0C/PEFE=0x7F");
                 if(synth.Core().Read(Reg::ENVVAL,p206Voice)!=0x7A48u)
                     throw std::runtime_error("P206 original delay tc0 not ENVVAL=0x7A48");
+                // Seal the exact native NoteOn I/O trace *before* any
+                // diagnostic ReadDriver pointer writes are issued.
+                synth.Core().CloseTrace();
                 p206Snapshot();
                 p206Next=at+p206Step;
                 p206Active=true;

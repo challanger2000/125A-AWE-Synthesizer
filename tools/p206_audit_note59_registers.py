@@ -16,7 +16,7 @@ def check(ok, reason):
 
 def raw_writes(path):
     pointer = None
-    seen_read = False
+    reads=0
     writes = []
     last_frame = -1
     portnames = {0x620:"D0",0x622:"D0HI",0xA20:"D1",0xA22:"D1HI",0xE20:"D3"}
@@ -27,23 +27,22 @@ def raw_writes(path):
         if f[0] == "R":
             check(len(f)==4, "corrupt register read")
             clock = int(f[1])
-            seen_read = True
+            reads+=1
         else:
             check(len(f)==3, "wrong register write shape")
             clock = int(f[0])
             port = int(f[1],16)
             value = int(f[2],16)
             check(0 <= value <= 65535, "16bit I/O word overflow")
-            if not seen_read:
-                if port == 0xE22:
-                    pointer = value
-                elif port in portnames:
-                    check(pointer is not None, "missing register pointer")
-                    writes.append((clock,pointer&31,(pointer>>5)&7,
-                                   portnames[port],value))
+            if port == 0xE22:
+                pointer = value
+            elif port in portnames:
+                check(pointer is not None, "missing register pointer")
+                writes.append((clock,pointer&31,(pointer>>5)&7,
+                               portnames[port],value))
         check(clock>=last_frame and clock>=0, "nonmonotone 44.1k clock")
         last_frame = clock
-    check(seen_read and len(writes)>10, "missing native chip note-on writes")
+    check(len(writes)>10, "missing native chip note-on writes")
     return writes
 
 def snapshots(path):
