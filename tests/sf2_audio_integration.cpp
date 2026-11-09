@@ -479,6 +479,12 @@ int main() {
                 return std::vector<int16_t>{};
             synth.Core().PowerOnInit();
             if(!synth.LoadBank(sf.string(),err)) return std::vector<int16_t>{};
+            // P190: the user-visible 0% genuinely mutes the FX return.
+            // This P27 positive test intentionally requests WET output;
+            // activate the relevant real GUI gate before injecting raw
+            // CSL/PTRX sends, rather than bypassing product mute behavior.
+            synth.SetGuiControl(10,reverb ? 1.f : 0.f);
+            synth.SetGuiControl(11,chorus ? 1.f : 0.f);
             synth.ProgramChange(0,0);
             synth.NoteOn(0,69,110);
             // The first single voice in a newly initialized Win95 chip is
