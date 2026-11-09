@@ -189,23 +189,43 @@ def main():
         raise ValueError("P199 invalid note58 hold reference")
     mask=(attack_hw/hpeak > .025)&(attack_em/epeak >.025)
     early_err=signed_db_error(attack_hw[mask],attack_em[mask],hpeak,epeak)
+    # Out-of-sample attack test. Infer ONE common lag exclusively from EG2/EG1
+    # note-off, then apply it to attack without attack-specific fitting.
+    # No changes to the audible PCM, capture, sample time stamps, or VST3.
+    common_lag_ms=int(round(float(np.median(aggregate))))
+    aligned_em=shifted_energy(em,start,end,common_lag_ms)
+    mask_aligned=(attack_hw/hpeak > .025)&(aligned_em/epeak > .025)
+    aligned_err=signed_db_error(attack_hw[mask_aligned],
+                                aligned_em[mask_aligned],hpeak,epeak)
+    if mask_aligned.sum()<30 or not len(early_err):
+        raise ValueError("P199 attack evidence insufficient")
     attack={
         "original_fixture_hardware_voices":2,
         "comparison_window_s":[start,end],
         "relative_to_each_capture_hold_median":True,
         "active_bins":int(mask.sum()),
+        "zero_shift_median_signed_db":round(float(np.median(early_err)),3),
+        "zero_shift_median_abs_db":round(float(np.median(np.abs(early_err))),3),
+        "lag_ms_inferred_independently_from_two_releases":common_lag_ms,
+        "release_lag_applied_for_analysis_only":True,
+        "aligned_active_bins":int(mask_aligned.sum()),
+        "aligned_median_signed_db":round(float(np.median(aligned_err)),3),
+        "aligned_median_abs_db":round(float(np.median(np.abs(aligned_err))),3),
         "median_signed_native_minus_hardware_attack_shape_db":
-            round(float(np.median(early_err)),3) if len(early_err) else None,
+            round(float(np.median(early_err)),3),
         "median_abs_attack_shape_error_db":
-            round(float(np.median(np.abs(early_err))),3) if len(early_err) else None,
+            round(float(np.median(np.abs(early_err))),3),
         "phase_2_amplitude_median_differences_from_p102":
             {p:next(x for x in phase["EG2_amp"]["phases"] if x["phase"]==p)["level_difference_db"]
              for p in ("attack","hold","decay","sustain")},
         "caveat":"Second simultaneous note58 sampleID42 (+24 semitones, fast-decay layer) means composite attack is not direct isolated chip EG2 shape."
     }
-    print("P199 EG2 attack relative to hold: median signed %.3fdB / median abs %.3fdB; %d active 10ms windows; TWO original layers" %
-          (attack["median_signed_native_minus_hardware_attack_shape_db"],
-           attack["median_abs_attack_shape_error_db"],attack["active_bins"]))
+    print("P199 EG2 attack relative to hold: 10ms amplitude shape 0ms lag "
+          "median abs %.3fdB -> independently inferred common release-lag "
+          "%+dms median abs %.3fdB; signed %.3f -> %.3fdB; TWO original layers" %
+          (attack["zero_shift_median_abs_db"],common_lag_ms,
+           attack["aligned_median_abs_db"],
+           attack["zero_shift_median_signed_db"],attack["aligned_median_signed_db"]))
     out={"experiment":"P199 AWE64 Gold real-capture relative envelope timing audit",
          "reference":"Original pinned analog CT4390 FLAC and MIDI, not S/PDIF",
          "single_original_global_p97_gain_db":p97["hardware_to_native_global_gain_match_db"],
