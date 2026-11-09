@@ -39,7 +39,7 @@ The 65/131Hz anomalies disappeared in original test times. This is evidence for 
 This production commit contains ONLY the two minimal source/test files plus this explanatory documentation. In particular it DOES NOT port research-only P193 legacy wet FX build switches, P194/P195 investigative scripts or temporary public-reference workflows. The current P190/P192 independent full Windows product-suite must run on this exact promoted code: CTests, VST3 module validator, packaged UI/GUI, 125A Plugin Test Lab, PCM/negative oracles and 0%-dry. The previously validated P190/P192 pipeline cannot be retroactively credited to the new P196 code.
 
 - Current source: IMPLEMENTED and **research physical A/B: PASS**.
-- Current production Windows complete QA: **NOT RUN until actual push workflow finishes**.
+- **Exact P196 Windows production code/test SHA `f308b71a4765e2402856e7be24105420542e37a1`: FULL LAB TEST PASS.** [Windows Actions #42588685864](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42588685864) completed SUCCESS: **67/67 active Release CTests** (including P90/P196), **537/537 official Steinberg VST3-module validator**, **99/99 real Win32 VSTGUI interactions**, three EditorHost lifecycle smokes, and independently pinned **125A Plugin Test Lab TECHNICAL_PASS**. Test-lab `release_approved=false`. The standalone P190 hard RT gate checked the raw CSV and reported **`PASS_LAB_ONLY`, 0/14,400 callback misses** for this Windows-2022 runner allocation. This is NOT a target-machine ASIO/MMCSS or Studio Pro certification.
 - Physical hardware AWE64 parity over all presets: NOT VERIFIED.
 - Real Studio Pro DAW, target-machine ASIO/MMCSS and owner SF2/ROM: NOT RUN.
 - FULL independent audit / commercial release: NO-GO.
