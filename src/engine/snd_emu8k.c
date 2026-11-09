@@ -321,6 +321,10 @@ emu8k_mod_attack_value(int32_t phase)
     const double amp = 1.0 - pow(1.0 - x, 3.0);
 #elif defined(AWE125_P201_MOD_ATTACK_SHAPE) && AWE125_P201_MOD_ATTACK_SHAPE == 70
     const double amp = 0.70 * (1.0 - pow(1.0 - x, 7.0)) + 0.30 * x;
+#elif defined(AWE125_P201_MOD_ATTACK_SHAPE) && AWE125_P201_MOD_ATTACK_SHAPE == 130
+    const double amp = (1.0 - pow(1.0 - x, 13.5)) - 0.30 * x * (1.0 - x);
+#elif defined(AWE125_P201_MOD_ATTACK_SHAPE) && AWE125_P201_MOD_ATTACK_SHAPE == 140
+    const double amp = (1.0 - pow(1.0 - x, 13.5)) - 0.40 * x * (1.0 - x);
 #else
     const double amp = 1.0 - pow(1.0 - x, 13.5);
 #endif
