@@ -58,19 +58,25 @@ def identify_sounding_layers(meta):
     matches = {}
     for midi in (58, 59):
         layers = []
+        # Do not count orphan SF2 instrument zones. Only preset zones that
+        # actually link an instrument participate in program 0 playback.
+        linked = []
+        for pz in prog[0]["preset_zones"]:
+            pg=pz["generator"]
+            rg=pg.get("keyRange",[0,127])
+            if "instrument" in pg and rg[0] <= midi <= rg[1]:
+                linked.append(pg["instrument"])
         for inst in prog[0]["instruments"]:
-            general = {}
+            if inst["id"] not in linked:
+                continue
             for zone in inst["zones"]:
                 g=zone["generator"]
-                if "sampleID" in g:
-                    if "keyRange" in g and not g["keyRange"][0] <= midi <= g["keyRange"][1]:
-                        continue
+                rg=g.get("keyRange",[0,127])
+                if "sampleID" in g and rg[0] <= midi <= rg[1]:
                     layers.append({"instrument":inst["name"],
                                    "sample_id":g["sampleID"],
                                    "key_range":g.get("keyRange"),
                                    "zone_generators":g})
-                else:
-                    general.update(g)
         matches[str(midi)] = layers
     if sorted(l["sample_id"] for l in matches["58"]) != [42,43]:
         raise ValueError("P199 original AWE64 EG2 test is NOT two-layer fixture expected")
