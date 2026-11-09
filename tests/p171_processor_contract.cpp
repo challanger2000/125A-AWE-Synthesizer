@@ -89,6 +89,37 @@ void banksAndFirstNotes() {
     }
 }
 
+
+void testP190WetTailBypass() {
+    // Previously 0 only zeroed NEW voice sends. Reverb/chorus feedback
+    // from existing audio still escaped. Prove the real Box86 PCM return
+    // matches an independently dry clone after the chip FIFO has drained.
+    for(int mode=0;mode<3;++mode) {
+        auto initial=state();
+        if(mode!=1)initial.controls[10]=10000;
+        if(mode!=0)initial.controls[11]=10000;
+        Rig switched(initial),reference(state());
+        bool wetBefore=false,matchedAfter=true,heardDry=false;
+        for(int block=0;block<22;++block) {
+            Block a,b;
+            if(block==0){a.note();b.note();}
+            if(block==8) {
+                if(mode!=1)a.param(kGuiFirstID+10,0.);
+                if(mode!=0)a.param(kGuiFirstID+11,0.);
+            }
+            const auto x=a.run(*switched.p),y=b.run(*reference.p);
+            if(block>=4&&block<8)wetBefore |= x!=y;
+            // Original 980-frame chip FIFO delays the knob action;
+            // make the assertion well after two 1024-frame blocks.
+            if(block>=11){matchedAfter &= (x==y);heardDry |= audible(y);}
+        }
+        const auto saved=save(*switched.p);
+        check(wetBefore&&matchedAfter&&heardDry&&
+              saved.controls[10]==0&&saved.controls[11]==0,
+              "P190 prior wet tails become fully dry after FIFO latency, FX case="+std::to_string(mode));
+    }
+}
+
 void stress(const std::filesystem::path& output) {
     std::ofstream csv(output);require(bool(csv),"stress CSV open");
     csv<<"frames,notes,scenario,block,wall_us,deadline_us,held_identities,late,thread_cycles,start_core,end_core,qpc_start,qpc_end,qpc_frequency,pid,tid\n";
@@ -184,7 +215,7 @@ int main(int argc,char** argv) {
     try {
         if(argc<3)return 2;assetsDir=argv[2];
         if(std::string(argv[1])=="stress"&&argc==4)stress(argv[3]);
-        else banksAndFirstNotes();
+        else {banksAndFirstNotes();testP190WetTailBypass();}
         std::cout<<"RESULT checks="<<checks<<" failed="<<failures<<'\n';
         return failures?1:0;
     } catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 2;}

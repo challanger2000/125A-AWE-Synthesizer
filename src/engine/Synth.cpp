@@ -85,6 +85,8 @@ Synth::Synth(uint32_t sampleRate)
     : m_hostRate(sampleRate ? sampleRate : 44100), m_core(sampleRate)
 {
     BuildDefaultWaveform();
+    // New 125A GUI defaults are 0% reverb and chorus: no wet return.
+    m_core.MuteEffectReturns(true,true);
 }
 
 // ---------------------------------------------------------------------------
@@ -291,6 +293,9 @@ void Synth::SetGuiControl(int index, float normalized) noexcept
     const float next=std::clamp(normalized,0.f,1.f);
     if(m_guiControls[static_cast<size_t>(index)]==next) return;
     m_guiControls[static_cast<size_t>(index)]=next;
+    if (index==10 || index==11)
+        m_core.MuteEffectReturns(m_guiControls[10]==0.f,
+                                 m_guiControls[11]==0.f);
     // The actual EMU8000 send bits are in CSL[31:24] and PTRX[15:8].
     // Apply live knob changes to held/releasing voices as well as future
     // NoteOns. Bounded 32-voice hardware-register writes, no allocation.

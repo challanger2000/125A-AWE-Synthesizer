@@ -472,6 +472,10 @@ typedef struct emu8k_t {
     int     pos;
     int32_t buffer[WTBUFLEN * 2];
 
+    /* 125A instance-local GUI return bypass, independent of voice sends. */
+    uint8_t mute_reverb_return;
+    uint8_t mute_chorus_return;
+
     uint16_t addr;
 } emu8k_t;
 

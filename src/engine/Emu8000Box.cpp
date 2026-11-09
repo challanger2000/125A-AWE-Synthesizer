@@ -24,6 +24,11 @@ void     Emu8000Box::PortWrite(uint16_t, uint16_t, bool) {}
 uint16_t Emu8000Box::PortRead(uint16_t)    { return 0xFFFF; }
 void     Emu8000Box::RenderFrame(int32_t& l, int32_t& r) { l = 0; r = 0; }
 void     Emu8000Box::FlushBlock()      {}
+void     Emu8000Box::MuteEffectReturns(bool rev, bool cho) noexcept
+{
+    m_reverbReturnMuted=rev;
+    m_chorusReturnMuted=cho;
+}
 
 #else
 
@@ -220,6 +225,7 @@ bool Emu8000Box::Init(const std::string& romPath, uint16_t basePort, int ramKb, 
     m_impl->frameInBlock = 0;
     m_impl->haveBlock = false;
     m_ready = true;
+    MuteEffectReturns(m_reverbReturnMuted,m_chorusReturnMuted);
     return true;
 }
 
@@ -290,6 +296,15 @@ uint16_t Emu8000Box::PortRead(uint16_t port)
     I.emu.target_pos = I.frameInBlock;
     emu8k_update(&I.emu);
     return emu8k_inw(port, &I.emu);
+}
+
+void Emu8000Box::MuteEffectReturns(bool rev, bool cho) noexcept
+{
+    m_reverbReturnMuted=rev;
+    m_chorusReturnMuted=cho;
+    if (!m_ready) return;
+    m_impl->emu.mute_reverb_return=rev ? 1 : 0;
+    m_impl->emu.mute_chorus_return=cho ? 1 : 0;
 }
 
 void Emu8000Box::FlushBlock()

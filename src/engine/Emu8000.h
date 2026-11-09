@@ -73,6 +73,9 @@ public:
     // legacy floating-point effect classes). No allocation or lock.
     void ApplyHardwareReverbPreset(unsigned index) noexcept;
     void ApplyHardwareChorusPreset(unsigned index) noexcept;
+    // P190 global return mute: no heap or blocking operation.
+    void MuteEffectReturns(bool rev, bool cho) noexcept
+    { m_box.MuteEffectReturns(rev,cho); }
 
     // Which driver family is emulated. Changes eight values in the init
     // arrays INIT3/INIT4 - see Awe32Driver.h. Set before PowerOnInit().

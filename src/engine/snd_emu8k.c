@@ -645,7 +645,8 @@ emu8k_work_reverb_fitted(emu8k_t *emu8k, int32_t *inbuf, int32_t *outbuf, int co
             for (int ch = 0; ch < 2; ch++) {
                 const int   p = (pos - emu8k->rv_echo_d[ch]) & 16383;
                 const float v = emu8k->rv_echo_c[ch] * emu8k->rv_echo_x[p] + emu8k->rv_echo_z[p];
-                outbuf[2 * n + ch] += (int32_t) (v * emu8k->rv_echo_g[ch] * 32768.0f);
+                if (!emu8k->mute_reverb_return)
+                    outbuf[2 * n + ch] += (int32_t) (v * emu8k->rv_echo_g[ch] * 32768.0f);
             }
             emu8k->rv_echo_pos = (pos + 1) & 16383;
             continue;
@@ -699,8 +700,9 @@ emu8k_work_reverb_fitted(emu8k_t *emu8k, int32_t *inbuf, int32_t *outbuf, int co
              * filtering, creative register writes and every other preset.
              * We do not represent this as a silicon DSP reconstruction. */
             const float return_gain = (emu8k->rv_preset == 3) ? 1.68f : 1.0f;
-            outbuf[2 * n + ch] += (int32_t) ((acc * emu8k->rv_out_gain + er[ch])
-                                             * return_gain * 32768.0f);
+            if (!emu8k->mute_reverb_return)
+                outbuf[2 * n + ch] += (int32_t) ((acc * emu8k->rv_out_gain + er[ch])
+                                                 * return_gain * 32768.0f);
         }
     }
 }
@@ -2154,7 +2156,7 @@ emu8k_chorus_tap(const int32_t *line, int write, double delay)
 }
 
 void
-emu8k_work_chorus(int32_t *inbuf, int32_t *outbuf, emu8k_chorus_eng_t *engine, int count)
+emu8k_work_chorus(int32_t *inbuf, int32_t *outbuf, emu8k_chorus_eng_t *engine, int count, int mute_return)
 {
     for (int pos = 0; pos < count; pos++) {
         /* AWE32Emu: triangle LFO - the card's chorus return has a square-wave
@@ -2189,8 +2191,11 @@ emu8k_work_chorus(int32_t *inbuf, int32_t *outbuf, emu8k_chorus_eng_t *engine, i
         engine->lfo_pos.addr += engine->lfo_inc.addr;
         engine->lfo_pos.int_address &= 0xFFFF;
 
-        (*outbuf++) += dat_l;
-        (*outbuf++) += dat_r;
+        if (!mute_return) {
+            outbuf[0] += dat_l;
+            outbuf[1] += dat_r;
+        }
+        outbuf += 2;
         inbuf++;
     }
 }
@@ -2263,7 +2268,7 @@ emu8k_reverb_damper_work(emu8k_reverb_combfilter_t *comb, int32_t in)
 
 /* TODO: This is not a correct emulation, just a workalike implementation. */
 void
-emu8k_work_reverb(int32_t *inbuf, int32_t *outbuf, emu8k_reverb_eng_t *engine, int count)
+emu8k_work_reverb(int32_t *inbuf, int32_t *outbuf, emu8k_reverb_eng_t *engine, int count, int mute_return)
 {
     int pos;
     if (engine->link_return_type) {
@@ -2284,8 +2289,11 @@ emu8k_work_reverb(int32_t *inbuf, int32_t *outbuf, emu8k_reverb_eng_t *engine, i
             dat1 += (emu8k_reverb_tail_work(&engine->tailL, &engine->allpass[0], in + dat1) * engine->link_return_amp) >> 8;
             dat2 += (emu8k_reverb_tail_work(&engine->tailR, &engine->allpass[4], in + dat2) * engine->link_return_amp) >> 8;
 
-            (*outbuf++) += (dat1 * engine->out_mix) >> 8;
-            (*outbuf++) += (dat2 * engine->out_mix) >> 8;
+            if (!mute_return) {
+                outbuf[0] += (dat1 * engine->out_mix) >> 8;
+                outbuf[1] += (dat2 * engine->out_mix) >> 8;
+            }
+            outbuf += 2;
         }
     } else {
         for (pos = 0; pos < count; pos++) {
@@ -2306,8 +2314,11 @@ emu8k_work_reverb(int32_t *inbuf, int32_t *outbuf, emu8k_reverb_eng_t *engine, i
             dat1 += (emu8k_reverb_tail_work(&engine->tailL, &engine->allpass[0], in + dat1) * engine->link_return_amp) >> 8;
             dat2 += (emu8k_reverb_tail_work(&engine->tailR, &engine->allpass[4], in + dat2) * engine->link_return_amp) >> 8;
 
-            (*outbuf++) += (dat1 * engine->out_mix) >> 8;
-            (*outbuf++) += (dat2 * engine->out_mix) >> 8;
+            if (!mute_return) {
+                outbuf[0] += (dat1 * engine->out_mix) >> 8;
+                outbuf[1] += (dat2 * engine->out_mix) >> 8;
+            }
+            outbuf += 2;
         }
     }
 }
@@ -2829,9 +2840,9 @@ emu8k_update_chunk(emu8k_t *emu8k)
 #ifdef REVERB_FITTED
         emu8k_work_reverb_fitted(emu8k, &emu8k->reverb_in_buffer[emu8k->pos], buf, num_samples); /* AWE32Emu */
 #else
-        emu8k_work_reverb(&emu8k->reverb_in_buffer[emu8k->pos], buf, &emu8k->reverb_engine, num_samples);
+        emu8k_work_reverb(&emu8k->reverb_in_buffer[emu8k->pos], buf, &emu8k->reverb_engine, num_samples, emu8k->mute_reverb_return);
 #endif
-        emu8k_work_chorus(&emu8k->chorus_in_buffer[emu8k->pos], buf, &emu8k->chorus_engine, num_samples);
+        emu8k_work_chorus(&emu8k->chorus_in_buffer[emu8k->pos], buf, &emu8k->chorus_engine, num_samples, emu8k->mute_chorus_return);
         emu8k_work_eq(emu8k, buf, num_samples);
         /* AWE32Emu: output level -1.1 dB (57737/65536). Card line out,
          * AWETST28 block 43, 1..8 voices of one sine in phase: the sum clips
