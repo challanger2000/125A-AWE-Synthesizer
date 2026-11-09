@@ -10,6 +10,7 @@ on:
       - 'tools/p103_*'
       - 'tools/p105_*'
       - 'tools/p194_*'
+      - 'tools/p195_*'
       - 'src/engine/CMakeLists.txt'
       - 'src/engine/Synth.cpp'
       - 'docs/P193-CT4390-REFERENCE-FIDELITY.md'
@@ -136,6 +137,16 @@ jobs:
             --p97-report p97-evidence/P97-AWE64-Gold-versus-125A-264s.json \
             --p102-report p97-evidence/P102-Amp-Mod-Envelope-Phases.json \
             --out p97-evidence/P194-Absolute-Low-Band-Attribution.json
+      - name: P195 identify actual MIDI notes and low-band spectral peaks behind P194 anomalies
+        run: |
+          "$RUNNER_TEMP/p97/venv/bin/python" -m py_compile tools/p195_keynum_midi_spectrum.py
+          "$RUNNER_TEMP/p97/venv/bin/python" tools/p195_keynum_midi_spectrum.py \
+            --reference "$RUNNER_TEMP/p97/CT4390.flac" \
+            --native "$RUNNER_TEMP/p97/native-264s.wav" \
+            --events "$RUNNER_TEMP/p97/events.tsv" \
+            --p97-report p97-evidence/P97-AWE64-Gold-versus-125A-264s.json \
+            --p194-report p97-evidence/P194-Absolute-Low-Band-Attribution.json \
+            --out p97-evidence/P195-Keynum-Note-Timing-Spectrum.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
