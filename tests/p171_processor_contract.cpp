@@ -51,17 +51,41 @@ void banksAndFirstNotes() {
     check(same(before,save(*retained.p))&&sound(*retained.p)==referenceSound(before,0),
         "P171 rejected load preserves first-note PCM and project state");
     {
-        Rig edited,original;bool identical=true,heard=false;
+        // P190 deliberate exception: FX send controls 10/11 write actual
+        // EMU8000 send registers while a note is held. ADSR/filter 0..9
+        // remain strictly NoteOn-only; preserve their existing contract.
+        Rig edited,original;
+        bool beforeIdentical=true,afterDifferent=false,heard=false;
         for(int n=0;n<8;++n) {
             Block a,b;
             if(!n){a.note();b.note();}
             if(n==3)for(int k=0;k<12;++k)a.param(kGuiFirstID+k,.8);
             const auto x=a.run(*edited.p),y=b.run(*original.p);
+            if(n<3)beforeIdentical&=x==y;
+            else afterDifferent|=x!=y;
+            heard|=audible(x);
+        }
+        const auto saved=save(*edited.p);
+        check(beforeIdentical&&afterDifferent&&heard&&
+              std::all_of(saved.controls.begin(),saved.controls.end(),
+                          [](auto v){return v==8000;}),
+              "P190 live FX send changes held-note PCM and saves controls");
+    }
+    {
+        Rig edited,original;bool identical=true,heard=false;
+        for(int n=0;n<8;++n) {
+            Block a,b;
+            if(!n){a.note();b.note();}
+            if(n==3)for(int k=0;k<10;++k)a.param(kGuiFirstID+k,.8);
+            const auto x=a.run(*edited.p),y=b.run(*original.p);
             identical&=x==y;heard|=audible(x);
         }
-        auto saved=save(*edited.p);
-        check(identical&&heard&&std::all_of(saved.controls.begin(),saved.controls.end(),[](auto v){return v==8000;}),
-              "P171 accepted overlays persist while held-note PCM preserves documented NoteOn-only semantics");
+        const auto saved=save(*edited.p);
+        bool persisted=true;
+        for(int k=0;k<12;++k)persisted&=
+            saved.controls[size_t(k)]==static_cast<uint32_t>(k<10?8000:0);
+        check(identical&&heard&&persisted,
+              "P171 non-FX overlays preserve held-note NoteOn-only PCM");
     }
 }
 
