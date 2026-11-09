@@ -242,7 +242,7 @@ int main(int argc,char** argv) {
             if(e.frame>=count)break;
             render(e.frame);
             const bool p206Target = p206 && e.frame==p206NoteOn &&
-                e.type=="note_on" && e.ch==0 && e.a==59 && e.b>0;
+                e.type=="note_on" && e.channel==0 && e.a==59 && e.b>0;
             if(p206Target) {
                 if(p206Voice>=0)throw std::runtime_error("Repeated P206 note59 MIDI");
                 if(!synth.Core().OpenTrace(p206Trace.c_str()))
