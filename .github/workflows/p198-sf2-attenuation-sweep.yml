@@ -1,0 +1,169 @@
+name: P198 research-only SF2 attenuation hardware candidate comparison
+on:
+  push:
+    branches: [research/p193-ct4390-fidelity]
+    paths:
+      - 'src/engine/SoundFont.cpp'
+      - 'src/engine/CMakeLists.txt'
+      - 'tools/p197_*'
+      - 'tools/p196_sf2_generator_inspect.py'
+      - '.github/workflows/p198-sf2-attenuation-sweep.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  physical-reference-264s:
+    strategy:
+      fail-fast: false
+      matrix:
+        scale: ["0.50", "0.53"]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch original AWE64 Gold FLAC, historical test SF2/MIDI, and ephemeral wave ROM
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/p97" p97-evidence
+          base='https://raw.githubusercontent.com/mrbumpy409/SoundFont-Spec-Test'
+          curl -fLsS --retry 3 --max-time 90 "$base/67c0405ea9/sf_spec_test.sf2" -o "$RUNNER_TEMP/p97/reference-v3.sf2"
+          curl -fLsS --retry 3 --max-time 90 "$base/67c0405ea9/sf_spec_test.mid" -o "$RUNNER_TEMP/p97/reference-v3.mid"
+          curl -fLsS --retry 3 --max-time 120 \
+            "$base/main/recordings/Sound%20Blaster%20AWE64%20Gold%20%28CT4390%29%20%28test%20v3.0%29.flac" \
+            -o "$RUNNER_TEMP/p97/CT4390.flac"
+          test "$(git hash-object "$RUNNER_TEMP/p97/reference-v3.sf2")" = 4768c4a0215abf49c7a2bb51ada5ba3494faa1c5
+          test "$(git hash-object "$RUNNER_TEMP/p97/reference-v3.mid")" = c720631fb2f74f46ce4e2fb0c12be7905353fcfe
+          test "$(git hash-object "$RUNNER_TEMP/p97/CT4390.flac")" = 9d5fa80197dd6f6170c039cb840e613949546ba9
+          curl -fLsS --retry 3 --max-time 90 \
+            https://raw.githubusercontent.com/86Box/roms/master/sound/creative/awe32.raw \
+            -o "$RUNNER_TEMP/p97/awe32.raw"
+          test "$(stat -c %s "$RUNNER_TEMP/p97/awe32.raw")" -ge 1048576
+      - name: Isolate MIDI and audio analysis dependencies
+        run: |
+          python3 -m venv "$RUNNER_TEMP/p97/venv"
+          "$RUNNER_TEMP/p97/venv/bin/pip" -q install numpy scipy soundfile mido
+      - name: Convert original 264-second MIDI to native 44.1kHz sample timeline
+        run: |
+          "$RUNNER_TEMP/p97/venv/bin/python" tools/p97_prepare_midi.py \
+            --midi "$RUNNER_TEMP/p97/reference-v3.mid" \
+            --tsv "$RUNNER_TEMP/p97/events.tsv" \
+            --json p97-evidence/P97-original-MIDI.json
+      - name: Fail closed if hardware-reference FX is enabled for a VST3 build
+        shell: bash
+        run: |
+          set -euo pipefail
+          if cmake -S . -B build-p193-invalid -G Ninja -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_OPL3_PROBES=OFF -D125A_BUILD_VST3=ON -DAWE125_P193_CT4390_REFERENCE_FX=ON >"$RUNNER_TEMP/p97/invalid-build.log" 2>&1; then
+            echo "P193 FAIL: reference mode must not be available for VST3"
+            exit 1
+          fi
+          grep -F 'P193 historical FX comparison must never be built into the product VST3' "$RUNNER_TEMP/p97/invalid-build.log"
+      - name: Compile 125A native chip runner, no VST3 or alternate soundfont engine
+        run: |
+          cmake -S . -B build-p97 -G Ninja \
+            -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_OPL3_PROBES=OFF -D125A_BUILD_VST3=OFF -DAWE125_P193_CT4390_REFERENCE_FX=ON "-DAWE125_P198_ATTEN_SCALE=${{ matrix.scale }}"
+          cmake --build build-p97 --target awe32_p97_midi_renderer --parallel 4
+          echo "P198 candidate SF2 attenuation scale is ${{ matrix.scale }}; native oracle only"
+      - name: Render complete 264 seconds through the original EMU8000 chip
+        run: |
+          ./build-p97/src/engine/awe32_p97_midi_renderer \
+            --rom "$RUNNER_TEMP/p97/awe32.raw" \
+            --sf2 "$RUNNER_TEMP/p97/reference-v3.sf2" \
+            --events "$RUNNER_TEMP/p97/events.tsv" \
+            --out "$RUNNER_TEMP/p97/native-264s.wav" --seconds 264
+      - name: Compare real CT4390 analog FLAC vs 125A native audio
+        run: |
+          "$RUNNER_TEMP/p97/venv/bin/python" tools/p97_compare_hardware_audio.py \
+            --reference "$RUNNER_TEMP/p97/CT4390.flac" \
+            --native "$RUNNER_TEMP/p97/native-264s.wav" --seconds 264 \
+            --out p97-evidence/P97-AWE64-Gold-versus-125A-264s.json
+      - name: P98 compare MIDI-verified Hall/Chorus A/B/C individual notes
+        run: |
+          "$RUNNER_TEMP/p97/venv/bin/python" tools/p98_effect_subtests.py \
+            --reference "$RUNNER_TEMP/p97/CT4390.flac" \
+            --native "$RUNNER_TEMP/p97/native-264s.wav" \
+            --events "$RUNNER_TEMP/p97/events.tsv" \
+            --p97-report p97-evidence/P97-AWE64-Gold-versus-125A-264s.json \
+            --out p97-evidence/P98-Effects-A-B-C-Subtests.json
+      - name: P99 separate gain and spectral-shape fidelity; save native regression fingerprints
+        run: |
+          "$RUNNER_TEMP/p97/venv/bin/python" -m py_compile tools/p99_fidelity_audit.py
+          "$RUNNER_TEMP/p97/venv/bin/python" tools/p99_fidelity_audit.py \
+            --p97 p97-evidence/P97-AWE64-Gold-versus-125A-264s.json \
+            --p98 p97-evidence/P98-Effects-A-B-C-Subtests.json \
+            --native "$RUNNER_TEMP/p97/native-264s.wav" \
+            --midi "$RUNNER_TEMP/p97/reference-v3.mid" \
+            --sf2 "$RUNNER_TEMP/p97/reference-v3.sf2" \
+            --out p97-evidence/P99-Fidelity-Audit.json \
+            --summary p97-evidence/P99-Fidelity-Summary.md
+      - name: P102 validate EG1/EG2 six-stage envelopes versus original AWE64
+        run: |
+          "$RUNNER_TEMP/p97/venv/bin/python" -m py_compile tools/p102_envelope_phases.py
+          "$RUNNER_TEMP/p97/venv/bin/python" tools/p102_envelope_phases.py \
+            --reference "$RUNNER_TEMP/p97/CT4390.flac" \
+            --native "$RUNNER_TEMP/p97/native-264s.wav" \
+            --events "$RUNNER_TEMP/p97/events.tsv" \
+            --p97-report p97-evidence/P97-AWE64-Gold-versus-125A-264s.json \
+            --out p97-evidence/P102-Amp-Mod-Envelope-Phases.json
+      - name: P103 compare physical vs native SF2 attenuation step slopes
+        run: |
+          "$RUNNER_TEMP/p97/venv/bin/python" -m py_compile tools/p103_attenuation_steps.py
+          "$RUNNER_TEMP/p97/venv/bin/python" tools/p103_attenuation_steps.py \
+            --reference "$RUNNER_TEMP/p97/CT4390.flac" \
+            --native "$RUNNER_TEMP/p97/native-264s.wav" \
+            --events "$RUNNER_TEMP/p97/events.tsv" \
+            --p97-report p97-evidence/P97-AWE64-Gold-versus-125A-264s.json \
+            --out p97-evidence/P103-SF2-Attenuation-Steps.json
+      - name: P105 measure filter spectra and physical ADSR release slope
+        run: |
+          "$RUNNER_TEMP/p97/venv/bin/python" -m py_compile tools/p105_filter_release_diagnostics.py
+          "$RUNNER_TEMP/p97/venv/bin/python" tools/p105_filter_release_diagnostics.py \
+            --reference "$RUNNER_TEMP/p97/CT4390.flac" \
+            --native "$RUNNER_TEMP/p97/native-264s.wav" \
+            --events "$RUNNER_TEMP/p97/events.tsv" \
+            --p97-report p97-evidence/P97-AWE64-Gold-versus-125A-264s.json \
+            --out p97-evidence/P105-Filter-and-Release-Diagnostics.json
+      - name: P194 attribute low-bass mismatch to absolute section powers and validate EG1 peak evidence
+        run: |
+          "$RUNNER_TEMP/p97/venv/bin/python" -m py_compile tools/p194_residual_attribution.py
+          "$RUNNER_TEMP/p97/venv/bin/python" tools/p194_residual_attribution.py \
+            --reference "$RUNNER_TEMP/p97/CT4390.flac" \
+            --native "$RUNNER_TEMP/p97/native-264s.wav" \
+            --p97-report p97-evidence/P97-AWE64-Gold-versus-125A-264s.json \
+            --p102-report p97-evidence/P102-Amp-Mod-Envelope-Phases.json \
+            --out p97-evidence/P194-Absolute-Low-Band-Attribution.json
+      - name: P195 identify actual MIDI notes and low-band spectral peaks behind P194 anomalies
+        run: |
+          "$RUNNER_TEMP/p97/venv/bin/python" -m py_compile tools/p195_keynum_midi_spectrum.py
+          "$RUNNER_TEMP/p97/venv/bin/python" tools/p195_keynum_midi_spectrum.py \
+            --reference "$RUNNER_TEMP/p97/CT4390.flac" \
+            --native "$RUNNER_TEMP/p97/native-264s.wav" \
+            --events "$RUNNER_TEMP/p97/events.tsv" \
+            --p97-report p97-evidence/P97-AWE64-Gold-versus-125A-264s.json \
+            --p194-report p97-evidence/P194-Absolute-Low-Band-Attribution.json \
+            --out p97-evidence/P195-Keynum-Note-Timing-Spectrum.json
+      - name: P197 isolate SF2 attenuation across 6 note-envelope phases and prove same-sample control
+        run: |
+          "$RUNNER_TEMP/p97/venv/bin/python" tools/p196_sf2_generator_inspect.py \
+            --sf2 "$RUNNER_TEMP/p97/reference-v3.sf2" --programs 0 \
+            --out p97-evidence/P197-Original-Program0-Generators.json
+          "$RUNNER_TEMP/p97/venv/bin/python" -m py_compile tools/p197_attenuation_phase_isolation.py
+          "$RUNNER_TEMP/p97/venv/bin/python" tools/p197_attenuation_phase_isolation.py \
+            --reference "$RUNNER_TEMP/p97/CT4390.flac" \
+            --native "$RUNNER_TEMP/p97/native-264s.wav" \
+            --events "$RUNNER_TEMP/p97/events.tsv" \
+            --p97-report p97-evidence/P97-AWE64-Gold-versus-125A-264s.json \
+            --sf2-metadata p97-evidence/P197-Original-Program0-Generators.json \
+            --out p97-evidence/P197-Attenuation-Phase-Isolation.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: P198-CT4390-SF2-Attenuation-Scale-${{ matrix.scale }}
+          path: |
+            p97-evidence/*.json
+            p97-evidence/*.md
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Destroy ephemeral ROM and original recording
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/p97"
