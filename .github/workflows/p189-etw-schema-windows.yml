@@ -181,7 +181,7 @@ jobs:
             # This MUST NOT start ASIO or ETW again.
             $raw=(Resolve-Path 'evidence/native-etw-local').Path
             $offlineBat=(Resolve-Path 'P189 BAT path with spaces/P189-REPLAY.bat').Path
-            & cmd.exe /d /c ('""'+$offlineBat+'" -ExistingRun "'+$raw+'""')
+            & $offlineBat -ExistingRun $raw
             if ($LASTEXITCODE -ne 3) { throw 'P189 offline replay has wrong diagnostic exit code' }
             $replayed=@(Get-ChildItem 'P189 BAT path with spaces' -Recurse -File -Filter P189-RESULT.json | ForEach-Object {Get-Content $_.FullName -Raw | ConvertFrom-Json})
             $captured=Get-Content 'evidence/native-etw-local/capture.json' -Raw | ConvertFrom-Json
