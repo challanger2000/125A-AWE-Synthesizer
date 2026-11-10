@@ -67,6 +67,8 @@ jobs:
           Copy-Item 'build-p220/Release/awe32_p220_77_vst3_pcm_recorder.exe' (Join-Path $kit '125A-P220-VST3-Recorder.exe')
           Copy-Item 'tools/P220-LOCAL-77-VST3.bat' (Join-Path $kit 'P220-LOCAL-77-VST3.bat')
           Copy-Item 'tools/p220_create_real_vst3_receipts.py' (Join-Path $kit 'p220_create_real_vst3_receipts.py')
+          Copy-Item 'tools/p220_77_preset_capture_plan.py' (Join-Path $kit 'p220_77_preset_capture_plan.py')
+          Copy-Item 'tools/p80_full_sf2_inventory.py' (Join-Path $kit 'p80_full_sf2_inventory.py')
           @(
             "P220 PORTABLE PRIVATE VST3 WAV TEST KIT (NOT RELEASE)"
             "SOURCE_SHA=$env:GITHUB_SHA"
