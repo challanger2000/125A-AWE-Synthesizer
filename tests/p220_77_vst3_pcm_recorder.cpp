@@ -216,6 +216,19 @@ RenderResult render_one(IPluginFactory* factory,const std::string& rom,
 } // namespace
 
 int wmain(int argc,wchar_t** argv) {
+    if(argc==2&&std::wstring(argv[1])==L"--self-test-positive-rail") {
+        // Deliberately on the signed16 upper rail 32767/32768, below the
+        // former >=0.99997 threshold. It MUST still count as saturation.
+        RenderResult r{};double energy=0;
+        accumulate_original_float(r,energy,32767.f/32768.f,0,0);
+        accumulate_original_float(r,energy,-1.f,0,1);
+        require(r.positiveRailSamples==1 && r.negativeRailSamples==1 &&
+                r.overrangeSamples==1 && r.exactSigned16GridSamples==2,
+                "P222 falsely accepted original signed16 positive rail");
+        std::cout<<"P222_SIGNED16_RAIL_MUTANT_DETECTED both=2/2"
+                   " including +32767/32768; no 16bit rail is a sonic PASS\n";
+        return 0;
+    }
     if(argc==3&&std::wstring(argv[1])==L"--self-test-overload") {
         // Pure synthetic fault mutation, no VST3 or user SF2/ROM needed.
         // This MUST retain both amplitude >1 and amplitude <-1 in the
