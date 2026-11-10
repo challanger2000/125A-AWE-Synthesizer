@@ -78,12 +78,13 @@ jobs:
           $assets=(Get-ChildItem $env:TEMP -Directory -Filter '125a-p128-*' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
           if (-not $dll -or -not $assets) { throw 'Original exported VST3 or generated P128 synthetic assets missing' }
           New-Item -ItemType Directory -Force 'qa/p222-synthetic' | Out-Null
+          $PSNativeCommandUseErrorActionPreference = $false
           & $exe $dll (Join-Path $assets 'zero.rom') (Join-Path $assets 'bank.sf2') 'qa/p222-synthetic' fx-factorial-probe 2>&1 |
             Tee-Object 'qa/p222-fx-matrix-synthetic-log.txt'
           $status=$LASTEXITCODE
           if ($status -ne 0 -and $status -ne 1) { throw 'P222 synthetic factorial crashed or argument invalid' }
           $txt=(Get-Content 'qa/p222-fx-matrix-synthetic-log.txt' -Raw)
-          if ($txt -notmatch 'P222_FX_SUMMARY MODE=SYNTHETIC ATTEMPTED=8 FAIL=\\d+ CREATIVE_DRIVER=NOT_RUN') {
+          if ($txt -notmatch 'P222_FX_SUMMARY MODE=SYNTHETIC ATTEMPTED=8 FAIL=\d+ CREATIVE_DRIVER=NOT_RUN') {
             throw 'P222 8 synthetic cases missing or incorrectly labelled as original Creative'
           }
           $rows=@(Get-Content 'qa/p222-fx-matrix-synthetic-log.txt' | Where-Object { $_ -match '^P222_FX_CASE ' })
