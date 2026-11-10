@@ -11,7 +11,7 @@ from p89_compare_voice_registers import native_trace
 from p217_clone_filter_matrix import SCHEMA,CASES,require
 
 EXPECTED_SF2_SHA256="89792cb61712c1a33a5bead1ff4318005e293dbfd1443ac148c3a46d85ff0b61"
-P216_SOURCE_SHA="50dbd6713736b9c60bb33a3a5c737e57b926fd64"
+P216_SOURCE_SHA="65ffbc909867ee54e2a2819990844fa8e3bf6bc6"
 REGS=("IFATN","CCCA_LO","CCCA_HI","PEFE","FMMOD")
 def values(trace,name):
     a=[w for voice,reg,w in trace if reg==name]
