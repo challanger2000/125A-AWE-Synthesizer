@@ -1,0 +1,47 @@
+name: P217 original-source SF2 filter cutoff/resonance/EG1/LFO 28-program preflight
+on:
+  push:
+    branches: [research/p217-original-creative-filter-matrix]
+    paths:
+      - .github/workflows/p217-filter-source-preflight.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verified-original-sf2-filter-fixture:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate original 28-case filter generator and negative fixtures
+        run: |
+          python3 -m py_compile tools/p217_clone_filter_matrix.py
+          python3 tools/p217_clone_filter_matrix.py --self-test
+      - name: Build 28 original-source-preserving SF2 filter variants without changing samples
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/p217"
+          curl -fLsS --retry 3 --max-time 90 https://raw.githubusercontent.com/mrbumpy409/SoundFont-Spec-Test/67c0405ea9/sf_spec_test.sf2 -o "$RUNNER_TEMP/p217/source.sf2"
+          test "$(git hash-object "$RUNNER_TEMP/p217/source.sf2")" = 4768c4a0215abf49c7a2bb51ada5ba3494faa1c5
+          python3 tools/p217_clone_filter_matrix.py --source "$RUNNER_TEMP/p217/source.sf2" \
+            --out "$RUNNER_TEMP/p217/filter.sf2" --manifest "$RUNNER_TEMP/p217/manifest.json"
+          python3 - <<'PY'
+          import hashlib,json,os,sys
+          from pathlib import Path
+          sys.path.insert(0,"tools")
+          from p83_generic_sf2 import inspect_sf2
+          root=Path(os.environ["RUNNER_TEMP"])/"p217"
+          m=json.loads((root/"manifest.json").read_text())
+          b=(root/"filter.sf2").read_bytes()
+          inv=inspect_sf2(b)
+          assert hashlib.sha256(b).hexdigest()==m["derived_sf2_sha256"]
+          assert inv["preset_count"]==34 and inv["instrument_count"]==25 and inv["sample_count"]==44
+          assert len(m["matrix"])==28 and {v["generator_operator"] for v in m["matrix"]}=={8,9,10,11}
+          assert [v["program"] for v in m["matrix"]]==list(range(100,128))
+          assert m["original_audio_bytes_identical"] and m["original_25_instruments_preserved"]
+          print("P217 primary-source SF2 four-domain filter matrix PASS",m["derived_sf2_sha256"],m["original_instrument_filter_bases"])
+          PY
+      - name: Destroy temporary media and derived bank after fixture audit
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/p217"
