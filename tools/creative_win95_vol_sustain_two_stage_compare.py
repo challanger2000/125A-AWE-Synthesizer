@@ -68,7 +68,7 @@ def source_checks(manifest, guest,verify):
 def self_test():
     require(T(0)==127 and T(250)==96 and T(500)==64 and T(1000)==0,
             "integer conversion reference drift")
-    require(T(-250)==159 and T(250)==96,
+    require(T(-250)==158 and T(250)==96,
             "signed division for negative preset delta must truncate toward zero")
     assert clamp(T(500)+T(500)-127)==1 and T(1000)==0
     for bad in (CASES[:-1],CASES[::-1]):
