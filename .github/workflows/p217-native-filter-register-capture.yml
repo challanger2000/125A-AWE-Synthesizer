@@ -1,0 +1,84 @@
+name: P217 native P216 86Box four-family filter register 28-program evidence
+on:
+  push:
+    branches: [research/p217-original-creative-filter-matrix]
+    paths:
+      - .github/workflows/p217-native-filter-register-capture.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  actual-native-emu8000-filter-registers:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Checkout exactly P216 fully Windows-tested PRODUCT DSP (not research candidate)
+        uses: actions/checkout@v4
+        with:
+          ref: 50dbd6713736b9c60bb33a3a5c737e57b926fd64
+          path: product
+          persist-credentials: false
+      - name: Test native SF2-independent source parser and exact provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile tools/p217_clone_filter_matrix.py tools/p217_capture_native_filter.py
+          python3 tools/p217_clone_filter_matrix.py --self-test
+          python3 tools/p217_capture_native_filter.py --self-test
+      - name: Generate authentic unchanged-sample original SF2, with only 28 appended filter presets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/p217" p217-native-evidence
+          curl -fLsS --retry 3 --max-time 90 \
+            https://raw.githubusercontent.com/mrbumpy409/SoundFont-Spec-Test/67c0405ea9/sf_spec_test.sf2 \
+            -o "$RUNNER_TEMP/p217/source.sf2"
+          test "$(git hash-object "$RUNNER_TEMP/p217/source.sf2")" = 4768c4a0215abf49c7a2bb51ada5ba3494faa1c5
+          python3 tools/p217_clone_filter_matrix.py --source "$RUNNER_TEMP/p217/source.sf2" \
+            --out "$RUNNER_TEMP/p217/filter.sf2" \
+            --manifest "$RUNNER_TEMP/p217/filter-manifest.json"
+          test "$(sha256sum "$RUNNER_TEMP/p217/filter.sf2" | cut -d' ' -f1)" = 89792cb61712c1a33a5bead1ff4318005e293dbfd1443ac148c3a46d85ff0b61
+          curl -fLsS --retry 3 --max-time 90 \
+            https://raw.githubusercontent.com/86Box/roms/master/sound/creative/awe32.raw \
+            -o "$RUNNER_TEMP/p217/awe32.raw"
+          test "$(stat -c %s "$RUNNER_TEMP/p217/awe32.raw")" = 1048576
+      - name: Build actual P216 native audio engine with original P216 DSP and verified ROM source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S product -B "$RUNNER_TEMP/p217/build" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_VST3=OFF
+          cmake --build "$RUNNER_TEMP/p217/build" --parallel 4 \
+            --target awe32_p86_generic_sf2_probe awe32_p90_sf2_driver_registers_test
+          ctest --test-dir "$RUNNER_TEMP/p217/build" --output-on-failure \
+            -R '125A_p90_sf2_driver_registers'
+      - name: Play all 28 original-source filter programs and record actual native 86Box voice registers
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/p217/traces" "$RUNNER_TEMP/p217/audio"
+          "$RUNNER_TEMP/p217/build/src/engine/awe32_p86_generic_sf2_probe" \
+            --rom "$RUNNER_TEMP/p217/awe32.raw" \
+            --sf2 "$RUNNER_TEMP/p217/filter.sf2" \
+            --out "$RUNNER_TEMP/p217/audio" \
+            --trace-dir "$RUNNER_TEMP/p217/traces" \
+            --bank 0 --programs "$(seq -s, 100 127)" --note 59 --velocity 100
+          python3 tools/p217_capture_native_filter.py \
+            --sf2 "$RUNNER_TEMP/p217/filter.sf2" \
+            --manifest "$RUNNER_TEMP/p217/filter-manifest.json" \
+            --trace-dir "$RUNNER_TEMP/p217/traces" \
+            --out p217-native-evidence/P217-actual-P216-125A-86Box-28-filter-registers.json
+      - name: Preserve only independent numeric P216 native register records (not Creative oracle)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: P217-real-native-P216-EMU8000-28-filter-register-records
+          path: p217-native-evidence/*.json
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Delete temporary original source SF2, proprietary ROM and PCM traces
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/p217"
