@@ -43,7 +43,9 @@ def capture(bank,manifest,traces):
           "preset_additive_offset":row["preset_additive_offset"],
           "native_register_series":{k:[f"0x{z:04X}" for z in pairs[k]] for k in REGS},
           "native_cutoff_high_byte":pairs["IFATN"][0]>>8,
-          "native_Q_high_nibble":pairs["CCCA_HI"][0]>>12,
+          # The INITIAL CCCA_HI write programs Q=0; the final one
+          # carries the real resonance. Retain BOTH raw writes.
+          "native_Q_high_nibble":pairs["CCCA_HI"][-1]>>12,
           "native_EG1_filter_depth_byte":pairs["PEFE"][0]&255,
           "native_LFO_filter_depth_byte":pairs["FMMOD"][0]&255,
           "native_active_voices":1})
