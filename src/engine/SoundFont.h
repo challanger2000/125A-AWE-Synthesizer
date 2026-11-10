@@ -127,13 +127,19 @@ namespace SoundFont
         // register units and those add up; the sum of the raw SF1 values
         // would be nonsense. -1 means "not computed" (the bank is SF2).
         int sf1AttenUnits = -1;
-        // P216: only the Win95 SF2 modulation-envelope sustain uses these
-        // original instrument / additive preset components, separately
-        // quantized by the historical Creative VxD. DOS/SF1/volume envelope
-        // and other generator semantics remain unchanged.
+        // The original Win95 Creative SBAWE.VXD quantizes both SF2
+        // sustain envelopes separately for the instrument's absolute value
+        // and for the preset's additive offset, BEFORE combining register
+        // values. Never infer these from the merged GenSet after AddFrom.
+        // Proven on actual original Win95 AWE64 Gold guest: EG1 P214 28/28,
+        // and volume sustain on 28 crossed source-derived cases (12 red in
+        // previous one-stage conversion). Preserve legacy DOS/SF1 semantics.
         int sf2ModSustainInstrument = 0;
         int sf2ModSustainPresetOffset = 0;
         bool sf2ModSustainLayerProvenance = false;
+        int sf2VolSustainInstrument = 0;
+        int sf2VolSustainPresetOffset = 0;
+        bool sf2VolSustainLayerProvenance = false;
     };
 
     // A bounded, non-allocating selection result for the audio thread.
