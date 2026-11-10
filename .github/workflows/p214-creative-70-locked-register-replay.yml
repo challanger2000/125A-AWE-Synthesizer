@@ -1,0 +1,32 @@
+name: P214 adversarial archived original Creative 70-note Sustain replay
+on:
+  push:
+    branches: [research/p214-creative-instrument-base-matrix]
+    paths:
+      - .github/workflows/p214-creative-70-locked-register-replay.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  archive-oracle-adversarial:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Replay 70 real Win95 Creative note registers; reject ten deliberately corrupted source measurements
+        run: |
+          python3 -m py_compile tools/p214_original_creative_70_replay.py
+          python3 tools/p214_original_creative_70_replay.py \
+            --p210 tests/fixtures/p211_p210_creative_sustain.json \
+            --p212 tests/fixtures/p213_p212_creative_sustain_locked.json \
+            --p214 tests/fixtures/p214_genuine_creative_instrument_base.json \
+            --out p214-evidence/P214-Creative-70-immutable-original-register-replay.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: P214-Creative-70-original-note-case-negative-control-audit
+          path: p214-evidence/*.json
+          retention-days: 30
+          if-no-files-found: error
