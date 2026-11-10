@@ -73,13 +73,17 @@ def compare(o,n):
     for program,label,requested,d in rows:
         reg,decode=REGION[label]
         orig,native=d[reg]
-        original_value,native_value=decode(orig[0]),decode(native[0])
+        # CCCA_HI is written twice: preliminary Q=0, then FINAL effective
+        # filter resonance. Reading only the first gives a false zero-Q
+        # report despite actual native Q=8 etc. Compare LAST captured write.
+        oi=-1 if label=="initialFilterQ" else 0
+        original_value,native_value=decode(orig[oi]),decode(native[oi])
         cases.append({
            "program":program,"generator_name":label,"requested_effective_value":requested,
            "original_Creative_decoded_register":original_value,
            "P216_native_decoded_register":native_value,
            "target_axis_exact":original_value==native_value,
-           "target_register_full_first_write_exact":orig[0]==native[0],
+           "target_register_effective_write_exact":orig[oi]==native[oi],
            "target_register_complete_write_series_exact":orig==native,
            "all_five_register_series_exact":all(x==y for x,y in d.values()),
            "per_register_full_series_equal":{k:v[0]==v[1] for k,v in d.items()},
@@ -90,7 +94,7 @@ def compare(o,n):
         group=[c for c in cases if c["generator_name"]==label]
         results[label]={"tested_original_source_cases":len(group),
                         "target_axis_correct":sum(c["target_axis_exact"] for c in group),
-                        "full_target_register_first_write_exact":sum(c["target_register_full_first_write_exact"] for c in group),
+                        "full_target_register_effective_write_exact":sum(c["target_register_effective_write_exact"] for c in group),
                         "full_target_register_series_exact":sum(c["target_register_complete_write_series_exact"] for c in group),
                         "entire_five_register_series_exact":sum(c["all_five_register_series_exact"] for c in group),
                         "original_Creative_register_values":[c["original_Creative_decoded_register"] for c in group],
