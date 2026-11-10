@@ -32,17 +32,27 @@ ROM, MIDI, GUI or parameter ID changes.**
    This gives the actual original `960 -> 6`; before the patch an
    unrelated 0.75-dB approximation clipped it to zero. The absent
    generator retains full sustain (127).
-2. For **SF2 + Win95 modulation-envelope Hold only**, round the
-   nonnegative millisecond hold duration to the nearest 92ms register step
-   rather than DOS `idiv` truncation. Original `0` timecents =
-   `1000 ms` now maps to register `0x74` (116), rather than `0x75`
-   (117). The already-matching VolumeEnvelope Hold path remains
-   untouched, as do DOS and SF1 conversions.
+2. For **SF2 + Win95 modulation-envelope Hold only**, use the
+   integer Creative VXD *timecents → 725-µs delay ticks → 92-ms Hold*
+   conversion. The earlier simplified `round(ms / 92)` matched P007
+   timecents 0 but failed three values in the real original-driver 28-case
+   sweep: -2400, -600 and 1200. The corrected algorithm was independently
+   verified at 14/14 Hold values in P210 and matches all 14 new original
+   Creative Hold observations. It respects integer key scaling and clamps
+   the timecents input. The already-matching VolumeEnvelope Hold path is
+   untouched, as are DOS and SF1 conversions.
 
-The actual original Creative run proves **those exact owner-source input
-vectors**. Other generator values and every boundary have not yet been
-swept through the original driver, so these generalized formulas must
-remain a controlled, regression-tested candidate outside that anchor.
+**Independent actual original Win95 Creative register sweep:** [private
+Actions #42899654680](https://github.com/challanger2000/125A-Engineering/actions/runs/42899654680),
+14/14 Volume-Sustain matches, old Hold 11/14. The fixed VXD-quantized
+Hold candidate matches the 14 frozen independently measured originals
+in targeted native C++; [native regression #42903894962](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42903894962)
+SUCCESS. Full authenticated source, all 28 values, the original three
+failure vectors and corrected integer formula are documented in
+[`CREATIVE-WIN95-28-GENERATOR-HOLD-SUSTAIN-ORIGINAL.md`](CREATIVE-WIN95-28-GENERATOR-HOLD-SUSTAIN-ORIGINAL.md).
+The fresh direct Creative Win95 retest after this last Hold correction
+was launched separately; its result must be checked before claiming
+that fresh 28/28 original-driver comparison as completed.
 
 ## Executed proof AFTER the patch
 
@@ -73,7 +83,9 @@ remain a controlled, regression-tested candidate outside that anchor.
   is unchanged from the reference parent branch.
 - **Four real owner SF2 sound banks / 376 presets**:
   **3,082/3,082 real 86Box-derived native EMU8000 dry audio note renders**,
-  each 2s/44.1kHz/stereo. **0 silent cases, 0 active-voice FX register
+  each 2s/44.1kHz/stereo, **repeated after** the latest generalized
+  original-quantized Hold correction using the private original media and
+  provenance-verified updated diagnostic binary. **0 silent cases, 0 active-voice FX register
   leakages, 0 signed32-to-int16 clipping-model mismatches.**
   The **234/234** previously measured P229 dry/velocity controls have
   *identical* audio stats after the register correction.
