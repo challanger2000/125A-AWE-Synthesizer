@@ -1267,8 +1267,12 @@ void Synth::StartVoice(int voice, uint8_t channel, uint8_t note, uint8_t velocit
     // `dos` (SBAWE32.MDI 0x2224): CC1 / 30 + channel pressure / 30 + patch
     // depth, capped at 0x7F from above only.
     // `win95` (SBAWE.VXD 0xC0FFB1D5 / 0xC0FFBE0B): CC1 / 30 + pressure / 30
-    // + patch depth, capped above; the low byte is ORed in sign-extended, so
-    // a negative filter depth turns the high byte into 0xFF.
+    // + patch depth, capped above. The previous SF1/SBK sign-extension rule
+    // cannot be applied to SF2: P217's 28 independently captured original
+    // Win95 Creative note windows show FMMOD 0080/0080/00D6 for SF2
+    // negative filter LFO depths -12000/-6000/-1200, whereas the old
+    // blanket OR made FF80/FF80/FFD6 and also altered PITCH modulation.
+    // Preserve the older SF1 rule, but keep SF2's high pitch byte separate.
     const int modDepth = (Awe32::IsDosLike(drv))
         ? std::min(static_cast<int>(static_cast<int8_t>((vp.fmmod >> 8) & 0xFF))
                        + ch.mdiModDiv30 + ch.mdiPressureDiv30, 0x7F)
@@ -1277,7 +1281,8 @@ void Synth::StartVoice(int voice, uint8_t channel, uint8_t note, uint8_t velocit
                   + ch.modWheel / 30 + ch.vxdPressureDiv30, -128, 0x7F);
     uint16_t fmmod = static_cast<uint16_t>(
         ((static_cast<uint8_t>(modDepth)) << 8) | (vp.fmmod & 0xFF));
-    if (drv == Awe32::Driver::Win95 && (vp.fmmod & 0x80))
+    if (drv == Awe32::Driver::Win95 && bank
+        && bank->version == SoundFont::Version::Sf1 && (vp.fmmod & 0x80))
         fmmod |= 0xFF00;
 
     const uint32_t reverbByte =
