@@ -140,6 +140,10 @@ jobs:
           if ($LASTEXITCODE -eq 0) { throw 'P222 false-green: synthetic controls passed as owner 77 SoundFont' }
           Remove-Item 'qa/p222-tampered-controller.txt' -Force
           Write-Output 'P222 analyzer accepted 8 real exported VST3 F32 cases, rejected tampered CC91 and false owner-bank provenance'
+          # The last intentional negative mutation returns nonzero; after BOTH
+          # negative checks have proved the rejection, explicitly normalize the
+          # shell step exit code (do not mask an earlier failure/throw).
+          exit 0
       - name: Remove synthetic test WAV data; publish only a test log
         if: always()
         shell: pwsh
