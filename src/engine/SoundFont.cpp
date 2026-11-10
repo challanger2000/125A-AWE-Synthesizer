@@ -1451,19 +1451,26 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
                 const auto converted = [](int permille) {
                     return 127 + (-127 * permille) / 1000;
                 };
-                if (region.sf2ModSustainLayerProvenance)
+                // A selected Region can be deliberately modified later
+                // (e.g. by a synthetic host/test or a future state overlay).
+                // Its stored instrument/preset provenance is authoritative
+                // ONLY while it still reconstructs the CURRENT merged value.
+                // Otherwise use the explicit new Sustain as a one-stage
+                // input, never the stale earlier layer values. P216 regression
+                // caught this with 600 and 1000 permille overrides.
+                const int rawInstrument = region.sf2ModSustainInstrument;
+                const int rawOffset = region.sf2ModSustainPresetOffset;
+                if (region.sf2ModSustainLayerProvenance &&
+                    rawInstrument + rawOffset == g.value[op])
                 {
-                    const int instrument = std::clamp(
-                        region.sf2ModSustainInstrument, 0, 1000);
-                    const int presetOffset = std::clamp(
-                        region.sf2ModSustainPresetOffset, -1000, 1000);
+                    const int instrument = std::clamp(rawInstrument, 0, 1000);
+                    const int presetOffset = std::clamp(rawOffset,-1000,1000);
                     return std::clamp(
                         converted(instrument) + converted(presetOffset) - 127,
                         0, 127);
                 }
-                // Synthetic callers that build Region directly have no
-                // instrument/preset split. Use the one-stage original VxD
-                // conversion for their explicit Sustain generator instead.
+                // Directly edited or independently created Region: the
+                // current generator is an absolute one-stage SF2 value.
                 return std::clamp(converted(
                     std::clamp<int>(g.value[op],0,1000)), 0, 127);
             }
