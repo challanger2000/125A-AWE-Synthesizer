@@ -191,3 +191,14 @@ target_link_libraries(awe32_p228_crossbank_dry_native PRIVATE awe32_chip_safety)
 target_compile_features(awe32_p228_crossbank_dry_native PRIVATE cxx_std_23)
 add_test(NAME 125A_p228_dry_matrix_negative_mutant
   COMMAND awe32_p228_crossbank_dry_native --self-test)
+
+# P229: isolate TRUE signed32 chip pre-16bit dry clipping on genuine owner
+# SF2 banks; the public Linux compiler never receives or stores private media.
+add_executable(awe32_p229_dry_preclip
+  "${PROJECT_SOURCE_DIR}/tools/p229_dry_preclip_native.cpp")
+target_include_directories(awe32_p229_dry_preclip PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/src/vst3" "${UPSTREAM_SRC}")
+target_link_libraries(awe32_p229_dry_preclip PRIVATE awe32_chip_safety)
+target_compile_features(awe32_p229_dry_preclip PRIVATE cxx_std_23)
+add_test(NAME 125A_p229_preclip_matrix_parser
+  COMMAND awe32_p229_dry_preclip --self-test)
