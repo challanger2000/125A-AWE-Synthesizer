@@ -1,0 +1,66 @@
+name: P220 real Windows x64 exported VST3 PCM recorder synthetic-only check
+on:
+  push:
+    branches: [qa/p220-77-preset-original-sound-acceptance]
+    paths:
+      - tests/p220_77_vst3_pcm_recorder.cpp
+      - tests/p128_processor.cmake
+      - .github/workflows/p220-real-windows-vst3-recorder.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: p220-vst3-recorder-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  real-exported-windows-vst3-synthetic-probe:
+    runs-on: windows-2022
+    timeout-minutes: 28
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch identical pinned Steinberg VST3 SDK as existing P178 Windows host
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch v3.8.1_build_84 --recurse-submodules https://github.com/steinbergmedia/vst3sdk.git external/vst3sdk
+          if ($LASTEXITCODE -ne 0) { throw 'Steinberg SDK clone failed' }
+          if ((git -C external/vst3sdk rev-parse HEAD).Trim() -ne '3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96') { throw 'Steinberg SDK hash mismatch' }
+      - name: Configure existing 125A actual product VST3 and P220 host
+        shell: pwsh
+        run: |
+          cmake -S . -B build-p220 -G 'Visual Studio 17 2022' -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_EDITORHOST_TEST=OFF
+          if ($LASTEXITCODE -ne 0) { throw 'CMake failed' }
+      - name: Build real Windows exported product and independent host
+        shell: pwsh
+        run: |
+          cmake --build build-p220 --config Release --parallel 3 --target awe32_p220_77_vst3_pcm_recorder
+          if ($LASTEXITCODE -ne 0) { throw 'P220 Windows VST3 host failed to build' }
+      - name: Run actual exported VST3 process callbacks and WAV writer on synthetic asset only
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $exe=(Resolve-Path 'build-p220/Release/awe32_p220_77_vst3_pcm_recorder.exe').Path
+          $dll=(Get-ChildItem 'build-p220/VST3/Release/125A_AWE_Synthesizer.vst3' -Filter '*.vst3' -File -Recurse | Select-Object -First 1).FullName
+          $assets=(Get-ChildItem $env:TEMP -Directory -Filter '125a-p128-*' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
+          if (-not $dll -or -not $assets) { throw 'Real exported VST3 or P128 synthetic assets unavailable' }
+          New-Item -ItemType Directory -Force 'qa/p220-synthetic' | Out-Null
+          & $exe $dll (Join-Path $assets 'zero.rom') (Join-Path $assets 'bank.sf2') 'qa/p220-synthetic' probe 2>&1 | Tee-Object 'qa/p220-probe-output.txt'
+          if ($LASTEXITCODE -ne 0) { throw 'Real exported VST3 PCM synthetic probe failed' }
+          $text=(Get-Content 'qa/p220-probe-output.txt' -Raw)
+          if ($text -notmatch 'P220_MODE=SYNTHETIC_PROBE_NOT_ORIGINAL_SF2 ACTUAL_VST3_AUDIO_PAIRS=2 ACTUAL_CREATIVE_DRIVER_RUN=NO') { throw 'Missing explicit original-driver NO status' }
+          @('P000-DRY.wav','P000-MODFX.wav') | ForEach-Object {
+            $wav=Join-Path 'qa/p220-synthetic' $_
+            if (-not (Test-Path $wav) -or (Get-Item $wav).Length -ne (44+132300*4)) { throw "Missing/truncated real VST3 process output: $wav" }
+          }
+          Write-Output 'P220 SYNTHETIC-ONLY actual exported VST3 process output verified: 2 WAVs, NOT 77 original SoundFont acceptance'
+      - name: Remove synthetic test WAV data; publish only a test log
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path qa/p220-synthetic) { Remove-Item qa/p220-synthetic -Recurse -Force }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: P220-Windows-Actual-Exported-VST3-PCM-Recorder-SYNTHETIC-ONLY
+          path: qa/p220-probe-output.txt
+          if-no-files-found: warn
+          retention-days: 7
