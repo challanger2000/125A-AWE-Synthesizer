@@ -1,0 +1,40 @@
+name: P220 original 77-preset private SF2 capture runner integration (STATIC QA only)
+on:
+  push:
+    branches: [qa/p220-77-preset-original-sound-acceptance]
+    paths:
+      - tools/p220_77_preset_capture_plan.py
+      - tools/p220_win95_77_capture.py
+      - tools/p48_86box_boot_win95.py
+      - .github/workflows/p220-private-original-sf2-77-preflight.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  no-user-bank-public-preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile adapted EXISTING original Win95 Creative 86Box capture path; rerun old P80/P87 tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile tools/p48_86box_boot_win95.py tools/p220_77_preset_capture_plan.py tools/p220_win95_77_capture.py
+          python3 -m py_compile tools/p80_full_sf2_inventory.py tools/p87_win95_six_note_capture.py tools/p89_compare_voice_registers.py
+          python3 tests/test_p80_inventory.py
+          python3 tests/test_p87_win95_six_note_capture.py
+      - name: Prove no private original 77-SF2 upload and no synthetic source can masquerade as user original
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/p220"
+          printf 'RIFFnotoriginal' > "$RUNNER_TEMP/p220/bogus.sf2"
+          if python3 tools/p220_77_preset_capture_plan.py \
+              --sf2 "$RUNNER_TEMP/p220/bogus.sf2" \
+              --out "$RUNNER_TEMP/p220/forged-plan.json"; then
+            echo "P220 FALSE GREEN: unrelated SF2 accepted as private original" >&2
+            exit 1
+          fi
+          test ! -e "$RUNNER_TEMP/p220/forged-plan.json"
+          echo "P220 private source absent: original driver/77 PCM NOT RUN, no proprietary material uploaded"
