@@ -5,6 +5,7 @@ on:
     paths:
       - tests/p220_77_vst3_pcm_recorder.cpp
       - tools/P222-LOCAL-FX-AB.bat
+      - tools/p222_analyze_fixed_fx_ab.py
       - tests/p128_processor.cmake
       - .github/workflows/p220-real-windows-vst3-recorder.yml
   workflow_dispatch:
@@ -117,6 +118,28 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'P222 signed16 positive full-scale rail FALSE-PASS mutation' }
           Write-Output ("P222 real Windows VST3 controlled FX factorial: 8/8 actual process() F32 WAV outputs, independent on/off sends; " +
                         "clip cases are explicitly FAIL, not audio fidelity. ORIGINAL_CREATIVE_77_NOT_RUN")
+      - name: P222 independent float-WAV factorial analyzer and wrong-controller / missing-bank mutations
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          python tools/p222_analyze_fixed_fx_ab.py --synthetic-probe --wav-dir 'qa/p222-synthetic' --log 'qa/p222-fx-matrix-synthetic-log.txt' --out 'qa/p222-fx-analyzer-synthetic-result.json'
+          if ($LASTEXITCODE -ne 0) { throw 'P222 independent float audio result parser failed' }
+          $result=Get-Content 'qa/p222-fx-analyzer-synthetic-result.json' -Raw | ConvertFrom-Json
+          if ($result.cases_observed -ne 8 -or $result.factorial_4_way_groups.Count -ne 2 -or
+              $result.original_creative_driver_capture -ne 'NOT RUN' -or
+              $result.release -ne 'BLOCKED') {
+            throw 'P222 false-green real-driver or incomplete synthetic stage'
+          }
+          $original=Get-Content 'qa/p222-fx-matrix-synthetic-log.txt' -Raw
+          $mutated=[regex]::new('CC91=48').Replace($original,'CC91=49',1)
+          $mutated | Set-Content 'qa/p222-tampered-controller.txt'
+          $PSNativeCommandUseErrorActionPreference = $false
+          python tools/p222_analyze_fixed_fx_ab.py --synthetic-probe --wav-dir 'qa/p222-synthetic' --log 'qa/p222-tampered-controller.txt' --out 'qa/p222-corrupt-controller-result.json' 2>$null
+          if ($LASTEXITCODE -eq 0) { throw 'P222 false-green: changed CC91 input accepted as valid fixed MIDI A/B' }
+          python tools/p222_analyze_fixed_fx_ab.py --wav-dir 'qa/p222-synthetic' --log 'qa/p222-fx-matrix-synthetic-log.txt' --out 'qa/p222-false-original-result.json' 2>$null
+          if ($LASTEXITCODE -eq 0) { throw 'P222 false-green: synthetic controls passed as owner 77 SoundFont' }
+          Remove-Item 'qa/p222-tampered-controller.txt' -Force
+          Write-Output 'P222 analyzer accepted 8 real exported VST3 F32 cases, rejected tampered CC91 and false owner-bank provenance'
       - name: Remove synthetic test WAV data; publish only a test log
         if: always()
         shell: pwsh
@@ -137,6 +160,7 @@ jobs:
           Copy-Item 'tools/p220_create_real_vst3_receipts.py' (Join-Path $kit 'p220_create_real_vst3_receipts.py')
           Copy-Item 'tools/p220_77_preset_capture_plan.py' (Join-Path $kit 'p220_77_preset_capture_plan.py')
           Copy-Item 'tools/p80_full_sf2_inventory.py' (Join-Path $kit 'p80_full_sf2_inventory.py')
+          Copy-Item 'tools/p222_analyze_fixed_fx_ab.py' (Join-Path $kit 'p222_analyze_fixed_fx_ab.py')
           @(
             "P220 PORTABLE PRIVATE VST3 WAV TEST KIT (NOT RELEASE)"
             "SOURCE_SHA=$env:GITHUB_SHA"
@@ -171,5 +195,6 @@ jobs:
           path: |
             qa/p220-probe-output.txt
             qa/p222-fx-matrix-synthetic-log.txt
+            qa/p222-fx-analyzer-synthetic-result.json
           if-no-files-found: warn
           retention-days: 7
