@@ -103,7 +103,9 @@ def original_target_inst(tab):
                   "attack_tc":signed(local[26]) if 26 in local else -12000})
     check(len(hits)==1,"not exactly one original sample43 note59 region: "+repr(hits))
     return hits[0]
-def derive(source):
+def derive(source, variants=VARIANTS, new_programs=NEW_PROGRAMS, label_prefix="P210"):
+    check(len(variants)==len(new_programs) and len(variants)>0 and len(set(new_programs))==len(new_programs),"bad proposed sweep cardinality")
+    check(all(0<=pr<=127 for pr in new_programs) and all(-12000<=h<=1200 and 0<=s<=1000 for h,s in variants),"sweep generator domain")
     top,fields=split_riff(source)
     tab=section_maps(fields)
     source_inventory=inspect_sf2(source)
@@ -132,9 +134,9 @@ def derive(source):
     new_bags=pbag[:-1]
     new_gens=pgen[:-1]
     meta=[]
-    for i,(hold,sustain) in enumerate(VARIANTS):
-        program=NEW_PROGRAMS[i]
-        label=f"P210 EG1 {program}"
+    for i,(hold,sustain) in enumerate(variants):
+        program=new_programs[i]
+        label=f"{label_prefix} EG1 {program}"
         new_phdr.append(label.encode("ascii").ljust(20,b"\0")
             +struct.pack("<HHHIII",program,0,start_bag+2*i,0,0,0))
         # Same legal global+local zone layout as original public test presets.
@@ -155,7 +157,7 @@ def derive(source):
     last_ptr=start_gen+len(new_gens)-(len(pgen)-1)
     new_bags.append(struct.pack("<HH",last_ptr,last_mod))
     end_terminal=bytearray(phdr_terminal)
-    struct.pack_into("<H",end_terminal,24,start_bag+2*len(VARIANTS))
+    struct.pack_into("<H",end_terminal,24,start_bag+2*len(variants))
     new_phdr.append(bytes(end_terminal))
     new_gens.append(pgen_terminal)
     overrides={b"phdr":b"".join(new_phdr),
@@ -167,12 +169,12 @@ def derive(source):
                            for tag,data,_ in top)
     derived=b"RIFF"+struct.pack("<I",len(result))+result
     v=inspect_sf2(derived)
-    check(v["preset_count"]==20 and v["instrument_count"]==25
+    check(v["preset_count"]==6+len(variants) and v["instrument_count"]==25
           and v["sample_count"]==44 and v["sample_pcm_bytes"]==
           source_inventory["sample_pcm_bytes"],
           "source-compatible derived SoundFont inventory invalid")
     check(sorted(x["program"] for x in v["presets"] if x["program"]>=100)
-          ==list(NEW_PROGRAMS),"missing controlled original-source presets")
+          ==list(new_programs),"missing controlled original-source presets")
     _,new_fields=split_riff(derived)
     newer=section_maps(new_fields)
     for name in (b"inst",b"ibag",b"igen",b"shdr",b"pmod",b"imod"):

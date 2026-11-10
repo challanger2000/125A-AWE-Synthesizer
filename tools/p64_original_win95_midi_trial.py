@@ -47,11 +47,11 @@ def send_paced_frame(fd, payload: bytes, conn, send, pace_ms=25):
 
 
 def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
-              send, key, type_path, screenshot, report, pcm_fifo=None, programs=(0,), note=48, creative_bank=1, preset_names=None, midi_channel=0, p210_sweep=False):
-    if p210_sweep:
+              send, key, type_path, screenshot, report, pcm_fifo=None, programs=(0,), note=48, creative_bank=1, preset_names=None, midi_channel=0, p210_sweep=False, p212_sweep=False):
+    if p210_sweep or p212_sweep:
         return run_p210_real_driver_sweep(conn,out,trace,fifo_base,send,
                                          screenshot,report,pcm_fifo,programs,
-                                         note,creative_bank,midi_channel)
+                                         note,creative_bank,midi_channel,p212_sweep=p212_sweep)
     if not programs or len(programs)>2 or any(not 0<=v<=127 for v in programs):
         raise ValueError("Select one or two valid MIDI program numbers")
     if not 0<=note<=127 or not 0<=creative_bank<=127 or not 0<=midi_channel<=15:
@@ -178,13 +178,14 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
 
 def run_p210_real_driver_sweep(conn, out, trace, fifo_base, send,
                                screenshot, report, pcm_fifo, programs,
-                               note, creative_bank, midi_channel):
-    """RESEARCH ONLY. Play 14 distinct generated SF2 presets through the
+                               note, creative_bank, midi_channel, p212_sweep=False):
+    """RESEARCH ONLY. Play 14/28 distinct generated SF2 presets through the
     actual Win95 guest Creative WinMM endpoint with 86Box EMU8000 I/O tap.
     This never synthesizes MIDI on the host and never writes EMU registers.
     A separate CSV window is frozen for every note, not just the first.
     """
-    if (len(programs)!=14 or len(set(programs))!=14 or note!=59
+    expected_count=28 if p212_sweep else 14
+    if (len(programs)!=expected_count or len(set(programs))!=expected_count or note!=59
             or midi_channel!=0 or creative_bank!=1):
         raise ValueError("P210 exact controlled note59 bank1 14-program sweep required")
     from p63_send_guest_midi import frame, demo_messages
@@ -227,11 +228,11 @@ def run_p210_real_driver_sweep(conn, out, trace, fifo_base, send,
         os.close(fd)
         if pcm:pcm_report=pcm.stop()
     after=rowcount()
-    if len(windows)!=14 or after<=before:
+    if len(windows)!=expected_count or after<=before:
         raise RuntimeError("P210 complete source-driver sweep missing")
     original={
         "p89_original_first_note_trace_window":dict(windows[0]),
-        "p210_original_creative_register_windows":windows,
+        ("p212_original_creative_register_windows" if p212_sweep else "p210_original_creative_register_windows"):windows,
         "p84_midi_channel_0_based":midi_channel,
         "p75_original_private_sf2_test":False,
         "p75_program_results":[],
@@ -241,7 +242,7 @@ def run_p210_real_driver_sweep(conn, out, trace, fifo_base, send,
         "original_creative_wavetable_audio":None,
         "direct_86box_pcm_fifo":pcm_report,
         "raw_private_audio_published":False,
-        "p210_real_win95_driver_sweep":True,
+        **({"p212_real_win95_driver_sweep":True} if p212_sweep else {"p210_real_win95_driver_sweep":True}),
         "notes":"Original Creative SBAWE.VXD and WinMM in Windows95 guest, 86Box tap, no physical board"}
     report["p64_original_win95_midi"]=original
     return original

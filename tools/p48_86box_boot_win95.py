@@ -73,7 +73,9 @@ def main() -> None:
     ap.add_argument("--universal-sf2-bank",type=int,help="SF2 preset bank; default first present bank")
     ap.add_argument("--universal-programs",help="Comma-separated two SF2 MIDI programs; defaults to first two")
     ap.add_argument("--p210-sweep",action="store_true",
-                    help="RESEARCH ONLY: controlled many-program original Creative driver trace sweep")
+                    help="RESEARCH ONLY: 14-program original Creative driver trace sweep")
+    ap.add_argument("--p212-sweep",action="store_true",
+                    help="RESEARCH ONLY: 28-program independent original Creative sustain sweep")
     ap.add_argument("--universal-creative-bank",type=int,default=1,help="Win95 Creative user bank (CC0), default 1")
     ap.add_argument("--universal-midi-channel",type=int,choices=range(1,17),help="MIDI channel 1..16; defaults to channel 10 for SF2 bank128, else 1")
     ap.add_argument("--universal-note",type=int,default=60,help="MIDI audition note (drum kits: 36)")
@@ -90,7 +92,9 @@ def main() -> None:
 
     if args.private_sf2 and args.universal_sf2:
         raise ValueError("Specify exactly one original or universal SF2 mode")
-    if args.p210_sweep and (not args.universal_sf2 or not args.p64_bridge or
+    if args.p210_sweep and args.p212_sweep:
+        raise ValueError("P210 and P212 modes are exclusive")
+    if (args.p210_sweep or args.p212_sweep) and (not args.universal_sf2 or not args.p64_bridge or
                            args.private_sf2 or args.p87_six_wav_dir or
                            args.universal_wav_dir or args.require_full_bank):
         raise ValueError("P210 requires explicit universal research SoundFont and original Win95 MIDI bridge")
@@ -122,16 +126,16 @@ def main() -> None:
             raise ValueError("Requested SF2 bank %d contains no presets"%bank)
         if args.universal_programs:
             raw=args.universal_programs.split(",")
-            needed=14 if args.p210_sweep else 2
-            if len(raw)!=needed:raise ValueError("P210 requires exactly 14, normal mode two MIDI test programs")
+            needed=28 if args.p212_sweep else (14 if args.p210_sweep else 2)
+            if len(raw)!=needed:raise ValueError("Research sweep requires exactly 14/28, normal mode two MIDI test programs")
             selected=[int(v.strip()) for v in raw]
         else:
             selected=[item["program"] for item in available[:2]]
             if len(selected)==1:selected.append(selected[0])
-        expected=14 if args.p210_sweep else 2
+        expected=28 if args.p212_sweep else (14 if args.p210_sweep else 2)
         if len(selected)!=expected or any(not 0<=pr<=127 for pr in selected):
             raise ValueError("Unexpected number of selected MIDI programs")
-        if args.p210_sweep and (len(set(selected))!=14 or
+        if (args.p210_sweep or args.p212_sweep) and (len(set(selected))!=expected or
                                 args.universal_note!=59 or
                                 args.universal_sf2_bank!=0):
             raise ValueError("P210 requires distinct bank0 programs and note59")
@@ -386,7 +390,8 @@ reconnect = 1
                                    creative_bank=args.universal_creative_bank if generic_report else 1,
                                    midi_channel=midi_channel if generic_report else 0,
                                    preset_names={item["program"]:item["name"] for item in audition_presets} if generic_report else ({0:"Grungy Ramp Bass",7:"TX81Z Lately Bass"} if private_report else None),
-                                   p210_sweep=args.p210_sweep)
+                                   p210_sweep=args.p210_sweep,
+                                   p212_sweep=args.p212_sweep)
                     if args.universal_wav_dir:
                         report["p84_universal_wav_export"]=p84_export_universal_wav(
                             args.out,args.universal_wav_dir,report)
