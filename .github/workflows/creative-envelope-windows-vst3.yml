@@ -4,6 +4,8 @@ on:
     branches: [fix/creative-win95-original-envelope-parity]
     paths:
       - .github/workflows/creative-envelope-windows-vst3.yml
+      - src/engine/SoundFont.cpp
+      - tests/creative_win95_sf2_envelope.cpp
   workflow_dispatch:
 permissions:
   contents: read
