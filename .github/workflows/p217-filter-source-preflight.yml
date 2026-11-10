@@ -6,6 +6,8 @@ on:
       - .github/workflows/p217-filter-source-preflight.yml
       - tools/p217_clone_filter_matrix.py
       - tools/p217_compare_original_creative_filters.py
+      - tools/p217_compare_creative_native_filters.py
+      - tools/p217_capture_native_filter.py
   workflow_dispatch:
 permissions:
   contents: read
@@ -21,6 +23,8 @@ jobs:
           python3 tools/p217_clone_filter_matrix.py --self-test
           python3 -m py_compile tools/p217_compare_original_creative_filters.py
           python3 tools/p217_compare_original_creative_filters.py --self-test
+          python3 tools/p217_capture_native_filter.py --self-test
+          python3 tools/p217_compare_creative_native_filters.py --self-test
       - name: Build 28 original-source-preserving SF2 filter variants without changing samples
         shell: bash
         run: |
