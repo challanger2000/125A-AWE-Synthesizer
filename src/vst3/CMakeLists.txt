@@ -36,7 +36,7 @@ smtg_target_add_plugin_resources(125A_AWE_Synthesizer
                         ${P165_FACEPLATE}
 )
 target_include_directories(125A_AWE_Synthesizer PRIVATE
-    ../engine ../engine/include ../opl3
+    ../engine ../engine/include
     ../../upstream/AWE32Emu/AWE32Emu/src
     ../../upstream/AWE32Emu/AWE32Emu/src/86box/include
 )
