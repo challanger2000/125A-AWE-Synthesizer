@@ -992,6 +992,14 @@ static void SelectRegionsImpl(const Bank& self, int bankNum, int program, int ke
                 if (presetGen.Has(Gen::ScaleTuning) &&
                     !r.gen.Has(Gen::ScaleTuning))
                     r.gen.Set(Gen::ScaleTuning, 100);
+                // P216: SBAWE.VXD (verified original 1998 Win95 Creative
+                // driver, P213/P214) separately quantizes instrument EG1
+                // sustain and its additive preset offset. Preserve both
+                // BEFORE GenSet::AddFrom discards their boundary; this
+                // carries no heap allocations into the audio callback.
+                r.sf2ModSustainInstrument = r.gen.Get(Gen::SustainModEnv, 0);
+                r.sf2ModSustainPresetOffset = presetGen.Get(Gen::SustainModEnv, 0);
+                r.sf2ModSustainLayerProvenance = true;
                 r.gen.AddFrom(presetGen);
                 // Saturate to the SF2 generator's legal timecents interval
                 // after offsets are applied; a preset cannot push the
@@ -1432,8 +1440,37 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
         // Both have 0 = peak (full sustain); do not interpret the
         // modulation-envelope percentage as volume centibels.
         if (op == Gen::SustainModEnv)
+        {
+            if (drv == Awe32::Driver::Win95)
+            {
+                // Original Creative SBAWE.VXD, LE object4 (P213):
+                // signed IMUL -127, CDQ, IDIV 1000, then ADD 127.
+                // C++ signed integer division also truncates toward zero.
+                // P214 real Creative Win95 evidence: 28 isolated register
+                // windows, four independent instrument bases, 28/28.
+                const auto converted = [](int permille) {
+                    return 127 + (-127 * permille) / 1000;
+                };
+                if (region.sf2ModSustainLayerProvenance)
+                {
+                    const int instrument = std::clamp(
+                        region.sf2ModSustainInstrument, 0, 1000);
+                    const int presetOffset = std::clamp(
+                        region.sf2ModSustainPresetOffset, -1000, 1000);
+                    return std::clamp(
+                        converted(instrument) + converted(presetOffset) - 127,
+                        0, 127);
+                }
+                // Synthetic callers that build Region directly have no
+                // instrument/preset split. Use the one-stage original VxD
+                // conversion for their explicit Sustain generator instead.
+                return std::clamp(converted(
+                    std::clamp<int>(g.value[op],0,1000)), 0, 127);
+            }
+            // DOS and other non-Win95 SF2 paths are intentionally unchanged.
             return std::clamp(127 - static_cast<int>(std::lround(
                 std::clamp<int>(g.value[op],0,1000) * 127.0 / 1000.0)),0,127);
+        }
         return std::clamp(127 - static_cast<int>(std::lround(
             std::max<int>(g.value[op],0) / 10.0 / kSustainDbPerStep)),0,127);
     };

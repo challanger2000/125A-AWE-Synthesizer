@@ -127,6 +127,13 @@ namespace SoundFont
         // register units and those add up; the sum of the raw SF1 values
         // would be nonsense. -1 means "not computed" (the bank is SF2).
         int sf1AttenUnits = -1;
+        // P216: only the Win95 SF2 modulation-envelope sustain uses these
+        // original instrument / additive preset components, separately
+        // quantized by the historical Creative VxD. DOS/SF1/volume envelope
+        // and other generator semantics remain unchanged.
+        int sf2ModSustainInstrument = 0;
+        int sf2ModSustainPresetOffset = 0;
+        bool sf2ModSustainLayerProvenance = false;
     };
 
     // A bounded, non-allocating selection result for the audio thread.
