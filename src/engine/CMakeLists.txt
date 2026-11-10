@@ -159,3 +159,14 @@ target_include_directories(awe32_p133_fx_modes_test PRIVATE
 target_link_libraries(awe32_p133_fx_modes_test PRIVATE awe32_chip_safety)
 set_target_properties(awe32_p133_fx_modes_test PROPERTIES CXX_STANDARD 23)
 add_test(NAME 125A_p133_fx_register_modes COMMAND awe32_p133_fx_modes_test)
+
+# P226: offline, owner-media-only diagnostic of the REAL signed32 chip output
+# before Emu8000Core::RenderBlock clamps it to int16. No VST3 UI or DSP gain
+# changes. Synthetic CI mode must never claim original Creative/audio parity.
+add_executable(awe32_p226_rawmix_probe
+  "${PROJECT_SOURCE_DIR}/tools/p226_preclip_probe.cpp")
+target_include_directories(awe32_p226_rawmix_probe PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/src/vst3" "${UPSTREAM_SRC}")
+target_link_libraries(awe32_p226_rawmix_probe PRIVATE awe32_chip_safety)
+target_compile_features(awe32_p226_rawmix_probe PRIVATE cxx_std_23)
+add_test(NAME 125A_p226_raw_capture_mutant COMMAND awe32_p226_rawmix_probe --self-test)
