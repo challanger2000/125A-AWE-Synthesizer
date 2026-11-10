@@ -22,6 +22,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          export PYTHONPATH="$GITHUB_WORKSPACE/tools:$GITHUB_WORKSPACE"
           python3 -m py_compile tools/p48_86box_boot_win95.py tools/p220_77_preset_capture_plan.py tools/p220_win95_77_capture.py
           python3 -m py_compile tools/p80_full_sf2_inventory.py tools/p87_win95_six_note_capture.py tools/p89_compare_voice_registers.py
           python3 tests/test_p80_inventory.py
