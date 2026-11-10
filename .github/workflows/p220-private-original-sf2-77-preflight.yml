@@ -5,6 +5,8 @@ on:
     paths:
       - tools/p220_77_preset_capture_plan.py
       - tools/p220_win95_77_capture.py
+      - tools/p67_read_guest_bridge_log.py
+      - tests/test_p220_guest_winmm_log.py
       - tools/p48_86box_boot_win95.py
       - .github/workflows/p220-private-original-sf2-77-preflight.yml
   workflow_dispatch:
@@ -27,6 +29,7 @@ jobs:
           python3 -m py_compile tools/p80_full_sf2_inventory.py tools/p87_win95_six_note_capture.py tools/p89_compare_voice_registers.py
           python3 tests/test_p80_inventory.py
           python3 tests/test_p87_win95_six_note_capture.py
+          python3 tests/test_p220_guest_winmm_log.py
       - name: Prove no private original 77-SF2 upload and no synthetic source can masquerade as user original
         shell: bash
         run: |
