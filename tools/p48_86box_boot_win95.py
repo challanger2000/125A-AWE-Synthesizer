@@ -70,6 +70,8 @@ def main() -> None:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--p64-bridge", action="store_true", help="Run original Win95 MIDI agent through 86Box COM1")
     ap.add_argument("--private-sf2", type=Path, help="Local original SF2, never commit/upload")
+    ap.add_argument("--private-note",type=int,default=48,help="Original user-bank note, defaults to historic P89 48")
+    ap.add_argument("--private-velocity",type=int,default=100,help="Original user-bank velocity, defaults to historic P89 100")
     ap.add_argument("--universal-sf2",type=Path,help="Any private SF2; original Creative Win95 driver audition")
     ap.add_argument("--universal-sf2-bank",type=int,help="SF2 preset bank; default first present bank")
     ap.add_argument("--universal-programs",help="Comma-separated two SF2 MIDI programs; defaults to first two")
@@ -101,6 +103,8 @@ def main() -> None:
         raise ValueError("P87 Alesis program 0/17 six-note bank requires SF2 bank 0")
     if args.universal_wav_dir and not args.universal_sf2:
         raise ValueError("--universal-wav-dir requires --universal-sf2")
+    if args.private_sf2 and (not 0<=args.private_note<=127 or not 1<=args.private_velocity<=127):
+        raise ValueError("Private-original-note/velocity must be within MIDI limits")
     if args.private_sf2 and not args.p64_bridge:
         raise ValueError("--private-sf2 requires --p64-bridge")
     if args.private_wav_dir and not args.private_sf2:
@@ -386,7 +390,8 @@ reconnect = 1
                                   p49_key,p49_type_path,p49_screenshot,report,
                                   pcm_fifo=vm/"p65-wavetable",
                                    programs=tuple(item["program"] for item in audition_presets) if generic_report else ((0,7) if private_report else (0,)),
-                                   note=args.universal_note if generic_report else 48,
+                                   note=args.universal_note if generic_report else args.private_note if private_report else 48,
+                                   velocity=args.private_velocity if private_report else 100,
                                    creative_bank=args.universal_creative_bank if generic_report else 1,
                                    midi_channel=midi_channel if generic_report else 0,
                                    preset_names={item["program"]:item["name"] for item in audition_presets} if generic_report else ({0:"Grungy Ramp Bass",7:"TX81Z Lately Bass"} if private_report else None))
