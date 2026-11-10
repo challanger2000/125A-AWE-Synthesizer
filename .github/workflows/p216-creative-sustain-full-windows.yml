@@ -87,7 +87,7 @@ jobs:
               --sf2 "$RUNNER_TEMP/p216/derived.sf2" \
               --out "$RUNNER_TEMP/p216/audio-$kind" \
               --trace-dir "$RUNNER_TEMP/p216/traces-$kind" \
-              --bank 0 --programs "$programs" --note 59 --velocity 100 --duration-ms 2000
+              --bank 0 --programs "$programs" --note 59 --velocity 100
             for program in $(seq 100 127); do
               test -s "$RUNNER_TEMP/p216/traces-$kind/B0_P$program""_N59_native-port-write.trace"
             done
