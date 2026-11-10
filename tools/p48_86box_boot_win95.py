@@ -116,8 +116,8 @@ def main() -> None:
     if args.p220_plan is not None:
         if not args.p220_plan.is_file():
             raise ValueError("P220 private exact bank MIDI contract file absent")
-        if args.out.resolve()==args.p220_private_audio_dir.resolve() or
-            args.out.resolve() in args.p220_private_audio_dir.resolve().parents:
+        if (args.out.resolve()==args.p220_private_audio_dir.resolve() or
+                args.out.resolve() in args.p220_private_audio_dir.resolve().parents):
             raise ValueError("P220 original user WAVs cannot be inside public results/Actions artifact output")
 
     full_bank_report=p80_inventory(args.private_sf2.read_bytes()) if args.require_full_bank else None
