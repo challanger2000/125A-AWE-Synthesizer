@@ -54,7 +54,7 @@ def selftest():
             "seven distinct values per filter dimension")
     require(all(-32768<=c[3]<=32767 for c in CASES),"value out of SF2 i16")
     assert 0 in [c[3] for c in CASES if c[1]==9]
-    for damaged in (CASES[:-1],CASES[:7]+CASES[7:14]+(CASES[14],)+CASES[15:],
+    for damaged in (CASES[:-1],CASES[:15]+(CASES[14],)+CASES[16:],
                     tuple(reversed(CASES))):
         try:
             require(len(damaged)==28 and
