@@ -103,6 +103,7 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
             for msg in demo_messages(channel=midi_channel,bank=creative_bank,program=second_program,note=note,velocity=velocity):
                 send_paced_frame(fd,msg,conn,send)
             send(conn,"step 400")
+            p89_second_start=max(0,len(trace.read_text(encoding="utf8",errors="replace").splitlines())-1) if trace.is_file() else -1
             p75_recording=False
             try:
                 send(conn,f"audio start {other_dir.resolve()}")
@@ -116,6 +117,7 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
             send(conn,"step 1200")
             if p75_recording:
                 send(conn,"audio stop")
+            p89_second_end=max(0,len(trace.read_text(encoding="utf8",errors="replace").splitlines())-1) if trace.is_file() else -1
     finally:
         os.close(fd)
     count_after=max(0,len(trace.read_text(encoding="utf8", errors="replace").splitlines())-1) if trace.is_file() else count_before
@@ -129,6 +131,8 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
             analysis={"analysis_error":str(exc)}
     pcm_report=pcm_receiver.stop() if pcm_receiver else None
     p75_program_reports=[]
+    p89_second_start=-1
+    p89_second_end=-1
     if second_program is not None:
         second=[p for p in sorted(other_dir.rglob("*.wav")) if "wavetable" in p.name.lower()]
         analysis7=None
@@ -151,6 +155,10 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
                 "program":first_program,"note":note,"velocity":velocity,
                 "start_row":p89_first_start,"end_row":p89_first_end,
                 "window_isolated":p89_first_end>p89_first_start>=0},
+            "p89_original_second_note_trace_window":{
+                "program":second_program,"note":note,"velocity":velocity,
+                "start_row":p89_second_start,"end_row":p89_second_end,
+                "window_isolated":bool(second_program is not None and p89_second_end>p89_second_start>=0)},
             "p84_midi_channel_0_based":midi_channel,
             "p75_original_private_sf2_test":second_program is not None,
             "p75_program_results":p75_program_reports,
