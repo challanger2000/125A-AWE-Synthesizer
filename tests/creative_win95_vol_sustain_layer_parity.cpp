@@ -6,6 +6,7 @@
 #include "Emu8000Regs.h"
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <iostream>
 using SoundFont::Bank;
