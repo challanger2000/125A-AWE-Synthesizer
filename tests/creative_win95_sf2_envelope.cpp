@@ -54,9 +54,9 @@ int main(){
         "SF1 hold uses its original time-units interpretation, not SF2 timecents");
     ok &= check(((sf1.dcysusv>>8)&0x7f)==0x7f,
         "SF1 existing sustain conversion must remain intact");
-    // SF2 Win95 numeric boundary controls; only 960 is directly
-    // Creative-driver-measured. The others are explicitly inference
-    // checks for monotonicity, range and integer conversion.
+    // Direct-original P007 at 960 plus 14 original Creative Win95
+    // generator-37 values are frozen below. Additional values here
+    // are safe bounded synthetic controls, NOT original hardware data.
     for(const int v: {0,1,250,500,750,959,960,961,999,1000,1200}) {
         r.gen.Set(Gen::SustainVolEnv,static_cast<int16_t>(v));
         const auto out=MakeVoiceParams(bank,r,99,112,
@@ -65,6 +65,69 @@ int main(){
         ok &= check(((out.dcysusv>>8)&0x7f)==expected,
             "SF2 Win95 vol sustain integer conversion within supported bounds");
     }
+    // INDEPENDENT 2026-11-10 original Win95 Creative driver register
+    // observations, generated from the authentic publicly accepted SF2
+    // source with original PCM and instrument zones preserved.
+    // Real Creative driver source: private Actions #42899654680 SUCCESS,
+    // 28 distinct isolated note59 velocity100 WinMM guest MIDI windows.
+    // These expected values NEVER call our proposed conversion.
+    struct VolOriginal {int centibels;int chip;};
+    constexpr VolOriginal volumeOriginal[14] = {
+        {0,127},{1,127},{10,126},{64,119},{127,111},
+        {250,96},{500,64},{750,32},{959,6},{960,6},
+        {961,5},{999,1},{1000,0},{1440,0}};
+    int volCases=0;
+    for(const auto& v:volumeOriginal) {
+        Region synthetic; synthetic.sample=&sample;
+        synthetic.gen.Set(Gen::HoldModEnv,0);
+        synthetic.gen.Set(Gen::SustainVolEnv,
+                          static_cast<int16_t>(v.centibels));
+        const auto actual=MakeVoiceParams(bank,synthetic,59,100,
+            Emu8000::kDramOffset+256u,0,Awe32::Driver::Win95);
+        const int sustain=(actual.dcysusv>>8)&127;
+        if(sustain!=v.chip) {
+            std::cerr<<"ORIGINAL_CREATIVE_VOL_SUSTAIN_MISMATCH cB="
+                     <<v.centibels<<" original="<<v.chip
+                     <<" native="<<sustain<<"\n";ok=false;
+        }else ++volCases;
+    }
+    struct HoldOriginal {int timecents;int chip;};
+    constexpr HoldOriginal holdOriginal[14]={
+        {-12000,127},{-6000,127},{-3600,126},{-2400,125},
+        {-1200,122},{-600,120},{-120,117},{-1,116},
+        {0,116},{1,116},{100,115},{300,114},
+        {600,112},{1200,104}};
+    int holdCases=0;
+    for(const auto& v:holdOriginal) {
+        Region synthetic; synthetic.sample=&sample;
+        synthetic.gen.Set(Gen::HoldModEnv,
+                          static_cast<int16_t>(v.timecents));
+        synthetic.gen.Set(Gen::SustainVolEnv,0);
+        const auto actual=MakeVoiceParams(bank,synthetic,59,100,
+            Emu8000::kDramOffset+256u,0,Awe32::Driver::Win95);
+        const int hold=(actual.atkhld>>8)&127;
+        if(hold!=v.chip) {
+            std::cerr<<"ORIGINAL_CREATIVE_MOD_HOLD_MISMATCH tc="
+                     <<v.timecents<<" original="<<v.chip
+                     <<" native="<<hold<<"\n";ok=false;
+        }else ++holdCases;
+    }
+    ok&=check(volCases==14 && holdCases==14,
+              "28 independent real Win95 driver input->register observations");
+    // Negative controls: the previous simple ms/92 round() MUST NOT be
+    // able to pass the observed -2400,-600,+1200 original-data cases.
+    // These probes prevent regression to the tempting but disproved fit.
+    auto oldSimpleRound=[](double ms) {
+        return std::clamp(127-static_cast<int>(std::lround(ms/92.0)),0,127);
+    };
+    ok&=check(oldSimpleRound(250.)==124 &&
+              oldSimpleRound(1000*std::pow(2.,-600./1200.))==119 &&
+              oldSimpleRound(2000.)==105,
+              "negative witness: old rounded-millisecond Win95 formula is WRONG");
+    std::cout<<"CREATIVE_WIN95_REAL_28_GENERATOR_CASES volume_sustain="
+             <<volCases<<"/14 modulation_hold="<<holdCases
+             <<"/14 original_driver_source=Actions_42899654680\n";
+
     // SF2 default: OMITTED sustainVolEnv stays full sustain, 127.
     Region missing;missing.sample=&sample;
     const auto omitted=MakeVoiceParams(bank,missing,99,112,
