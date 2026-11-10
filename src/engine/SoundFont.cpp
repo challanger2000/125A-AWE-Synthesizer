@@ -163,11 +163,24 @@ namespace
     }
     int HoldFromMs(double ms)
     {
-        // The driver divides as integers with `idiv`, which **truncates**
-        // towards zero (SBAWE32.DRV: `idiv -92; add 0x7F`), so no rounding.
-        // Example: hold 630 ms -> 630/92 = 6 -> 121 (0x79), not 120.
+        // Keep the older DOS/SF1 integer-truncation rule unchanged.
+        // SBAWE32.DRV: idiv -92; add 0x7F.
         const int steps = static_cast<int>(ms / (Emu8000::kHoldSecPerStep * 1000.0));
         return std::clamp(127 - steps, 0, 127);
+    }
+    int HoldFromWin95Sf2Ms(double ms)
+    {
+        // The original SBAWE.VXD on the owner's real SF2 P007, note 99,
+        // HoldModEnv=0 timecents (1000 ms), writes ATKHLD high 0x74
+        // (116), whereas the DOS-truncation rule yields 0x75 (117).
+        // Round the SF2 Win95 hold to the nearest 92-ms register step;
+        // keep the DOS/SF1 route independent. This is verified at that
+        // original-driver anchor; a full Win95 hold sweep is still needed
+        // to certify boundary values.
+        if (!(ms > 0.0)) return 0x7F;
+        const double steps = ms / (Emu8000::kHoldSecPerStep * 1000.0);
+        if (steps >= 127.0) return 0;
+        return std::clamp(127 - static_cast<int>(std::lround(steps)), 0, 127);
     }
     // 1:1 transcription of the branch `C119C116` of `SBAWE.VXD` (object at
     // 0xC1196C74). The jump table of the conversion routine sends exactly
@@ -1478,6 +1491,16 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
             return std::clamp(127 - static_cast<int>(std::lround(
                 std::clamp<int>(g.value[op],0,1000) * 127.0 / 1000.0)),0,127);
         }
+        if (op == Gen::SustainVolEnv && drv == Awe32::Driver::Win95)
+        {
+            // Actual Win95 Creative P007 note99 V112: SF2 SustainVolEnv
+            // generator 37 value 960 -> DCYSUSV sustain byte 0x06.
+            // The former 0.75-dB formula clipped to 0x00. Match the
+            // original 127-step, integer-truncated 0..1000 mapping here.
+            // DOS and SF1 retain the existing independent conversions.
+            const int cb = std::clamp<int>(g.value[op], 0, 1000);
+            return 127 + (-127 * cb) / 1000;
+        }
         return std::clamp(127 - static_cast<int>(std::lround(
             std::max<int>(g.value[op],0) / 10.0 / kSustainDbPerStep)),0,127);
     };
@@ -1517,7 +1540,9 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
 
     vp.envvol  = delayReg(Gen::DelayVolEnv);
     vp.atkhldv = static_cast<uint16_t>(
-        (HoldFromMs(keyScaled(Gen::HoldVolEnv, Gen::KeynumToVolEnvHold, false)) << 8)
+        ((!sf1 && drv == Awe32::Driver::Win95
+            ? HoldFromWin95Sf2Ms(keyScaled(Gen::HoldVolEnv, Gen::KeynumToVolEnvHold, false))
+            : HoldFromMs(keyScaled(Gen::HoldVolEnv, Gen::KeynumToVolEnvHold, false))) << 8)
         | (g.Has(Gen::AttackVolEnv)
                ? (!sf1 && drv == Awe32::Driver::Win95)
                    ? AttackRateFromSf2Timecents(g.value[Gen::AttackVolEnv])
@@ -1530,7 +1555,9 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
 
     vp.envval = delayReg(Gen::DelayModEnv);
     vp.atkhld = static_cast<uint16_t>(
-        (HoldFromMs(keyScaled(Gen::HoldModEnv, Gen::KeynumToModEnvHold, false)) << 8)
+        ((!sf1 && drv == Awe32::Driver::Win95
+            ? HoldFromWin95Sf2Ms(keyScaled(Gen::HoldModEnv, Gen::KeynumToModEnvHold, false))
+            : HoldFromMs(keyScaled(Gen::HoldModEnv, Gen::KeynumToModEnvHold, false))) << 8)
         | (g.Has(Gen::AttackModEnv)
                ? (!sf1 && drv == Awe32::Driver::Win95)
                    ? AttackRateFromSf2Timecents(g.value[Gen::AttackModEnv])
