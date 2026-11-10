@@ -183,7 +183,7 @@ public:
                 if(!prepared->Core().UseBox86Chip(model.romPath,error) ||
                    prepared->Core().ChipVariant()!=Emu8000Core::Chip::Box86) {
                     error="ROM-Ladefehler: "+(error.empty() ?
-                        std::string("86Box-EMU8000 konnte nicht starten"):error);
+                        std::string("EMU8000-Kern konnte nicht starten"):error);
                     prepared.reset();
                 } else {
                     prepared->Core().PowerOnInit();
@@ -195,12 +195,12 @@ public:
                     if(!model.sf2Path.empty()&&!loadedSf2)
                         status="SF2-Ladefehler: "+banks.sf2Error;
                     else if(loadedGm&&loadedSf2)
-                        status="86Box: originale GM-ROM-Bank und SF2 geladen.";
+                        status="Originale GM-ROM-Bank und SF2 geladen.";
                     else if(loadedGm)
-                        status="86Box: originale 1MGM-Bank (SYNTHGM.SBK) geladen.";
+                        status="Originale 1MGM-Bank (SYNTHGM.SBK) geladen.";
                     else if(loadedSf2)
-                        status="86Box: SF2 geladen. SYNTHGM.SBK fehlt neben ROM.";
-                    else status="86Box: ROM bereit. SYNTHGM.SBK neben ROM oder SF2 laden.";
+                        status="SF2 geladen. SYNTHGM.SBK fehlt neben ROM.";
+                    else status="ROM bereit. SYNTHGM.SBK neben ROM oder SF2 laden.";
                 }
             } catch(const std::exception& e) {
                 error="ROM-Ladefehler: "+std::string(e.what());
@@ -402,7 +402,7 @@ public:
                 replacement->Core().SetDriver(Awe32::Driver::Win95);
                 if(!replacement->Core().UseBox86Chip(model.romPath,error) ||
                    replacement->Core().ChipVariant()!=Emu8000Core::Chip::Box86)
-                    error="Wave ROM: "+(error.empty()?std::string("86Box nicht gestartet"):error);
+                    error="Wave ROM: "+(error.empty()?std::string("EMU8000-Kern nicht gestartet"):error);
                 else {
                     replacement->Core().PowerOnInit();
                     replacement->Core().ApplyHardwareReverbPreset(model.reverbPreset);
@@ -463,7 +463,7 @@ public:
         sendTextMessage(active&&!romReady ?
             "125A_SF2_STATUS:SF2 gewaehlt. Original-Wave-ROM erforderlich: ROM LADEN." :
             (active ?
-                "125A_SF2_STATUS:86Box-EMU8000: ROM und SF2 geladen." :
+                "125A_SF2_STATUS:EMU8000: ROM und SF2 geladen." :
                 "125A_SF2_STATUS:SF2 gewaehlt - Laden bei Aktivierung."));
         sf2Ack("OK");
         return kResultOk;
@@ -1557,7 +1557,7 @@ private:
         std::ostringstream info;
         info<<std::fixed<<std::setprecision(1)
             <<"SAMPLE-RAM "<<usedMiB<<"/"<<totalMiB<<" MiB"
-            <<"   |   ROM: GELADEN   |   CORE: 86BOX";
+            <<"   |   ROM: GELADEN   |   CORE: EMU8000";
         return info.str();
     }
     std::string HardwareDescriptor() const {
