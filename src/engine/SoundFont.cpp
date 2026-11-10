@@ -1020,6 +1020,12 @@ static void SelectRegionsImpl(const Bank& self, int bankNum, int program, int ke
                 r.sf2ModSustainInstrument = r.gen.Get(Gen::SustainModEnv, 0);
                 r.sf2ModSustainPresetOffset = presetGen.Get(Gen::SustainModEnv, 0);
                 r.sf2ModSustainLayerProvenance = true;
+                // Real Win95 Creative volume sustain cross-base oracle: all
+                // 28 instrument/preset combinations use separate integer
+                // conversions. Save this boundary before GenSet::AddFrom.
+                r.sf2VolSustainInstrument = r.gen.Get(Gen::SustainVolEnv, 0);
+                r.sf2VolSustainPresetOffset = presetGen.Get(Gen::SustainVolEnv, 0);
+                r.sf2VolSustainLayerProvenance = true;
                 r.gen.AddFrom(presetGen);
                 // Saturate to the SF2 generator's legal timecents interval
                 // after offsets are applied; a preset cannot push the
@@ -1500,13 +1506,31 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
         }
         if (op == Gen::SustainVolEnv && drv == Awe32::Driver::Win95)
         {
-            // Actual Win95 Creative P007 note99 V112: SF2 SustainVolEnv
-            // generator 37 value 960 -> DCYSUSV sustain byte 0x06.
-            // The former 0.75-dB formula clipped to 0x00. Match the
-            // original 127-step, integer-truncated 0..1000 mapping here.
-            // DOS and SF1 retain the existing independent conversions.
-            const int cb = std::clamp<int>(g.value[op], 0, 1000);
-            return 127 + (-127 * cb) / 1000;
+            // The original Creative Win95 driver converts SF2 generator 37
+            // twice: once for the absolute instrument value, and once for
+            // the signed additive preset offset, then combines the two
+            // hardware values. ORIGINAL Win95-driver 4x7 crossed source-
+            // derived SoundFont evidence: 28/28 two-stage, only 16/28
+            // when incorrectly converting the merged SF2 value.
+            //
+            // In signed C++ arithmetic, division truncates toward zero:
+            // T(n) = 127 + trunc(-127*n / 1000).
+            const auto convert = [](int cb) { return 127 + (-127 * cb) / 1000; };
+            const int instrument = region.sf2VolSustainInstrument;
+            const int presetOffset = region.sf2VolSustainPresetOffset;
+            if (region.sf2VolSustainLayerProvenance &&
+                instrument + presetOffset == g.value[op])
+            {
+                return std::clamp(
+                    convert(std::clamp(instrument, 0, 1000)) +
+                    convert(std::clamp(presetOffset, -1000, 1000)) - 127,
+                    0, 127);
+            }
+            // Programmatic/host-edited synthetic region with stale layer
+            // provenance: treat the current value as one absolute SF2
+            // generator, never silently use earlier layer components.
+            return std::clamp(convert(std::clamp<int>(g.value[op], 0, 1000)),
+                              0, 127);
         }
         return std::clamp(127 - static_cast<int>(std::lround(
             std::max<int>(g.value[op],0) / 10.0 / kSustainDbPerStep)),0,127);
