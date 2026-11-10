@@ -13,6 +13,13 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+      - name: Verify VST3 source dependency include contract
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          if (!(Test-Path 'src/opl3/IbkBank.h')) { throw 'Historical FM preset header missing' }
+          $cmake=Get-Content src/vst3/CMakeLists.txt -Raw
+          if ($cmake -notmatch '\.\./opl3') { throw 'CMake does not expose existing IbkBank.h to VST3 compilation' }
       - name: Get pinned Steinberg VST3 SDK and all VSTGUI submodules
         shell: pwsh
         run: |
