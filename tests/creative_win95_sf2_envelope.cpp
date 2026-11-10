@@ -12,7 +12,7 @@
 using SoundFont::Bank;
 using SoundFont::Sample;
 using SoundFont::Region;
-using SoundFont::Gen;
+namespace Gen = SoundFont::Gen;
 using SoundFont::Version;
 using SoundFont::MakeVoiceParams;
 namespace {
