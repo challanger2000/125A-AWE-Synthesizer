@@ -1,3 +1,7 @@
+> **CI VERIFIED:** [P213 source-derived 42-case audit #42734359204](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42734359204) – SUCCESS at commit `8aae8d8b4560d28c9cca4f6fbf6e359006e9c5a0`. Replays frozen independent source-driver measurements (P210 14/14, P212 28/28, 31 distinct values) against the VXD signed integer conversion plus the actual additive preset-stage structure. Still research-only; no new original driver run or full call-graph proof in this step.
+
+---
+
 # P213 – Exact original Creative VXD arithmetic and source-preserving SF2 preset staging
 
 **Evidence status: original numeric driver measurements independently replayed against source-derived arithmetic. Product unchanged.** This report supersedes the unconfirmed P211 126-scale ties-to-even research guess; do not change original measurement fixtures to fit a model.
