@@ -155,7 +155,9 @@ def main():
             "original_creative_register_series":{
                 key:[f"0x{x:04X}" for x in series[key]] for key in REGS},
             "original_creative_cutoff_high_byte":series["IFATN"][0]>>8,
-            "original_creative_filter_Q_high_nibble":series["CCCA_HI"][0]>>12,
+            # Original Creative also writes CCCA twice. Report the final
+            # programmed Q while preserving every original raw word.
+            "original_creative_filter_Q_high_nibble":series["CCCA_HI"][-1]>>12,
             "original_creative_EG1_filter_depth_byte":series["PEFE"][0]&255,
             "original_creative_LFO_filter_depth_byte":series["FMMOD"][0]&255,
             "original_active_voice_count":1})
