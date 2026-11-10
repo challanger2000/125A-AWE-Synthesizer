@@ -213,3 +213,14 @@ target_link_libraries(awe32_creative_win95_sf2_envelope_test PRIVATE awe32_chip_
 target_compile_features(awe32_creative_win95_sf2_envelope_test PRIVATE cxx_std_23)
 add_test(NAME 125A_creative_win95_original_sf2_envelopes
   COMMAND awe32_creative_win95_sf2_envelope_test)
+
+# Real Win95 SBAWE.VXD 28-case original-source SF2 VolumeSustain
+# instrument+additive-preset oracle. No original driver or SoundFont bytes.
+add_executable(awe32_creative_win95_vol_sustain_layer_parity
+  "${PROJECT_SOURCE_DIR}/tests/creative_win95_vol_sustain_layer_parity.cpp")
+target_include_directories(awe32_creative_win95_vol_sustain_layer_parity PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}" "${UPSTREAM_SRC}")
+target_link_libraries(awe32_creative_win95_vol_sustain_layer_parity PRIVATE awe32_chip_safety)
+target_compile_features(awe32_creative_win95_vol_sustain_layer_parity PRIVATE cxx_std_23)
+add_test(NAME 125A_creative_win95_original_volume_sustain_layers
+  COMMAND awe32_creative_win95_vol_sustain_layer_parity)
