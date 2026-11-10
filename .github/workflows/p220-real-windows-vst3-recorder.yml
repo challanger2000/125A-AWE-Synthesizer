@@ -66,6 +66,7 @@ jobs:
           Copy-Item 'build-p220/VST3/Release/125A_AWE_Synthesizer.vst3' (Join-Path $kit '125A_AWE_Synthesizer.vst3') -Recurse
           Copy-Item 'build-p220/Release/awe32_p220_77_vst3_pcm_recorder.exe' (Join-Path $kit '125A-P220-VST3-Recorder.exe')
           Copy-Item 'tools/P220-LOCAL-77-VST3.bat' (Join-Path $kit 'P220-LOCAL-77-VST3.bat')
+          Copy-Item 'tools/P221-LOCAL-P000-CLIP-DIAG.bat' (Join-Path $kit 'P221-LOCAL-P000-CLIP-DIAG.bat')
           Copy-Item 'tools/p220_create_real_vst3_receipts.py' (Join-Path $kit 'p220_create_real_vst3_receipts.py')
           Copy-Item 'tools/p220_77_preset_capture_plan.py' (Join-Path $kit 'p220_77_preset_capture_plan.py')
           Copy-Item 'tools/p80_full_sf2_inventory.py' (Join-Path $kit 'p80_full_sf2_inventory.py')
@@ -81,6 +82,7 @@ jobs:
             "PHYSICAL_CREATIVE_HARDWARE=NOT_RUN"
             "RELEASE=NO_GO"
             "ACTION=Run P220-LOCAL-77-VST3.bat, provide local ROM/SF2 paths; records 154 private WAVs; cannot prove original Creative sound without original captures"
+            "P221=If P000-MODFX clips, optional P221-LOCAL-P000-CLIP-DIAG.bat captures only P000, preserving raw unclipped F32 WAV and exact peak; no original driver claim"
           ) | Set-Content (Join-Path $kit 'P220-START-HERE.txt')
           $module=(Get-ChildItem (Join-Path $kit '125A_AWE_Synthesizer.vst3') -Filter '*.vst3' -File -Recurse | Select-Object -First 1).FullName
           if (-not $module) { throw 'VST3 module missing from portable kit' }
