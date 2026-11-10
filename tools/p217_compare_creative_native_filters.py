@@ -125,6 +125,9 @@ def selftest():
                  requested_effective_value=target,preset_additive_offset=target-default,
                  original_active_voice_count=1,native_active_voices=1)
         raw={k:["0x0020"] for k in REGS}
+        # Reproduce the genuine double CCCA programming order: preliminary
+        # Q=0, final Q=8. This is NOT a Creative hardware observation.
+        raw["CCCA_HI"]=["0x0020","0x8020"]
         A.append({**row,"original_creative_register_series":deepcopy(raw)})
         B.append({**row,"native_register_series":deepcopy(raw)})
     original=dict(schema=ORIGINAL_SCHEMA,
@@ -158,7 +161,14 @@ def selftest():
     require(result["total_target_register_matches"]==27 and
         result["per_filter_domain"]["initialFilterFc"]["status"]=="FAIL",
         "false-green mutant: changed native cutoff incorrectly matched original")
-    print("P217 independent parity comparator selftest PASS: seven source mutations rejected, mutated register fails target axis")
+    q=deepcopy(native)
+    q["cases"][11]["native_register_series"]["CCCA_HI"][-1]="0x0020"
+    qr=compare(original,q)
+    require(qr["total_target_register_matches"]==27 and
+        qr["per_filter_domain"]["initialFilterQ"]["status"]=="FAIL" and
+        qr["per_filter_domain"]["initialFilterQ"]["P216_native_register_values"][4]==0,
+        "false-green mutant: ignoring FINAL Q register write")
+    print("P217 independent parity comparator selftest PASS: seven source mutations rejected, cutoff and final-Q mutants rejected")
 def main():
     p=argparse.ArgumentParser()
     p.add_argument("--self-test",action="store_true")
