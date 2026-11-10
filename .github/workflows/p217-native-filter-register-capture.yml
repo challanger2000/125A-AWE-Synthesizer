@@ -1,7 +1,7 @@
-name: P217 native P216 86Box four-family filter register 28-program evidence
+name: P218 corrected SF2 negative FMMOD real native 28-case comparison
 on:
   push:
-    branches: [research/p217-original-creative-filter-matrix]
+    branches: [research/p218-native-fmmod-filter-validation]
     paths:
       - .github/workflows/p217-native-filter-register-capture.yml
   workflow_dispatch:
@@ -15,10 +15,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Checkout exactly P216 fully Windows-tested PRODUCT DSP (not research candidate)
+      - name: Checkout exactly isolated P218 one-line measured SF2 correction, never alter P216
         uses: actions/checkout@v4
         with:
-          ref: 50dbd6713736b9c60bb33a3a5c737e57b926fd64
+          ref: 65ffbc909867ee54e2a2819990844fa8e3bf6bc6
           path: product
           persist-credentials: false
       - name: Test native SF2-independent source parser and exact provenance
@@ -70,12 +70,12 @@ jobs:
             --sf2 "$RUNNER_TEMP/p217/filter.sf2" \
             --manifest "$RUNNER_TEMP/p217/filter-manifest.json" \
             --trace-dir "$RUNNER_TEMP/p217/traces" \
-            --out p217-native-evidence/P217-actual-P216-125A-86Box-28-filter-registers.json
+            --out p217-native-evidence/P218-actual-candidate-125A-86Box-28-filter-registers.json
       - name: Preserve only independent numeric P216 native register records (not Creative oracle)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: P217-real-native-P216-EMU8000-28-filter-register-records
+          name: P218-native-candidate-EMU8000-28-filter-register-records
           path: p217-native-evidence/*.json
           retention-days: 14
           if-no-files-found: warn
