@@ -1,0 +1,51 @@
+name: P214 isolated authenticated SF2 instrument/preset source preflight
+on:
+  push:
+    branches: [research/p214-creative-instrument-base-matrix]
+    paths: [.github/workflows/p214-authenticated-sf2-preflight.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate-original-source-derived-bank:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compile and adversarially preflight both P214 scripts
+        run: |
+          python3 -m py_compile tools/p214_clone_instrument_matrix.py tools/p214_compare_creative_instrument_base.py
+          python3 tools/p214_clone_instrument_matrix.py --self-test
+          python3 tools/p214_compare_creative_instrument_base.py --self-test
+      - name: Download exact already-Creative-accepted public source and generate crossed instrument matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/p214"
+          curl -fLsS --retry 3 --max-time 90 https://raw.githubusercontent.com/mrbumpy409/SoundFont-Spec-Test/67c0405ea9/sf_spec_test.sf2 -o "$RUNNER_TEMP/p214/source.sf2"
+          test "$(git hash-object "$RUNNER_TEMP/p214/source.sf2")" = 4768c4a0215abf49c7a2bb51ada5ba3494faa1c5
+          python3 tools/p214_clone_instrument_matrix.py \
+            --source "$RUNNER_TEMP/p214/source.sf2" \
+            --out "$RUNNER_TEMP/p214/private-derived.sf2" \
+            --manifest "$RUNNER_TEMP/p214/private-manifest.json"
+          python3 - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          from sys import path
+          path.insert(0,"tools")
+          from p83_generic_sf2 import inspect_sf2
+          m=json.loads((Path(os.environ["RUNNER_TEMP"])/"p214/private-manifest.json").read_text())
+          b=(Path(os.environ["RUNNER_TEMP"])/"p214/private-derived.sf2").read_bytes()
+          p=inspect_sf2(b)
+          assert hashlib.sha256(b).hexdigest()==m["sf2_sha256"]
+          assert p["preset_count"]==34 and p["instrument_count"]==28 and p["sample_count"]==44
+          assert len(m["cases"])==28 and len(set((c["base_instrument_sustain"],c["sustain_mod_env_permille"]) for c in m["cases"]))==28
+          assert m["original_audio_pcm_byte_identical"] and m["original_25_instruments_preserved"]
+          assert sorted({c["base_instrument_sustain"] for c in m["cases"]})==[0,250,500,1000]
+          print("P214 authentic original-source SF2 construction and independent parsing PASS",m["sf2_sha256"])
+          PY
+      - name: Destroy temporary original public source and derived audio bank
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/p214"
