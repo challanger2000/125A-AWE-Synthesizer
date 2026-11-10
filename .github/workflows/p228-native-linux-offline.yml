@@ -1,0 +1,51 @@
+name: P228 Native Linux EMU8000 four-bank test binary - no user media
+on:
+  push:
+    branches: [qa/p228-crossbank-real-dry-audio]
+    paths:
+      - tools/p228_batch_dry_native.cpp
+      - src/engine/CMakeLists.txt
+      - .github/workflows/p228-native-linux-offline.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-linux-offline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build identical production patched EMU8000 native chip code
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build-p228 -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -D125A_BUILD_VST3=OFF -D125A_BUILD_ENGINE_PROBES=ON \
+            -D125A_BUILD_OPL3_PROBES=OFF
+          cmake --build build-p228 --parallel 4 --target awe32_p228_crossbank_dry_native
+      - name: Adversarial manifest parsing; no private files in CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          build-p228/src/engine/awe32_p228_crossbank_dry_native --self-test
+      - name: Attach standalone native x64 Linux executable only
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p p228-tool
+          cp build-p228/src/engine/awe32_p228_crossbank_dry_native p228-tool/125A-P228-EMU8000-DRY-Linux-x64
+          sha256sum p228-tool/125A-P228-EMU8000-DRY-Linux-x64 > p228-tool/SHA256.txt
+          file p228-tool/125A-P228-EMU8000-DRY-Linux-x64
+          printf '%s\n' \
+            "P228 offline native EMU8000 executable, not VST3" \
+            "Source SHA: $GITHUB_SHA" \
+            "Original sample/ROM: none included or uploaded" \
+            "Actual original four SF2 dry audio runs: NOT RUN in public CI" \
+            "Owner instrument parity: NOT PROVEN, release BLOCKED" \
+            > p228-tool/START-HERE.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: P228-Patched-EMU8000-Linux-Offline-Binary-NO-MEDIA
+          path: p228-tool/
+          if-no-files-found: error
+          retention-days: 7
