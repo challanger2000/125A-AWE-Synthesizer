@@ -67,6 +67,19 @@ struct RenderResult {
     double rms=0;
     bool valid=false;
 };
+void accumulate_original_float(RenderResult& report,double& energy,float v,int frame,int channel) {
+    require(std::isfinite(v),"P220 nonfinite real VST3 output");
+    report.peak=std::max(report.peak,std::abs(v));
+    if(std::abs(v)>=0.99997f) {
+        ++report.overrangeSamples;
+        if(report.firstOverrangeFrame<0) {
+            report.firstOverrangeFrame=frame;
+            report.firstOverrangeChannel=channel;
+            report.firstOverrangeValue=v;
+        }
+    }
+    energy+=double(v)*double(v);
+}
 RenderResult render_one(IPluginFactory* factory,const std::string& rom,
                          const std::string& sf2,int program,bool modfx,
                          const std::filesystem::path& target) {
@@ -147,17 +160,7 @@ RenderResult render_one(IPluginFactory* factory,const std::string& rom,
             const float samples[]={left[i],right[i]};
             for(int ch=0;ch<2;++ch) {
                 const float v=samples[ch];
-                require(std::isfinite(v),"P220 nonfinite real VST3 output");
-                report.peak=std::max(report.peak,std::abs(v));
-                if(std::abs(v)>=0.99997f) {
-                    ++report.overrangeSamples;
-                    if(report.firstOverrangeFrame<0) {
-                        report.firstOverrangeFrame=pos+i;
-                        report.firstOverrangeChannel=ch;
-                        report.firstOverrangeValue=v;
-                    }
-                }
-                energy+=double(v)*double(v);
+                accumulate_original_float(report,energy,v,pos+i,ch);
                 originalFloat.push_back(v); // exact un-normalized VST3 output
                 const float q=std::clamp(v,-1.f,1.f);
                 pcm.push_back(static_cast<int16_t>(std::lround(q*32767.f)));
@@ -186,6 +189,31 @@ RenderResult render_one(IPluginFactory* factory,const std::string& rom,
 } // namespace
 
 int wmain(int argc,wchar_t** argv) {
+    if(argc==3&&std::wstring(argv[1])==L"--self-test-overload") {
+        // Pure synthetic fault mutation, no VST3 or user SF2/ROM needed.
+        // This MUST retain both amplitude >1 and amplitude <-1 in the
+        // forensic IEEE-float WAV; normalizing or silently clipping
+        // a failed voice is forbidden.
+        try {
+            const std::vector<float> bad={0.5f,-1.25f,1.75f,0.0f};
+            RenderResult r{};double energy=0;
+            for(int i=0;i<4;++i)
+                accumulate_original_float(r,energy,bad[static_cast<size_t>(i)],i/2,i%2);
+            require(r.overrangeSamples==2&&r.peak==1.75f&&
+                r.firstOverrangeFrame==0&&r.firstOverrangeChannel==1&&
+                r.firstOverrangeValue==-1.25f,
+                "P221 false-green overrange detection on original float PCM");
+            write_float_wave(std::filesystem::path(argv[2]),bad);
+            std::cout<<"P221_OVERLOAD_MUTANT_PASS original peak=1.75"
+                     <<" two overrange values preserved without normalization"
+                     <<" first_frame=0 channel=1 original_first_value=-1.25"
+                     <<" NO_SONIC_RELEASE\n";
+            return 0;
+        }catch(const std::exception& e) {
+            std::cerr<<"P221_OVERLOAD_MUTANT_FAIL "<<e.what()<<'\n';
+            return 1;
+        }
+    }
     // 125A-P220-VST3-Recorder.exe 125A_AWE_Synthesizer.vst3
     //    awe32.raw "Synth 512 Bank.sf2" PRIVATE_OUT_DIR probe|full|owner-p000-diagnostic
     if(argc!=6) {
