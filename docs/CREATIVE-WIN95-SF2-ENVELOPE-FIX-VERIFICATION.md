@@ -50,9 +50,14 @@ in targeted native C++; [native regression #42903894962](https://github.com/chal
 SUCCESS. Full authenticated source, all 28 values, the original three
 failure vectors and corrected integer formula are documented in
 [`CREATIVE-WIN95-28-GENERATOR-HOLD-SUSTAIN-ORIGINAL.md`](CREATIVE-WIN95-28-GENERATOR-HOLD-SUSTAIN-ORIGINAL.md).
-The fresh direct Creative Win95 retest after this last Hold correction
-was launched separately; its result must be checked before claiming
-that fresh 28/28 original-driver comparison as completed.
+The **fresh original Creative Win95 retest after the corrected Hold
+implementation has PASSED, 28/28 exact source-original register outcomes**:
+[private original-driver run #42904061108](https://github.com/challanger2000/125A-Engineering/actions/runs/42904061108)
+and numeric artifact 13803899253. The old simplified hold path matched
+only 11/14; the final real corrected SF2 Win95 path matches 14/14. The
+full original-series provenance, control values and raw register
+observations are retained in the
+[28-generator report](CREATIVE-WIN95-28-GENERATOR-HOLD-SUSTAIN-ORIGINAL.md).
 
 ## Executed proof AFTER the patch
 
