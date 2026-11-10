@@ -47,10 +47,10 @@ def send_paced_frame(fd, payload: bytes, conn, send, pace_ms=25):
 
 
 def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
-              send, key, type_path, screenshot, report, pcm_fifo=None, programs=(0,), note=48, creative_bank=1, preset_names=None, midi_channel=0):
+              send, key, type_path, screenshot, report, pcm_fifo=None, programs=(0,), note=48, creative_bank=1, preset_names=None, midi_channel=0, velocity=100):
     if not programs or len(programs)>2 or any(not 0<=v<=127 for v in programs):
         raise ValueError("Select one or two valid MIDI program numbers")
-    if not 0<=note<=127 or not 0<=creative_bank<=127 or not 0<=midi_channel<=15:
+    if not 0<=note<=127 or not 1<=velocity<=127 or not 0<=creative_bank<=127 or not 0<=midi_channel<=15:
         raise ValueError("Invalid MIDI note, Creative user bank or channel")
     first_program=programs[0]
     second_program=programs[1] if len(programs)==2 else None
@@ -71,7 +71,7 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
     uart_frames_sent=0
     audio_dir.mkdir(exist_ok=True)
     try:
-        init=tuple(demo_messages(channel=midi_channel,bank=creative_bank,program=first_program,note=note,velocity=100))
+        init=tuple(demo_messages(channel=midi_channel,bank=creative_bank,program=first_program,note=note,velocity=velocity))
         for msg in init:
             uart_bytes_sent+=send_paced_frame(fd,msg,conn,send)
             uart_frames_sent+=1
@@ -87,7 +87,7 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
         # known program/note. Start AFTER all bank/CC/program messages and
         # AFTER the complete SF2 upload; end BEFORE changing program again.
         p89_first_start=max(0,len(trace.read_text(encoding="utf8",errors="replace").splitlines())-1) if trace.is_file() else -1
-        uart_bytes_sent+=send_paced_frame(fd,frame(0x90|midi_channel,note,100),conn,send)
+        uart_bytes_sent+=send_paced_frame(fd,frame(0x90|midi_channel,note,velocity),conn,send)
         uart_frames_sent+=1
         send(conn,"step 1200")
         screenshot(conn,out,"p64-creative-playing.png",report)
@@ -100,7 +100,7 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
         p75_program7_before=max(0,len(trace.read_text(encoding="utf8",errors="replace").splitlines())-1) if trace.is_file() else 0
         if second_program is not None:
             other_dir.mkdir(exist_ok=True)
-            for msg in demo_messages(channel=midi_channel,bank=creative_bank,program=second_program,note=note,velocity=100):
+            for msg in demo_messages(channel=midi_channel,bank=creative_bank,program=second_program,note=note,velocity=velocity):
                 send_paced_frame(fd,msg,conn,send)
             send(conn,"step 400")
             p75_recording=False
@@ -109,7 +109,7 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
                 p75_recording=True
             except Exception as exc:
                 report["p75_recording_error"]=str(exc)
-            send_paced_frame(fd,frame(0x90|midi_channel,note,100),conn,send)
+            send_paced_frame(fd,frame(0x90|midi_channel,note,velocity),conn,send)
             send(conn,"step 1200")
             screenshot(conn,out,"p75-program7-playing.png",report)
             send_paced_frame(fd,frame(0x80|midi_channel,note,0),conn,send)
@@ -148,7 +148,7 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
              "register_write_delta":max(0,count_after-p75_program7_before),
              "raw_audio_uploaded":False}]
     result={"p89_original_first_note_trace_window":{
-                "program":first_program,"note":note,"velocity":100,
+                "program":first_program,"note":note,"velocity":velocity,
                 "start_row":p89_first_start,"end_row":p89_first_end,
                 "window_isolated":p89_first_end>p89_first_start>=0},
             "p84_midi_channel_0_based":midi_channel,
