@@ -115,6 +115,7 @@ def capture(conn,send,guest_fifo,trace,report,raw_dir,private_dir):
                             "source_audio":"86Box_original_wavetable_tap",
                             "creative_register_window":[before,after],
                             "register_entries":len(registers),
+                            "register_write_sequence":registers,
                             "audio_frames":pcm["frames"],
                             "reference_sha256":hashlib.sha256(target.read_bytes()).hexdigest(),
                             "guest_delivery_ack":"P67_REQUIRED_AFTER_GUEST"})
