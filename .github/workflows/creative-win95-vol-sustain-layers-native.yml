@@ -1,0 +1,48 @@
+name: Exact original Creative Win95 volume sustain instrument-preset native regression
+on:
+  push:
+    branches: [fix/creative-volume-sustain-layer-parity]
+    paths:
+      - src/engine/SoundFont.h
+      - src/engine/SoundFont.cpp
+      - src/engine/CMakeLists.txt
+      - tests/creative_win95_vol_sustain_layer_parity.cpp
+      - .github/workflows/creative-win95-vol-sustain-layers-native.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  real-original-fixed-28-cases:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build actual linked SF2/86Box chip code and prior oracles
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build-creative-volume -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -D125A_BUILD_VST3=OFF \
+            -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_OPL3_PROBES=OFF
+          cmake --build build-creative-volume --parallel 4 \
+            --target awe32_creative_win95_vol_sustain_layer_parity \
+              awe32_creative_win95_sf2_envelope_test \
+              awe32_p90_sf2_driver_registers_test \
+              awe32_p228_crossbank_dry_native
+      - name: Verify 28 authentic Creative Win95 volume-sustain instrument/preset values and negative witnesses
+        shell: bash
+        run: |
+          set -euo pipefail
+          ctest --test-dir build-creative-volume --output-on-failure \
+            -R '125A_(creative_win95_original_volume_sustain_layers|creative_win95_original_sf2_envelopes|p90_sf2_driver_registers|p228_dry_matrix_negative_mutant)'
+          build-creative-volume/src/engine/awe32_creative_win95_vol_sustain_layer_parity
+      - name: Actual user SoundFonts/Original Win95 required separately
+        shell: bash
+        run: |
+          printf '%s\n' \
+            'Original Win95 driver real 28-case snapshot is a frozen numeric regression oracle.' \
+            'Live Win95 driver + current native engine A/B runs in PRIVATE engineering CI.' \
+            'No original user SoundFont, sample PCM, ROM or Windows guest uploaded.' \
+            'No VST3/DAW release approval on synthetic-only native test.'
