@@ -224,3 +224,12 @@ target_link_libraries(awe32_creative_win95_vol_sustain_layer_parity PRIVATE awe3
 target_compile_features(awe32_creative_win95_vol_sustain_layer_parity PRIVATE cxx_std_23)
 add_test(NAME 125A_creative_win95_original_volume_sustain_layers
   COMMAND awe32_creative_win95_vol_sustain_layer_parity)
+
+# P230: owner-media-only original ROM + SYNTHGM.SBK native acoustic renderer.
+# Does not bundle original ROM/SBK, does not certify Creative parity.
+add_executable(awe32_p230_rom_sbk_native
+  "${PROJECT_SOURCE_DIR}/tools/p230_rom_sbk_native.cpp")
+target_include_directories(awe32_p230_rom_sbk_native PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/src/vst3" "${UPSTREAM_SRC}")
+target_link_libraries(awe32_p230_rom_sbk_native PRIVATE awe32_chip_safety)
+target_compile_features(awe32_p230_rom_sbk_native PRIVATE cxx_std_23)
