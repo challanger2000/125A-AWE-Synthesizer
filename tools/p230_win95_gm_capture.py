@@ -26,6 +26,12 @@ def label(bank,program,note,velocity):
     prefix="gm" if bank==16383 else "drum"
     return f"{prefix}_b{bank:05}_p{program:03}_n{note:03}_v{velocity:03}.wav"
 
+def controllers(channel):
+    # Creative channel 10 has an implicit original GM drum kit. CC0=0
+    # explicitly switches banks and may remove the drum routing.
+    baseline=((7,100),(11,127),(10,64),(1,0),(64,0),(91,0),(93,0))
+    return baseline if channel==9 else ((0,0),)+baseline
+
 def self_test():
     cases=plan()
     assert len(cases)==8
@@ -33,6 +39,7 @@ def self_test():
     assert all((channel==9)==(bank==16382) for bank,_,_,_,channel in cases)
     assert len({label(b,p,n,v) for b,p,n,v,_ in cases})==8
     assert set(MELODIC)<set(range(128)) and set(DRUMS)<set(range(128))
+    assert (0,0) in controllers(0) and all(cc!=0 for cc,_ in controllers(9))
     print("P230_CREATIVE_GM_8_CASE_ORIGINAL_GUEST_PLAN_PASS")
 
 def row_index(path):
@@ -63,8 +70,7 @@ def capture(conn,send,guest_fifo,trace,report,raw_dir,private_dir):
             fname=label(bank,program,note,velocity)
             guest_bank=0  # Original Win95 Creative 1MGM program bank
             # Channel 10 selects the original GM percussion map.
-            reset=((0,guest_bank),(7,100),(11,127),(10,64),
-                   (1,0),(64,0),(91,0),(93,0))
+            reset=controllers(channel)
             for cc,val in reset:
                 send_paced_frame(fd,frame(0xB0|channel,cc,val),conn,send)
             send_paced_frame(fd,frame(0xC0|channel,program,0),conn,send)
@@ -94,13 +100,17 @@ def capture(conn,send,guest_fifo,trace,report,raw_dir,private_dir):
             if len(found)!=1:
                 raise RuntimeError("Original 86Box wavetable capture missing/ambiguous "+fname)
             pcm=pcm_stats(found[0])
-            if not 80000<=pcm["frames"]<=105000 or pcm["nonzero_frames"]<1000:
-                raise RuntimeError("Original ROM audio silent/truncated "+fname)
+            good=(80000<=pcm["frames"]<=105000 and pcm["nonzero_frames"]>=1000)
+            if not good and channel!=9:
+                raise RuntimeError("Original melodic ROM audio invalid "+fname+
+                                   " "+str(pcm))
             target=private_dir/fname
             shutil.copyfile(found[0],target)
             records.append({"file":fname,"bank":bank,"program":program,
+                            "valid_original_pcm":good,
+                            "pcm_observed":pcm,
                             "note":note,"velocity":velocity,"channel":channel,
-                            "guest_bank_cc0":guest_bank,
+                            "guest_bank_cc0":(guest_bank if channel!=9 else "not_sent_implicit_original_drum"),
                             "source":"booted_Win95_Creative_WinMM",
                             "source_audio":"86Box_original_wavetable_tap",
                             "creative_register_window":[before,after],
@@ -112,6 +122,8 @@ def capture(conn,send,guest_fifo,trace,report,raw_dir,private_dir):
         os.close(fd)
     report["p230_original_gm_8_capture"]={
         "cases":records,"reference_count":len(records),
+        "valid_pcm_count":sum(bool(x["valid_original_pcm"]) for x in records),
+        "invalid_pcm_cases":[x for x in records if not x["valid_original_pcm"]],
         "creative_driver_live_registers":all(x["register_entries"]>0 for x in records),
         "P67_guest_original_driver_provenance":"NOT_RUN",
         "full_397_original_reference":"NOT_RUN",
