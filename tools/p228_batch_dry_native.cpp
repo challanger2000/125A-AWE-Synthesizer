@@ -49,6 +49,10 @@ std::vector<Trial> read_plan(const std::filesystem::path& plan,
     std::vector<Trial> rows;
     size_t seen=0;
     while(std::getline(input,line)) {
+        // Python csv.writer and Windows tools emit CRLF. std::getline removes
+        // LF only; a retained CR in the last cell must never reject genuine
+        // 2000 ms audio-test rows.
+        if(!line.empty() && line.back()=='\r')line.pop_back();
         if(line.empty())continue;
         auto c=csv_columns(line);
         check(c.size()==11,"bad P228 matrix column count");
