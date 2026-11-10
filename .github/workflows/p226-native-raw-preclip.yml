@@ -1,0 +1,121 @@
+name: P226 Windows EMU8000 signed32 preclip diagnostic
+on:
+  push:
+    branches: [qa/p226-raw32-preclip-factorial]
+    paths:
+      - src/engine/Emu8000.h
+      - src/engine/Emu8000Box.h
+      - src/engine/Emu8000Box.cpp
+      - src/engine/CMakeLists.txt
+      - tools/p226_preclip_probe.cpp
+      - tools/p226_make_synth_fixture.cpp
+      - tools/p226_compare_preclip_to_vst3.py
+      - tools/P226-LOCAL-PRECLIP.bat
+      - .github/workflows/p226-native-raw-preclip.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: p226-native-raw32-probe
+  cancel-in-progress: true
+jobs:
+  actual-windows-emu8000:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure native EMU8000 without VST3 SDK
+        shell: pwsh
+        run: |
+          cmake -S . -B build-p226 -G 'Visual Studio 17 2022' -A x64 -D125A_BUILD_VST3=OFF -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_OPL3_PROBES=OFF
+          if ($LASTEXITCODE -ne 0) { throw 'P226 configure failed' }
+      - name: Build actual native chip, raw tap and synthetic fixture
+        shell: pwsh
+        run: |
+          cmake --build build-p226 --config Release --parallel 3 --target awe32_p226_rawmix_probe awe32_p226_synthetic_fixture
+          if ($LASTEXITCODE -ne 0) { throw 'P226 Windows compile failed' }
+      - name: Adversarial saturation and WAV parser oracle
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $probe=(Get-ChildItem build-p226 -Recurse -File -Filter awe32_p226_rawmix_probe.exe | Select-Object -First 1).FullName
+          if (-not $probe) { throw 'Missing actual P226 probe' }
+          & $probe --self-test
+          if ($LASTEXITCODE -ne 0) { throw 'P226 raw capture negative mutant not detected' }
+          python tools/p226_compare_preclip_to_vst3.py --self-test
+          if ($LASTEXITCODE -ne 0) { throw 'P226 independent VST3 comparison negative mutant not detected' }
+      - name: Test actual 16-case native EMU8000 synthetic fixture and untouched PCM
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $probe=(Get-ChildItem build-p226 -Recurse -File -Filter awe32_p226_rawmix_probe.exe | Select-Object -First 1).FullName
+          $maker=(Get-ChildItem build-p226 -Recurse -File -Filter awe32_p226_synthetic_fixture.exe | Select-Object -First 1).FullName
+          if (-not $probe -or -not $maker) { throw 'P226 probe or synthetic generator missing' }
+          $src='qa/p226-synthetic-only'
+          $out='qa/p226-synthetic-raw'
+          New-Item -ItemType Directory -Force $src,$out | Out-Null
+          & $maker (Resolve-Path $src).Path
+          if ($LASTEXITCODE -ne 0) { throw 'P226 fixture generator failed' }
+          & $probe (Resolve-Path "$src/zero.rom").Path (Resolve-Path "$src/bank.sf2").Path (Resolve-Path $out).Path --synthetic 2>&1 | Tee-Object 'qa/p226-synthetic-log.txt'
+          if ($LASTEXITCODE -ne 0) { throw 'P226 true chip preclip test failed' }
+          $log=Get-Content qa/p226-synthetic-log.txt -Raw
+          if ($log -notmatch 'P226_MATRIX_DONE=16' -or $log -notmatch 'TYPE=ACTUAL_NATIVE_EMU8000_INT32' -or $log -notmatch 'ORIGINAL_CREATIVE=NOT_RUN RELEASE=BLOCKED') {
+            throw 'P226 incomplete native raw matrix / incorrect claim'
+          }
+          $raw=@(Get-ChildItem $out -Filter '*.raw32le' -File)
+          if ($raw.Count -ne 16) { throw "P226 expected 16 signed32 outputs, got $($raw.Count)" }
+          foreach ($item in $raw) {
+            if ($item.Length -ne 1058400) { throw "P226 truncated raw signed32 audio: $($item.Name)" }
+          }
+          $matrix=@(Import-Csv "$out/P226-PRECLIP-MATRIX.csv")
+          if ($matrix.Count -ne 16) { throw 'P226 incomplete 16-case CSV' }
+          if (@($matrix | Where-Object { $_.cc1 -ne '96' -or $_.cc91 -ne '48' -or $_.cc93 -ne '32' -or $_.frames -ne '132300' }).Count -ne 0) {
+            throw 'P226 wrong MIDI or frame identity'
+          }
+          $signal=@($matrix | Where-Object { [double]$_.raw_rms_l -gt 0.0001 -or [double]$_.raw_rms_r -gt 0.0001 })
+          if ($signal.Count -lt 8) { throw 'P226 positive native audio test was silent' }
+          Write-Output 'P226 16 real EMU8000 native raw32 captures; PCM clamp and capture-off parity passed; synthetic media only'
+      - name: Package portable owner-only executable and BAT
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $kit='qa/P226-PORTABLE-WINDOWS-NO-MEDIA'
+          New-Item -ItemType Directory -Force $kit | Out-Null
+          $exe=(Get-ChildItem build-p226 -Recurse -File -Filter awe32_p226_rawmix_probe.exe | Select-Object -First 1).FullName
+          if (-not $exe) { throw 'P226 executable absent' }
+          Copy-Item $exe (Join-Path $kit '125A-P226-Preclip.exe')
+          Copy-Item tools/P226-LOCAL-PRECLIP.bat (Join-Path $kit 'P226-LOCAL-PRECLIP.bat')
+          Copy-Item tools/p226_compare_preclip_to_vst3.py (Join-Path $kit 'p226_compare_preclip_to_vst3.py')
+          @(
+            '125A P226 SIGNED32 PRECLIP DIAGNOSTIC - NOT A RELEASE'
+            "SOURCE_SHA=$env:GITHUB_SHA"
+            'WINDOWS_SYNTHETIC_16_CASE_NATIVE_EMU8000_PRECLIP_TEST=PASS'
+            'ORIGINAL_USER_ROM_SF2=NOT_INCLUDED_NOT_TESTED'
+            'VST3_PROCESS=NOT_RUN_IN_THIS_DIAGNOSTIC'
+            'ORIGINAL_CREATIVE_REFERENCE=NOT_RUN'
+            'RELEASE=BLOCKED'
+            'PLACE=awe32.raw and Synth 512 Bank.sf2 next to the BAT or enter their paths'
+            'RUN=P226-LOCAL-PRECLIP.bat; it creates one private ZIP containing raw32 recordings and CSV'
+            'PRIVATE_MEDIA=NEVER_AUTOMATICALLY_UPLOADED'
+          ) | Set-Content (Join-Path $kit 'START-HERE.txt') -Encoding UTF8
+          $digest=(Get-FileHash (Join-Path $kit '125A-P226-Preclip.exe') -Algorithm SHA256).Hash
+          "SHA256_EXE=$digest" | Set-Content (Join-Path $kit 'SHA256.txt')
+      - uses: actions/upload-artifact@v4
+        with:
+          name: P226-Windows-EMU8000-Preclip-Private-Test-Kit-NO-MEDIA
+          path: qa/P226-PORTABLE-WINDOWS-NO-MEDIA/
+          retention-days: 14
+          if-no-files-found: error
+      - name: Delete all synthetic source media and audio from runner workspace
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path 'qa/p226-synthetic-only') { Remove-Item 'qa/p226-synthetic-only' -Recurse -Force }
+          if (Test-Path 'qa/p226-synthetic-raw') { Remove-Item 'qa/p226-synthetic-raw' -Recurse -Force }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: P226-Synthetic-Native-Preclip-Evidence-Log
+          path: qa/p226-synthetic-log.txt
+          retention-days: 7
+          if-no-files-found: warn
