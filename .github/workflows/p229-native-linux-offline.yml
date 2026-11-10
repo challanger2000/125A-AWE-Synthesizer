@@ -1,0 +1,51 @@
+name: P229 genuine four-bank dry signed32 preclip test binary - no user media
+on:
+  push:
+    branches: [qa/p229-dry-preclip-rootcause]
+    paths:
+      - tools/p229_dry_preclip_native.cpp
+      - src/engine/CMakeLists.txt
+      - .github/workflows/p229-native-linux-offline.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-linux-offline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build identical production patched EMU8000 native chip code
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build-p229 -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -D125A_BUILD_VST3=OFF -D125A_BUILD_ENGINE_PROBES=ON \
+            -D125A_BUILD_OPL3_PROBES=OFF
+          cmake --build build-p229 --parallel 4 --target awe32_p229_dry_preclip
+      - name: Adversarial manifest parsing; no private files in CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          build-p229/src/engine/awe32_p229_dry_preclip --self-test
+      - name: Attach standalone native x64 Linux executable only
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p p229-tool
+          cp build-p229/src/engine/awe32_p229_dry_preclip p229-tool/125A-P229-EMU8000-PRECLIP-Linux-x64
+          sha256sum p229-tool/125A-P229-EMU8000-PRECLIP-Linux-x64 > p229-tool/SHA256.txt
+          file p229-tool/125A-P229-EMU8000-PRECLIP-Linux-x64
+          printf '%s\n' \
+            "P229 offline native EMU8000 signed32 preclip executable, not VST3" \
+            "Source SHA: $GITHUB_SHA" \
+            "Original sample/ROM: none included or uploaded" \
+            "Actual original four SF2 dry-preclip audio runs: NOT RUN in public CI" \
+            "Owner instrument parity: NOT PROVEN, release BLOCKED" \
+            > p229-tool/START-HERE.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: P229-Patched-EMU8000-Linux-Preclip-Binary-NO-MEDIA
+          path: p229-tool/
+          if-no-files-found: error
+          retention-days: 7
