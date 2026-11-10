@@ -76,6 +76,13 @@ public:
     // P190 global return mute: no heap or blocking operation.
     void MuteEffectReturns(bool rev, bool cho) noexcept
     { m_box.MuteEffectReturns(rev,cho); }
+    // P226: diagnostics are opt-in and disabled in normal DAW operation.
+    // The captured 32-bit sample is the EMU8000 output BEFORE RenderBlock
+    // clamps it to signed16, not a floating-point reconstruction.
+    void SetRawChipFrameCapture(int32_t* stereo, size_t frames) noexcept
+    { m_box.SetRawFrameCapture(stereo,frames); }
+    size_t RawChipFramesCaptured() const noexcept
+    { return m_box.RawCapturedFrames(); }
 
     // Which driver family is emulated. Changes eight values in the init
     // arrays INIT3/INIT4 - see Awe32Driver.h. Set before PowerOnInit().

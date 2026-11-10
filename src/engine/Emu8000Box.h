@@ -53,6 +53,18 @@ public:
 
     // One frame at 44100 Hz. The first kLatencyFrames calls return silence.
     void RenderFrame(int32_t& l, int32_t& r);
+    // P226: OPTIONAL per-instance raw chip output before int16 saturation.
+    // Caller owns and preallocates capacityFrames*2 int32 samples. Set/clear
+    // only when no render call can overlap; read the count only after rendering.
+    // No allocations, locks, disk writes, or audio-format changes. This is a
+    // native diagnostic tap, not a claim of physical Creative output parity.
+    void SetRawFrameCapture(int32_t* interleavedStereo,
+                            size_t capacityFrames) noexcept {
+        m_rawCapture=interleavedStereo;
+        m_rawCaptureCapacity=interleavedStereo ? capacityFrames : 0u;
+        m_rawCapturedFrames=0u;
+    }
+    size_t RawCapturedFrames() const noexcept { return m_rawCapturedFrames; }
 
     // 125A runtime global FX-return bypass. Keep effect algorithms and
     // internal feedback running, but do not add wet to the 86Box output.
@@ -66,4 +78,7 @@ private:
     bool  m_ready = false;
     bool  m_reverbReturnMuted = false;
     bool  m_chorusReturnMuted = false;
+    int32_t* m_rawCapture = nullptr;  // never owned; default disabled
+    size_t m_rawCaptureCapacity = 0;
+    size_t m_rawCapturedFrames = 0;
 };

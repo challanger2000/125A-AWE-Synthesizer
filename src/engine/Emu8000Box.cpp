@@ -363,6 +363,15 @@ void Emu8000Box::RenderFrame(int32_t& l, int32_t& r)
     }
 
     if (I.overflowed) { l = 0; r = 0; }
+    // P226: preserve EXACT pre-int16 signed32 samples for the offline oracle.
+    // This does not change l/r or the chip's output/FX/clock state. The host
+    // provides capacity off-thread; the audio callback never allocates.
+    if (m_rawCapture && m_rawCapturedFrames < m_rawCaptureCapacity)
+    {
+        const size_t at=m_rawCapturedFrames++ * 2u;
+        m_rawCapture[at]=l;
+        m_rawCapture[at+1u]=r;
+    }
     if (++I.frameInBlock == kBlockFrames)
     {
         FlushBlock();
