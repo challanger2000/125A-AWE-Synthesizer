@@ -1,0 +1,67 @@
+name: P224 Windows VST3 GUI label correction package
+on:
+  push:
+    branches:
+      - fix/p224-remove-86box-ui-label
+    paths:
+      - src/vst3/Factory.cpp
+      - .github/workflows/p224-vst3-build.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  p224-windows-vst3:
+    runs-on: windows-2022
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned Steinberg VST3 SDK
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch v3.8.1_build_84 --recurse-submodules https://github.com/steinbergmedia/vst3sdk.git external/vst3sdk
+          if ($LASTEXITCODE -ne 0) { throw 'Steinberg SDK clone failed' }
+          if ((git -C external/vst3sdk rev-parse HEAD).Trim() -ne '3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96') { throw 'Steinberg SDK hash mismatch' }
+      - name: Configure actual Windows VST3
+        shell: pwsh
+        run: |
+          cmake -S . -B build-p224 -G 'Visual Studio 17 2022' -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_EDITORHOST_TEST=OFF
+          if ($LASTEXITCODE -ne 0) { throw 'CMake configure failed' }
+      - name: Build actual exported Windows VST3
+        shell: pwsh
+        run: |
+          cmake --build build-p224 --config Release --parallel 3 --target 125A_AWE_Synthesizer
+          if ($LASTEXITCODE -ne 0) { throw 'Actual Windows VST3 build failed' }
+      - name: Verify corrected visible status and package exact built VST3
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $source=Get-Content 'src/vst3/Factory.cpp' -Raw
+          if ($source -notmatch 'CORE: EMU8000') { throw 'P224 expected visible core label missing' }
+          if ($source -match 'CORE: 86BOX' -or $source -match '"86Box:') { throw 'Visible 86Box message remains' }
+          $plugin='build-p224/VST3/Release/125A_AWE_Synthesizer.vst3'
+          if (-not (Test-Path $plugin -PathType Container)) { throw 'Built VST3 bundle missing' }
+          $dlls=@(Get-ChildItem $plugin -File -Recurse -Filter '*.vst3')
+          if ($dlls.Count -ne 1) { throw "Expected exactly one built VST3 DLL, got $($dlls.Count)" }
+          $out='qa/P224-Windows-VST3-TEST'
+          New-Item $out -ItemType Directory -Force | Out-Null
+          Copy-Item $plugin (Join-Path $out '125A_AWE_Synthesizer.vst3') -Recurse
+          $hash=(Get-FileHash $dlls[0].FullName -Algorithm SHA256).Hash
+          @(
+            "P224 GUI STATUS LABEL CORRECTION - WINDOWS VST3 TEST BUILD"
+            "SOURCE_SHA=$env:GITHUB_SHA"
+            "VST3_DLL_SHA256=$hash"
+            "CORE_LABEL=EMU8000"
+            "DSP_CHANGES=NONE"
+            "VST3_BUILD=PASS"
+            "GUI_VISUAL_CHECK=NOT_RUN"
+            "ORIGINAL_CREATIVE_AUDIO=NOT_RUN"
+            "DAW_ASIO=NOT_RUN"
+            "RELEASE=NO_GO"
+          ) | Set-Content (Join-Path $out 'START-HERE.txt') -Encoding UTF8
+      - name: Upload Windows VST3 test package
+        uses: actions/upload-artifact@v4
+        with:
+          name: P224-Windows-VST3-EMU8000-Label-TEST
+          path: qa/P224-Windows-VST3-TEST/
+          if-no-files-found: error
+          retention-days: 14
