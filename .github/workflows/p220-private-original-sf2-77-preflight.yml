@@ -16,6 +16,8 @@ jobs:
     timeout-minutes: 6
     steps:
       - uses: actions/checkout@v4
+      - name: Install existing pinned P80/P87 FAT staging test dependency (no guest VM)
+        run: python3 -m pip install --disable-pip-version-check --no-input pyfatfs==1.1.0 'setuptools<81'
       - name: Compile adapted EXISTING original Win95 Creative 86Box capture path; rerun old P80/P87 tests
         shell: bash
         run: |
