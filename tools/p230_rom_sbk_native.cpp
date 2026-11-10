@@ -28,6 +28,11 @@ std::vector<Case> plan(){
       result.push_back({16382,0,note,100,9});
     return result;
 }
+std::vector<Case> pilot(){
+    return {{16383,0,60,100,0},{16383,39,60,100,0},{16383,80,60,100,0},
+            {16383,88,60,100,0},{16383,112,60,100,0},
+            {16382,0,36,100,9},{16382,0,38,100,9},{16382,0,42,100,9}};
+}
 std::string name(const Case& c){
     const auto pad=[](unsigned n,unsigned w){
         auto s=std::to_string(n);return std::string(w>s.size()?w-s.size():0,'0')+s;
@@ -48,7 +53,8 @@ void write_wav(const fs::path& path,const std::vector<int16_t>& pcm){
     require(bool(out),"PCM write failed");
 }
 struct Result {size_t active=0,nonzero=0,rails=0;};
-Result render(const fs::path& rom,const Case& c,std::vector<int16_t>& pcm){
+Result render(const fs::path& rom,const Case& c,std::vector<int16_t>& pcm,
+              const fs::path& trace={}){
     Synth s(kRate);s.Core().SetDriver(Awe32::Driver::Win95);
     std::string err;
     require(s.Core().UseBox86Chip(rom.string(),err),"ROM chip init: "+err);
@@ -64,6 +70,8 @@ Result render(const fs::path& rom,const Case& c,std::vector<int16_t>& pcm){
     s.ControlChange(uint8_t(c.channel),91,0);
     s.ControlChange(uint8_t(c.channel),93,0);
     s.SetGuiControl(10,0.f);s.SetGuiControl(11,0.f);
+    if(!trace.empty())require(s.Core().OpenTrace(trace.string().c_str()),
+                              "failed to start original-register comparison trace");
     s.NoteOn(uint8_t(c.channel),uint8_t(c.note),uint8_t(c.velocity),1);
     Result result;
     for(auto note:s.CaptureHeldNotes())if(note.sequence)++result.active;
@@ -81,6 +89,7 @@ Result render(const fs::path& rom,const Case& c,std::vector<int16_t>& pcm){
         }
         at+=count;
     }
+    if(!trace.empty())s.Core().CloseTrace();
     return result;
 }
 }
@@ -92,9 +101,10 @@ int main(int argc,char** argv){
                    <<','<<c.velocity<<','<<c.channel<<'\n';
         return 0;
     }
-    require(argc==3,"usage: p230_rom_sbk_native awe32.raw PRIVATE_OUTPUT_DIR"
-                    " (SYNTHGM.SBK adjacent to ROM); or --list");
-    const fs::path rom=argv[1],dir=argv[2];
+    const bool pilotMode=argc==4 && std::string(argv[1])=="--pilot";
+    require(argc==3||pilotMode,"usage: p230_rom_sbk_native awe32.raw PRIVATE_OUTPUT_DIR"
+           " or --pilot awe32.raw PRIVATE_OUTPUT_DIR or --list");
+    const fs::path rom=argv[pilotMode?2:1],dir=argv[pilotMode?3:2];
     require(fs::is_regular_file(rom)&&fs::file_size(rom)==1048576,
             "original 1MiB Wave ROM required");
     const auto sbk=AWE125::RomGmBank::AdjacentFile(rom.string());
@@ -103,15 +113,19 @@ int main(int argc,char** argv){
             "valid 1MGM SYNTHGM.SBK next to ROM required: "+err);
     require(!fs::exists(dir),"refuse overwrite existing output");
     require(fs::create_directories(dir),"cannot create output");
+    if(pilotMode)require(fs::create_directories(dir/"traces"),
+                        "cannot create private pilot trace directory");
     std::ofstream manifest(dir/"cases.csv");
     require(bool(manifest),"cannot create manifest");
     manifest<<"file,bank,program,note,velocity,channel,voices,nonzero,rails\n";
     std::array<bool,128> gmAudible{};
     bool drumAudible=false;
     size_t silent=0,missing=0,clipped=0;
-    for(auto c:plan()){
+    const auto cases=pilotMode?pilot():plan();
+    for(auto c:cases){
         std::vector<int16_t> pcm(kFrames*2ull,0);
-        auto r=render(rom,c,pcm);
+        const auto trace=pilotMode?(dir/"traces"/(name(c)+".trace")):fs::path{};
+        auto r=render(rom,c,pcm,trace);
         const auto filename=name(c);
         write_wav(dir/filename,pcm);
         manifest<<filename<<','<<c.bank<<','<<c.program<<','<<c.note
@@ -123,12 +137,13 @@ int main(int argc,char** argv){
     }
     require(bool(manifest),"manifest write failed");
     const auto missingGm=std::count(gmAudible.begin(),gmAudible.end(),false);
-    std::cout<<"P230_REAL_ROM_SBK_NATIVE cases="<<plan().size()
+    std::cout<<(pilotMode?"P231_GM_PILOT_REGISTER_TRACE_NATIVE":"P230_REAL_ROM_SBK_NATIVE")
+             <<" cases="<<cases.size()
              <<" silent_cases="<<silent<<" no_voice_cases="<<missing
              <<" clipped_cases="<<clipped<<" silent_gm_programs="<<missingGm
              <<" any_drums_audible="<<drumAudible
              <<" ORIGINAL_CREATIVE_PCM=NOT_RUN PHYSICAL_CARD=NOT_RUN"
              <<" RELEASE=BLOCKED\n";
-    return missingGm||!drumAudible?3:0;
+    return (pilotMode?(missing||silent):(missingGm||!drumAudible))?3:0;
  }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 2;}
 }
