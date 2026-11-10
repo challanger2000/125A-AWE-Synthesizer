@@ -1,0 +1,238 @@
+{
+  "schema": "P214-genuine-Win95-Creative-instrument-base-registers-locked-v1",
+  "source_run": 42737751948,
+  "source_artifact_id": 13727998644,
+  "source_original_Creative_vxd_sha256": "d343f2428ab3e593c9e42a668cf521b7801e1239792eaf7f2b11b5f179bc7c9a",
+  "source_public_sf2_git_blob": "4768c4a0215abf49c7a2bb51ada5ba3494faa1c5",
+  "source_derived_sf2_sha256": "fd49ab51447262e843d3d547290a12aad2176553f47ec66c30039f3844dcc97c",
+  "source_86box_environment": "original Creative SBAWE.VXD in Windows 95, AWE64 Gold 28MB emulated, note59 velocity100",
+  "physical_Creative_board_present": false,
+  "original_SF2_samples_embedded": false,
+  "note": "Both full DCYSUS register writes transcribed from original P214 Actions evidence JSON before artifact expiry; model predictions not used to generate these source observations.",
+  "cases": [
+    {
+      "program": 100,
+      "instrument_sustain_base": 0,
+      "preset_sustain_delta": 0,
+      "requested_sustain": 0,
+      "creative_dcysus_first_write": "0x7F27",
+      "creative_dcysus_release_write": "0x8027"
+    },
+    {
+      "program": 101,
+      "instrument_sustain_base": 0,
+      "preset_sustain_delta": 1,
+      "requested_sustain": 1,
+      "creative_dcysus_first_write": "0x7F27",
+      "creative_dcysus_release_write": "0x8027"
+    },
+    {
+      "program": 102,
+      "instrument_sustain_base": 0,
+      "preset_sustain_delta": 249,
+      "requested_sustain": 249,
+      "creative_dcysus_first_write": "0x6027",
+      "creative_dcysus_release_write": "0x8027"
+    },
+    {
+      "program": 103,
+      "instrument_sustain_base": 0,
+      "preset_sustain_delta": 250,
+      "requested_sustain": 250,
+      "creative_dcysus_first_write": "0x6027",
+      "creative_dcysus_release_write": "0x8027"
+    },
+    {
+      "program": 104,
+      "instrument_sustain_base": 0,
+      "preset_sustain_delta": 500,
+      "requested_sustain": 500,
+      "creative_dcysus_first_write": "0x4027",
+      "creative_dcysus_release_write": "0x8027"
+    },
+    {
+      "program": 105,
+      "instrument_sustain_base": 0,
+      "preset_sustain_delta": 750,
+      "requested_sustain": 750,
+      "creative_dcysus_first_write": "0x2027",
+      "creative_dcysus_release_write": "0x8027"
+    },
+    {
+      "program": 106,
+      "instrument_sustain_base": 0,
+      "preset_sustain_delta": 1000,
+      "requested_sustain": 1000,
+      "creative_dcysus_first_write": "0x0027",
+      "creative_dcysus_release_write": "0x8027"
+    },
+    {
+      "program": 107,
+      "instrument_sustain_base": 250,
+      "preset_sustain_delta": -250,
+      "requested_sustain": 0,
+      "creative_dcysus_first_write": "0x7F27",
+      "creative_dcysus_release_write": "0x8027"
+    },
+    {
+      "program": 108,
+      "instrument_sustain_base": 250,
+      "preset_sustain_delta": -249,
+      "requested_sustain": 1,
+      "creative_dcysus_first_write": "0x7F27",
+      "creative_dcysus_release_write": "0x8027"
+    },
+    {
+      "program": 109,
+      "instrument_sustain_base": 250,
+      "preset_sustain_delta": -1,
+      "requested_sustain": 249,
+      "creative_dcysus_first_write": "0x6027",
+      "creative_dcysus_release_write": "0x8027"
+    },
+    {
+      "program": 110,
+      "instrument_sustain_base": 250,
+      "preset_sustain_delta": 0,
+      "requested_sustain": 250,
+      "creative_dcysus_first_write": "0x6027",
+      "creative_dcysus_release_write": "0x8027"
+    },
+    {
+      "program": 111,
+      "instrument_sustain_base": 250,
+      "preset_sustain_delta": 250,
+      "requested_sustain": 500,
+      "creative_dcysus_first_write": "0x4127",
+      "creative_dcysus_release_write": "0x8027"
+    },
+    {
+      "program": 112,
+      "instrument_sustain_base": 250,
+      "preset_sustain_delta": 500,
+      "requested_sustain": 750,
+      "creative_dcysus_first_write": "0x2127",
+      "creative_dcysus_release_write": "0x8027"
+    },
+    {
+      "program": 113,
+      "instrument_sustain_base": 250,
+      "preset_sustain_delta": 750,
+      "requested_sustain": 1000,
+      "creative_dcysus_first_write": "0x0127",
+      "creative_dcysus_release_write": "0x8027"
+    },
+    {
+      "program": 114,
+      "instrument_sustain_base": 500,
+      "preset_sustain_delta": -500,
+      "requested_sustain": 0,
+      "creative_dcysus_first_write": "0x7F27",
+      "creative_dcysus_release_write": "0x8027"
+    },
+    {
+      "program": 115,
+      "instrument_sustain_base": 500,
+      "preset_sustain_delta": -499,
+      "requested_sustain": 1,
+      "creative_dcysus_first_write": "0x7F27",
+      "creative_dcysus_release_write": "0x8027"
+    },
+    {
+      "program": 116,
+      "instrument_sustain_base": 500,
+      "preset_sustain_delta": -251,
+      "requested_sustain": 249,
+      "creative_dcysus_first_write": "0x5F27",
+      "creative_dcysus_release_write": "0x8027"
+    },
+    {
+      "program": 117,
+      "instrument_sustain_base": 500,
+      "preset_sustain_delta": -250,
+      "requested_sustain": 250,
+      "creative_dcysus_first_write": "0x5F27",
+      "creative_dcysus_release_write": "0x8027"
+    },
+    {
+      "program": 118,
+      "instrument_sustain_base": 500,
+      "preset_sustain_delta": 0,
+      "requested_sustain": 500,
+      "creative_dcysus_first_write": "0x4027",
+      "creative_dcysus_release_write": "0x8027"
+    },
+    {
+      "program": 119,
+      "instrument_sustain_base": 500,
+      "preset_sustain_delta": 250,
+      "requested_sustain": 750,
+      "creative_dcysus_first_write": "0x2127",
+      "creative_dcysus_release_write": "0x8027"
+    },
+    {
+      "program": 120,
+      "instrument_sustain_base": 500,
+      "preset_sustain_delta": 500,
+      "requested_sustain": 1000,
+      "creative_dcysus_first_write": "0x0127",
+      "creative_dcysus_release_write": "0x8027"
+    },
+    {
+      "program": 121,
+      "instrument_sustain_base": 1000,
+      "preset_sustain_delta": -1000,
+      "requested_sustain": 0,
+      "creative_dcysus_first_write": "0x7F27",
+      "creative_dcysus_release_write": "0x8027"
+    },
+    {
+      "program": 122,
+      "instrument_sustain_base": 1000,
+      "preset_sustain_delta": -999,
+      "requested_sustain": 1,
+      "creative_dcysus_first_write": "0x7E27",
+      "creative_dcysus_release_write": "0x8027"
+    },
+    {
+      "program": 123,
+      "instrument_sustain_base": 1000,
+      "preset_sustain_delta": -751,
+      "requested_sustain": 249,
+      "creative_dcysus_first_write": "0x5F27",
+      "creative_dcysus_release_write": "0x8027"
+    },
+    {
+      "program": 124,
+      "instrument_sustain_base": 1000,
+      "preset_sustain_delta": -750,
+      "requested_sustain": 250,
+      "creative_dcysus_first_write": "0x5F27",
+      "creative_dcysus_release_write": "0x8027"
+    },
+    {
+      "program": 125,
+      "instrument_sustain_base": 1000,
+      "preset_sustain_delta": -500,
+      "requested_sustain": 500,
+      "creative_dcysus_first_write": "0x3F27",
+      "creative_dcysus_release_write": "0x8027"
+    },
+    {
+      "program": 126,
+      "instrument_sustain_base": 1000,
+      "preset_sustain_delta": -250,
+      "requested_sustain": 750,
+      "creative_dcysus_first_write": "0x1F27",
+      "creative_dcysus_release_write": "0x8027"
+    },
+    {
+      "program": 127,
+      "instrument_sustain_base": 1000,
+      "preset_sustain_delta": 0,
+      "requested_sustain": 1000,
+      "creative_dcysus_first_write": "0x0027",
+      "creative_dcysus_release_write": "0x8027"
+    }
+  ]
+}
