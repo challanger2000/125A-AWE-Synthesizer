@@ -20,6 +20,31 @@ static void logline(const char *msg) {
     while(msg[n])++n;
     if(n) { WriteFile(logfd,msg,n,&written,NULL); FlushFileBuffers(logfd); }
 }
+/*
+ * P220: opt-in forensic evidence, compiled ONLY into a disposable guest
+ * helper for real private 77-SF2 acceptance. Original WinMM MIDI routing
+ * is unchanged. Every *successfully delivered* message includes its
+ * original status/data bytes in the guest's local P63LOG.TXT.
+ * The ordinary P63 helper still logs only the historical generic line.
+ * Do not add printf/CRT or ship this guest executable as a product.
+ */
+static void log_delivered_message(DWORD m) {
+#ifdef AWE125_P220_MIDI_EVIDENCE
+    static const char hex[]="0123456789ABCDEF";
+    char line[]="MIDI DELIVERED 0x00 0x00 0x00\r\n";
+    unsigned char a=(unsigned char)(m&255u);
+    unsigned char b=(unsigned char)((m>>8)&255u);
+    unsigned char c=(unsigned char)((m>>16)&255u);
+    line[17]=hex[a>>4];line[18]=hex[a&15u];
+    line[22]=hex[b>>4];line[23]=hex[b&15u];
+    line[27]=hex[c>>4];line[28]=hex[c&15u];
+    logline(line);
+#else
+    (void)m;
+    logline("MIDI DELIVERED\r\n");
+#endif
+}
+
 static DWORD p74_uart_debug_bytes=0;
 static void log_byte(unsigned char b) {
     static const char hex[]="0123456789ABCDEF";
@@ -124,7 +149,7 @@ static void run(void) {
                 logline("ERROR Original Creative midiOutShortMsg\r\n");
                 break;
             }
-            logline("MIDI DELIVERED\r\n");
+            log_delivered_message((DWORD)message);
         }
     }
     midiOutReset(midi);
