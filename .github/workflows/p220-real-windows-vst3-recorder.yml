@@ -1,9 +1,10 @@
-name: P220 real Windows x64 exported VST3 PCM recorder synthetic-only check
+name: P222 controlled FX factorial on real Windows VST3 and clipped-PCM fault detection
 on:
   push:
-    branches: [qa/p220-77-preset-original-sound-acceptance]
+    branches: [qa/p220-77-preset-original-sound-acceptance, qa/p222-controlled-fx-factorial]
     paths:
       - tests/p220_77_vst3_pcm_recorder.cpp
+      - tools/P222-LOCAL-FX-AB.bat
       - tests/p128_processor.cmake
       - .github/workflows/p220-real-windows-vst3-recorder.yml
   workflow_dispatch:
@@ -68,11 +69,59 @@ jobs:
           if ($a -ne -1.25 -or $c -ne 1.75) { throw "P221 float waveform got normalized or clipped: $a / $c" }
           Remove-Item $wav -Force
           Write-Output 'P221 adversarial overrange PASS: -1.25 and +1.75 ORIGINAL VST3-sample amplitudes preserved, no false PCM16 PASS'
+      - name: P222 controlled factorial experiment on exported VST3 (synthetic-only) and all 8 real F32 capture files
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $exe=(Resolve-Path 'build-p220/Release/awe32_p220_77_vst3_pcm_recorder.exe').Path
+          $dll=(Get-ChildItem 'build-p220/VST3/Release/125A_AWE_Synthesizer.vst3' -Filter '*.vst3' -File -Recurse | Select-Object -First 1).FullName
+          $assets=(Get-ChildItem $env:TEMP -Directory -Filter '125a-p128-*' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
+          if (-not $dll -or -not $assets) { throw 'Original exported VST3 or generated P128 synthetic assets missing' }
+          New-Item -ItemType Directory -Force 'qa/p222-synthetic' | Out-Null
+          & $exe $dll (Join-Path $assets 'zero.rom') (Join-Path $assets 'bank.sf2') 'qa/p222-synthetic' fx-factorial-probe 2>&1 |
+            Tee-Object 'qa/p222-fx-matrix-synthetic-log.txt'
+          $status=$LASTEXITCODE
+          if ($status -ne 0 -and $status -ne 1) { throw 'P222 synthetic factorial crashed or argument invalid' }
+          $txt=(Get-Content 'qa/p222-fx-matrix-synthetic-log.txt' -Raw)
+          if ($txt -notmatch 'P222_FX_SUMMARY MODE=SYNTHETIC ATTEMPTED=8 FAIL=\\d+ CREATIVE_DRIVER=NOT_RUN') {
+            throw 'P222 8 synthetic cases missing or incorrectly labelled as original Creative'
+          }
+          $rows=@(Get-Content 'qa/p222-fx-matrix-synthetic-log.txt' | Where-Object { $_ -match '^P222_FX_CASE ' })
+          if ($rows.Count -ne 8) { throw "P222 expected eight independent cases, got $($rows.Count)" }
+          $labels=@('P000-N48V64-DRY','P000-N48V64-REVERB','P000-N48V64-CHORUS','P000-N48V64-BOTH',
+                    'P000-N72V120-DRY','P000-N72V120-REVERB','P000-N72V120-CHORUS','P000-N72V120-BOTH')
+          foreach ($i in 0..7) {
+            $row=$rows[$i]
+            if (-not $row.Contains($labels[$i]+' ') -or
+                -not $row.Contains('CC1=96 CC7=100 CC11=127 CC91=48 CC93=32')) {
+              throw "P222 note/velocity/CC varied unexpectedly at case $i"
+            }
+            $rev=if ($i%4 -eq 1 -or $i%4 -eq 3) {'10000'} else {'0'}
+            $chor=if ($i%4 -ge 2) {'10000'} else {'0'}
+            if (-not $row.Contains("gui_rev=$rev gui_chor=$chor ")) {
+              throw "P222 FX factorial not independently controlled at case $i"
+            }
+            $wav=Join-Path 'qa/p222-synthetic' ($labels[$i]+'-ACTUAL-VST3-F32.wav')
+            if (-not (Test-Path $wav) -or (Get-Item $wav).Length -ne (44+132300*8)) {
+              throw "P222 missing exact 3-second original VST3 32bit float capture: $wav"
+            }
+          }
+          $hashes=@($labels[4..7] | ForEach-Object {
+            (Get-FileHash (Join-Path 'qa/p222-synthetic' ($_+'-ACTUAL-VST3-F32.wav')) -Algorithm SHA256).Hash
+          })
+          if (@($hashes | Select-Object -Unique).Count -le 1) {
+            throw 'P222 genuine VST3 emitted identical samples for dry and all three FX combinations'
+          }
+          & $exe --self-test-positive-rail
+          if ($LASTEXITCODE -ne 0) { throw 'P222 signed16 positive full-scale rail FALSE-PASS mutation' }
+          Write-Output ("P222 real Windows VST3 controlled FX factorial: 8/8 actual process() F32 WAV outputs, independent on/off sends; " +
+                        "clip cases are explicitly FAIL, not audio fidelity. ORIGINAL_CREATIVE_77_NOT_RUN")
       - name: Remove synthetic test WAV data; publish only a test log
         if: always()
         shell: pwsh
         run: |
           if (Test-Path qa/p220-synthetic) { Remove-Item qa/p220-synthetic -Recurse -Force }
+          if (Test-Path qa/p222-synthetic) { Remove-Item qa/p222-synthetic -Recurse -Force }
       - name: Package portable owner-only Windows VST3 77-trial BAT, recorder EXE and exact verified DLL
         shell: pwsh
         run: |
@@ -83,6 +132,7 @@ jobs:
           Copy-Item 'build-p220/Release/awe32_p220_77_vst3_pcm_recorder.exe' (Join-Path $kit '125A-P220-VST3-Recorder.exe')
           Copy-Item 'tools/P220-LOCAL-77-VST3.bat' (Join-Path $kit 'P220-LOCAL-77-VST3.bat')
           Copy-Item 'tools/P221-LOCAL-P000-CLIP-DIAG.bat' (Join-Path $kit 'P221-LOCAL-P000-CLIP-DIAG.bat')
+          Copy-Item 'tools/P222-LOCAL-FX-AB.bat' (Join-Path $kit 'P222-LOCAL-FX-AB.bat')
           Copy-Item 'tools/p220_create_real_vst3_receipts.py' (Join-Path $kit 'p220_create_real_vst3_receipts.py')
           Copy-Item 'tools/p220_77_preset_capture_plan.py' (Join-Path $kit 'p220_77_preset_capture_plan.py')
           Copy-Item 'tools/p80_full_sf2_inventory.py' (Join-Path $kit 'p80_full_sf2_inventory.py')
@@ -98,7 +148,9 @@ jobs:
             "PHYSICAL_CREATIVE_HARDWARE=NOT_RUN"
             "RELEASE=NO_GO"
             "ACTION=Run P220-LOCAL-77-VST3.bat, provide local ROM/SF2 paths; records 154 private WAVs; cannot prove original Creative sound without original captures"
-            "P221=If P000-MODFX clips, optional P221-LOCAL-P000-CLIP-DIAG.bat captures only P000, preserving raw unclipped F32 WAV and exact peak; no original driver claim"
+            "P221=If P000-MODFX clips, optional P221-LOCAL-P000-CLIP-DIAG.bat captures only P000, preserving original host F32 WAV and exact peak; no original driver claim"
+            "P222=Run P222-LOCAL-FX-AB.bat for 16 fixed-note-and-velocity factorial cases: P000/P021 x N48/V64,N72/V120 x dry,reverb,chorus,both. Original host float captured, no normalization. Only GUI FX sends change within each four-run group."
+            "P222_ORIGINAL_CREATIVE_AUDIO=NOT_RUN; P222_PHYSICAL_AWE64=NOT_TESTED; P222_RELEASE=BLOCKED"
           ) | Set-Content (Join-Path $kit 'P220-START-HERE.txt')
           $module=(Get-ChildItem (Join-Path $kit '125A_AWE_Synthesizer.vst3') -Filter '*.vst3' -File -Recurse | Select-Object -First 1).FullName
           if (-not $module) { throw 'VST3 module missing from portable kit' }
@@ -107,14 +159,16 @@ jobs:
             Set-Content (Join-Path $kit 'SHA256SUMS.txt')
       - uses: actions/upload-artifact@v4
         with:
-          name: P220-Portable-Windows-VST3-77-Preset-Private-WAV-Test-Kit-NO-ORIGINAL-MEDIA
+          name: P222-Portable-Windows-VST3-Controlled-FX-AB-Test-Kit-NO-PRIVATE-MEDIA
           path: qa/P220-LOCAL-77-WINDOWS-VST3/
           if-no-files-found: error
           retention-days: 14
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: P220-Windows-Actual-Exported-VST3-PCM-Recorder-SYNTHETIC-ONLY
-          path: qa/p220-probe-output.txt
+          name: P222-Windows-Actual-Exported-VST3-FX-Control-SYNTHETIC-ONLY
+          path: |
+            qa/p220-probe-output.txt
+            qa/p222-fx-matrix-synthetic-log.txt
           if-no-files-found: warn
           retention-days: 7
