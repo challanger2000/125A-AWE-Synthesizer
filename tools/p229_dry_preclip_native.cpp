@@ -86,13 +86,14 @@ struct Metrics{
     int peak=0,first=-1;
     size_t live=0;
     size_t nonzeroFXVoices=0;
+    size_t activeChipVoices=0;
     int32_t rawMin=std::numeric_limits<int32_t>::max();
     int32_t rawMax=std::numeric_limits<int32_t>::min();
     uint64_t rawOverPos=0,rawOverNeg=0,rawClipMismatches=0;
     int firstRawOverflowFrame=-1;
     double rawSquares=0.0,rawSum=0.0;
 };
-Metrics run(const std::string& rom,const std::string& sf2,const Trial& t) {
+Metrics run(const std::string& rom,const std::string& sf2,const Trial& t,bool positiveFxWitness=false) {
     Synth synth(SR);
     synth.Core().SetDriver(Awe32::Driver::Win95);
     synth.SetStrictPresetSelection(true);
@@ -109,10 +110,12 @@ Metrics run(const std::string& rom,const std::string& sf2,const Trial& t) {
     synth.ControlChange(0,11,127);
     synth.ControlChange(0,91,127);
     synth.ControlChange(0,93,127);
-    synth.SetGuiControl(10,0.f);
-    synth.SetGuiControl(11,0.f);
-    check(synth.GuiControl(10)==0.f && synth.GuiControl(11)==0.f,
-          "GUI 0 percent not retained");
+    synth.SetGuiControl(10,positiveFxWitness?1.f:0.f);
+    synth.SetGuiControl(11,positiveFxWitness?1.f:0.f);
+    check((positiveFxWitness && synth.GuiControl(10)==1.f &&
+           synth.GuiControl(11)==1.f) ||
+          (!positiveFxWitness && synth.GuiControl(10)==0.f &&
+           synth.GuiControl(11)==0.f), "GUI FX state not retained");
     // Capture actual chip output before RenderBlock int16 clamp.
     std::vector<int32_t> raw(static_cast<size_t>(FRAMES)*2,0);
     std::vector<int16_t> pcm(static_cast<size_t>(FRAMES)*2,0);
@@ -126,10 +129,12 @@ Metrics run(const std::string& rom,const std::string& sf2,const Trial& t) {
     // don't inspect free voices with stale power-on register data.
     for(int v=0;v<Synth::kMaxVoices;++v){
         if(!synth.Core().IsVoiceActive(v))continue;
+        ++m.activeChipVoices;
         const auto ptrx=synth.Core().ReadDriver(Emu8000::Reg::PTRX,v);
         const auto csl=synth.Core().ReadDriver(Emu8000::Reg::CSL,v);
         if(((ptrx>>8)&255u)||((csl>>24)&255u))++m.nonzeroFXVoices;
     }
+    check(m.activeChipVoices>0,"FX register witness vacuous: no active physical EMU8000 voice");
     // Always measure real chip PCM, never the RIFF inventory or a fake
     // built-in test oscillator. No normalisation, no limiter, no effect FX.
     std::array<int16_t,1024*2> frames{};
@@ -195,7 +200,8 @@ int main(int argc,char** argv) {
               "nonzero_fx_register_voices,nonzero_samples,first_nonzero_frame,"
               "rms_dbfs,peak_dbfs,neg_rails,pos_rails,dc_normalized,"
               "raw_min,raw_max,raw_over_pos,raw_over_neg,raw_first_over_frame,"
-              "raw_peak_dbfs,raw_rms_dbfs,raw_dc,raw_clip_mismatches\n";
+              "raw_peak_dbfs,raw_rms_dbfs,raw_dc,raw_clip_mismatches,"
+              "active_chip_voices\n";
         size_t completed=0,voices_missing=0,fx_leaks=0,allsilent=0;
         for(const auto& t:cases){
             const auto m=run(rom.string(),sf2.string(),t);
@@ -219,7 +225,7 @@ int main(int argc,char** argv) {
                      -static_cast<int64_t>(m.rawMin),m.rawMax))/32768.)<<','
                <<20.*std::log10(std::sqrt(m.rawSquares/double(FRAMES*2))/32768.)<<','
                <<m.rawSum/double(FRAMES*2*32768)<<','
-               <<m.rawClipMismatches<<'\n';
+               <<m.rawClipMismatches<<','<<m.activeChipVoices<<'\n';
             check(bool(out),"result output truncated");
             if(completed%50==0) {
                 out.flush();
@@ -228,6 +234,12 @@ int main(int argc,char** argv) {
                          <<" silent="<<allsilent<<"\n"<<std::flush;
             }
         }
+        const Metrics witness=run(rom.string(),sf2.string(),cases[0],true);
+        check(witness.activeChipVoices>0 && witness.nonzeroFXVoices>0,
+              "positive witness FAIL: nonzero FX registers cannot be observed");
+        std::cout<<"P229_WET_POSITIVE_CONTROL=PASS chipVoices="
+                 <<witness.activeChipVoices<<" nonzeroFxRegisterVoices="
+                 <<witness.nonzeroFXVoices<<"\\n";
         std::cout<<"P229_RAW32_NATIVE_EMU8000 bank="<<bank
                  <<" note_cases="<<completed
                  <<" no_voice="<<voices_missing<<" nonzero_FX_register_cases="<<fx_leaks
