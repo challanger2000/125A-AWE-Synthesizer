@@ -57,6 +57,40 @@ jobs:
         shell: pwsh
         run: |
           if (Test-Path qa/p220-synthetic) { Remove-Item qa/p220-synthetic -Recurse -Force }
+      - name: Package portable owner-only Windows VST3 77-trial BAT, recorder EXE and exact verified DLL
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $kit='qa/P220-LOCAL-77-WINDOWS-VST3'
+          New-Item -ItemType Directory -Force $kit | Out-Null
+          Copy-Item 'build-p220/VST3/Release/125A_AWE_Synthesizer.vst3' (Join-Path $kit '125A_AWE_Synthesizer.vst3') -Recurse
+          Copy-Item 'build-p220/Release/awe32_p220_77_vst3_pcm_recorder.exe' (Join-Path $kit '125A-P220-VST3-Recorder.exe')
+          Copy-Item 'tools/P220-LOCAL-77-VST3.bat' (Join-Path $kit 'P220-LOCAL-77-VST3.bat')
+          Copy-Item 'tools/p220_create_real_vst3_receipts.py' (Join-Path $kit 'p220_create_real_vst3_receipts.py')
+          @(
+            "P220 PORTABLE PRIVATE VST3 WAV TEST KIT (NOT RELEASE)"
+            "SOURCE_SHA=$env:GITHUB_SHA"
+            "WIN64_EXPORT_VST3=REAL"
+            "SYNTHETIC_PROBE=2/2 ACTUAL_EXPORTED_PROCESS_WAV"
+            "OWNER_77_PRESETS=NOT_RUN"
+            "ORIGINAL_CREATIVE_WIN95_77_CAPTURE=NOT_RUN"
+            "PRIVATE_ROM_SF2_AUDIO_NOT_IN_ZIP=true"
+            "STUDIO_ONE_ASIO=NOT_RUN"
+            "PHYSICAL_CREATIVE_HARDWARE=NOT_RUN"
+            "RELEASE=NO_GO"
+            "ACTION=Run P220-LOCAL-77-VST3.bat, provide local ROM/SF2 paths; records 154 private WAVs; cannot prove original Creative sound without original captures"
+          ) | Set-Content (Join-Path $kit 'P220-START-HERE.txt')
+          $module=(Get-ChildItem (Join-Path $kit '125A_AWE_Synthesizer.vst3') -Filter '*.vst3' -File -Recurse | Select-Object -First 1).FullName
+          if (-not $module) { throw 'VST3 module missing from portable kit' }
+          Get-FileHash @($module,(Join-Path $kit '125A-P220-VST3-Recorder.exe')) -Algorithm SHA256 |
+            ForEach-Object { '{0}  {1}' -f $_.Hash,$_.Path } |
+            Set-Content (Join-Path $kit 'SHA256SUMS.txt')
+      - uses: actions/upload-artifact@v4
+        with:
+          name: P220-Portable-Windows-VST3-77-Preset-Private-WAV-Test-Kit-NO-ORIGINAL-MEDIA
+          path: qa/P220-LOCAL-77-WINDOWS-VST3/
+          if-no-files-found: error
+          retention-days: 14
       - uses: actions/upload-artifact@v4
         if: always()
         with:
