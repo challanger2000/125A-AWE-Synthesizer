@@ -26,6 +26,7 @@ from p83_generic_sf2 import stage_private as p83_stage_private
 from p84_export_universal_wav import export as p84_export_universal_wav
 from p87_win95_six_note_capture import capture_six as p87_capture_six
 from p220_win95_77_capture import run as p220_capture_77
+from p230_win95_gm_capture import capture as p230_capture_gm
 
 
 # Scancode set 1 (US Win95 layout), only for the fixed laboratory filename.
@@ -83,6 +84,7 @@ def main() -> None:
     ap.add_argument("--require-full-bank",action="store_true",help="Require exact original 77-preset bank, not the two-preset test fixture")
     ap.add_argument("--p220-plan",type=Path,help="Exact full-77 original-bank private MIDI test contract")
     ap.add_argument("--p220-private-audio-dir",type=Path,help="PRIVATE only: 154 real original Creative Win95 wavetable WAVs; not a GitHub artifact")
+    ap.add_argument("--p230-original-gm-dir",type=Path,help="PRIVATE-only eight original Creative GM/ROM wave WAV pilot")
     ap.add_argument("--private-wav-dir",type=Path,help="Local private export directory for original two bass WAVs")
     ap.add_argument("--sound-card", choices=("sbawe32_pnp","sbawe64_gold"), default="sbawe32_pnp")
     args = ap.parse_args()
@@ -111,6 +113,11 @@ def main() -> None:
         raise ValueError("--private-wav-dir requires --private-sf2")
     if args.require_full_bank and not args.private_sf2:
         raise ValueError("--require-full-bank requires --private-sf2")
+    if args.p230_original_gm_dir:
+        if not args.p64_bridge or args.private_sf2 or args.universal_sf2 or args.sound_card!="sbawe64_gold":
+            raise ValueError("P230 requires original Gold+Win95 P64 bridge without owner SF2")
+        if args.p230_original_gm_dir.resolve()==args.out.resolve() or args.out.resolve() in args.p230_original_gm_dir.resolve().parents:
+            raise ValueError("Original P230 PCM cannot reside within public results path")
     if (args.p220_plan is None)!=(args.p220_private_audio_dir is None):
         raise ValueError("P220 requires BOTH --p220-plan and --p220-private-audio-dir")
     if args.p220_plan is not None and not (
@@ -408,6 +415,10 @@ reconnect = 1
                             args.p87_six_wav_dir,
                             bank_select=args.universal_creative_bank,
                             channel=midi_channel)
+                    if args.p230_original_gm_dir is not None:
+                        report["p230_original_gm_8_capture"]=p230_capture_gm(
+                            conn,send,vm/"p64-midi",trace,report,
+                            args.out/"p230-gm-original-working",args.p230_original_gm_dir)
                     if args.p220_plan is not None:
                         # The SAME already booted original Win95/Creative/86Box
                         # guest, never a new VM or a substitute sampler.
