@@ -163,12 +163,12 @@ def run(oracle, manifest, bank, baseline_dir, candidate_dir):
                     if x["instrument_sustain_base"]!=500)
     control_matches=sum(x["candidate_sustain_high_matches_original"] for x in results
                         if x["instrument_sustain_base"]==500)
-    require(candidate==28 and new_matches==21 and control_matches==7,
-            f"native P215 candidate FAIL original Creative EG1 high bytes: {candidate}/28 ({new_matches}/21 new)")
-    require(baseline < candidate and any(
-            a["native_baseline_dcysus"]!=a["native_candidate_dcysus"] for a in results),
-            "P215 experiment did not detect old implementation's actual faulty voice output")
+    improved = baseline < candidate and any(
+        a["native_baseline_dcysus"]!=a["native_candidate_dcysus"] for a in results)
+    parity = candidate==28 and new_matches==21 and control_matches==7
     return {
+        "candidate_creative_high_byte_parity_pass":parity,
+        "baseline_to_candidate_improvement_detected":improved,
         "schema":"P215-native-86Box-layered-SF2-EG1-Sustain-vs-genuine-Creative-P214-v1",
         "original_creative_run":P214_RUN,
         "original_creative_artifact":P214_ARTIFACT,
@@ -205,6 +205,8 @@ def main():
           "/28 original Creative Win95 Sustain; old baseline",result["baseline_matches_original_28"],
           "/28; all non-DCYSUS voice writes unchanged")
     print("Research only, original driver not reexecuted, physical hardware and DAW NOT RUN")
+    if not result["candidate_creative_high_byte_parity_pass"] or not result["baseline_to_candidate_improvement_detected"]:
+        raise SystemExit("P215 RESEARCH FAIL: candidate does not reproduce all genuine original Creative Sustain high bytes, or did not improve baseline; forensic JSON retained")
 
 
 if __name__=="__main__":
