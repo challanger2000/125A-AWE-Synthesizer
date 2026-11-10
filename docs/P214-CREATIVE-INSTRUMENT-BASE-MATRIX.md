@@ -37,9 +37,13 @@ Independent original-driver notes must exhibit exactly one active voice and the 
 | Malformed provenance/fixture controls | Comparator and generator self-tests | Fail closed on 9 comparator and 4 source-matrix mutations | Test logic added, independent CI preflight required |
 | Physical original AWE64 silicon and Windows Studio One ASIO | Hardware / DAW | Original target physical-audio / VST3 host acceptance | **NOT RUN** |
 
+## CI runner reliability note
+
+Original workflow [#42735984635](https://github.com/challanger2000/125A-Engineering/actions/runs/42735984635) was cancelled due an unusually stalled dependency-installation step; **that first run produced no new original Creative measurements**. The replacement workflow [#42737751948](https://github.com/challanger2000/125A-Engineering/actions/runs/42737751948) generates and verifies the bank before expensive tool installation, uses bounded apt-update/install timeouts and is the only P214 original-driver run relevant to new empirical results. The independent, inexpensive bank preflight [#42736933567](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42736933567) already passed.
+
 ## Links
 
-- [P214 original Creative test workflow](https://github.com/challanger2000/125A-Engineering/actions/runs/42735984635).
+- [P214 original Creative test workflow](https://github.com/challanger2000/125A-Engineering/actions/runs/42737751948).
 - [P213 verified VxD source-derived findings](P213-SUSTAIN-SOURCE-DERIVED-FINDING.md).
 - [P212 genuine original-driver result](https://github.com/challanger2000/125A-Engineering/actions/runs/42727927825).
 
