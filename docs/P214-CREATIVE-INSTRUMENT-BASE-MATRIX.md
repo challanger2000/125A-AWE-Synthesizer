@@ -34,15 +34,23 @@ The P214 comparison evaluates that candidate **after** capturing fresh original 
 
 Independent original-driver notes must exhibit exactly one active voice and the expected modulation envelope write pattern. Seven base-500 original repeat controls must equal P210/P212, or the source observation is rejected. Other programme paths (delay/pitch envelope) must stay equal, preventing silent fallback from being counted as Sustain evidence. The 21 new-base predictions may mismatch; CI must preserve those mismatches and must **not** invent expected Creative values.
 
+## Permanent original-register evidence and adversarial replay
+
+The actual original Creative first-note and release `DCYSUS` register pairs for all 28 P214 tests are preserved in the versioned numeric fixture [`tests/fixtures/p214_genuine_creative_instrument_base.json`](../tests/fixtures/p214_genuine_creative_instrument_base.json). This copy was checked against original run #42737751948, artifact ID `13727998644`, before the temporary Actions ZIP expires. No Creative binary or original SoundFont audio is included.
+
+[**Independent archived-oracle replay #42739958177 – SUCCESS**](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42739958177): all **70/70** actual Creative note-register observations (P210 14/14, P212 28/28, P214 28/28), including **21/21 previously untested instrument-base combinations**, reproduce the source-derived signed integer two-stage arithmetic. **10 deliberately corrupted original register/provenance/matrix controls were rejected.** In the P214 cross-base experiment the naive single-stage formula matches only **16/28** original values; **12/28 cases discriminate** between a single merged conversion and the source-derived two-stage conversion. Those discrepancies are observed Creative register values, not artificially generated expected data.
+
+The 70-case run replays archived numeric evidence; it is **not** a new invocation of the original Creative driver, which was genuinely executed in the linked P210/P212/P214 runs. The formula is supported for the sampled original-driver cases, not mathematically proven for every arbitrary SoundFont or parameter combination. Full VXD generator-29 call path, physical board and Studio One/ASIO remain **NOT RUN**. No production DSP changes.
+
 ## Test adequacy / known boundaries
 
 | Required evidence | Source | Acceptance | Status |
 | --- | --- | --- | --- |
-| Authenticated original SF2 and immutable 44 sample records | `p214_clone_instrument_matrix.py` | SHA-1 source ID, unchanged original tables/audio and rigorous matrix verification | Pending full CI execution |
-| 28 genuine Windows 95 Creative windows | `p48_86box_boot_win95.py` with `--p214-sweep` | Original WinMM/COM1, verified ROM/sample upload/PCM, ordered windows | Pending full CI execution |
-| Genuine Creative register output | `p214_compare_creative_instrument_base.py` | One voice, exact ATKHLD/DCYSUS counts, seven historically observed controls | Pending full CI execution |
-| Formula versus original driver | Same comparator | Independent match count for 21 previously untested bases, no self-fulfilling oracle | Pending full CI execution |
-| Malformed provenance/fixture controls | Comparator and generator self-tests | Fail closed on 9 comparator and 4 source-matrix mutations | Test logic added, independent CI preflight required |
+| Authenticated original SF2 and immutable 44 sample records | `p214_clone_instrument_matrix.py` | SHA-1 source ID, unchanged original tables/audio and rigorous matrix verification | **PASS – authenticated Win95 test #42737751948** |
+| 28 genuine Windows 95 Creative windows | `p48_86box_boot_win95.py` with `--p214-sweep` | Original WinMM/COM1, verified ROM/sample upload/PCM, ordered windows | **PASS – authenticated Win95 test #42737751948** |
+| Genuine Creative register output | `p214_compare_creative_instrument_base.py` | One voice, exact ATKHLD/DCYSUS counts, seven historically observed controls | **PASS – authenticated Win95 test #42737751948** |
+| Formula versus original driver | Same comparator | Independent match count for 21 previously untested bases, no self-fulfilling oracle | **PASS – authenticated Win95 test #42737751948** |
+| Malformed provenance/fixture controls | Comparator and generator self-tests | Fail closed on 9 comparator and 4 source-matrix mutations | **PASS – P214 preflight #42736933567, original Win95 #42737751948; 10 further frozen-oracle mutations detected by #42739958177** |
 | Physical original AWE64 silicon and Windows Studio One ASIO | Hardware / DAW | Original target physical-audio / VST3 host acceptance | **NOT RUN** |
 
 ## CI runner reliability note
