@@ -18,6 +18,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <utility>
 
 namespace {
 constexpr int kRate=44100;
@@ -25,8 +26,8 @@ constexpr int kFrames=kRate*3;
 constexpr int kOff=kRate;
 constexpr int kBlock=1024;
 struct Summary {
-    std::array<int32_t,2> minimum{INT32_MAX,INT32_MAX};
-    std::array<int32_t,2> maximum{INT32_MIN,INT32_MIN};
+    std::array<int32_t,2> minimum{std::numeric_limits<int32_t>::max(),std::numeric_limits<int32_t>::max()};
+    std::array<int32_t,2> maximum{std::numeric_limits<int32_t>::min(),std::numeric_limits<int32_t>::min()};
     std::array<uint64_t,2> below{},above{},negRail{},posRail{};
     std::array<double,2> mean{},rms{};
     int firstOverFrame=-1, firstOverChannel=-1;
@@ -79,6 +80,9 @@ Summary examine(const std::vector<int32_t>& raw,
         }
     }
     for(size_t ch=0;ch<2;++ch) {
+        require(result.negRail[ch]>=result.below[ch] &&
+                result.posRail[ch]>=result.above[ch],
+                "P226 signed16 rails do not cover all true int32 overflows");
         result.mean[ch]/=kFrames;
         result.rms[ch]=std::sqrt(sq[ch]/kFrames);
     }
@@ -143,6 +147,42 @@ Summary one(const std::string& rom,const std::string& sf2,
     require(captured==size_t(kFrames),
             "P226 raw chip tap did NOT capture every output frame");
     const auto summary=examine(raw,pcm);
+    // Adversarial parity against a second REAL native chip render, WITHOUT
+    // enabling the tap. One dry control and one maximally wet layered case.
+    // This proves capture instrumentation itself does not change PCM.
+    if((program==0 && note==48 && stage==0) ||
+       (program==21 && note==72 && stage==3)) {
+        Synth untapped(kRate);
+        untapped.Core().SetDriver(Awe32::Driver::Win95);
+        std::string error;
+        require(untapped.Core().UseBox86Chip(rom,error),
+                "P226 untapped parity EMU8000 init failed");
+        untapped.Core().PowerOnInit();
+        const auto other=AWE125::RomGmBank::LoadBanks(untapped,rom,sf2);
+        require(other.sf2,"P226 untapped parity SF2 could not load");
+        untapped.SelectBrowserBank(0);
+        untapped.ProgramChange(0,static_cast<uint8_t>(program));
+        untapped.SetGuiControl(10,stage==1||stage==3?1.f:0.f);
+        untapped.SetGuiControl(11,stage==2||stage==3?1.f:0.f);
+        untapped.ControlChange(0,7,100);
+        untapped.ControlChange(0,11,127);
+        untapped.ControlChange(0,1,96);
+        untapped.ControlChange(0,91,48);
+        untapped.ControlChange(0,93,32);
+        std::vector<int16_t> unmodified(pcm.size());
+        untapped.NoteOn(0,static_cast<uint8_t>(note),
+                        static_cast<uint8_t>(velocity),1);
+        for(int frame=0;frame<kFrames;) {
+            if(frame==kOff)untapped.NoteOff(0,static_cast<uint8_t>(note));
+            int count=std::min(kBlock,kFrames-frame);
+            if(frame<kOff)count=std::min(count,kOff-frame);
+            untapped.RenderBlock(unmodified.data()+size_t(frame)*2,
+                                 static_cast<uint32_t>(count));
+            frame+=count;
+        }
+        require(pcm==unmodified,
+                "P226 tapping signed32 changed the real EMU8000 PCM");
+    }
     require(summary.checked==size_t(kFrames)*2,
             "P226 raw channel count incorrect");
     static_assert(std::endian::native==std::endian::little,
@@ -162,18 +202,13 @@ int run(const std::vector<std::filesystem::path>& args) {
         std::cout<<"P226_ORACLE_MUTANT=DETECTED and signed32->signed16 rails checked\n";
         return 0;
     }
-    require(args.size()==5 || args.size()==6,
+    require(args.size()==5,
         "Usage: p226-preclip.exe awe32.raw bank.sf2 private-output-dir --full|--synthetic");
-    const bool synthetic=args.size()==6 && args[5]=="--synthetic";
-    require(args.size()==5 || synthetic ||
-            (args.size()==6 && args[5]=="--full"),
-            "P226 invalid mode");
     const auto romPath=args[1],fontPath=args[2],outDir=args[3];
     // args[4] is the mandatory mode: do not silently omit user bank parity.
     const bool full=args[4]=="--full";
     const bool synthMode=args[4]=="--synthetic";
     require(full||synthMode,"P226 explicit --full/--synthetic required");
-    require(!synthetic,"P226 redundant second mode argument");
     require(std::filesystem::is_regular_file(romPath) &&
             std::filesystem::file_size(romPath)==1048576u,
             "P226 expected 1 MiB owner-original/synthetic wave ROM");
@@ -194,7 +229,6 @@ int run(const std::vector<std::filesystem::path>& args) {
     const auto rom=narrow(romPath),sf2=narrow(fontPath);
     int done=0,clipped=0;
     for(int program:{0,21}) {
-        if(synthMode && program==21)continue;
         for(const auto [note,vel]:std::array<std::pair<int,int>,2>{{{48,64},{72,120}}}) {
             for(int stage=0;stage<4;++stage) {
                 const auto label=case_name(program,note,vel,stage);
@@ -231,7 +265,7 @@ int run(const std::vector<std::filesystem::path>& args) {
             }
         }
     }
-    require(done==(synthMode?8:16),"P226 missing factorial cases");
+    require(done==16,"P226 missing factorial cases");
     std::cout<<"P226_MATRIX_DONE="<<done<<" PRECLIP_CASES_OVER="<<clipped
              <<" TYPE=ACTUAL_NATIVE_EMU8000_INT32"
              <<" VST3_PROCESS=NOT_RUN IN_THIS_PROBE"
