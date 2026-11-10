@@ -12,8 +12,8 @@ from pyfatfs.PyFatFS import PyFatFS
 from p38_stage_creative_awe32_win95 import partition_offset
 
 
-def inspect(log: bytes) -> dict:
-    if len(log)>8192:
+def inspect(log: bytes, *, max_bytes: int = 8192) -> dict:
+    if max_bytes not in (8192, 65536) or len(log)>max_bytes:
         raise ValueError("Unexpected Win95 agent diagnostic size")
     txt=log.decode("ascii","replace")
     return {
@@ -28,19 +28,54 @@ def inspect(log: bytes) -> dict:
     }
 
 
+def p220_expected_winmm_delivery(full_report):
+    """Recognize the 154 private 77-SF2 trials without trusting status flags.
+
+    The guest has no per-message payload in the historical P63 log, so this
+    proves only aggregate WinMM delivery count, NOT that 154 individually
+    requested program/CC values were echoed by Windows or selected by ROM.
+    """
+    trial=full_report.get("p220_original_win95_private_capture")
+    if trial is None:return None
+    from p220_77_preset_capture_plan import BANK_SHA
+    if (not isinstance(trial,dict) or
+            trial.get("private_sf2_sha256")!=BANK_SHA or
+            trial.get("all_154_original_pcm_captured") is not True or
+            full_report.get("full_77_preset_soundfont_validated") is not True):
+        raise ValueError("P220 cannot enlarge Win95 log capacity without exact full-bank capture proof")
+    records=trial.get("trials")
+    if not isinstance(records,list) or len(records)!=154:
+        raise ValueError("P220 original Win95 trial count incomplete")
+    programs=[p for p in range(78) if p!=63]
+    expected=[(f"P{p:03d}-{mode}",p) for p in programs for mode in ("DRY","MODFX")]
+    if [(x.get("id"),x.get("program")) for x in records if isinstance(x,dict)]!=expected:
+        raise ValueError("P220 MIDI trial program identity/order incomplete")
+    if not all(x.get("source_audio_pcm_from")=="86box_wavetable_during_real_original_Win95"
+               and x.get("original_emu8000_voice_write_delta",0)>0
+               and x.get("note_off_sent_to_guest") is True
+               for x in records):
+        raise ValueError("P220 missing live Creative 86Box capture/driver register evidence")
+    # Existing P64 mandatory two baselines program0/7 are 4 commands each.
+    # Each P220 scenario: CC0+CC7+CC11+CC1+CC91+CC93+PC+ON+OFF = 9.
+    return 8+154*9
+
+
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument("--disk",type=Path,required=True)
     p.add_argument("--out",type=Path,required=True)
     p.add_argument("--audio-report",type=Path,required=True)
     a=p.parse_args()
+    full_report=json.loads(a.audio_report.read_text(encoding="utf8"))
+    p220_delivery=p220_expected_winmm_delivery(full_report)
     with PyFatFS(str(a.disk),offset=partition_offset(a.disk),read_only=True,preserve_case=False) as fs:
         startup=fs.readbytes("AWE32/P68BOOT.LOG").decode("ascii","replace") if fs.exists("AWE32/P68BOOT.LOG") else ""
         root_marker=fs.readbytes("P71ROOT.TXT").decode("ascii","replace") if fs.exists("P71ROOT.TXT") else ""
         midi_marker=fs.readbytes("P73MIDI.TXT").decode("ascii","replace") if fs.exists("P73MIDI.TXT") else ""
         batch=fs.readbytes("AWE32/P68BAT.LOG").decode("ascii","replace") if fs.exists("AWE32/P68BAT.LOG") else ""
         if fs.exists("AWE32/P63LOG.TXT"):
-            result=inspect(fs.readbytes("AWE32/P63LOG.TXT"))
+            result=inspect(fs.readbytes("AWE32/P63LOG.TXT"),
+                           max_bytes=65536 if p220_delivery is not None else 8192)
         else:
             result={"phase":"P67","agent_launched_in_actual_win95":False,
                     "original_creative_winmm_endpoint_selected":False,
@@ -64,7 +99,11 @@ def main():
     result["p68_win95_autostart_launched"]="P68 WIN95 AUTOSTART LOADED" in startup
     result["p68_win95_createprocess_ok"]="P63 CREATEPROCESS SUCCESS" in startup
     result["p68_launch_diagnostic"]=next((line.strip() for line in startup.splitlines() if line.startswith("P63 CREATEPROCESS")), "P68BOOT.LOG not created")
-    full_report=json.loads(a.audio_report.read_text(encoding="utf8"))
+    result["p220_original_77_expected_midi_deliveries"] = p220_delivery
+    result["p220_original_77_guest_delivery_count_match"] = (
+        p220_delivery is not None and
+        result["creatives_midi_short_messages_delivered"]==p220_delivery)
+    result["p220_winmm_message_values_individually_attested"] = False
     audio=full_report.get("p64_original_win95_midi",{})
     pcm=audio.get("direct_86box_pcm_fifo") or {}
     result["emu8000_pcm_stream_frames"]=pcm.get("frames",0)
@@ -94,7 +133,8 @@ def main():
         and result["p75_both_basses_nonzero"]
         and result["p75_sf2_sample_upload_plausible"]
         and not result["win95_agent_error"]
-        and result["audio_observed"])
+        and result["audio_observed"]
+        and (p220_delivery is None or result["p220_original_77_guest_delivery_count_match"]))
     if not ok:
         raise SystemExit("P67 FAIL: original Win95 Creative WinMM MIDI path is not proven")
 
