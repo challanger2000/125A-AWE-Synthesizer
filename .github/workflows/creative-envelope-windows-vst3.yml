@@ -18,8 +18,8 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           if (!(Test-Path 'src/opl3/IbkBank.h')) { throw 'Historical FM preset header missing' }
-          $cmake=Get-Content src/vst3/CMakeLists.txt -Raw
-          if ($cmake -notmatch '\.\./opl3') { throw 'CMake does not expose existing IbkBank.h to VST3 compilation' }
+          $opl3=Get-Content src/opl3/CMakeLists.txt -Raw
+          if ($opl3 -notmatch 'target_include_directories\(awe32_opl3_midi PUBLIC') { throw 'OPL3 MIDI target does not export existing IbkBank.h include directory' }
       - name: Get pinned Steinberg VST3 SDK and all VSTGUI submodules
         shell: pwsh
         run: |
@@ -31,7 +31,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
-          cmake -S . -B build-env-win -G 'Visual Studio 17 2022' -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_EDITORHOST_TEST=OFF -D125A_BUILD_OPL3_PROBES=OFF
+          cmake -S . -B build-env-win -G 'Visual Studio 17 2022' -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_EDITORHOST_TEST=OFF -D125A_BUILD_OPL3_PROBES=ON
           if ($LASTEXITCODE -ne 0) { throw 'Windows CMake configure failed' }
           cmake --build build-env-win --config Release --parallel 3 --target awe32_p220_77_vst3_pcm_recorder awe32_creative_win95_sf2_envelope_test awe32_p90_sf2_driver_registers_test
           if ($LASTEXITCODE -ne 0) { throw 'Real Windows VST3 host/engine build failed' }
