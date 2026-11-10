@@ -163,9 +163,8 @@ namespace
     }
     int HoldFromMs(double ms)
     {
-        // The driver divides as integers with `idiv`, which **truncates**
-        // towards zero (SBAWE32.DRV: `idiv -92; add 0x7F`), so no rounding.
-        // Example: hold 630 ms -> 630/92 = 6 -> 121 (0x79), not 120.
+        // Keep the older DOS/SF1 integer-truncation rule unchanged.
+        // SBAWE32.DRV: idiv -92; add 0x7F.
         const int steps = static_cast<int>(ms / (Emu8000::kHoldSecPerStep * 1000.0));
         return std::clamp(127 - steps, 0, 127);
     }
@@ -198,6 +197,27 @@ namespace
         const int value = (0x10000 + (q & 0xFFFF)) >> (16 - (q >> 16));
         const int reg = static_cast<int>(Emu8000::kDelayNone) - value;
         return (reg >= 0) ? reg : 0;
+    }
+
+    // Original Creative SBAWE.VXD Win95 SF2 modulation hold calculation:
+    // quantise the incoming SF2 timecents using the VERIFIED VXD delay
+    // converter first, then integer-truncate 725-us delay ticks into
+    // 92-ms hardware hold steps. A direct exp2/timecents->ms conversion
+    // disagrees with the original chip register even if rounded to 92ms.
+    //
+    // Independent original Windows95 driver evidence:
+    // P210 original source-derived sweep 14/14 hold cases;
+    // 2026-11-10 original 28-case (14 Vol sustain + 14 Mod hold) confirms
+    // the three extra off-by-one failures in the old round(ms / 92).
+    // This integer path matches all 14 independently captured hold cases.
+    int HoldFromWin95Sf2Timecents(int64_t timecents)
+    {
+        const int tc=static_cast<int>(
+            std::clamp<int64_t>(timecents,-12000,5484));
+        const int delayTicks=0x8000-DelayFromTimecents(tc);
+        const int steps=static_cast<int>(
+            static_cast<int64_t>(delayTicks)*725/92000);
+        return std::clamp(127-steps,0,127);
     }
 
     // The delay register step is **725 microseconds**. Neither an estimate
@@ -1478,6 +1498,16 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
             return std::clamp(127 - static_cast<int>(std::lround(
                 std::clamp<int>(g.value[op],0,1000) * 127.0 / 1000.0)),0,127);
         }
+        if (op == Gen::SustainVolEnv && drv == Awe32::Driver::Win95)
+        {
+            // Actual Win95 Creative P007 note99 V112: SF2 SustainVolEnv
+            // generator 37 value 960 -> DCYSUSV sustain byte 0x06.
+            // The former 0.75-dB formula clipped to 0x00. Match the
+            // original 127-step, integer-truncated 0..1000 mapping here.
+            // DOS and SF1 retain the existing independent conversions.
+            const int cb = std::clamp<int>(g.value[op], 0, 1000);
+            return 127 + (-127 * cb) / 1000;
+        }
         return std::clamp(127 - static_cast<int>(std::lround(
             std::max<int>(g.value[op],0) / 10.0 / kSustainDbPerStep)),0,127);
     };
@@ -1530,7 +1560,11 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
 
     vp.envval = delayReg(Gen::DelayModEnv);
     vp.atkhld = static_cast<uint16_t>(
-        (HoldFromMs(keyScaled(Gen::HoldModEnv, Gen::KeynumToModEnvHold, false)) << 8)
+        ((!sf1 && drv == Awe32::Driver::Win95
+            ? HoldFromWin95Sf2Timecents(
+                static_cast<int64_t>(g.Get(Gen::HoldModEnv,-12000)) +
+                static_cast<int64_t>(60-key)*g.Get(Gen::KeynumToModEnvHold,0))
+            : HoldFromMs(keyScaled(Gen::HoldModEnv, Gen::KeynumToModEnvHold, false))) << 8)
         | (g.Has(Gen::AttackModEnv)
                ? (!sf1 && drv == Awe32::Driver::Win95)
                    ? AttackRateFromSf2Timecents(g.value[Gen::AttackModEnv])

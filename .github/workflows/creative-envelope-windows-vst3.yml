@@ -1,0 +1,71 @@
+name: Corrected original Creative SF2 envelopes Windows VST3 and actual PCM
+on:
+  push:
+    branches: [fix/creative-win95-original-envelope-parity]
+    paths:
+      - .github/workflows/creative-envelope-windows-vst3.yml
+      - src/engine/SoundFont.cpp
+      - tests/creative_win95_sf2_envelope.cpp
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-vst3-envelope:
+    runs-on: windows-2022
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify VST3 source dependency include contract
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          if (!(Test-Path 'src/opl3/IbkBank.h')) { throw 'Historical FM preset header missing' }
+          $opl3=Get-Content src/opl3/CMakeLists.txt -Raw
+          if ($opl3 -notmatch 'target_include_directories\(awe32_opl3_midi PUBLIC') { throw 'OPL3 MIDI target does not export existing IbkBank.h include directory' }
+      - name: Get pinned Steinberg VST3 SDK and all VSTGUI submodules
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          git clone --depth 1 --branch v3.8.1_build_84 --recurse-submodules https://github.com/steinbergmedia/vst3sdk.git external/vst3sdk
+          if ($LASTEXITCODE -ne 0) { throw 'Steinberg SDK clone failed' }
+          if ((git -C external/vst3sdk rev-parse HEAD).Trim() -ne '3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96') { throw 'Steinberg SDK commit changed' }
+      - name: Build actual Windows x64 VST3 plus original driver envelope regression
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          cmake -S . -B build-env-win -G 'Visual Studio 17 2022' -A x64 -D125A_BUILD_VST3=ON -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_EDITORHOST_TEST=OFF -D125A_BUILD_OPL3_PROBES=ON
+          if ($LASTEXITCODE -ne 0) { throw 'Windows CMake configure failed' }
+          cmake --build build-env-win --config Release --parallel 3 --target awe32_p220_77_vst3_pcm_recorder awe32_creative_win95_sf2_envelope_test awe32_p90_sf2_driver_registers_test
+          if ($LASTEXITCODE -ne 0) { throw 'Real Windows VST3 host/engine build failed' }
+      - name: Validate Win95 SF2 numerical anchor on native Windows C++
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          ctest --test-dir build-env-win -C Release --output-on-failure -R '125A_(creative_win95_original_sf2_envelopes|p90_sf2_driver_registers)'
+          if ($LASTEXITCODE -ne 0) { throw 'Windows native original-Creative envelope regression failed' }
+      - name: Exercise actual EXPORTED Windows VST3 with synthetic SF2 and real WAV recorder
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $exe=(Resolve-Path 'build-env-win/Release/awe32_p220_77_vst3_pcm_recorder.exe').Path
+          $dll=(Get-ChildItem 'build-env-win/VST3/Release/125A_AWE_Synthesizer.vst3' -Filter '*.vst3' -File -Recurse | Select-Object -First 1).FullName
+          $assets=(Get-ChildItem $env:TEMP -Directory -Filter '125a-p128-*' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
+          if (-not $exe -or -not $dll -or -not $assets) { throw 'Missing actual Windows exported VST3 or real synthetic SF2 fixture' }
+          New-Item -ItemType Directory -Force qa/creative-envelope-vst3 | Out-Null
+          & $exe $dll (Join-Path $assets 'zero.rom') (Join-Path $assets 'bank.sf2') 'qa/creative-envelope-vst3' probe 2>&1 | Tee-Object qa/creative-envelope-vst3/host.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Actual exported Windows VST3 AudioProcessor failed' }
+          $log=Get-Content qa/creative-envelope-vst3/host.txt -Raw
+          if ($log -notmatch 'P220_MODE=SYNTHETIC_PROBE_NOT_ORIGINAL_SF2 ACTUAL_VST3_AUDIO_PAIRS=2 ACTUAL_CREATIVE_DRIVER_RUN=NO') { throw 'Fake success or provenance not identified' }
+          foreach($file in @('P000-DRY.wav','P000-MODFX.wav')) {
+            $wav=Join-Path 'qa/creative-envelope-vst3' $file
+            if (!(Test-Path $wav) -or (Get-Item $wav).Length -ne (44+132300*4)) { throw "Missing real exported VST3 PCM: $file" }
+          }
+          python -c "import pathlib,struct; p=pathlib.Path('qa/creative-envelope-vst3/P000-DRY.wav'); b=p.read_bytes(); assert b[:4]==b'RIFF' and b[8:12]==b'WAVE'; assert struct.unpack_from('<HHI',b,20)==(1,2,44100); assert struct.unpack_from('<H',b,34)[0]==16; d=b[44:]; assert len(d)==132300*4; pcm=struct.unpack('<'+str(len(d)//2)+'h',d); assert any(v!=0 for v in pcm); print('REAL_EXPORTED_WIN64_VST3_SYNTHETIC_DRY_PCM16_NONZERO_PASS')"
+          if ($LASTEXITCODE -ne 0) { throw 'Actual output PCM test failed' }
+      - name: Keep only numerical log - no SF2 or ROM assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: Corrected-Creative-SF2-Win64-VST3-Actual-PCM-SYNTHETIC-ONLY
+          path: qa/creative-envelope-vst3/host.txt
+          if-no-files-found: error
+          retention-days: 7

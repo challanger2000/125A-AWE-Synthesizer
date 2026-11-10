@@ -1,0 +1,56 @@
+name: Original Creative Win95 SF2 envelope native regression - research
+on:
+  push:
+    branches: [fix/creative-win95-original-envelope-parity]
+    paths:
+      - .github/workflows/creative-win95-original-envelope.yml
+      - src/engine/SoundFont.cpp
+      - src/engine/CMakeLists.txt
+      - tests/creative_win95_sf2_envelope.cpp
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-original-envelope:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile original chip and exact P007 Win95 Creative register tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build-envelope -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_VST3=OFF \
+            -D125A_BUILD_OPL3_PROBES=OFF
+          cmake --build build-envelope --parallel 4 \
+            --target awe32_creative_win95_sf2_envelope_test \
+                     awe32_p90_sf2_driver_registers_test \
+                     awe32_p228_crossbank_dry_native \
+                     awe32_p229_dry_preclip
+      - name: Execute actual linked SoundFont/EMU8000 register negative controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          ctest --test-dir build-envelope --output-on-failure \
+            -R '125A_(creative_win95_original_sf2_envelopes|p90_sf2_driver_registers|p228_dry_matrix_negative_mutant|p229_preclip_matrix_parser)'
+      - name: Produce native candidate private-banks diagnostic binary only
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p envelope-native
+          cp build-envelope/src/engine/awe32_p229_dry_preclip envelope-native/125A-EMU8000-FIXED-PRIVATE-SF2-DRY-x64
+          sha256sum envelope-native/125A-EMU8000-FIXED-PRIVATE-SF2-DRY-x64 > envelope-native/SHA256.txt
+          printf '%s\n' \
+            "Research native candidate, not VST3" \
+            "No ROM, proprietary SF2, guest image or Creative driver included" \
+            "Real original Win95 hardware match requires private direct-driver rerun" \
+            "Windows VST3 + ASIO/DAW: NOT RUN, RELEASE BLOCKED" \
+            > envelope-native/START-HERE.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CREATIVE-WIN95-SF2-ENVELOPE-NATIVE-RESEARCH-BINARY-NO-OWNER-MEDIA
+          path: envelope-native/
+          if-no-files-found: error
+          retention-days: 7

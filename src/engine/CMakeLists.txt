@@ -202,3 +202,14 @@ target_link_libraries(awe32_p229_dry_preclip PRIVATE awe32_chip_safety)
 target_compile_features(awe32_p229_dry_preclip PRIVATE cxx_std_23)
 add_test(NAME 125A_p229_preclip_matrix_parser
   COMMAND awe32_p229_dry_preclip --self-test)
+
+# Exact original Win95 Creative SBAWE.VXD P007 envelope register regression.
+# No proprietary owner SoundFont or ROM is included in this fixture.
+add_executable(awe32_creative_win95_sf2_envelope_test
+  "${PROJECT_SOURCE_DIR}/tests/creative_win95_sf2_envelope.cpp")
+target_include_directories(awe32_creative_win95_sf2_envelope_test PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}" "${UPSTREAM_SRC}")
+target_link_libraries(awe32_creative_win95_sf2_envelope_test PRIVATE awe32_chip_safety)
+target_compile_features(awe32_creative_win95_sf2_envelope_test PRIVATE cxx_std_23)
+add_test(NAME 125A_creative_win95_original_sf2_envelopes
+  COMMAND awe32_creative_win95_sf2_envelope_test)
