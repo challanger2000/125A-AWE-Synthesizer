@@ -4,7 +4,7 @@
 
 **Branch:** qa/p226-raw32-preclip-factorial, derived from qa/p222-controlled-fx-factorial.
 
-**Status:** Implementation committed. Windows build, actual raw capture and original driver A/B require verified execution results. RELEASE BLOCKED.
+**Status:** Windows-native P226 synthetic test VERIFIED SUCCESS (Actions #42787336357, source 5b3dc35e), 16/16 actual native 32-bit chip captures; owner private-media and original driver A/B still NOT RUN. RELEASE BLOCKED.
 
 ## Measurable question
 
@@ -36,9 +36,9 @@ P226 captures the ACTUAL chip signed32 output in the real native 980-frame FIFO 
 
 | Contract | Evidence required | State |
 |---|---|---|
-| Raw capture truly preclip | All 264600 signed32 samples per case map exactly through clip16 to actual native int16 PCM; raw extrema not limited to signed16 | NOT RUN |
-| No sonic modification by tap | Duplicate native synth rendered with and without capture, dry and strong layered wet case; bit-identical PCM | NOT RUN |
-| Synthetic Windows harness | 16 actual synthetic audible chip renders, fixed CC/FX, negative sentinel, exact lengths and case counts | NOT RUN |
+| Raw capture before clamp (synthetic) | All 264600 native signed32 samples per case map exactly through clip16 to actual native int16 PCM; synthetic samples do not exceed signed16 | PASS: Windows #42787336357; real owner overrange NOT RUN |
+| No sonic modification by tap | Duplicate native synth rendered with and without capture, dry and strong layered wet case; bit-identical PCM | PASS: Windows #42787336357, two synthetic cases |
+| Synthetic Windows harness | 16 actual synthetic audible chip renders, fixed CC/FX, negative sentinel, exact lengths and case counts | PASS: Windows #42787336357 |
 | Genuine original private ROM/SF2 | Run the portable executable locally against original owner assets | NOT RUN |
 | Exact native and VST3 parity | Compare clip(native raw32) to 16 full-length independently recorded P222 VST3 WAVs, no amplitude normalization | NOT RUN |
 | Original Win95 Creative register/audio oracle | Real owner SF2 loaded by original Creative driver, actual sample load evidence and independent original driver WAVs | NOT RUN |
@@ -48,3 +48,13 @@ P226 captures the ACTUAL chip signed32 output in the real native 980-frame FIFO 
 Important limitations: the native probe alone is NOT a real VST3 process tap, and signed32 output may have already saturated earlier inside a filter or FX stage. If the independent per-sample VST3 comparison fails, first investigate timing, preset, master gain and controller discrepancies rather than retuning the DSP. Raw32 clipping overrange alone does not establish physical Creative parity. No arbitrary gain normalization, DC blocker or invented send curve is authorized by this measurement.
 
 **Local use:** Place original awe32.raw and Synth 512 Bank.sf2 alongside the portable BAT (or enter absolute paths). Running the BAT writes 16 private raw32 captures and a CSV to a new local directory and creates a private ZIP. It uploads nothing. Compare against the previously submitted P222 VST3 audio in the analysis environment; Python is not needed on the owner's computer.
+
+
+## Executed evidence (2026-11-10)
+
+- [Windows Actions #42787336357](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42787336357) **SUCCESS**, confirmed through job step results and actual artifacts; source commit 5b3dc35edc5970ef565da02bfe8bef5753b9ed17.
+- 16 actual native EMU8000 captures, 132300 stereo frames per case; all 16 synthetic chip outputs remained inside signed16 range, so this run does NOT reproduce owner's clipping.
+- Full native int32->int16 exact mapping for each of 264600 samples per case, plus two native capture-enabled versus capture-disabled PCM equality checks: **PASS**.
+- C++ signed16-saturation test-only negative mutant and Python comparator mutation: **PASS**.
+- Portable media-free owner test ZIP: GitHub artifact ID 13749838688, Windows EXE SHA256 A25F7FBB81F52622F9B4B519B3C41823468531F29EF65CEA899180ABC32786ED.
+- Real user original ROM and 77-program SF2, the prior 16 P222 VST3 WAV comparisons, original Win95 Creative driver and physical AWE64: **NOT RUN** by this Windows CI.
