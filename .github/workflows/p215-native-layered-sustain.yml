@@ -1,0 +1,110 @@
+name: P215 native layered SF2 EG1 Sustain vs 28 original Creative Win95 registers
+on:
+  push:
+    branches: [research/p215-sf2-eg1-layered-sustain-native]
+    paths:
+      - src/engine/SoundFont.cpp
+      - src/engine/SoundFont.h
+      - src/engine/CMakeLists.txt
+      - tools/p215_native_vs_creative_sustain.py
+      - .github/workflows/p215-native-layered-sustain.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  independent-native-86box-creative-oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Static source and immutable original-driver evidence preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile tools/p214_clone_instrument_matrix.py tools/p215_native_vs_creative_sustain.py
+          python3 tools/p214_clone_instrument_matrix.py --self-test
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          q=json.loads(Path("tests/fixtures/p214_genuine_creative_instrument_base.json").read_text())
+          assert q["source_run"]==42737751948 and q["source_artifact_id"]==13727998644
+          assert q["source_derived_sf2_sha256"]=="fd49ab51447262e843d3d547290a12aad2176553f47ec66c30039f3844dcc97c"
+          assert len(q["cases"])==28 and [x["program"] for x in q["cases"]]==list(range(100,128))
+          print("P215 source-provenance preflight PASS: exact original P214 28 written register cases")
+          PY
+      - name: Create exact Creative-accepted original-source SoundFont fixture and stage genuine EMU8000 ROM privately
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/p215" p215-evidence
+          curl -fLsS --retry 3 --max-time 90 \
+            https://raw.githubusercontent.com/mrbumpy409/SoundFont-Spec-Test/67c0405ea9/sf_spec_test.sf2 \
+            -o "$RUNNER_TEMP/p215/source.sf2"
+          test "$(git hash-object "$RUNNER_TEMP/p215/source.sf2")" = 4768c4a0215abf49c7a2bb51ada5ba3494faa1c5
+          python3 tools/p214_clone_instrument_matrix.py \
+            --source "$RUNNER_TEMP/p215/source.sf2" \
+            --out "$RUNNER_TEMP/p215/derived.sf2" \
+            --manifest "$RUNNER_TEMP/p215/manifest.json"
+          test "$(sha256sum "$RUNNER_TEMP/p215/derived.sf2" | cut -d' ' -f1)" = fd49ab51447262e843d3d547290a12aad2176553f47ec66c30039f3844dcc97c
+          curl -fLsS --retry 3 --max-time 90 \
+            https://raw.githubusercontent.com/86Box/roms/master/sound/creative/awe32.raw \
+            -o "$RUNNER_TEMP/p215/awe32.raw"
+          test "$(stat -c %s "$RUNNER_TEMP/p215/awe32.raw")" = 1048576
+      - name: Build independently both full native 86Box EMU8000 implementations
+        shell: bash
+        run: |
+          set -euo pipefail
+          for kind in baseline candidate; do
+            flag=OFF
+            if [ "$kind" = candidate ]; then flag=ON; fi
+            cmake -S . -B "$RUNNER_TEMP/p215/build-$kind" -G Ninja \
+              -DCMAKE_BUILD_TYPE=Release -D125A_BUILD_ENGINE_PROBES=ON \
+              -D125A_BUILD_VST3=OFF -D125A_BUILD_OPL3_PROBES=OFF \
+              -DAWE125_P208_SF2_HOLD_SUSTAIN=OFF \
+              -DAWE125_P215_SF2_SUSTAIN_LAYERS="$flag"
+            cmake --build "$RUNNER_TEMP/p215/build-$kind" --parallel 4 \
+              --target awe32_p86_generic_sf2_probe awe32_p90_sf2_driver_registers_test
+            ctest --test-dir "$RUNNER_TEMP/p215/build-$kind" --output-on-failure \
+              -R '^125A_p90_sf2_driver_registers$'
+          done
+      - name: Run actual native 86Box SF2 playback and capture 28 isolated register traces for each variant
+        shell: bash
+        run: |
+          set -euo pipefail
+          programs="$(seq -s, 100 127)"
+          for kind in baseline candidate; do
+            mkdir -p "$RUNNER_TEMP/p215/trace-$kind" "$RUNNER_TEMP/p215/audio-$kind"
+            "$RUNNER_TEMP/p215/build-$kind/src/engine/awe32_p86_generic_sf2_probe" \
+              --rom "$RUNNER_TEMP/p215/awe32.raw" \
+              --sf2 "$RUNNER_TEMP/p215/derived.sf2" \
+              --out "$RUNNER_TEMP/p215/audio-$kind" \
+              --trace-dir "$RUNNER_TEMP/p215/trace-$kind" \
+              --bank 0 --programs "$programs" \
+              --note 59 --velocity 100 --duration-ms 2000
+            for program in $(seq 100 127); do
+              test -s "$RUNNER_TEMP/p215/trace-$kind/B0_P$program""_N59_native-port-write.trace"
+            done
+          done
+      - name: Compare actual native EMU8000 registers independently against frozen original Creative driver observations
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/p215_native_vs_creative_sustain.py \
+            --oracle tests/fixtures/p214_genuine_creative_instrument_base.json \
+            --manifest "$RUNNER_TEMP/p215/manifest.json" \
+            --sf2 "$RUNNER_TEMP/p215/derived.sf2" \
+            --native-baseline-dir "$RUNNER_TEMP/p215/trace-baseline" \
+            --native-candidate-dir "$RUNNER_TEMP/p215/trace-candidate" \
+            --out p215-evidence/P215-original-Creative-28-vs-native-baseline-and-layered-candidate.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: P215-original-Creative-28-vs-genuine-native-86Box-register-results
+          path: p215-evidence/*.json
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Remove external original SoundFont ROM and private PCM/traces
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/p215"
