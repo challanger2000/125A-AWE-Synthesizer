@@ -13,6 +13,7 @@
 #include <limits>
 #include <sstream>
 #include <cmath>
+#include <bit>
 
 namespace {
 std::string utf8_path(const std::filesystem::path& path) {
@@ -40,15 +41,31 @@ void write_wave(const std::filesystem::path& file,const std::vector<int16_t>& pc
     for(auto value:pcm)word(out,static_cast<std::uint16_t>(value),2);
     require(bool(out),"P220 WAV write failed");
 }
-std::string sha_file(const std::filesystem::path& path) {
-    // SHA-256 is independently calculated by the Python receipt creator.
-    // This host never pretends a file timestamp is an asset proof.
-    return utf8_path(path);
+// Preserve unscaled ORIGINAL float data when the VST3 exceeds 0 dBFS.
+ // 16-bit PCM would irreversibly clip and conceal the actual diagnostic.
+void write_float_wave(const std::filesystem::path& file,const std::vector<float>& pcm) {
+    require(!pcm.empty()&&pcm.size()%2==0,"P220 forensic WAV stereo frame count");
+    require(pcm.size()<std::numeric_limits<std::uint32_t>::max()/4,
+            "P220 forensic WAV RIFF size");
+    std::ofstream out(file,std::ios::binary|std::ios::trunc);
+    require(bool(out),"P220 cannot create ORIGINAL-FLOAT forensic WAV");
+    const auto dataBytes=static_cast<std::uint32_t>(pcm.size()*sizeof(float));
+    out.write("RIFF",4);word(out,36u+dataBytes,4);out.write("WAVEfmt ",8);
+    word(out,16,4);word(out,3,2);word(out,2,2);
+    word(out,44100,4);word(out,44100*8,4);word(out,8,2);word(out,32,2);
+    out.write("data",4);word(out,dataBytes,4);
+    for(float v:pcm) {
+        require(std::isfinite(v),"P220 forensic PCM contains nonfinite");
+        word(out,std::bit_cast<std::uint32_t>(v),4);
+    }
+    require(bool(out),"P220 forensic float WAV write failed");
 }
 struct RenderResult {
-    int frames=0,callbacks=0;
-    float peak=0;
+    int frames=0,callbacks=0,overrangeSamples=0,firstOverrangeFrame=-1,
+        firstOverrangeChannel=-1;
+    float peak=0,firstOverrangeValue=0;
     double rms=0;
+    bool valid=false;
 };
 RenderResult render_one(IPluginFactory* factory,const std::string& rom,
                          const std::string& sf2,int program,bool modfx,
@@ -82,6 +99,8 @@ RenderResult render_one(IPluginFactory* factory,const std::string& rom,
     constexpr int framesTotal=44100*3, blockSize=1024;
     std::vector<int16_t> pcm;
     pcm.reserve(framesTotal*2);
+    std::vector<float> originalFloat;
+    originalFloat.reserve(framesTotal*2);
     RenderResult report{};
     double energy=0;
     for(int pos=0;pos<framesTotal;pos+=blockSize) {
@@ -125,10 +144,21 @@ RenderResult render_one(IPluginFactory* factory,const std::string& rom,
                 "P220 actual exported VST3 process failed");
         ++report.callbacks;
         for(int i=0;i<n;++i) {
-            for(float v:{left[i],right[i]}) {
+            const float samples[]={left[i],right[i]};
+            for(int ch=0;ch<2;++ch) {
+                const float v=samples[ch];
                 require(std::isfinite(v),"P220 nonfinite real VST3 output");
                 report.peak=std::max(report.peak,std::abs(v));
+                if(std::abs(v)>=0.99997f) {
+                    ++report.overrangeSamples;
+                    if(report.firstOverrangeFrame<0) {
+                        report.firstOverrangeFrame=pos+i;
+                        report.firstOverrangeChannel=ch;
+                        report.firstOverrangeValue=v;
+                    }
+                }
                 energy+=double(v)*double(v);
+                originalFloat.push_back(v); // exact un-normalized VST3 output
                 const float q=std::clamp(v,-1.f,1.f);
                 pcm.push_back(static_cast<int16_t>(std::lround(q*32767.f)));
             }
@@ -138,11 +168,19 @@ RenderResult render_one(IPluginFactory* factory,const std::string& rom,
     report.rms=std::sqrt(energy/double(pcm.size()));
     require(report.frames==framesTotal&&report.callbacks>0,
             "P220 incomplete actual VST3 audio callback timeline");
-    require(report.peak<0.99997f,
-            "P220 clipping: do not normalize or silently conceal real level errors");
-    require(report.rms>0.00015,
-            "P220 silence in real VST3; fail rather than mark missing sample as PASS");
-    write_wave(target,pcm);
+    report.valid=report.overrangeSamples==0 && report.peak<0.99997f
+                 &&report.rms>0.00015;
+    if(!report.valid) {
+        const auto forensic=target.parent_path()/
+                            (target.stem().string()+"-FAILED-UNCLIPPED-F32.wav");
+        require(!std::filesystem::exists(forensic),
+                "P220 refuses to overwrite existing forensic float WAV");
+        write_float_wave(forensic,originalFloat);
+        // This must NEVER produce the expected 16-bit filename: it is a
+        // failed, out-of-range or silent ORIGINAL float output, not a PASS.
+    } else {
+        write_wave(target,pcm);
+    }
     return report;
 }
 } // namespace
@@ -188,7 +226,7 @@ int wmain(int argc,wchar_t** argv) {
         require(getter!=nullptr,"P220 real VST3 factory export");
         factory=getter();
         require(factory!=nullptr,"P220 VST3 factory null");
-        int tested=0;
+        int tested=0,failed=0,attempts=0;
         for(int p=0;p<=77;++p) {
             if(p==63)continue;
             if(probe&&p!=0)continue; // synthetic **negative-proof only**
@@ -200,6 +238,24 @@ int wmain(int argc,wchar_t** argv) {
                 const auto staleError=std::string("P220 refuses stale/overwritten prior capture ")+name;
                 require(!std::filesystem::exists(dest),staleError.c_str());
                 const auto measurement=render_one(factory,rom,sf2,p,fx,dest);
+                ++attempts;
+                if(!measurement.valid) {
+                    ++failed;
+                    std::cout<<"P220_VST3_AUDIO_FAIL "<<name
+                        <<" program="<<p<<" note="<<(fx?72:48)
+                        <<" velocity="<<(fx?120:64)
+                        <<" fx_gui_send="<<(fx?10000:0)
+                        <<" CC91="<<(fx?48:0)<<" CC93="<<(fx?32:0)
+                        <<" peak="<<std::setprecision(10)<<measurement.peak
+                        <<" rms="<<measurement.rms
+                        <<" overrange_samples="<<measurement.overrangeSamples
+                        <<" first_overrange_frame="<<measurement.firstOverrangeFrame
+                        <<" first_overrange_channel="<<measurement.firstOverrangeChannel
+                        <<" first_overrange_value="<<measurement.firstOverrangeValue
+                        <<" forensic_float_wav="<<name<<"-FAILED-UNCLIPPED-F32.wav"
+                        <<" RESULT=FAIL_NOT_AUDIO_ACCEPTANCE\n"<<std::flush;
+                    continue;
+                }
                 std::cout<<"P220_VST3_PCM "<<name
                          <<" program="<<p<<" note="<<(fx?72:48)
                          <<" velocity="<<(fx?120:64)
@@ -211,7 +267,16 @@ int wmain(int argc,wchar_t** argv) {
                 ++tested;
             }
         }
-        require(tested==(probe?2:154),"P220 missing actual process() trials");
+        require(attempts==(probe?2:154),"P220 missing actual VST3 process() trials");
+        if(failed) {
+            std::cout<<"P220_VST3_SUMMARY ATTEMPTED="<<attempts
+                     <<" PASS_PCM16="<<tested<<" FAILED="<<failed
+                     <<" REASON=REAL_VST3_AUDIO_OVERLOAD_OR_SILENCE"
+                     <<" SONIC_RELEASE=BLOCKED\n"<<std::flush;
+            throw std::runtime_error("P220 independent WAV failures: "+
+                    std::to_string(failed)+"/"+std::to_string(attempts)+
+                    " ; detailed original float diagnostic WAVs saved");
+        }
         std::cout<<"P220_MODE="<<(probe?"SYNTHETIC_PROBE_NOT_ORIGINAL_SF2":
                                       "OWNER_PRIVATE_77_VST3_RECORDINGS_NOT_CREATIVE")
                  <<" ACTUAL_VST3_AUDIO_PAIRS="<<tested
