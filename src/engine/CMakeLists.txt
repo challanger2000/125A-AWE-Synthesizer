@@ -170,3 +170,13 @@ target_include_directories(awe32_p226_rawmix_probe PRIVATE
 target_link_libraries(awe32_p226_rawmix_probe PRIVATE awe32_chip_safety)
 target_compile_features(awe32_p226_rawmix_probe PRIVATE cxx_std_23)
 add_test(NAME 125A_p226_raw_capture_mutant COMMAND awe32_p226_rawmix_probe --self-test)
+
+# P226: reuse synthetic P166 test's fixture generator for full acoustic
+# capture in public CI. Generated original-free ROM and SoundFont only.
+add_executable(awe32_p226_synthetic_fixture
+  "${PROJECT_SOURCE_DIR}/tools/p226_make_synth_fixture.cpp")
+target_include_directories(awe32_p226_synthetic_fixture PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/src/vst3"
+  "${PROJECT_SOURCE_DIR}/src/opl3" "${UPSTREAM_SRC}")
+target_link_libraries(awe32_p226_synthetic_fixture PRIVATE awe32_chip_safety)
+target_compile_features(awe32_p226_synthetic_fixture PRIVATE cxx_std_23)
