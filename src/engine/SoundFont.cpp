@@ -1540,9 +1540,7 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
 
     vp.envvol  = delayReg(Gen::DelayVolEnv);
     vp.atkhldv = static_cast<uint16_t>(
-        ((!sf1 && drv == Awe32::Driver::Win95
-            ? HoldFromWin95Sf2Ms(keyScaled(Gen::HoldVolEnv, Gen::KeynumToVolEnvHold, false))
-            : HoldFromMs(keyScaled(Gen::HoldVolEnv, Gen::KeynumToVolEnvHold, false))) << 8)
+        (HoldFromMs(keyScaled(Gen::HoldVolEnv, Gen::KeynumToVolEnvHold, false)) << 8)
         | (g.Has(Gen::AttackVolEnv)
                ? (!sf1 && drv == Awe32::Driver::Win95)
                    ? AttackRateFromSf2Timecents(g.value[Gen::AttackVolEnv])
