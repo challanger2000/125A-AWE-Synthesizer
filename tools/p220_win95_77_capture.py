@@ -45,7 +45,7 @@ def rows_before(path):
     # CSV row offsets MUST count actual parser rows rather than raw bytes
     # because P89 original_csv validates row range in 0-based data rows.
     with Path(path).open("r",encoding="utf8",errors="replace") as f:
-        return max(-1,sum(1 for _ in f)-2)
+        return max(-1,sum(1 for _ in f)-1)
 
 def run(conn,send,midi_fifo,trace,report,private_sf2,planned,raw_output,private_output):
     cases=validate(private_sf2,planned,report)
@@ -111,7 +111,8 @@ def run(conn,send,midi_fifo,trace,report,private_sf2,planned,raw_output,private_
                     "private original audio copy truncated")
             item={"id":label,"program":p,"note":case["note"],
                   "velocity":case["velocity"],"controllers":case["controllers"],
-                  "note_off_observed":True,
+                  "note_off_observed":"PENDING_GUEST_WINMM_ACK",
+                  "note_off_sent_to_guest":True,
                   "audio_frames":info["frames"],
                   "wav_sha256":hashlib.sha256(dest.read_bytes()).hexdigest(),
                   "creative_program_change_delivered":"PENDING_P67_WINMM_GUEST_LOG",
