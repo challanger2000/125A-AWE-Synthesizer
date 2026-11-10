@@ -51,7 +51,7 @@ jobs:
             $wav=Join-Path 'qa/creative-envelope-vst3' $file
             if (!(Test-Path $wav) -or (Get-Item $wav).Length -ne (44+132300*4)) { throw "Missing real exported VST3 PCM: $file" }
           }
-          python -c "import pathlib,struct; p=pathlib.Path('qa/creative-envelope-vst3/P000-DRY.wav'); d=p.read_bytes()[44:]; assert len(d)==132300*4; samples=struct.unpack('<'+str(len(d)//4)+'f',d); assert any(abs(s)>0.000001 for s in samples); assert all(abs(s)<10 for s in samples); print('REAL_EXPORTED_WIN64_VST3_SYNTHETIC_DRY_NONZERO_PASS')"
+          python -c "import pathlib,struct; p=pathlib.Path('qa/creative-envelope-vst3/P000-DRY.wav'); b=p.read_bytes(); assert b[:4]==b'RIFF' and b[8:12]==b'WAVE'; assert struct.unpack_from('<HHI',b,20)==(1,2,44100); assert struct.unpack_from('<H',b,34)[0]==16; d=b[44:]; assert len(d)==132300*4; pcm=struct.unpack('<'+str(len(d)//2)+'h',d); assert any(v!=0 for v in pcm); print('REAL_EXPORTED_WIN64_VST3_SYNTHETIC_DRY_PCM16_NONZERO_PASS')"
           if ($LASTEXITCODE -ne 0) { throw 'Actual output PCM test failed' }
       - name: Keep only numerical log - no SF2 or ROM assets
         uses: actions/upload-artifact@v4
