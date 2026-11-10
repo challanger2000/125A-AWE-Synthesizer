@@ -3,16 +3,22 @@
 #include <cmath>
 #include <cstdint>
 
-// P190: global user-visible send level (0..1). The original SF2/CC send
-// determines the midpoint curve, but can NEVER override an explicit zero.
-// 0 -> dry (0 on both EMU8000 effect buses); 1 -> hardware send 255.
-// This is not the discrete Creative chorus/reverb PRESET index.
+// P223: the visible send knob controls the *actual eight-bit EMU8000
+// voice-send hardware register* directly. This is a transparent hardware
+// register mapping (0% -> 0, 100% -> 255), not an invented nonlinear
+// enrichment/boost curve tied to the SoundFont patch value.
+//
+// The original Creative SF2/CC91/CC93 send calculation is still performed
+// upstream and preserved in Synth::VoiceAlloc for hardware/driver oracles.
+// The 125A 0%=dry GUI contract explicitly overrides that original send.
+// Consequently this GUI is a user override, NOT a historical Creative driver
+// front-panel control. Original-driver comparisons MUST use captured hardware
+// register values rather than assuming equal GUI percentages imply parity.
 namespace AWE125::FxSendLevel {
-inline std::uint8_t Apply(int sf2AndMidiSend, float amount) noexcept {
+inline std::uint8_t Apply(int /*creativeSend*/, float amount) noexcept {
     if (!std::isfinite(amount) || amount <= 0.f) return 0;
     const double x = std::clamp(static_cast<double>(amount), 0., 1.);
-    const double base = std::clamp(static_cast<double>(sf2AndMidiSend), 0., 255.);
-    const double send = x * (base + (255. - base) * x);
-    return static_cast<std::uint8_t>(std::clamp(std::lround(send),0L,255L));
+    return static_cast<std::uint8_t>(
+        std::clamp(std::lround(255.0 * x), 0L, 255L));
 }
 }
