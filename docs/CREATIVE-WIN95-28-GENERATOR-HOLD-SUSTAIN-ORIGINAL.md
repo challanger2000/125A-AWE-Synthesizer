@@ -90,13 +90,30 @@ witnesses for the incorrect old 92ms rounding.
   SUCCESS, 4/4 selected CTests; 28 frozen independent real-driver
   input→register vectors all match. This is native C++ parity against
   authenticated original numerical evidence, not fresh driver playback.
-- Full **fresh original Creative Win95 28-note rerun with current corrected
-  chip**: [private workflow #42904061108](https://github.com/challanger2000/125A-Engineering/actions/runs/42904061108),
-  **PENDING** at initial drafting; do not claim it succeeded until job
-  concludes and 28/28 original register observations are read.
+- **Fresh original Creative Win95 28-note rerun with corrected chip:
+  SUCCESS, 28/28 independent original register outcomes matched.**
+  [Original Creative private Actions #42904061108](https://github.com/challanger2000/125A-Engineering/actions/runs/42904061108),
+  archived numeric-only artifact **13803899253**; source-authenticated
+  SF2, full guest WinMM/Creative SBAWE.VXD sample upload and actual
+  isolated 28 MIDI windows compared against corrected native chip.
+  **ZERO mismatches** in the measured VolumeSustain/ModHold register
+  families. This includes prior real failures -2400, -600 and +1200.
+  This does not establish acoustic, mixer-gain or physical silicon parity.
 - Actual exported **Win64 VST3** targeted host PCM after correction:
-  [Windows workflow #42903971457](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42903971457),
-  **PENDING** at initial drafting; no real Studio One / ASIO qualification.
+  [Windows workflow #42903971457](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42903971457)
+  **SUCCESS**; 47 Steinberg SDK tests passed, 2/2 targeted Windows
+  CTests passed and two real hosted synthetic-SF2 PCM16 WAVs emitted;
+  nonzero dry PCM confirmed. No real Studio One / ASIO qualification.
+- **Complete post-correction four-owner-bank native run:** 3,082/3,082
+  actual EMU8000 44.1kHz stereo 2-second note renders across four
+  genuine owner SF2s. Per-bank cases 688/210/1272/912, 0 silent notes,
+  0 missing active chip voices, 0 FX sends with GUI 0, 0 raw32→int16
+  clamp mismatches and four successful wet-FX positive controls.
+  The same 117 dry preclip cases persist (28/5/52/32 by bank);
+  12,332 total signed16 rail values. Prior P229 234 exact
+  note/velocity configurations reproduce all 19 numerical metrics
+  unchanged; this is not proof of PCM sample identity. No proprietary
+  user SoundFont or ROM was uploaded to GitHub.
 - Full owner 77/376 preset original-driver acoustic PCM comparison, physical
   AWE64 hardware comparison, clipping fidelity and Studio One release gates
   remain **NOT RUN / NOT PROVEN**. The previous 117 dry clipping cases
