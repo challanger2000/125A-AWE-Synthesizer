@@ -117,6 +117,11 @@ Summary one(const std::string& rom,const std::string& sf2,
     require(synth.Core().UseBox86Chip(rom,err),
             "P226 EMU8000 chip init failed; original ROM required");
     synth.Core().PowerOnInit();
+    // Same explicitly applied VST3 defaults from AssetState::Data
+    // (Creative Hall 2 = 4, Chorus 3 = 2). The raw tap MUST NOT
+    // accidentally compare a different effect preset or driver state.
+    synth.Core().ApplyHardwareReverbPreset(4u);
+    synth.Core().ApplyHardwareChorusPreset(2u);
     const auto banks=AWE125::RomGmBank::LoadBanks(synth,rom,sf2);
     if(!banks.sf2)throw std::runtime_error("P226 SF2 load: "+banks.sf2Error);
     synth.SelectBrowserBank(0);
@@ -158,6 +163,8 @@ Summary one(const std::string& rom,const std::string& sf2,
         require(untapped.Core().UseBox86Chip(rom,error),
                 "P226 untapped parity EMU8000 init failed");
         untapped.Core().PowerOnInit();
+        untapped.Core().ApplyHardwareReverbPreset(4u);
+        untapped.Core().ApplyHardwareChorusPreset(2u);
         const auto other=AWE125::RomGmBank::LoadBanks(untapped,rom,sf2);
         require(other.sf2,"P226 untapped parity SF2 could not load");
         untapped.SelectBrowserBank(0);
