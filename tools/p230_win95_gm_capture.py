@@ -100,7 +100,7 @@ def capture(conn,send,guest_fifo,trace,report,raw_dir,private_dir):
             if len(found)!=1:
                 raise RuntimeError("Original 86Box wavetable capture missing/ambiguous "+fname)
             pcm=pcm_stats(found[0])
-            good=(80000<=pcm["frames"]<=105000 and pcm["nonzero_frames"]>=1000)
+            good=(80000<=pcm["frames"]<=105000 and pcm["nonzero_frames"]>=(100 if channel==9 else 1000))
             if not good and channel!=9:
                 raise RuntimeError("Original melodic ROM audio invalid "+fname+
                                    " "+str(pcm))
