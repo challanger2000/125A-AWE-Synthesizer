@@ -87,7 +87,10 @@ if(AWE125_P215_SF2_SUSTAIN_LAYERS)
     message(FATAL_ERROR
       "P215 source-derived Sustain candidate is native-only and excludes P208")
   endif()
-  target_compile_definitions(awe32_chip_safety PRIVATE
+  # Region is a header-defined type passed between the engine and clients.
+  # Propagate the research macro to ALL consumers, preventing a mismatched
+  # Region layout between separately compiled P86/Synth translation units.
+  target_compile_definitions(awe32_chip_safety PUBLIC
     AWE125_P215_SF2_SUSTAIN_LAYERS)
 endif()
 
