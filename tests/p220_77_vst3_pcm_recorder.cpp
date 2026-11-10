@@ -197,8 +197,8 @@ int wmain(int argc,wchar_t** argv) {
                     (p<10?"00":p<100?"0":"")+std::to_string(p)+
                     (fx?"-MODFX":"-DRY");
                 const auto dest=outDir/(name+".wav");
-                require(!std::filesystem::exists(dest),
-                        "P220 refuses stale/overwritten prior capture "+name);
+                const auto staleError=std::string("P220 refuses stale/overwritten prior capture ")+name;
+                require(!std::filesystem::exists(dest),staleError.c_str());
                 const auto measurement=render_one(factory,rom,sf2,p,fx,dest);
                 std::cout<<"P220_VST3_PCM "<<name
                          <<" program="<<p<<" note="<<(fx?72:48)
