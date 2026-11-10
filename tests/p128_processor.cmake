@@ -72,6 +72,19 @@ if(125A_PROCESSOR_SDK_ROOT AND 125A_BUILD_ENGINE_PROBES)
       "$<TARGET_FILE:awe32_p177_ui_first_note_host>"
       "$<TARGET_FILE:125A_AWE_Synthesizer>" "${p128_assets}")
     set_tests_properties(125A_p177_real_gui_load_first_note PROPERTIES TIMEOUT 155)
+    # P220: actual private 77-preset Windows exported VST3 -> independent
+    # 44.1k stereo PCM output. No user SF2/ROM enters public CI.
+    # Built from the existing P171 VST3 host, not a second synthesizer.
+    add_executable(awe32_p220_77_vst3_pcm_recorder
+      "${PROJECT_SOURCE_DIR}/tests/p220_77_vst3_pcm_recorder.cpp"
+      "${125A_PROCESSOR_SDK_ROOT}/public.sdk/source/common/memorystream.cpp")
+    target_include_directories(awe32_p220_77_vst3_pcm_recorder PRIVATE
+      "${125A_PROCESSOR_SDK_ROOT}" "${PROJECT_SOURCE_DIR}/src/vst3")
+    target_link_libraries(awe32_p220_77_vst3_pcm_recorder PRIVATE sdk sdk_hosting ole32)
+    target_compile_features(awe32_p220_77_vst3_pcm_recorder PRIVATE cxx_std_23)
+    add_dependencies(awe32_p220_77_vst3_pcm_recorder 125A_AWE_Synthesizer p128_assets)
+    # Full owner 77 case has no public test because source/ROM are private.
+    # A CI synthetic source is only a negative control, NEVER a release PASS.
     # P178: self-contained PRIVATE Windows asset acceptance EXE for owner BAT.
     # Build/test only with generated synthetic media on public CI.
     add_executable(awe32_p178_owner_media_probe
