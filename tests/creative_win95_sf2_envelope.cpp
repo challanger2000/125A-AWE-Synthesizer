@@ -66,7 +66,7 @@ int main(){
             "SF2 Win95 vol sustain integer conversion within supported bounds");
     }
     // SF2 default: OMITTED sustainVolEnv stays full sustain, 127.
-    Region missing;r.sample=&sample;
+    Region missing;missing.sample=&sample;
     const auto omitted=MakeVoiceParams(bank,missing,99,112,
         Emu8000::kDramOffset+256u,0,Awe32::Driver::Win95);
     ok &= check(((omitted.dcysusv>>8)&0x7f)==127,
