@@ -52,6 +52,22 @@ jobs:
             if (-not (Test-Path $wav) -or (Get-Item $wav).Length -ne (44+132300*4)) { throw "Missing/truncated real VST3 process output: $wav" }
           }
           Write-Output 'P220 SYNTHETIC-ONLY actual exported VST3 process output verified: 2 WAVs, NOT 77 original SoundFont acceptance'
+      - name: P221 deliberate >0 dBFS mutation must preserve ORIGINAL float values beyond PCM16 full scale
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $exe=(Resolve-Path 'build-p220/Release/awe32_p220_77_vst3_pcm_recorder.exe').Path
+          $wav='qa/p221-synthetic-overrange-F32.wav'
+          & $exe --self-test-overload $wav
+          if ($LASTEXITCODE -ne 0) { throw 'P221 overrange negative mutation not detected' }
+          $b=[System.IO.File]::ReadAllBytes((Resolve-Path $wav).Path)
+          if ($b.Length -ne 60) { throw 'P221 forensic float WAV length wrong' }
+          if ([BitConverter]::ToUInt16($b,20) -ne 3 -or [BitConverter]::ToUInt16($b,22) -ne 2) { throw 'P221 WAV not stereo IEEE-FLOAT' }
+          $a=[BitConverter]::ToSingle($b,48)
+          $c=[BitConverter]::ToSingle($b,52)
+          if ($a -ne -1.25 -or $c -ne 1.75) { throw "P221 float waveform got normalized or clipped: $a / $c" }
+          Remove-Item $wav -Force
+          Write-Output 'P221 adversarial overrange PASS: -1.25 and +1.75 ORIGINAL VST3-sample amplitudes preserved, no false PCM16 PASS'
       - name: Remove synthetic test WAV data; publish only a test log
         if: always()
         shell: pwsh
