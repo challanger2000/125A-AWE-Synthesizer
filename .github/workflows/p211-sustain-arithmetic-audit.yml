@@ -1,0 +1,30 @@
+name: P211 test original Creative EG1 sustain scale and ties-to-even hypothesis
+on:
+  push:
+    branches: [research/p206-original-eg1-registers]
+    paths:
+      - 'tools/p211_sustain_driver_oracle.py'
+      - 'tests/fixtures/p211_p210_creative_sustain.json'
+      - '.github/workflows/p211-sustain-arithmetic-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  independent-mathematics:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify archived genuine original driver cases and reject six corrupted sources
+        run: |
+          python3 -m py_compile tools/p211_sustain_driver_oracle.py
+          python3 tools/p211_sustain_driver_oracle.py \
+            --fixture tests/fixtures/p211_p210_creative_sustain.json \
+            --out p211-evidence/P211-original-creative-EG1-sustain-scale-comparison.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: P211-Original-Win95-Creative-Sustain-Model-Numeric-Evidence
+          path: p211-evidence/*.json
+          retention-days: 7
+          if-no-files-found: error

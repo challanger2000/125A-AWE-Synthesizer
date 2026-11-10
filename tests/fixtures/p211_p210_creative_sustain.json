@@ -1,0 +1,81 @@
+{
+  "schema": "P211-P210-genuine-Creative-derived-v1",
+  "source_actions_run": 42722686808,
+  "source_artifact_id": 13722420060,
+  "source_public_original_sf2_git_blob": "4768c4a0215abf49c7a2bb51ada5ba3494faa1c5",
+  "note": 59,
+  "velocity": 100,
+  "original_guest_driver": "SBAWE.VXD in emulated 86Box Win95; physical EMU8000 not present",
+  "cases": [
+    {
+      "program": 100,
+      "sustain_permille": 500,
+      "creative_sustain_high_byte": 64
+    },
+    {
+      "program": 101,
+      "sustain_permille": 500,
+      "creative_sustain_high_byte": 64
+    },
+    {
+      "program": 102,
+      "sustain_permille": 500,
+      "creative_sustain_high_byte": 64
+    },
+    {
+      "program": 103,
+      "sustain_permille": 500,
+      "creative_sustain_high_byte": 64
+    },
+    {
+      "program": 104,
+      "sustain_permille": 500,
+      "creative_sustain_high_byte": 64
+    },
+    {
+      "program": 105,
+      "sustain_permille": 500,
+      "creative_sustain_high_byte": 64
+    },
+    {
+      "program": 106,
+      "sustain_permille": 500,
+      "creative_sustain_high_byte": 64
+    },
+    {
+      "program": 107,
+      "sustain_permille": 500,
+      "creative_sustain_high_byte": 64
+    },
+    {
+      "program": 108,
+      "sustain_permille": 0,
+      "creative_sustain_high_byte": 127
+    },
+    {
+      "program": 109,
+      "sustain_permille": 250,
+      "creative_sustain_high_byte": 95
+    },
+    {
+      "program": 110,
+      "sustain_permille": 499,
+      "creative_sustain_high_byte": 64
+    },
+    {
+      "program": 111,
+      "sustain_permille": 501,
+      "creative_sustain_high_byte": 64
+    },
+    {
+      "program": 112,
+      "sustain_permille": 750,
+      "creative_sustain_high_byte": 33
+    },
+    {
+      "program": 113,
+      "sustain_permille": 1000,
+      "creative_sustain_high_byte": 1
+    }
+  ]
+}
