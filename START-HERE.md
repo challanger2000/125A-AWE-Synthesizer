@@ -1,3 +1,11 @@
+# P214 – Abnahme Original-Creative-Treiber abgeschlossen (10.11.2026)
+
+**VERIFIZIERT:** [P214 echter Original-Creative-Windows-95-Lauf #42737751948 – SUCCESS](https://github.com/challanger2000/125A-Engineering/actions/runs/42737751948). Originales SBAWE.VXD über original WinMM in emuliertem Win95/86Box AWE64 Gold, 28 voneinander getrennte MIDI-/Registerfenster, echte originale DCYSUS-Werte statt generierter Erwartungswerte. Die vorher aus originalen VxD-Instruktionen rekonstruierte zweistufige Sustain-Berechnung stimmt **28/28 Fällen**, davon **21/21 mit neuer Instrument-Basis (0, 250 oder 1000)** und **7/7 Kontrollen mit Basis 500**. Quell-SF2 SHA-1-Git-Blob `4768c4a0215abf49c7a2bb51ada5ba3494faa1c5`; abgeleitete P214-Testbank SHA-256 `fd49ab51447262e843d3d547290a12aad2176553f47ec66c30039f3844dcc97c`. [Vollständiger P214-Nachweis](docs/P214-CREATIVE-INSTRUMENT-BASE-MATRIX.md).
+
+**Wichtig:** P213 und P214 stützen die Zweistufenberechnung für 42+28 beobachtete Original-Creative-Notenfälle, nicht mathematisch für jede beliebige SF2-Bank, nicht nach vollständiger Original-VxD-Aufrufpfad-Rekonstruktion, nicht auf physischer AWE-Hardware oder Studio One/ASIO. **Keine produktive VST3-Änderung, kein Merge, kein FULL AUDIT, keine Releasefreigabe.** Der erste P214-Lauf #42735984635 wurde wegen hängender CI-Installation abgebrochen und darf nicht als Originaltreiber-Messung gelten. Der korrigierte Lauf #42737751948 ist die erfolgreiche Quelle.
+
+---
+
 # P214 – unabhängiger Creative-Instrument-Grundwert-Test (10. Nov. 2026)
 
 **Quelle und Prüfaufbau VOR dem Originaltreibertest geprüft:** [P214-Quellbank/Generator-Preflight #42736933567 SUCCESS](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42736933567). Authentifizierte, bereits vom Originaltreiber akzeptierte öffentliche SoundFont; neuer abgeleiteter SF2 SHA-256 `fd49ab51447262e843d3d547290a12aad2176553f47ec66c30039f3844dcc97c`; sechs ursprüngliche Presets, alle 25 ursprünglichen Instrumente und 44 Sample-Records sowie gesamte originale Audiodaten erhalten; 3 zusätzliche Klon-Instrumente, 28 neue Presets, 4 Sustain-Grundwerte (0/250/500/1000) × 7 Zielwerte (0/1/249/250/500/750/1000), davon 21 bisher nicht gemessene Instrument-/Preset-Kombinationen und 7 Base-500-Originalkontrollen. Achtung: Der Synthesizer-VST3-DSP ist NICHT verändert.
