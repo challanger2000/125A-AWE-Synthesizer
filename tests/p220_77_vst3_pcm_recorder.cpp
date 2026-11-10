@@ -14,6 +14,7 @@
 #include <sstream>
 #include <cmath>
 #include <bit>
+#include <utility>
 
 namespace {
 std::string utf8_path(const std::filesystem::path& path) {
@@ -64,12 +65,20 @@ struct RenderResult {
     int frames=0,callbacks=0,overrangeSamples=0,firstOverrangeFrame=-1,
         firstOverrangeChannel=-1;
     float peak=0,firstOverrangeValue=0;
+    int positiveRailSamples=0,negativeRailSamples=0,exactSigned16GridSamples=0;
     double rms=0;
     bool valid=false;
 };
 void accumulate_original_float(RenderResult& report,double& energy,float v,int frame,int channel) {
     require(std::isfinite(v),"P220 nonfinite real VST3 output");
     report.peak=std::max(report.peak,std::abs(v));
+    // AWE PCM output can already be clipped/quantized to signed 16-bit
+    // before the VST3 32-bit callback. A positive rail of 32767/32768
+    // is not >0.99997 and was a FALSE NEGATIVE in P220.
+    if(v == -1.0f) ++report.negativeRailSamples;
+    if(v == 32767.0f/32768.0f) ++report.positiveRailSamples;
+    if(v*32768.0f == std::round(v*32768.0f))
+        ++report.exactSigned16GridSamples;
     if(std::abs(v)>=0.99997f) {
         ++report.overrangeSamples;
         if(report.firstOverrangeFrame<0) {
@@ -80,9 +89,16 @@ void accumulate_original_float(RenderResult& report,double& energy,float v,int f
     }
     energy+=double(v)*double(v);
 }
+// P222 factorial experiment: MIDI and sample-zone inputs stay fixed across
+// all four FX stages; ONLY the independent absolute GUI send gates change.
+struct P222Config {
+    int note=72,velocity=120,cc1=96,cc91=48,cc93=32;
+    std::uint32_t guiReverb=0,guiChorus=0;
+};
 RenderResult render_one(IPluginFactory* factory,const std::string& rom,
                          const std::string& sf2,int program,bool modfx,
-                         const std::filesystem::path& target) {
+                         const std::filesystem::path& target,
+                         const P222Config* diag=nullptr) {
     AWE125::AssetState::Data wanted{};
     wanted.pathsSpecified=true;wanted.romPath=rom;wanted.sf2Path=sf2;
     wanted.bank=0;wanted.engine=0;
@@ -90,8 +106,8 @@ RenderResult render_one(IPluginFactory* factory,const std::string& rom,
     wanted.channelPrograms.fill(static_cast<std::uint32_t>(program));
     // P190 global sends are independently controllable; turn them on
     // only for the FX trial so CC91/CC93 have a chance to be audible.
-    wanted.controls[10]=modfx?10000:0;
-    wanted.controls[11]=modfx?10000:0;
+    wanted.controls[10]=diag?diag->guiReverb:(modfx?10000:0);
+    wanted.controls[11]=diag?diag->guiChorus:(modfx?10000:0);
     Instance instance(factory,44100,wanted);
     // Verify actual exported component has committed the requested
     // SF2 path, bank, and program. This is not a Creative-ROM proof.
@@ -108,7 +124,8 @@ RenderResult render_one(IPluginFactory* factory,const std::string& rom,
     require(observed.romPath==rom&&observed.sf2Path==sf2&&
             observed.bank==0&&int(observed.program)==program,
             "P220 actual VST3 asset path/bank/program state not acknowledged");
-    const int note=modfx?72:48,velocity=modfx?120:64;
+    const int note=diag?diag->note:(modfx?72:48);
+    const int velocity=diag?diag->velocity:(modfx?120:64);
     constexpr int framesTotal=44100*3, blockSize=1024;
     std::vector<int16_t> pcm;
     pcm.reserve(framesTotal*2);
@@ -135,8 +152,10 @@ RenderResult render_one(IPluginFactory* factory,const std::string& rom,
                 require(queue&&queue->addPoint(0,double(value)/127.,pointIndex)==kResultOk,
                         "P220 CC parameter queue failed");
             };
-            setcc(7,100);setcc(11,127);setcc(1,modfx?96:0);
-            setcc(91,modfx?48:0);setcc(93,modfx?32:0);
+            setcc(7,100);setcc(11,127);
+            setcc(1,diag?diag->cc1:(modfx?96:0));
+            setcc(91,diag?diag->cc91:(modfx?48:0));
+            setcc(93,diag?diag->cc93:(modfx?32:0));
             Event on{};on.type=Event::kNoteOnEvent;on.sampleOffset=0;
             on.noteOn.channel=0;on.noteOn.pitch=static_cast<int16>(note);
             on.noteOn.velocity=float(velocity)/127.f;on.noteOn.noteId=29;
@@ -171,19 +190,27 @@ RenderResult render_one(IPluginFactory* factory,const std::string& rom,
     report.rms=std::sqrt(energy/double(pcm.size()));
     require(report.frames==framesTotal&&report.callbacks>0,
             "P220 incomplete actual VST3 audio callback timeline");
-    report.valid=report.overrangeSamples==0 && report.peak<0.99997f
-                 &&report.rms>0.00015;
-    if(!report.valid) {
+    report.valid=report.overrangeSamples==0 &&
+                 report.positiveRailSamples==0 &&
+                 report.negativeRailSamples==0 &&
+                 report.peak<0.99997f && report.rms>0.00015;
+    if(diag) {
+        // Always keep the ORIGINAL 32-bit host process output, even if it
+        // itself is already saturated to int16 levels by the EMU8000 core.
+        // F32 does NOT "unclip" a prior internal clip.
+        const auto forensic=target.parent_path()/
+                            (target.stem().string()+"-ACTUAL-VST3-F32.wav");
+        require(!std::filesystem::exists(forensic),
+                "P222 refuses to overwrite existing actual host float WAV");
+        write_float_wave(forensic,originalFloat);
+    } else if(!report.valid) {
         const auto forensic=target.parent_path()/
                             (target.stem().string()+"-FAILED-UNCLIPPED-F32.wav");
         require(!std::filesystem::exists(forensic),
                 "P220 refuses to overwrite existing forensic float WAV");
         write_float_wave(forensic,originalFloat);
-        // This must NEVER produce the expected 16-bit filename: it is a
-        // failed, out-of-range or silent ORIGINAL float output, not a PASS.
-    } else {
-        write_wave(target,pcm);
     }
+    if(report.valid)write_wave(target,pcm);
     return report;
 }
 } // namespace
@@ -215,15 +242,18 @@ int wmain(int argc,wchar_t** argv) {
         }
     }
     // 125A-P220-VST3-Recorder.exe 125A_AWE_Synthesizer.vst3
-    //    awe32.raw "Synth 512 Bank.sf2" PRIVATE_OUT_DIR probe|full|owner-p000-diagnostic
+    //    awe32.raw "Synth 512 Bank.sf2" PRIVATE_OUT_DIR
+    //    probe|full|owner-p000-diagnostic|fx-factorial|fx-factorial-probe
     if(argc!=6) {
-        std::cerr<<"P220 usage: recorder.exe DLL ROM SF2 PRIVATE_OUTPUT_DIR probe|full|owner-p000-diagnostic\n";
+        std::cerr<<"P220 usage: recorder.exe DLL ROM SF2 PRIVATE_OUTPUT_DIR probe|full|owner-p000-diagnostic|fx-factorial|fx-factorial-probe\n";
         return 2;
     }
     const bool full=std::wstring(argv[5])==L"full";
     const bool probe=std::wstring(argv[5])==L"probe";
     const bool ownerDiagnostic=std::wstring(argv[5])==L"owner-p000-diagnostic";
-    if(!full&&!probe&&!ownerDiagnostic)return 2;
+    const bool fxFactorial=std::wstring(argv[5])==L"fx-factorial";
+    const bool fxFactorialProbe=std::wstring(argv[5])==L"fx-factorial-probe";
+    if(!full&&!probe&&!ownerDiagnostic&&!fxFactorial&&!fxFactorialProbe)return 2;
     const auto dllPath=std::filesystem::path(argv[1]);
     const auto romPath=std::filesystem::path(argv[2]);
     const auto sf2Path=std::filesystem::path(argv[3]);
@@ -255,6 +285,65 @@ int wmain(int argc,wchar_t** argv) {
         require(getter!=nullptr,"P220 real VST3 factory export");
         factory=getter();
         require(factory!=nullptr,"P220 VST3 factory null");
+        if(fxFactorial || fxFactorialProbe) {
+            const std::array<std::pair<int,int>,2> midiCases{{
+                {48,64},{72,120}
+            }};
+            constexpr const char* fxNames[]={"DRY","REVERB","CHORUS","BOTH"};
+            int attempts=0,failed=0;
+            for(int program:{0,21}) {
+                if(fxFactorialProbe && program!=0)continue;
+                for(const auto& [note,velocity]:midiCases) {
+                    for(int stage=0;stage<4;++stage) {
+                        P222Config cfg{};
+                        cfg.note=note;cfg.velocity=velocity;
+                        cfg.guiReverb=(stage==1||stage==3)?10000:0;
+                        cfg.guiChorus=(stage==2||stage==3)?10000:0;
+                        // All CCs identical in every group; the GUI FX
+                        // gate is the ONLY changed independent variable.
+                        cfg.cc1=96;cfg.cc91=48;cfg.cc93=32;
+                        const auto label=std::string("P")+
+                          (program<10?"00":"0")+std::to_string(program)+
+                          "-N"+std::to_string(note)+"V"+std::to_string(velocity)+
+                          "-"+fxNames[stage];
+                        const auto dest=outDir/(label+".wav");
+                        const auto result=render_one(factory,rom,sf2,program,
+                                                      true,dest,&cfg);
+                        ++attempts;
+                        if(!result.valid) ++failed;
+                        const int samples=2*result.frames;
+                        std::cout<<"P222_FX_CASE "<<label
+                          <<" preset="<<program
+                          <<" note="<<note<<" velocity="<<velocity
+                          <<" CC1=96 CC7=100 CC11=127 CC91=48 CC93=32"
+                          <<" gui_rev="<<cfg.guiReverb
+                          <<" gui_chor="<<cfg.guiChorus
+                          <<" peak="<<std::setprecision(10)<<result.peak
+                          <<" rms="<<result.rms
+                          <<" rail_negative="<<result.negativeRailSamples
+                          <<" rail_positive="<<result.positiveRailSamples
+                          <<" exact_int16_grid="<<result.exactSigned16GridSamples
+                          <<" audio_sample_count="<<samples
+                          <<" first_overrange_frame="<<result.firstOverrangeFrame
+                          <<" first_overrange_channel="<<result.firstOverrangeChannel
+                          <<" callbacks="<<result.callbacks
+                          <<" raw_float_wav="<<label<<"-ACTUAL-VST3-F32.wav"
+                          <<" verdict="<<(result.valid?"AUDIO_NO_RAIL_DETECTED":"AUDIO_CLIP_OR_SILENCE")
+                          <<" sonic_release=BLOCKED\n"<<std::flush;
+                    }
+                }
+            }
+            require(attempts==(fxFactorialProbe?8:16),
+                    "P222 missing factorial cases; expected 8 synthetic or 16 private");
+            std::cout<<"P222_FX_SUMMARY MODE="<<(fxFactorialProbe?"SYNTHETIC":"PRIVATE_SF2")
+                     <<" ATTEMPTED="<<attempts<<" FAIL="<<failed
+                     <<" CREATIVE_DRIVER=NOT_RUN"
+                     <<" AWE64_PHYSICAL=NOT_TESTED"
+                     <<" RELEASE=BLOCKED\n"<<std::flush;
+            // This diagnostic has an honest failed-gate exit even though
+            // all requested AUDIO FLOAT data has been safely retained.
+            ret=failed?1:0;
+        } else {
         int tested=0,failed=0,attempts=0;
         for(int p=0;p<=77;++p) {
             if(p==63)continue;
@@ -313,6 +402,7 @@ int wmain(int argc,wchar_t** argv) {
                  <<" ACTUAL_VST3_AUDIO_PAIRS="<<tested
                  <<" ACTUAL_CREATIVE_DRIVER_RUN=NO\n";
         ret=0;
+        }
     }catch(const std::exception& e) {
         std::cerr<<"P220_VST3_FAIL "<<e.what()<<'\n';
     }
