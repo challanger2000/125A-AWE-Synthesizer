@@ -1,3 +1,11 @@
+## Verifiziertes Original-Creative-Ergebnis (10. November 2026)
+
+[**P214 Originaltreiber GitHub Actions #42737751948: SUCCESS**](https://github.com/challanger2000/125A-Engineering/actions/runs/42737751948), Artefakt `P214-Creative-Win95-EG1-28Program-InstrumentBase-Register-Oracle` (GitHub-Artefakt-ID `13727998644`). Die Originaltreiber-Messung bestand aus 28 isolierten, geordneten Noten-/Registerfenstern für die authentifizierte, ausschließlich ergänzte SF2-Bank. Die kontrollierte zweistufige Sustain-Berechnung traf **28/28** Creative-Registerwerte, davon **21/21** bei neuen Instrument-Grundwerten (0, 250, 1000) und **7/7** historische Kontrollen bei Basis 500. Der GitHub-Test prüfte originale MIDI/WinMM-Übertragung, Audiosignal und die Herkunft der SF2-Daten.
+
+**Grenzen:** Nur die geprüften Sustain-Kombinationen im emulierten 86Box/Win95-Originaltreiber sind belegt; Original-Silizium, unabhängige Hardware-Klangmessung, andere SF2-Generator-Kombinationen, kompletter Aufrufpfad und Studio-One-ASIO-Abnahme sind weiterhin offen. Kein DSP-Patch und keine Releasefreigabe. Der frühere abgebrochene Installationslauf #42735984635 ist kein Messergebnis.
+
+---
+
 # P214 – Independent original Creative instrument-base × preset Sustain experiment
 
 **Research only; source driver verification does not equal release certification.**
