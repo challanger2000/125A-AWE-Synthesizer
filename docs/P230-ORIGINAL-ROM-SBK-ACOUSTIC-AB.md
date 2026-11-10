@@ -45,3 +45,23 @@ This feature produces a **measurement harness**, not a sonic fix. Do not modify 
 ## Actual P230 original-media native audio (2026-11-10)
 
 **397 native original-media renders: PASS** on private [GitHub Actions #42920879055](https://github.com/challanger2000/125A-Engineering/actions/runs/42920879055), numeric artifact `P230-PRIVATE-AUTHENTIC-ROM-SBK-NUMERIC-ONLY` (ID 13812255444). The genuine 1 MiB 86Box Creative Wave-ROM SHA-256 is `4e143b94f758734f594ded78f4e5115635975c16fa37fabeae0baa4938ca710e`; the authentic original Creative 34,832-byte `SYNTHGM.SBK` SHA-256 is `fd2e35a260fef22fe809918dda3c921c6d48d53a29c3515af8a41019ce72d586`, matching previous Creative media run #42784725737. All 397 rendered samples were distinct by PCM SHA-256, with **zero silent cases, zero missing voices and zero signed16 rail/clipping cases**. No raw original ROM/SBK or PCM uploaded. This establishes actual source-data native sound rendering, **not Creative Win95 original-driver acoustic parity**. The original-driver A/B, hardware card and four-SF2 clipping comparison are separate NOT RUN/NO-GO gates.
+
+## Real Win95 SBAWE.VXD against 125A ROM/SBK PCM: first eight-case pilot
+
+A **real original-Creative-via-Win95/86Box source-to-source A/B has now been executed**, as opposed to comparing only 125A native PCM. See [private run #42924338165](https://github.com/challanger2000/125A-Engineering/actions/runs/42924338165), numeric-only artifact `P230-private-original-Win95-Creative-GM8-numeric-only` (ID `13813099665`). Original Creative WinMM/guest driver provenance P67 passed. Five melodic cases returned meaningful WAVs, three channel-10 drum cases did not. The workflow's green infrastructure conclusion **is NOT a pass for eight-case acoustic fidelity**.
+
+| GM MIDI program, note C4 (60), velocity 100 | RMS original-minus-125A dB | Envelope correlation | Status |
+| --- | ---: | ---: | --- |
+| 0 | -5.968 | 0.98735 | level/band discrepancy |
+| 39 | -8.052 | 0.89813 | level/envelope/band discrepancy |
+| 80 | -4.755 | 0.86270 | level/envelope/band discrepancy |
+| 88 | -3.633 | 0.79787 | level/envelope/band discrepancy |
+| 112 | -4.661 | 0.99507 | level/band discrepancy |
+
+All five original signals are lower in level at matched CC7=100, CC11=127 and nominal FX sends zero. Original captures are about 150–160 ms later than native note start; the analyzer compensates. There are also spectral differences. **Do not fix by globally scaling the audio**: the already-implemented 1MGM special rule applies +16 units (= about 6 dB) in `Synth::StartVoice` for ROM samples; a second blanket correction would risk double attenuation and would not address envelope/spectral differences.
+
+Original 86Box/Creative drum captures for notes 36, 38, 42 contained respectively only **13, 4 and 8 nonzero audio frames** out of about 103,000 despite 47 normalized register writes per case, hence are **INVALID reference audio**. The test has been corrected not to issue CC0=0 on channel 10, but the three nearly silent captures persisted. These cannot be interpreted as evidence that 125A's audible ROM drums differ from correct Creative playback. Need inspect exact driver voice register address/attenuation/loop writes and guest bank routing.
+
+**P231 investigation:** [private register-differential run #42926852782](https://github.com/challanger2000/125A-Engineering/actions/runs/42926852782), using the P89 register-oracle logic for all eight cases, with diagnostic evidence attached whether or not the three invalid drum references fail. It does not alter production DSP.
+
+Current gate: **5 measured GM mismatches; 3 invalid original drum references; 0 proven physical AWE64 Gold comparisons; release NO-GO**.
