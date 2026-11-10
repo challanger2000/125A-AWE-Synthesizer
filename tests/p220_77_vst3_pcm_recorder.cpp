@@ -187,14 +187,15 @@ RenderResult render_one(IPluginFactory* factory,const std::string& rom,
 
 int wmain(int argc,wchar_t** argv) {
     // 125A-P220-VST3-Recorder.exe 125A_AWE_Synthesizer.vst3
-    //    awe32.raw "Synth 512 Bank.sf2" PRIVATE_OUT_DIR probe|full
+    //    awe32.raw "Synth 512 Bank.sf2" PRIVATE_OUT_DIR probe|full|owner-p000-diagnostic
     if(argc!=6) {
-        std::cerr<<"P220 usage: recorder.exe DLL ROM SF2 PRIVATE_OUTPUT_DIR probe|full\n";
+        std::cerr<<"P220 usage: recorder.exe DLL ROM SF2 PRIVATE_OUTPUT_DIR probe|full|owner-p000-diagnostic\n";
         return 2;
     }
     const bool full=std::wstring(argv[5])==L"full";
     const bool probe=std::wstring(argv[5])==L"probe";
-    if(!full&&!probe)return 2;
+    const bool ownerDiagnostic=std::wstring(argv[5])==L"owner-p000-diagnostic";
+    if(!full&&!probe&&!ownerDiagnostic)return 2;
     const auto dllPath=std::filesystem::path(argv[1]);
     const auto romPath=std::filesystem::path(argv[2]);
     const auto sf2Path=std::filesystem::path(argv[3]);
@@ -229,7 +230,7 @@ int wmain(int argc,wchar_t** argv) {
         int tested=0,failed=0,attempts=0;
         for(int p=0;p<=77;++p) {
             if(p==63)continue;
-            if(probe&&p!=0)continue; // synthetic **negative-proof only**
+            if((probe||ownerDiagnostic)&&p!=0)continue; // P000 bounded diagnostics, no 77-preset acceptance
             for(bool fx:{false,true}) {
                 const auto name=std::string("P")+
                     (p<10?"00":p<100?"0":"")+std::to_string(p)+
@@ -267,7 +268,8 @@ int wmain(int argc,wchar_t** argv) {
                 ++tested;
             }
         }
-        require(attempts==(probe?2:154),"P220 missing actual VST3 process() trials");
+        require(attempts==((probe||ownerDiagnostic)?2:154),
+                "P220 missing actual VST3 process() trials");
         if(failed) {
             std::cout<<"P220_VST3_SUMMARY ATTEMPTED="<<attempts
                      <<" PASS_PCM16="<<tested<<" FAILED="<<failed
@@ -278,7 +280,8 @@ int wmain(int argc,wchar_t** argv) {
                     " ; detailed original float diagnostic WAVs saved");
         }
         std::cout<<"P220_MODE="<<(probe?"SYNTHETIC_PROBE_NOT_ORIGINAL_SF2":
-                                      "OWNER_PRIVATE_77_VST3_RECORDINGS_NOT_CREATIVE")
+            ownerDiagnostic?"OWNER_P000_DIAGNOSTIC_NOT_FULL_SF2_NOT_ORIGINAL_CREATIVE":
+                            "OWNER_PRIVATE_77_VST3_RECORDINGS_NOT_CREATIVE")
                  <<" ACTUAL_VST3_AUDIO_PAIRS="<<tested
                  <<" ACTUAL_CREATIVE_DRIVER_RUN=NO\n";
         ret=0;
