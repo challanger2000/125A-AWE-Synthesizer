@@ -132,9 +132,11 @@ namespace SoundFont
         // adding their register-unit deltas. The merged GenSet alone loses
         // this quantization boundary. These fields carry the independent
         // original values; they are inert in all product builds.
+#ifdef AWE125_P215_SF2_SUSTAIN_LAYERS
         int sf2ModSustainInstrument = 0;
         int sf2ModSustainPresetOffset = 0;
         bool sf2ModSustainLayerProvenance = false;
+#endif
     };
 
     // A bounded, non-allocating selection result for the audio thread.
