@@ -180,3 +180,14 @@ target_include_directories(awe32_p226_synthetic_fixture PRIVATE
   "${PROJECT_SOURCE_DIR}/src/opl3" "${UPSTREAM_SRC}")
 target_link_libraries(awe32_p226_synthetic_fixture PRIVATE awe32_chip_safety)
 target_compile_features(awe32_p226_synthetic_fixture PRIVATE cxx_std_23)
+
+# P228: offline native 86Box EMU8000 with original OWNER-supplied SF2s.
+# Public CI compiles/self-tests only; no user original bank or ROM in GitHub.
+add_executable(awe32_p228_crossbank_dry_native
+  "${PROJECT_SOURCE_DIR}/tools/p228_batch_dry_native.cpp")
+target_include_directories(awe32_p228_crossbank_dry_native PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/src/vst3" "${UPSTREAM_SRC}")
+target_link_libraries(awe32_p228_crossbank_dry_native PRIVATE awe32_chip_safety)
+target_compile_features(awe32_p228_crossbank_dry_native PRIVATE cxx_std_23)
+add_test(NAME 125A_p228_dry_matrix_negative_mutant
+  COMMAND awe32_p228_crossbank_dry_native --self-test)
