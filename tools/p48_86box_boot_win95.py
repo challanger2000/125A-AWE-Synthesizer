@@ -25,6 +25,7 @@ from p76_export_private_wav import export as p76_export_private_wav
 from p83_generic_sf2 import stage_private as p83_stage_private
 from p84_export_universal_wav import export as p84_export_universal_wav
 from p87_win95_six_note_capture import capture_six as p87_capture_six
+from p227_original_creative_fx_sweep import run as p227_run
 
 
 # Scancode set 1 (US Win95 layout), only for the fixed laboratory filename.
@@ -80,6 +81,8 @@ def main() -> None:
                     help="RESEARCH ONLY: 28-program crossed original instrument / preset Sustain test")
     ap.add_argument("--p217-sweep",action="store_true",
                     help="RESEARCH ONLY: 28 genuine Creative Win95 SF2 Cutoff/Q/EG1/LFO filter cases")
+    ap.add_argument("--p227-fx-sweep",action="store_true",
+                    help="RESEARCH ONLY: 16 original Creative CC91/CC93 send-register and PCM cases on public bank")
     ap.add_argument("--universal-creative-bank",type=int,default=1,help="Win95 Creative user bank (CC0), default 1")
     ap.add_argument("--universal-midi-channel",type=int,choices=range(1,17),help="MIDI channel 1..16; defaults to channel 10 for SF2 bank128, else 1")
     ap.add_argument("--universal-note",type=int,default=60,help="MIDI audition note (drum kits: 36)")
@@ -96,12 +99,21 @@ def main() -> None:
 
     if args.private_sf2 and args.universal_sf2:
         raise ValueError("Specify exactly one original or universal SF2 mode")
-    if sum((args.p210_sweep,args.p212_sweep,args.p214_sweep,args.p217_sweep))>1:
+    if sum((args.p210_sweep,args.p212_sweep,args.p214_sweep,args.p217_sweep,args.p227_fx_sweep))>1:
         raise ValueError("Original Creative sweep modes are mutually exclusive")
     if (args.p210_sweep or args.p212_sweep or args.p214_sweep or args.p217_sweep) and (not args.universal_sf2 or not args.p64_bridge or
                            args.private_sf2 or args.p87_six_wav_dir or
                            args.universal_wav_dir or args.require_full_bank):
         raise ValueError("P210 requires explicit universal research SoundFont and original Win95 MIDI bridge")
+    if args.p227_fx_sweep and (not args.universal_sf2 or not args.p64_bridge or
+            args.private_sf2 or args.private_wav_dir or args.universal_wav_dir or
+            args.p87_six_wav_dir or args.require_full_bank or
+            args.sound_card!="sbawe64_gold" or
+            args.universal_sf2_bank!=0 or
+            args.universal_note!=59 or
+            args.universal_creative_bank!=1 or
+            args.universal_midi_channel not in (None,1)):
+        raise ValueError("P227 requires existing Gold Win95 Creative driver + source public SF2 bank0, note59, CC0 bank1 and MIDI ch1")
     if args.require_full_bank and args.universal_sf2:
         raise ValueError("Full77 fixture is incompatible with universal SF2 mode")
     if args.universal_sf2 and not args.p64_bridge:
@@ -144,6 +156,8 @@ def main() -> None:
                                 args.universal_sf2_bank!=0):
             raise ValueError("P210 requires distinct bank0 programs and note59")
         by_program={item["program"]:item for item in available}
+        if args.p227_fx_sweep and selected!=[0,1]:
+            raise ValueError("P227 exact two original public bank programs 0 and 1 required")
         if any(pr not in by_program for pr in selected):
             raise ValueError("Selected MIDI program absent in SF2 bank %d"%bank)
         audition_presets=[by_program[pr] for pr in selected]
@@ -386,7 +400,11 @@ reconnect = 1
                 report["p57_original_midi_trials"] = []
                 report["p62_wideband_upload_only"] = not args.p64_bridge
                 if args.p64_bridge:
-                    p64_run_trial(conn,args.out,trace,vm/"p64-midi",send,
+                    if args.p227_fx_sweep:
+                        p227_run(conn,args.out,trace,vm/"p64-midi",send,
+                                 p49_screenshot,report,vm/"p65-wavetable")
+                    else:
+                        p64_run_trial(conn,args.out,trace,vm/"p64-midi",send,
                                   p49_key,p49_type_path,p49_screenshot,report,
                                   pcm_fifo=vm/"p65-wavetable",
                                    programs=tuple(item["program"] for item in audition_presets) if generic_report else ((0,7) if private_report else (0,)),
