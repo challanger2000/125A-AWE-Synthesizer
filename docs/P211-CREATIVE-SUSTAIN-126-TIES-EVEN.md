@@ -1,3 +1,7 @@
+> **SUPERSEDED / FALSIFIED by P212 (2026-11-10).** The P211 126-scale ties-to-even model matched the seven distinct P210 Sustain settings but only 22/28 new P212 original-driver cases. Do not merge it. Later hash-verified original `SBAWE.VXD` analysis identified signed integer arithmetic; when the separately converted instrument-500 and additive preset-delta fixture stages are respected, 42/42 independently measured Creative register cases match. See [P213 finding](P213-SUSTAIN-SOURCE-DERIVED-FINDING.md) and [successful P213 audit](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42734359204). General SF2 layer call graph and hardware parity remain unverified; no production DSP change.
+
+---
+
 # P211 – Original Creative EG1 SF2 Sustain: distinct-scale hypothesis
 
 Only 14 genuine Creative Windows 95 register examples from [P210](https://github.com/challanger2000/125A-Engineering/actions/runs/42722686808) are reused; 7 distinct SustainModEnv generator values. Source bank was the authenticated original public SoundFont Spec Test v3.0 with unchanged instrument sample and 14 appended preset-only variants. Native chip and product DSP NOT changed here.
