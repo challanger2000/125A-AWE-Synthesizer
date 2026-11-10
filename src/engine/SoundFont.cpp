@@ -168,20 +168,6 @@ namespace
         const int steps = static_cast<int>(ms / (Emu8000::kHoldSecPerStep * 1000.0));
         return std::clamp(127 - steps, 0, 127);
     }
-    int HoldFromWin95Sf2Ms(double ms)
-    {
-        // The original SBAWE.VXD on the owner's real SF2 P007, note 99,
-        // HoldModEnv=0 timecents (1000 ms), writes ATKHLD high 0x74
-        // (116), whereas the DOS-truncation rule yields 0x75 (117).
-        // Round the SF2 Win95 hold to the nearest 92-ms register step;
-        // keep the DOS/SF1 route independent. This is verified at that
-        // original-driver anchor; a full Win95 hold sweep is still needed
-        // to certify boundary values.
-        if (!(ms > 0.0)) return 0x7F;
-        const double steps = ms / (Emu8000::kHoldSecPerStep * 1000.0);
-        if (steps >= 127.0) return 0;
-        return std::clamp(127 - static_cast<int>(std::lround(steps)), 0, 127);
-    }
     // 1:1 transcription of the branch `C119C116` of `SBAWE.VXD` (object at
     // 0xC1196C74). The jump table of the conversion routine sends exactly
     // four delay generators there: delayModLFO (21), delayVibLFO (23),
@@ -211,6 +197,27 @@ namespace
         const int value = (0x10000 + (q & 0xFFFF)) >> (16 - (q >> 16));
         const int reg = static_cast<int>(Emu8000::kDelayNone) - value;
         return (reg >= 0) ? reg : 0;
+    }
+
+    // Original Creative SBAWE.VXD Win95 SF2 modulation hold calculation:
+    // quantise the incoming SF2 timecents using the VERIFIED VXD delay
+    // converter first, then integer-truncate 725-us delay ticks into
+    // 92-ms hardware hold steps. A direct exp2/timecents->ms conversion
+    // disagrees with the original chip register even if rounded to 92ms.
+    //
+    // Independent original Windows95 driver evidence:
+    // P210 original source-derived sweep 14/14 hold cases;
+    // 2026-11-10 original 28-case (14 Vol sustain + 14 Mod hold) confirms
+    // the three extra off-by-one failures in the old round(ms / 92).
+    // This integer path matches all 14 independently captured hold cases.
+    int HoldFromWin95Sf2Timecents(int64_t timecents)
+    {
+        const int tc=static_cast<int>(
+            std::clamp<int64_t>(timecents,-12000,5484));
+        const int delayTicks=0x8000-DelayFromTimecents(tc);
+        const int steps=static_cast<int>(
+            static_cast<int64_t>(delayTicks)*725/92000);
+        return std::clamp(127-steps,0,127);
     }
 
     // The delay register step is **725 microseconds**. Neither an estimate
@@ -1554,7 +1561,9 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
     vp.envval = delayReg(Gen::DelayModEnv);
     vp.atkhld = static_cast<uint16_t>(
         ((!sf1 && drv == Awe32::Driver::Win95
-            ? HoldFromWin95Sf2Ms(keyScaled(Gen::HoldModEnv, Gen::KeynumToModEnvHold, false))
+            ? HoldFromWin95Sf2Timecents(
+                static_cast<int64_t>(g.Get(Gen::HoldModEnv,-12000)) +
+                static_cast<int64_t>(60-key)*g.Get(Gen::KeynumToModEnvHold,0))
             : HoldFromMs(keyScaled(Gen::HoldModEnv, Gen::KeynumToModEnvHold, false))) << 8)
         | (g.Has(Gen::AttackModEnv)
                ? (!sf1 && drv == Awe32::Driver::Win95)
