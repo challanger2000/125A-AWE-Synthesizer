@@ -30,7 +30,8 @@ jobs:
             --target awe32_creative_win95_vol_sustain_layer_parity \
               awe32_creative_win95_sf2_envelope_test \
               awe32_p90_sf2_driver_registers_test \
-              awe32_p228_crossbank_dry_native
+              awe32_p228_crossbank_dry_native \
+              awe32_p229_dry_preclip
       - name: Verify 28 authentic Creative Win95 volume-sustain instrument/preset values and negative witnesses
         shell: bash
         run: |
@@ -38,6 +39,28 @@ jobs:
           ctest --test-dir build-creative-volume --output-on-failure \
             -R '125A_(creative_win95_original_volume_sustain_layers|creative_win95_original_sf2_envelopes|p90_sf2_driver_registers|p228_dry_matrix_negative_mutant)'
           build-creative-volume/src/engine/awe32_creative_win95_vol_sustain_layer_parity
+      - name: Package only compiled real EMU8000 private-source diagnostic for local owner four-bank regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p bin-for-owner-local
+          cp build-creative-volume/src/engine/awe32_p229_dry_preclip \
+             bin-for-owner-local/125A-EMU8000-ORIGINAL-WIN95-SF2-VOL-LAYER-FIX-LINUX-X64
+          chmod +x bin-for-owner-local/125A-EMU8000-ORIGINAL-WIN95-SF2-VOL-LAYER-FIX-LINUX-X64
+          sha256sum bin-for-owner-local/125A-EMU8000-ORIGINAL-WIN95-SF2-VOL-LAYER-FIX-LINUX-X64 \
+             > bin-for-owner-local/SHA256.txt
+          printf '%s\n' \
+            "Owner media remains PRIVATE and is NOT included in this CI artifact" \
+            "Real original Creative Win95 A/B is run in private Engineering Actions" \
+            "This native Linux binary is NOT the exported Windows VST3" \
+            "No release, no full acoustic or original-hardware parity" \
+            > bin-for-owner-local/START-HERE.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Original-Creative-VolumeSustain-FIXED-Native-EMU8000-MEDIA-FREE
+          path: bin-for-owner-local/
+          if-no-files-found: error
+          retention-days: 7
       - name: Actual user SoundFonts/Original Win95 required separately
         shell: bash
         run: |
