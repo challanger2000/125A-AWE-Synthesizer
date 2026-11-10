@@ -54,7 +54,7 @@ def derive_sweep(raw:bytes, old):
     # original 25 instruments and sample43 one-voice note59 reference.
     variants=tuple((0,500) for _ in VOL_VALUES)+tuple((h,500) for h in HOLD_VALUES)
     bank,cases,target=derive(raw,variants=variants,new_programs=PROGRAMS,
-                            label_prefix="125A-CREATIVE")
+                            label_prefix="ENV")
     require(target["hold_tc"]==0 and target["sustain"]==500,
             "source instrument changed before construction")
     top,fields=split_riff(bank)
