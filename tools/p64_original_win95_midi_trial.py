@@ -98,6 +98,8 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
             send(conn,"audio stop")
         p89_first_end=max(0,len(trace.read_text(encoding="utf8",errors="replace").splitlines())-1) if trace.is_file() else -1
         p75_program7_before=max(0,len(trace.read_text(encoding="utf8",errors="replace").splitlines())-1) if trace.is_file() else 0
+        p89_second_start=-1
+        p89_second_end=-1
         if second_program is not None:
             other_dir.mkdir(exist_ok=True)
             for msg in demo_messages(channel=midi_channel,bank=creative_bank,program=second_program,note=note,velocity=velocity):
@@ -131,8 +133,6 @@ def run_trial(conn, out: Path, trace: Path, fifo_base: Path,
             analysis={"analysis_error":str(exc)}
     pcm_report=pcm_receiver.stop() if pcm_receiver else None
     p75_program_reports=[]
-    p89_second_start=-1
-    p89_second_end=-1
     if second_program is not None:
         second=[p for p in sorted(other_dir.rglob("*.wav")) if "wavetable" in p.name.lower()]
         analysis7=None
