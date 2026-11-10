@@ -992,6 +992,14 @@ static void SelectRegionsImpl(const Bank& self, int bankNum, int program, int ke
                 if (presetGen.Has(Gen::ScaleTuning) &&
                     !r.gen.Has(Gen::ScaleTuning))
                     r.gen.Set(Gen::ScaleTuning, 100);
+#ifdef AWE125_P215_SF2_SUSTAIN_LAYERS
+                // Source-directed 1998 SBAWE.VXD P213/P214 research only.
+                // Capture the ORIGINAL two generator levels before AddFrom
+                // irreversibly erases their separate integer quantization.
+                r.sf2ModSustainInstrument = r.gen.Get(Gen::SustainModEnv, 0);
+                r.sf2ModSustainPresetOffset = presetGen.Get(Gen::SustainModEnv, 0);
+                r.sf2ModSustainLayerProvenance = true;
+#endif
                 r.gen.AddFrom(presetGen);
                 // Saturate to the SF2 generator's legal timecents interval
                 // after offsets are applied; a preset cannot push the
@@ -1451,6 +1459,31 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
         // modulation-envelope percentage as volume centibels.
         if (op == Gen::SustainModEnv)
         {
+#ifdef AWE125_P215_SF2_SUSTAIN_LAYERS
+            if (drv == Awe32::Driver::Win95)
+            {
+                // Recovered from matching original 1998 SBAWE.VXD LE.object4:
+                // IMUL -127; CDQ; IDIV 1000; ADD 127 (signed truncation
+                // toward zero), not lround() or one conversion after merge.
+                // P214 genuine 28-program Win95 Creative register oracle:
+                // 21 new instrument bases and 7 base-500 controls.
+                const auto T = [](int x) {
+                    return 127 + (-127 * x) / 1000;
+                };
+                if (region.sf2ModSustainLayerProvenance)
+                {
+                    const int instrument = std::clamp(
+                        region.sf2ModSustainInstrument,0,1000);
+                    const int offset = std::clamp(
+                        region.sf2ModSustainPresetOffset,-1000,1000);
+                    return std::clamp(T(instrument) + T(offset) - 127,0,127);
+                }
+                // Synthetic direct Region use has no parser-layer
+                // provenance; a single explicitly provided generator
+                // still passes through the genuine signed converter.
+                return std::clamp(T(std::clamp<int>(g.value[op],0,1000)),0,127);
+            }
+#endif
 #ifdef AWE125_P208_SF2_HOLD_SUSTAIN
             // P208 native-only hypothesis from P207 real Win95 driver:
             // truncate SF2 permille*127/1000 instead of rounding.

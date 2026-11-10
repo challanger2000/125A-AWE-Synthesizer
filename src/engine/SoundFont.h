@@ -127,6 +127,14 @@ namespace SoundFont
         // register units and those add up; the sum of the raw SF1 values
         // would be nonsense. -1 means "not computed" (the bank is SF2).
         int sf1AttenUnits = -1;
+        // P215 NATIVE-ONLY: original Creative Win95 converts SF2 EG1
+        // instrument sustain and additive preset sustain separately before
+        // adding their register-unit deltas. The merged GenSet alone loses
+        // this quantization boundary. These fields carry the independent
+        // original values; they are inert in all product builds.
+        int sf2ModSustainInstrument = 0;
+        int sf2ModSustainPresetOffset = 0;
+        bool sf2ModSustainLayerProvenance = false;
     };
 
     // A bounded, non-allocating selection result for the audio thread.

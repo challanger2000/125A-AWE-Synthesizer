@@ -77,6 +77,20 @@ if(AWE125_P203_SLOW_MOD_ATTACK)
   endif()
   target_compile_definitions(awe32_chip_safety PRIVATE AWE125_P203_SLOW_MOD_ATTACK)
 endif()
+# P215 source-derived EG1 Sustain research: all 70 P210/P212/P214 genuine
+# original Win95 register cases can be compared against two independently
+# built native 86Box chips. NEVER enable in the commercial VST3.
+option(AWE125_P215_SF2_SUSTAIN_LAYERS
+  "Native-only original Creative SF2 EG1 layered Sustain research experiment" OFF)
+if(AWE125_P215_SF2_SUSTAIN_LAYERS)
+  if(125A_BUILD_VST3 OR AWE125_P208_SF2_HOLD_SUSTAIN)
+    message(FATAL_ERROR
+      "P215 source-derived Sustain candidate is native-only and excludes P208")
+  endif()
+  target_compile_definitions(awe32_chip_safety PRIVATE
+    AWE125_P215_SF2_SUSTAIN_LAYERS)
+endif()
+
 # P208 candidate cannot be compiled into VST3. Default remains unchanged.
 option(AWE125_P208_SF2_HOLD_SUSTAIN
   "Research-only Win95 SoundFont EG1 hold/sustain converter experiment" OFF)
