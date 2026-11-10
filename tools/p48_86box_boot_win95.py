@@ -25,6 +25,7 @@ from p76_export_private_wav import export as p76_export_private_wav
 from p83_generic_sf2 import stage_private as p83_stage_private
 from p84_export_universal_wav import export as p84_export_universal_wav
 from p87_win95_six_note_capture import capture_six as p87_capture_six
+from p220_win95_77_capture import run as p220_capture_77
 
 
 # Scancode set 1 (US Win95 layout), only for the fixed laboratory filename.
@@ -78,6 +79,8 @@ def main() -> None:
     ap.add_argument("--universal-wav-dir",type=Path,help="Private output directory of real original Creative WAVs")
     ap.add_argument("--p87-six-wav-dir",type=Path,help="Private six-note original Win95 Creative D4 WAV export, requires universal SF2 and Gold")
     ap.add_argument("--require-full-bank",action="store_true",help="Require exact original 77-preset bank, not the two-preset test fixture")
+    ap.add_argument("--p220-plan",type=Path,help="Exact full-77 original-bank private MIDI test contract")
+    ap.add_argument("--p220-private-audio-dir",type=Path,help="PRIVATE only: 154 real original Creative Win95 wavetable WAVs; not a GitHub artifact")
     ap.add_argument("--private-wav-dir",type=Path,help="Local private export directory for original two bass WAVs")
     ap.add_argument("--sound-card", choices=("sbawe32_pnp","sbawe64_gold"), default="sbawe32_pnp")
     args = ap.parse_args()
@@ -104,6 +107,19 @@ def main() -> None:
         raise ValueError("--private-wav-dir requires --private-sf2")
     if args.require_full_bank and not args.private_sf2:
         raise ValueError("--require-full-bank requires --private-sf2")
+    if (args.p220_plan is None)!=(args.p220_private_audio_dir is None):
+        raise ValueError("P220 requires BOTH --p220-plan and --p220-private-audio-dir")
+    if args.p220_plan is not None and not (
+        args.private_sf2 and args.require_full_bank and args.p64_bridge
+        and args.sound_card=="sbawe64_gold"):
+        raise ValueError("P220 requires actual P75 full-77 original Win95 Creative AWE64 Gold driver, private bank and P64 COM1")
+    if args.p220_plan is not None:
+        if not args.p220_plan.is_file():
+            raise ValueError("P220 private exact bank MIDI contract file absent")
+        if args.out.resolve()==args.p220_private_audio_dir.resolve() or
+            args.out.resolve() in args.p220_private_audio_dir.resolve().parents:
+            raise ValueError("P220 original user WAVs cannot be inside public results/Actions artifact output")
+
     full_bank_report=p80_inventory(args.private_sf2.read_bytes()) if args.require_full_bank else None
     ram_kib=28672 if args.sound_card=="sbawe64_gold" else 2048
     generic_report=p83_stage_private(args.disk,args.universal_sf2,ram_kib*1024) if args.universal_sf2 else None
@@ -387,6 +403,16 @@ reconnect = 1
                             args.p87_six_wav_dir,
                             bank_select=args.universal_creative_bank,
                             channel=midi_channel)
+                    if args.p220_plan is not None:
+                        # The SAME already booted original Win95/Creative/86Box
+                        # guest, never a new VM or a substitute sampler.
+                        # Keep all private PCM outside args.out and artifact
+                        # upload roots. P67 confirmation remains a later gate.
+                        p220_capture_77(conn,send,vm/"p64-midi",trace,report,
+                            args.private_sf2,
+                            json.loads(args.p220_plan.read_text(encoding="utf8")),
+                            args.p220_private_audio_dir/"_raw-working",
+                            args.p220_private_audio_dir)
                 report["p55_original_sf2_load_confirmed"] = False
                 report["p53_original_control_panel_loaded"] = False
                 report["p53_original_bank_sf2_loaded"] = False
