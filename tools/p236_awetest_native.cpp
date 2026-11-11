@@ -29,7 +29,7 @@ static void wavhead(std::ofstream& f,uint32_t frames) {
 static void writeTone(Emu8000Core& core,int cutoff,int Q) {
     // AWETEST.C: physical voice V_TEST, reconstructed exact default register
     // stimulus from code; *not* a newly recorded per-write hardware trace.
-    constexpr int v=0;
+    constexpr int v=29; // AWETEST.C defines V_TEST=29; V_MARK=28
     const uint32_t sampleStart=458995, loopStart=459001, loopEnd=467282;
     core.Write(Reg::DCYSUSV,v,0x0080);
     core.Write(Reg::VTFT,v,0x0000FFFF);
@@ -75,8 +75,8 @@ static void capture(Emu8000Core& core,const fs::path& out,int cutoff,int Q) {
         }
     };
     render(22050);
-    core.Write(Reg::DCYSUSV,0,0x0080);
-    core.Write(Reg::VTFT,0,0x0000FFFF);
+    core.Write(Reg::DCYSUSV,29,0x0080);
+    core.Write(Reg::VTFT,29,0x0000FFFF);
     render(n);
     require(bool(f)&&nonzero>50,"AWETEST current core silence or failed output");
     std::cout<<"P236_AWETEST_NATIVE_PCM "<<cutoff<<" Q "<<Q<<" samples "<<n
