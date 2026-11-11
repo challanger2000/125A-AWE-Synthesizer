@@ -29,7 +29,7 @@ from scipy import signal
 SOURCE_SHA="9ae2217b92af72f706c9631679cd43c3afff507f"
 LOG_BLOB_SHA="09fe5c9f2a07e86fb4193f9f56f0b8583f656ede"
 FILES={213000:"reca003",323600:"reca004"}
-BANDS=((0,50),(50,250),(250,1000),(1000,4000),(4000,10000))
+BANDS=((0,50),(50,250),(250,1000),(1000,4000),(4000,10000),(10000,22050))
 CUTOFFS=(0,16,32,48,64,80,96,112,128,160,192,224,252)
 RESONANCE={(96,q) for q in (0,4,8,12,15)} | {(192,q) for q in (0,4,8,12,15)}
 
@@ -92,9 +92,13 @@ def feature(x,noise):
     for lo,hi in BANDS:
         v=float(np.sum(p[(f>=lo)&(f<hi)]))
         bands[f"{lo}-{hi}Hz"]=v
+    spectral_sum=sum(bands.values())
+    fractions={band:round(power/max(spectral_sum,1e-25),6)
+               for band,power in bands.items()}
     return {"rms":r,"ac_rms":ac,"above_250hz_rms":highpass250,
         "dc_mean":float(np.mean(x)), "peak":limit,"noise_rms":n,"snr_db":round(snr,3),
-        "clipped_sample_count":clipped,"valid":bool(good),"bands":bands}
+        "clipped_sample_count":clipped,"valid":bool(good),"bands":bands,
+        "spectral_energy_fractions":fractions}
 
 def dbp(v):
     return 10*math.log10(max(v,1e-25))
@@ -163,6 +167,8 @@ def audit(a):
             "card_dc_mean":round(ref["dc_mean"],9),"current_125a_dc_mean":round(nat["dc_mean"],9),
             "card_above_250hz_rms":round(ref["above_250hz_rms"],8),
             "current_125a_above_250hz_rms":round(nat["above_250hz_rms"],8),
+            "card_spectral_energy_fractions":ref["spectral_energy_fractions"],
+            "native_spectral_energy_fractions":nat["spectral_energy_fractions"],
             "original_hardware_stamp":cut[key],
             "compare":compare(ref,nat,*anchor) if valid else None}
         cut_rows.append(row)
@@ -263,6 +269,8 @@ def audit(a):
                   "relative_ac_level_error_db",x["compare"]["relative_ac_level_error_db"],
                   "relative_above250_level_error_db",x["compare"]["relative_above_250hz_level_error_db"],
                   "card_dc",x["card_dc_mean"],"native_dc",x["current_125a_dc_mean"],
+                  "reference_high10k_frac",x["card_spectral_energy_fractions"]["10000-22050Hz"],
+                  "native_high10k_frac",x["native_spectral_energy_fractions"]["10000-22050Hz"],
                   "relative_bands",{
                    k:v["125a_minus_card_relative_db"]
                    for k,v in x["compare"]["relative_spectrum"].items()})
