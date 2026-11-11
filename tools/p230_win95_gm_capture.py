@@ -32,6 +32,14 @@ def controllers(channel):
     baseline=((7,100),(11,127),(10,64),(1,0),(64,0),(91,0),(93,0))
     return baseline if channel==9 else ((0,0),)+baseline
 
+def noteoff_pacing_ms(payload):
+    # P64 send_paced_frame advances 25 ms of guest time for EACH UART byte.
+    # The note-off is applied after the final byte, not before its transmission.
+    if len(payload)!=6:
+        raise ValueError("P234 refuses unexpected Creative UART frame length")
+    return 25*len(payload)
+
+
 def self_test():
     cases=plan()
     assert len(cases)==8
@@ -40,6 +48,8 @@ def self_test():
     assert len({label(b,p,n,v) for b,p,n,v,_ in cases})==8
     assert set(MELODIC)<set(range(128)) and set(DRUMS)<set(range(128))
     assert (0,0) in controllers(0) and all(cc!=0 for cc,_ in controllers(9))
+    assert noteoff_pacing_ms(frame(0x80,60,0))==150
+    assert 1000-noteoff_pacing_ms(frame(0x80,60,0))==850
     print("P230_CREATIVE_GM_8_CASE_ORIGINAL_GUEST_PLAN_PASS")
 
 def row_index(path):
@@ -98,8 +108,12 @@ def capture(conn,send,guest_fifo,trace,report,raw_dir,private_dir):
                 started=True
                 send(conn,"step 50")
                 send_paced_frame(fd,frame(0x90|channel,note,velocity),conn,send)
-                send(conn,"step 1000")
-                send_paced_frame(fd,frame(0x80|channel,note,0),conn,send)
+                off=frame(0x80|channel,note,0)
+                compensated_hold_ms=1000-noteoff_pacing_ms(off)
+                if compensated_hold_ms<=0:
+                    raise RuntimeError("P234 UART pacing exceeds desired note hold")
+                send(conn,f"step {compensated_hold_ms}")
+                send_paced_frame(fd,off,conn,send)
                 send(conn,"step 1000")
             finally:
                 try:
@@ -141,6 +155,9 @@ def capture(conn,send,guest_fifo,trace,report,raw_dir,private_dir):
                             "p233_stage_file_byte_range":[stage_begin,stage_end],
                             "p234_dry_pcm_byte_range":[dry_begin,dry_end],
                             "p234_true_note_edge_observer_enabled":bool(pcm_path),
+                            "p234_target_hold_ms":1000,
+                            "p234_pacing_correction_ms":noteoff_pacing_ms(frame(0x80|channel,note,0)),
+                            "p234_pre_noteoff_step_ms":1000-noteoff_pacing_ms(frame(0x80|channel,note,0)),
 
                             "register_write_sequence":registers,
                             "audio_frames":pcm["frames"],
