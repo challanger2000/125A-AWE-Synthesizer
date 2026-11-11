@@ -100,7 +100,7 @@ int main(int argc,char** argv){
         // Two physical cutoff families are enough for this targeted audit,
         // not a claim to have audited all 96 resonance notes.
         const std::array<int,5> qs={0,4,8,12,15};
-        for(int c:{96,160})for(int q:qs)capture(core,root/("resonance_"+std::to_string(c)+"_"+std::to_string(q)+".wav"),c,q);
+        for(int c:{96,192})for(int q:qs)capture(core,root/("resonance_"+std::to_string(c)+"_"+std::to_string(q)+".wav"),c,q);
         std::cout<<"P236_DIRECT_REAL_AWE32_V25_TONE_REGISTER_RECONSTRUCTION_COMPLETE 23 notes; no production DSP edit\n";
         return 0;
     }catch(const std::exception& ex){
