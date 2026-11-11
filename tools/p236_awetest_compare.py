@@ -393,32 +393,56 @@ def line_out_audit(a):
     demand(set(CUTOFFS)<=set(cut_ev),"external line cutoff notes missing")
     card={}
     native={}
+    internal={}
+    original_internal,sr=sf.read(a.card_folder/"reca003.flac",
+                                 dtype="float64",always_2d=True)
+    demand(sr==44100 and original_internal.shape[1]==2,
+           "AWE32 internal ADC recording wrong format")
     for cutoff in CUTOFFS:
         e=cut_ev[cutoff]
+        demand(e["filebase"]==213000,
+               "cutoff note not in original reca003")
         t=slope*e["rt"]+intercept
         card[cutoff]=feature(read_line(t+.08,t+.32),read_line(t-.06,t-.01))
+        frame=e["frame"]
+        demand(frame>2646 and frame+14112<len(original_internal),
+               "internal ADC window outside actual recording")
+        internal[cutoff]=feature(original_internal[frame+3528:frame+14112,0],
+                                original_internal[frame-2646:frame-441,0])
         wav,sr=sf.read(a.native_dir/f"cutoff_{cutoff}.wav",
                        dtype="float64",always_2d=True)
         demand(sr==44100,"line-out native WAV rate")
         native[cutoff]=feature(wav[3528:14112,0],np.zeros(2000))
-    demand(card[252]["valid"] and native[252]["valid"],
-           "external line cutoff252 anchor silent/noisy/clipped")
+    demand(card[252]["valid"] and native[252]["valid"] and internal[252]["valid"],
+           "external LINE / internal ADC / native wide-open anchor invalid")
     rows=[]
     for cutoff in CUTOFFS:
-        x,y=card[cutoff],native[cutoff]
+        x,y,z=card[cutoff],native[cutoff],internal[cutoff]
+        trusted=x["valid"] and y["valid"] and z["valid"]
+        path_bias=(dbr(z["rms"],internal[252]["rms"])-
+                   dbr(x["rms"],card[252]["rms"])) if trusted else None
         rows.append({"cutoff":cutoff,"line_capture_valid":x["valid"],
                      "line_snr_db":x["snr_db"],"line_clipped_samples":x["clipped_sample_count"],
+                     "simultaneous_internal_ADC_valid":z["valid"],
+                     "simultaneous_internal_ADC_snr_db":z["snr_db"],
+                     "internal_ADC_minus_line_relative_rms_db":
+                         round(path_bias,4) if path_bias is not None else None,
                      "compare":compare(x,y,card[252],native[252])
                        if x["valid"] and y["valid"] else None})
     valid=[r for r in rows if r["compare"]]
     med=round(float(np.median([abs(r["compare"]["relative_level_error_db"])
                                for r in valid])),4) if valid else None
+    capture_errors=[abs(r["internal_ADC_minus_line_relative_rms_db"])
+                    for r in rows if r["cutoff"]!=252 and
+                    r["internal_ADC_minus_line_relative_rms_db"] is not None]
+    capture_median=round(float(np.median(capture_errors)),4) if capture_errors else None
     out={"schema":"P236-real-AWE32-v25-external-line-vs-125A",
          "source":"turican0 AWETST25 genuine simultaneous LINE OUT, author's flac25.py 2-anchor fit",
          "card_log_blob_sha":LOG_BLOB_SHA,"current_125a_commit":a.current_commit,
          "line_parts":[p.name for p in a.line_parts],
          "line_alignment":anchors_text,"line_clock_slope":round(float(slope),8),
          "valid_pairs":len(valid),"median_abs_cutoff_rms_error_db":med,
+         "median_abs_original_internal_ADC_vs_line_cutoff_db":capture_median,
          "note_windows":rows,
          "conditions":"No EQ/gain correction or analog compensation; same actual native WAV and ROM",
          "release_audio_fidelity":"BLOCKED"}
@@ -426,6 +450,7 @@ def line_out_audit(a):
     a.line_out.write_text(json.dumps(out,indent=2)+"\n")
     print("P236_REAL_AWE32_EXTERNAL_LINE_CUTOFF",
           "valid",len(valid),"median_abs_level_error_db",med,
+          "same_hardware_capture_path_median_abs_db",capture_median,
           "align",anchors_text)
     for item in rows:
         if item["compare"]:
