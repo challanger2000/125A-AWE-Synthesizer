@@ -1,0 +1,434 @@
+[
+  {
+    "pr": 102,
+    "base": "fix/creative-volume-sustain-layer-parity",
+    "base_sha": "2bd6d2d299a53f9af1e741e625d22207e08c8909",
+    "head": "qa/p230-original-rom-sbk-audio",
+    "head_sha": "7b7553fb9562c8b65cdd1541e7066823fba10954",
+    "already_in_proposed_base": false
+  },
+  {
+    "pr": 101,
+    "base": "qa/creative-original-owner-direct-ab",
+    "base_sha": "8052496bc0d13d0ba09caf5727b1f366a486fb03",
+    "head": "fix/creative-win95-original-envelope-parity",
+    "head_sha": "503123022dbfca8aee3f814b6acbfd7b43f526a7",
+    "already_in_proposed_base": true
+  },
+  {
+    "pr": 100,
+    "base": "qa/p228-crossbank-real-dry-audio",
+    "base_sha": "a17d95d87f43e750bbb0c6642fdfacc5bef0cbb1",
+    "head": "qa/p229-dry-preclip-rootcause",
+    "head_sha": "e3cbd9ce7870d6d31f9b55f80ef5af44212e3274",
+    "already_in_proposed_base": true
+  },
+  {
+    "pr": 99,
+    "base": "qa/p226-raw32-preclip-factorial",
+    "base_sha": "597150d21825fc6cf95fd9287a6a5784959d3e65",
+    "head": "qa/p228-crossbank-real-dry-audio",
+    "head_sha": "a17d95d87f43e750bbb0c6642fdfacc5bef0cbb1",
+    "already_in_proposed_base": true
+  },
+  {
+    "pr": 98,
+    "base": "qa/p222-controlled-fx-factorial",
+    "base_sha": "3af63b99238e1c538dcae63a69925c409d7e4a4c",
+    "head": "qa/p226-raw32-preclip-factorial",
+    "head_sha": "597150d21825fc6cf95fd9287a6a5784959d3e65",
+    "already_in_proposed_base": true
+  },
+  {
+    "pr": 97,
+    "base": "qa/p222-controlled-fx-factorial",
+    "base_sha": "3af63b99238e1c538dcae63a69925c409d7e4a4c",
+    "head": "fix/p224-remove-86box-ui-label",
+    "head_sha": "8e8315c2ecab9f4a8bdbd415c1b7af5a8485a3c1",
+    "already_in_proposed_base": false
+  },
+  {
+    "pr": 96,
+    "base": "qa/p222-controlled-fx-factorial",
+    "base_sha": "3af63b99238e1c538dcae63a69925c409d7e4a4c",
+    "head": "fix/p223-preserve-creative-fx-sends",
+    "head_sha": "3ae1b26322adf36e841a7e926a97352021139944",
+    "already_in_proposed_base": false
+  },
+  {
+    "pr": 90,
+    "base": "qa/p178-private-media-local-acceptance",
+    "base_sha": "cff9d91cdec5aa2574d039b23660fae0589c6878",
+    "head": "qa/p179-native-asio-instrument-kit",
+    "head_sha": "3aaa2f736535dde3642ab7cea11d919059ff12bb",
+    "already_in_proposed_base": false
+  },
+  {
+    "pr": 89,
+    "base": "qa/p177-controller-gui-first-note",
+    "base_sha": "f2b07522eab8a364632f88cfcb11f18e18523b40",
+    "head": "qa/p178-private-media-local-acceptance",
+    "head_sha": "cff9d91cdec5aa2574d039b23660fae0589c6878",
+    "already_in_proposed_base": true
+  },
+  {
+    "pr": 88,
+    "base": "qa/p176-exported-vst3-first-note-loops",
+    "base_sha": "65bba76976115d8b3634a4a1316bc59d79ebab80",
+    "head": "qa/p177-controller-gui-first-note",
+    "head_sha": "f2b07522eab8a364632f88cfcb11f18e18523b40",
+    "already_in_proposed_base": true
+  },
+  {
+    "pr": 87,
+    "base": "fix/p175-dark-filter-peak-bound",
+    "base_sha": "3203fe8df1531c29a9ea944e1ce9d05af74d1769",
+    "head": "qa/p176-exported-vst3-first-note-loops",
+    "head_sha": "65bba76976115d8b3634a4a1316bc59d79ebab80",
+    "already_in_proposed_base": true
+  },
+  {
+    "pr": 86,
+    "base": "fix/p170-p171-audio-corrections",
+    "base_sha": "aa7b871836857fe4ffb5a5c46dea0354df278c53",
+    "head": "fix/p175-dark-filter-peak-bound",
+    "head_sha": "3203fe8df1531c29a9ea944e1ce9d05af74d1769",
+    "already_in_proposed_base": true
+  },
+  {
+    "pr": 84,
+    "base": "fix/p168-dawevidence-lcd-text-safe-inset",
+    "base_sha": "8ad695055cdaa0dafc99e3b1d1d61b83d9f30f14",
+    "head": "fix/p169-invalid-program-visible",
+    "head_sha": "99fb90fc855c4c7643e24816fa644fdc738c290f",
+    "already_in_proposed_base": true
+  },
+  {
+    "pr": 79,
+    "base": "fix/p165-original-faceplate-layout",
+    "base_sha": "c729fda9cbf2c27723e7a0d5bd39e4e173c6db57",
+    "head": "fix/p166-exact-sf2-rom-isolation",
+    "head_sha": "6395d4cf1d027ae2f01b73ed2a6e658121a469c9",
+    "already_in_proposed_base": true
+  },
+  {
+    "pr": 77,
+    "base": "opt/p137-box86-shadow-skip-unused-float-dsp",
+    "base_sha": "f0f397c265db4db145571b89d86676361d8514ae",
+    "head": "audit/p140-p134-p137-paired-stress",
+    "head_sha": "ca27257581064dae3cc78d3dbc0bd86e56409861",
+    "already_in_proposed_base": false
+  },
+  {
+    "pr": 76,
+    "base": "fix/p122-bank-dirty-audit",
+    "base_sha": "79ba56bc5eb1da9a4c03329dd4b3dc26d8fa9944",
+    "head": "audit/p139-p137-v11-full-etw",
+    "head_sha": "67f8ed302525c19970d02bbf76b0dba1180657af",
+    "already_in_proposed_base": false
+  },
+  {
+    "pr": 74,
+    "base": "fix/p122-bank-dirty-audit",
+    "base_sha": "79ba56bc5eb1da9a4c03329dd4b3dc26d8fa9944",
+    "head": "audit/p135-p134-v11-realtime",
+    "head_sha": "00f40c89a6506ab4722d04620d58d920a3fc859e",
+    "already_in_proposed_base": false
+  },
+  {
+    "pr": 71,
+    "base": "fix/p122-bank-dirty-audit",
+    "base_sha": "79ba56bc5eb1da9a4c03329dd4b3dc26d8fa9944",
+    "head": "audit/p132-chorus-feedback-evidence-20261106",
+    "head_sha": "9e93ff667a9adacb42df85f370882b5282f080ce",
+    "already_in_proposed_base": false
+  },
+  {
+    "pr": 70,
+    "base": "fix/p122-bank-dirty-audit",
+    "base_sha": "79ba56bc5eb1da9a4c03329dd4b3dc26d8fa9944",
+    "head": "audit/p131-process-wall-cycles-20261106",
+    "head_sha": "8fe01428741cb74070fe8b387e24b4b7e60613b5",
+    "already_in_proposed_base": false
+  },
+  {
+    "pr": 67,
+    "base": "fix/p122-bank-dirty-audit",
+    "base_sha": "79ba56bc5eb1da9a4c03329dd4b3dc26d8fa9944",
+    "head": "fix/p129-chorus-signed-tail-quantization",
+    "head_sha": "64b8f61c7a4fe5a1292867b96e5be3ef303dcbb3",
+    "already_in_proposed_base": false
+  },
+  {
+    "pr": 62,
+    "base": "research/p62-creative-sf2-upload-fit-refinement",
+    "base_sha": "42a2843e2dd96fceaaf7eb2abed5fe2db3e63409",
+    "head": "develop/p63-win95-original-driver-midi-bridge",
+    "head_sha": "867c09651bffeaf71dd817c1c0af410734727fe9",
+    "already_in_proposed_base": true
+  },
+  {
+    "pr": 61,
+    "base": "research/p60-original-creative-sf2-ram-upload",
+    "base_sha": "deac27bd6e733ae0604b88723c3f568fe8875522",
+    "head": "research/p62-creative-sf2-upload-fit-refinement",
+    "head_sha": "42a2843e2dd96fceaaf7eb2abed5fe2db3e63409",
+    "already_in_proposed_base": true
+  },
+  {
+    "pr": 60,
+    "base": "research/p60-original-creative-sf2-ram-upload",
+    "base_sha": "deac27bd6e733ae0604b88723c3f568fe8875522",
+    "head": "research/p61-bass-envelope-audible-decay",
+    "head_sha": "c1affe5446c19e936b15510db751cc94c53c62cd",
+    "already_in_proposed_base": false
+  },
+  {
+    "pr": 59,
+    "base": "research/p59-user-bass-d3-e3-voice-regression",
+    "base_sha": "3d102cd2966e3d6cd88c3e1ebbc96dbf6906a4b4",
+    "head": "research/p60-original-creative-sf2-ram-upload",
+    "head_sha": "deac27bd6e733ae0604b88723c3f568fe8875522",
+    "already_in_proposed_base": true
+  },
+  {
+    "pr": 58,
+    "base": "research/p58-sf2-waveform-spectral-confirmation",
+    "base_sha": "28d9e853f391a789192ec75e23610d308731e605",
+    "head": "research/p59-user-bass-d3-e3-voice-regression",
+    "head_sha": "3d102cd2966e3d6cd88c3e1ebbc96dbf6906a4b4",
+    "already_in_proposed_base": true
+  },
+  {
+    "pr": 57,
+    "base": "research/p57-original-creative-userbank-midi",
+    "base_sha": "585ec1e0c70c699d333cd3a350de3a5fab260893",
+    "head": "research/p58-sf2-waveform-spectral-confirmation",
+    "head_sha": "28d9e853f391a789192ec75e23610d308731e605",
+    "already_in_proposed_base": true
+  },
+  {
+    "pr": 56,
+    "base": "research/p56-win95-creative-apply-generated-sf2",
+    "base_sha": "298de6b7fc398f7ac06ee81ae7165dceef806be2",
+    "head": "research/p57-original-creative-userbank-midi",
+    "head_sha": "585ec1e0c70c699d333cd3a350de3a5fab260893",
+    "already_in_proposed_base": true
+  },
+  {
+    "pr": 55,
+    "base": "research/p55-win95-original-creative-sf2-user-load",
+    "base_sha": "a84bd168a34f5cb646b5af8e29af25647418ee44",
+    "head": "research/p56-win95-creative-apply-generated-sf2",
+    "head_sha": "298de6b7fc398f7ac06ee81ae7165dceef806be2",
+    "already_in_proposed_base": true
+  },
+  {
+    "pr": 54,
+    "base": "research/p54-creative-control-panel-synth-user-tabs",
+    "base_sha": "1a15cd2770fa42b8170b6979ed8bc12953b99939",
+    "head": "research/p55-win95-original-creative-sf2-user-load",
+    "head_sha": "a84bd168a34f5cb646b5af8e29af25647418ee44",
+    "already_in_proposed_base": true
+  },
+  {
+    "pr": 53,
+    "base": "research/p53-original-creative-control-panel-win95",
+    "base_sha": "d7aad085ad4c3c47850029693f2fed584038198f",
+    "head": "research/p54-creative-control-panel-synth-user-tabs",
+    "head_sha": "1a15cd2770fa42b8170b6979ed8bc12953b99939",
+    "already_in_proposed_base": true
+  },
+  {
+    "pr": 52,
+    "base": "research/p52-creative-awecp95-sf2-staging",
+    "base_sha": "97fe007d971945fb935cbf4c148cce2445086c15",
+    "head": "research/p53-original-creative-control-panel-win95",
+    "head_sha": "d7aad085ad4c3c47850029693f2fed584038198f",
+    "already_in_proposed_base": true
+  },
+  {
+    "pr": 51,
+    "base": "research/p51-emu8000-immediate-trace",
+    "base_sha": "5827a125b4b18cb837ec89f20140e02367b8df3d",
+    "head": "research/p52-creative-awecp95-sf2-staging",
+    "head_sha": "97fe007d971945fb935cbf4c148cce2445086c15",
+    "already_in_proposed_base": true
+  },
+  {
+    "pr": 50,
+    "base": "research/p50-emu8000-program0-7-comparison",
+    "base_sha": "1d3859a20a10893a8713a54673e66617d66bacb6",
+    "head": "research/p51-emu8000-immediate-trace",
+    "head_sha": "5827a125b4b18cb837ec89f20140e02367b8df3d",
+    "already_in_proposed_base": true
+  },
+  {
+    "pr": 49,
+    "base": "research/p49-win95-midi-note-creative-driver",
+    "base_sha": "22d7f29e6c85aee264881446df213ab43c760460",
+    "head": "research/p50-emu8000-program0-7-comparison",
+    "head_sha": "1d3859a20a10893a8713a54673e66617d66bacb6",
+    "already_in_proposed_base": true
+  },
+  {
+    "pr": 48,
+    "base": "research/p49-win95-midi-note-creative-driver",
+    "base_sha": "22d7f29e6c85aee264881446df213ab43c760460",
+    "head": "research/p49c-win95-midi-program7",
+    "head_sha": "8df211f82786c08454e06b92dcb4b96515b4c47c",
+    "already_in_proposed_base": false
+  },
+  {
+    "pr": 47,
+    "base": "research/p48-win95-86box-awe32-pnp-guest",
+    "base_sha": "f5882eb448b676aa27f26d55842e2a494fe188da",
+    "head": "research/p49-win95-midi-note-creative-driver",
+    "head_sha": "22d7f29e6c85aee264881446df213ab43c760460",
+    "already_in_proposed_base": true
+  },
+  {
+    "pr": 46,
+    "base": "research/p47-86box-emu8000-hardware-smoke",
+    "base_sha": "168813464470413384f31c0f036f3eb8ccba2f1d",
+    "head": "research/p48-win95-86box-awe32-pnp-guest",
+    "head_sha": "f5882eb448b676aa27f26d55842e2a494fe188da",
+    "already_in_proposed_base": true
+  },
+  {
+    "pr": 45,
+    "base": "research/p46-win95-original-driver-reboot",
+    "base_sha": "fe217317ddb0951dc7be5c82b5678930e5f58110",
+    "head": "research/p47-86box-emu8000-hardware-smoke",
+    "head_sha": "168813464470413384f31c0f036f3eb8ccba2f1d",
+    "already_in_proposed_base": true
+  },
+  {
+    "pr": 44,
+    "base": "research/p45-86box-emu8000-trace-instrumentation",
+    "base_sha": "fc1d3f35e9f7c33309f9a83b2f186d7ced0d8b15",
+    "head": "research/p46-win95-original-driver-reboot",
+    "head_sha": "fe217317ddb0951dc7be5c82b5678930e5f58110",
+    "already_in_proposed_base": true
+  },
+  {
+    "pr": 43,
+    "base": "research/p44-win95-awe32-finish-driver-setup",
+    "base_sha": "7e9f28a1e1f380d0e0f673ebfeea3bed8a4b694e",
+    "head": "research/p45-86box-emu8000-trace-instrumentation",
+    "head_sha": "fc1d3f35e9f7c33309f9a83b2f186d7ced0d8b15",
+    "already_in_proposed_base": false
+  },
+  {
+    "pr": 42,
+    "base": "research/p43-win95-original-awe32-install",
+    "base_sha": "fa7ebf77d1fd3e9046dda6d4c0065d4e21f30fce",
+    "head": "research/p44-win95-awe32-finish-driver-setup",
+    "head_sha": "7e9f28a1e1f380d0e0f673ebfeea3bed8a4b694e",
+    "already_in_proposed_base": true
+  },
+  {
+    "pr": 41,
+    "base": "research/p42-win95-media-class-selection",
+    "base_sha": "8d39e6734a2ddd23ae188ee73f7a9f905c04440d",
+    "head": "research/p43-win95-original-awe32-install",
+    "head_sha": "fa7ebf77d1fd3e9046dda6d4c0065d4e21f30fce",
+    "already_in_proposed_base": true
+  },
+  {
+    "pr": 40,
+    "base": "research/p41-win95-awe32-hardware-wizard",
+    "base_sha": "a2d5acad329b27e723397ae114a239484ebb7745",
+    "head": "research/p42-win95-media-class-selection",
+    "head_sha": "8d39e6734a2ddd23ae188ee73f7a9f905c04440d",
+    "already_in_proposed_base": true
+  },
+  {
+    "pr": 39,
+    "base": "research/p40-win95-qemu-direct-guest-input",
+    "base_sha": "e6c53137213b970cb13b7742b49477de73648538",
+    "head": "research/p41-win95-awe32-hardware-wizard",
+    "head_sha": "a2d5acad329b27e723397ae114a239484ebb7745",
+    "already_in_proposed_base": false
+  },
+  {
+    "pr": 38,
+    "base": "research/p36-win95-dosboxx-awe32-boot",
+    "base_sha": "55a91bd9f5027fbeff0e1a2fde75bd1ab07e6b85",
+    "head": "research/p38-original-creative-win95-install",
+    "head_sha": "943e9abcf5e5cda5fdf7953f2dd951497f19671f",
+    "already_in_proposed_base": true
+  },
+  {
+    "pr": 37,
+    "base": "develop/v0.1.0-upstream-audit",
+    "base_sha": "13bd4cbd61be66d4dd71fe572a7663123e0aea04",
+    "head": "research/p34-win95-original-driver-stack-audit",
+    "head_sha": "29c4d2c5c214b22057c732846ae26bb970ecfc27",
+    "already_in_proposed_base": false
+  },
+  {
+    "pr": 36,
+    "base": "develop/v0.1.0-upstream-audit",
+    "base_sha": "13bd4cbd61be66d4dd71fe572a7663123e0aea04",
+    "head": "research/p33-actual-audio-merge-ab",
+    "head_sha": "661371072b88cc4401397b2615c2d0fa52c195c8",
+    "already_in_proposed_base": false
+  },
+  {
+    "pr": 35,
+    "base": "develop/v0.1.0-upstream-audit",
+    "base_sha": "13bd4cbd61be66d4dd71fe572a7663123e0aea04",
+    "head": "research/p32-sf2-preset-merge-comparison",
+    "head_sha": "bdac7148e0af3086ce6c2e16ce30bf65edae954f",
+    "already_in_proposed_base": false
+  },
+  {
+    "pr": 34,
+    "base": "research/p30-creative-dos-awe32-runtime",
+    "base_sha": "d0f97999d96700d79526ccb637b9f04a557e0777",
+    "head": "research/p31-original-creative-noteon-validation",
+    "head_sha": "fe850abda3e234a4a655ae69a9b079f3c5172a1d",
+    "already_in_proposed_base": false
+  },
+  {
+    "pr": 33,
+    "base": "research/p29-original-creative-sf2-driver-oracle",
+    "base_sha": "9dd8f50ef11a955a37662548842fdacaeaa521b4",
+    "head": "research/p30-creative-dos-awe32-runtime",
+    "head_sha": "d0f97999d96700d79526ccb637b9f04a557e0777",
+    "already_in_proposed_base": false
+  },
+  {
+    "pr": 32,
+    "base": "develop/v0.1.0-upstream-audit",
+    "base_sha": "13bd4cbd61be66d4dd71fe572a7663123e0aea04",
+    "head": "research/p29-original-creative-sf2-driver-oracle",
+    "head_sha": "9dd8f50ef11a955a37662548842fdacaeaa521b4",
+    "already_in_proposed_base": false
+  },
+  {
+    "pr": 31,
+    "base": "docs/p22-verified-sf2-timbre-checkpoint",
+    "base_sha": "c7a940eb9dff4aafaae6bcd5f268b2d19a5ff083",
+    "head": "fix/p24-visible-rom-backend-status",
+    "head_sha": "f9ae1a5af3210df22823fa608809ae2bb9981ee6",
+    "already_in_proposed_base": false
+  },
+  {
+    "pr": 30,
+    "base": "docs/p22-verified-sf2-timbre-checkpoint",
+    "base_sha": "c7a940eb9dff4aafaae6bcd5f268b2d19a5ff083",
+    "head": "fix/p23-sf2-scale-tuning",
+    "head_sha": "c2d23a8b6077ce207063619699d7976978609123",
+    "already_in_proposed_base": false
+  },
+  {
+    "pr": 5,
+    "base": "develop/v0.1.0-upstream-audit",
+    "base_sha": "13bd4cbd61be66d4dd71fe572a7663123e0aea04",
+    "head": "work/p15-built-in-fm-presets",
+    "head_sha": "5a85c3fb29b0f88467937c587b93f409091cf9b8",
+    "already_in_proposed_base": false
+  }
+]

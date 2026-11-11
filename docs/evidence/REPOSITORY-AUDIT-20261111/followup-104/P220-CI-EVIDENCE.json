@@ -1,0 +1,46 @@
+{
+  "source_commit": "0832e1573a9ba83d3fdae43a63917554a0440aa8",
+  "run_id": 42939861242,
+  "run_url": "https://github.com/challanger2000/125A-Plugin-Test-Lab/actions/runs/42939861242",
+  "run_status": "SUCCESS",
+  "jobs": [
+    {
+      "job": 130258823938,
+      "os": "windows-2022",
+      "status": "SUCCESS",
+      "url": "https://github.com/challanger2000/125A-Plugin-Test-Lab/actions/runs/42939861242/job/130258823938",
+      "raw_log_access": "Requires GitHub login; public job status inspected"
+    },
+    {
+      "job": 130258824439,
+      "os": "ubuntu-24.04",
+      "status": "SUCCESS",
+      "url": "https://github.com/challanger2000/125A-Plugin-Test-Lab/actions/runs/42939861242/job/130258824439",
+      "raw_log_access": "Requires GitHub login; public job status inspected"
+    }
+  ],
+  "published_artifacts": [
+    {
+      "name": "P220-Stereo-v2-Gate-Mutations-and-Required-Blocked-ubuntu-24.04",
+      "artifact_id": 13821075153,
+      "published_archive_sha256": "b00ac8eaddd623e3623886a400e604b423a1d23edc63cc07771fa9c5f610af84",
+      "url": "https://github.com/challanger2000/125A-Plugin-Test-Lab/actions/runs/42939861242/artifacts/13821075153",
+      "archive_bytes_independently_downloaded": false
+    },
+    {
+      "name": "P220-Stereo-v2-Gate-Mutations-and-Required-Blocked-windows-2022",
+      "artifact_id": 13820017799,
+      "published_archive_sha256": "3ca4cd2e599405fbd27b6087377314704d592e52b6c3010208094352a28365bc",
+      "url": "https://github.com/challanger2000/125A-Plugin-Test-Lab/actions/runs/42939861242/artifacts/13820017799",
+      "archive_bytes_independently_downloaded": false
+    }
+  ],
+  "stereo_expectations_per_job": 13,
+  "synthetic_matrix_comparisons_per_job": 154,
+  "existing_mutations_rejected_per_job": 10,
+  "compatibility_assertions_per_job": 19,
+  "counts_provenance": "Assertions in exact committed workflow/scripts, successful non-continue-on-error Windows/Ubuntu jobs; local raw RED/GREEN and complete matrix also executed",
+  "original_creative_fidelity": "NOT RUN",
+  "native_product_build": "NOT RUN (QA Python-only change)",
+  "release_approved": false
+}

@@ -1,0 +1,106 @@
+{
+  "scope": "Existing P220 PCM-comparison component only. Synthetic three-second stereo WAV; no Windows/VST3/product execution. Positive control precedes counterexamples.",
+  "lab_sha": "6cb294cdc64fa6aa30867fa3e7747105d30edb91",
+  "cases": [
+    {
+      "input": "same_stereo",
+      "expected_under_stereo_identity_contract": "PASS",
+      "actual_comparator_status": "PASS",
+      "details": {
+        "rms_level_native_minus_creative_db": 0.0,
+        "log_envelope_correlation": 1.0,
+        "onset_lag_ms": 0,
+        "spectrum_native_minus_creative_db_8_centers": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "max_abs_spectral_difference_db": 0.0,
+        "center_frequencies_hz": [
+          110,
+          220,
+          440,
+          880,
+          1760,
+          3520,
+          7040,
+          11000
+        ],
+        "measured_audio_frames": 88200,
+        "scope": "emulated EMU8000 original Win95 driver vs real VST3; NOT physical AWE64"
+      }
+    },
+    {
+      "input": "channel_swap",
+      "expected_under_stereo_identity_contract": "FAIL",
+      "actual_comparator_status": "PASS",
+      "details": {
+        "rms_level_native_minus_creative_db": 0.0,
+        "log_envelope_correlation": 1.0,
+        "onset_lag_ms": 0,
+        "spectrum_native_minus_creative_db_8_centers": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "max_abs_spectral_difference_db": 0.0,
+        "center_frequencies_hz": [
+          110,
+          220,
+          440,
+          880,
+          1760,
+          3520,
+          7040,
+          11000
+        ],
+        "measured_audio_frames": 88200,
+        "scope": "emulated EMU8000 original Win95 driver vs real VST3; NOT physical AWE64"
+      }
+    },
+    {
+      "input": "minus6db",
+      "expected_under_stereo_identity_contract": "FAIL",
+      "actual_comparator_status": "FAIL",
+      "details": {
+        "rms_level_native_minus_creative_db": -6.021,
+        "log_envelope_correlation": 1.0,
+        "onset_lag_ms": 0,
+        "spectrum_native_minus_creative_db_8_centers": [
+          0.001,
+          -0.0,
+          0.0,
+          0.346,
+          -5.858,
+          28.541,
+          8.655,
+          7.549
+        ],
+        "max_abs_spectral_difference_db": 0.001,
+        "center_frequencies_hz": [
+          110,
+          220,
+          440,
+          880,
+          1760,
+          3520,
+          7040,
+          11000
+        ],
+        "measured_audio_frames": 88200,
+        "scope": "emulated EMU8000 original Win95 driver vs real VST3; NOT physical AWE64"
+      }
+    }
+  ],
+  "finding": "Stereo channel swap is not detected by the mono-summed screening metrics. Not a product defect finding; not a full P220 gate execution."
+}

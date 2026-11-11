@@ -1,3 +1,16 @@
+## P104 – veröffentlichter Repository-Audit und QA-Folgeauftrag (11.11.2026)
+
+[Bericht, vollständige 142-Branch-/89-PR-Inventare, Graph und ausgeführte P196/P198-Prüfung](docs/P104-REPOSITORY-INTEGRATION-FOLLOWUP.md).
+Vorläufiger Integrationsausgangspunkt: `2bd6d2d299a53f9af1e741e625d22207e08c8909`
+auf `fix/creative-volume-sustain-layer-parity`; keine Produktintegration oder Freigabe.
+P220-Stereokorrektur ausschließlich im bestehenden Test Lab, Quellcommit
+`0832e1573a9ba83d3fdae43a63917554a0440aa8`. P232 bleibt beim Entwickler;
+keine neuen Branches, Merges, Löschungen, DSP- oder ASIO-Grenzwertänderungen.
+Aktuelle Testnachweise und NOT-RUN-Grenzen stehen im Folgebericht. Ältere
+Aktuell-Abschnitte darunter bleiben historische Nachweise.
+
+---
+
 > **P222 fixed-input FX A/B diagnostic – Windows-Testpaket geprüft (10.11.2026):** [GitHub Actions #42768740906 SUCCESS](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42768740906), echter exportierter Win64-VST3-Host: **8/8 reale `process()`-WAVs** mit synthetischem Kontroll-SF2, Note/Velocity 48/64 bzw. 72/120, jeweils **trocken, nur Reverb, nur Chorus, beide**; alle MIDI-CCs (1/7/11/91/93) innerhalb der Vierergruppe fest. Originale Float32-Ausgabe sowie RMS/Peaks, negative und positive Signed16-Rails untersucht; positive Fullscale- und falsche CC91-/bank-Identitätsmutationen erkannt. **Privater P000/P021-16-Fall-Versuch noch NICHT gelaufen.** Portables **P222**-Windows-Paket: [Actions-Artefakt 13740868075](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/42768740906/artifacts/13740868075), mit `P222-LOCAL-FX-AB.bat`, P171/P220-VST3-Recorder und echtem Produkt-VST3, **ohne** ROM/SF2/Benutzer-WAV. [Vollständiger Original-SF2-FX-Befund und Abnahmegrenzen](docs/P222-CONTROLLED-FX-AB-TRIAGE.md). **Keine Original-Creative-Win95-Klangreferenz der 77 Presets, Release BLOCKED, 0/77 Klang-PASS, kein DSP geändert.**
 
 > **P221 – echter Besitzerbank-Fehlversuch, Klangstatus weiterhin BLOCKED:** [P221 Diagnosebericht](docs/P221-OWNER-P000-FX-OVERLOAD-TRIAGE.md). Die privat eingereichte `P000-DRY.wav` ist echte, hörbare Windows-VST3-Ausgabe (3s/44,1kHz, Peak 0,22137), aber der unmittelbar folgende `P000-MODFX`-Fall brach vor dem Schreiben einer WAV mit dem unveränderten Übersteuerungs-Gate ab. **Genauer MODFX-Peak aus alter Version nicht vorhanden.** Die alte Testfixture stellt VST3-GUI FX-Sends auf 100%/100% (=255/255), während das Win95-Creative-MIDI CC91=48/CC93=32 anfordert – **unterschiedliche, nicht kalibrierte Original-/VST3-Effektbedingungen!** Kein zulässiger Originalklangvergleich. Der neue reine Testcode erfasst im Fehlerfall original-unclipped 32-bit-Float-Audio, echte Peak-/Zeit-/Kanaldiagnostik und bleibt mit Exitcode !=0 rot; der optionale P000-Diagnose-BAT erfordert kein 77er-Neurendern. **Keine Produkt-DSP-Änderung, keine Freigabe, 0/77 Klang-PASS.**

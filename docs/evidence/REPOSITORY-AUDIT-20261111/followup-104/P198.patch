@@ -1,0 +1,66 @@
+diff --git a/src/engine/SoundFont.cpp b/src/engine/SoundFont.cpp
+index a6d530f..d089f55 100644
+--- a/src/engine/SoundFont.cpp
++++ b/src/engine/SoundFont.cpp
+@@ -1284,18 +1284,19 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
+     }
+     else
+     {
+-        // SF2 stores initialAttenuation in centibels. The Win95 Creative
+-        // AWE hardware uses its historical *0.4 attenuation response*, not
+-        // a modern SF2 player's nominal 1.0 dB per dB. The original
+-        // SoundFont Spec Test #11 records +5 SF2 dB as approximately +2 dB
+-        // attenuation on an AWE64 Gold; P103's 5-step hardware playback
+-        // independently finds 2.258 dB per +5 SF2 dB, whereas the previous
+-        // Win95 path rendered 4.250 dB. Preserve the legacy DOS family,
+-        // whose converter and existing compatibility regressions are distinct.
+-        // This corrects the SF2-to-register mapping; chip 0.375-dB IFATN
+-        // quantization and verified Creative MIDI attenuation curves remain.
++        // P198: SF2 initialAttenuation centibels -> Creative IFATN units.
++        // The original CT4390 Gold/SoundFont Spec Test v3.0 uses the same
++        // sample (ID 43) and pitch across 5 separately attenuated notes.
++        // Hardware: 2.258 dB per +5 SF2 dB. P104's 0.4 approximation
++        // produced 1.700 dB/step; the independent P198 reference at 0.50
++        // produced 2.267 dB/step with <=0.05 dB middle/late per-note
++        // error. The alternate 0.53 showed >1 dB errors at intermediate
++        // notes despite an identical average slope (chip quantization).
++        // Preserve original 0.375 dB IFATN steps and DOS/SDK/SF1 mapping.
++        // This is analog hardware response calibration, not a VXD binary
++        // proof or permission to retune envelopes, EQ and effects.
+         const double hardwareSf2AttenuationScale =
+-            (drv == Awe32::Driver::Win95) ? 0.4 : 1.0;
++            (drv == Awe32::Driver::Win95) ? 0.50 : 1.0;
+         vp.patchAttenUnits = static_cast<uint8_t>(std::clamp(
+             static_cast<int>(std::lround(g.Get(Gen::InitialAttenuation, 0)
+                        * hardwareSf2AttenuationScale
+diff --git a/tests/p90_sf2_driver_registers.cpp b/tests/p90_sf2_driver_registers.cpp
+index 9f5383d..d91c672 100644
+--- a/tests/p90_sf2_driver_registers.cpp
++++ b/tests/p90_sf2_driver_registers.cpp
+@@ -39,19 +39,20 @@ int main() {
+     ok&=check(!oneShot.looping && !oneShot.loopOpensOnRelease,
+               "Win95 SF2 mode 0 is one-shot");
+     r.gen.Set(Gen::SampleModes,1);
+-    // P104: original CT4390 analog SoundFont Spec Test #11 confirms its
+-    // historic 0.4-dB-per-dB SF2 initialAttenuation response, rather than
+-    // modern SF2 1:1. Check Win95 versus the untouched DOS mapping.
+-    for (const int cb : {0, 50, 100, 150, 300})
++    // P198: P104's 0.40 scale left 0.558 dB/5-SF2-dB low on physical
++    // AWE64 Gold comparison. The 0.50 candidate matches every note in
++    // independent original SF2 fixture (sample 43, matched pitch) within
++    // 0.05 dB during its stable middle/late phase. DOS remains unchanged.
++    for (const int cb : {0, 50, 100, 150, 200, 250, 300})
+     {
+         r.gen.Set(Gen::InitialAttenuation, static_cast<int16_t>(cb));
+         const auto win95 = MakeVoiceParams(sf2,r,60,100,base,0,Awe32::Driver::Win95);
+         const auto oldDos = MakeVoiceParams(sf2,r,60,100,base,0,Awe32::Driver::Dos);
+-        const int expectedWin95 = static_cast<int>(std::lround(cb * .4 / 10. / .375));
++        const int expectedWin95 = static_cast<int>(std::lround(cb * .50 / 10. / .375));
+         const int expectedDos = static_cast<int>(std::lround(cb / 10. / .375));
+         ok &= check(win95.patchAttenUnits == expectedWin95
+                     && oldDos.patchAttenUnits == expectedDos,
+-                    "P104 hardware Win95 SF2 0.4x attenuation; DOS unmodified");
++                    "P198 hardware Win95 SF2 0.50x attenuation; DOS unmodified");
+     }
+     r.gen.Set(Gen::InitialAttenuation, 0);
+     // P92 independent original Creative converter code / P91 genuine

@@ -1,0 +1,73 @@
+{
+  "schema": "one-off-125a-repository-integration-audit-20261111",
+  "generated_at_utc": "2026-11-11T01:03:38.755398+00:00",
+  "repository": "challanger2000/125A-AWE-Synthesizer",
+  "binding_instructions": [
+    "https://github.com/challanger2000/125A-AWE-Synthesizer/issues/103",
+    "https://github.com/challanger2000/125A-AWE-Synthesizer/issues/104"
+  ],
+  "engineering_main": "811f71fa72f51ecf1b9d5121c21f8b8e03302971",
+  "proposed_base": "2bd6d2d299a53f9af1e741e625d22207e08c8909",
+  "proposed_base_branch": "fix/creative-volume-sustain-layer-parity",
+  "protected_p232_head": "7b7553fb9562c8b65cdd1541e7066823fba10954",
+  "main": "2aa2d05308d25064c706d35c2e1868e9c9e8ee2d",
+  "lab_main": "7213fe1f81f4036f74431cb5b2d7dbd09b73ee5c",
+  "lab_existing_sound_gate": "6cb294cdc64fa6aa30867fa3e7747105d30edb91",
+  "branch_count": 142,
+  "tag_count": 43,
+  "open_pr_count": 54,
+  "draft_pr_count": 53,
+  "closed_pr_count": 35,
+  "closed_pr_merge_results_in_base": 35,
+  "open_pr_heads_already_ancestors_of_base": 31,
+  "category_counts": {
+    "C": 44,
+    "D": 31,
+    "B": 64,
+    "A": 3
+  },
+  "scope": "142 remote head metadata/DAG/tree signatures; 89 PR metadata; selected production diffs, evidence and existing Test Lab integration contracts. Not a full plugin code/function audit.",
+  "executed": [
+    "Git reachability and tree comparisons",
+    "isolated merge-tree simulations without updating refs",
+    "synthetic existing P220 comparator counterexample",
+    "inventory consistency assertions",
+    "read-only existing GitHub workflow status/provenance checks"
+  ],
+  "not_run": [
+    "new Windows builds/regression",
+    "P232 equal-state capture acceptance",
+    "new real ROM/SF2/ASIO/DAW sessions",
+    "complete per-branch CI/raw-artifact verification"
+  ],
+  "product_repository_files_changed": false,
+  "remote_refs_changed": false,
+  "release_approved": false,
+  "cleanup_approved": false,
+  "metric_definitions": {
+    "unique_vs_proposed_base_count": "Raw reachable commits absent from selected base; includes docs/research, not a count of missing functional fixes.",
+    "unique_vs_other_branch_tips_count": "Commits reachable from this branch and no other of the 142 remote heads; existing archive tags excluded from this metric.",
+    "nearest_ancestor_branch_tips": "Transitive reduction of exact tip ancestry among remote heads; not inferred from names.",
+    "ci_locators": "Documentary references, not head-specific PASS unless explicitly verified in report evidence matrix."
+  },
+  "instruction_snapshots": [
+    {
+      "issue": 103,
+      "url": "https://github.com/challanger2000/125A-AWE-Synthesizer/issues/103",
+      "updated_at": "2026-11-11T00:51:24Z",
+      "body_sha256": "361cc26dad0c19f6f64a62e88ab28369dc6652931cbf61e4988683727e47385b"
+    },
+    {
+      "issue": 103,
+      "url": "https://github.com/challanger2000/125A-AWE-Synthesizer/issues/103#issuecomment-6783618877",
+      "updated_at": "2026-11-11T00:51:24Z",
+      "body_sha256": "05650e39e5124f12029502ed97a65d5f53d08a3026d288ed222ebd0e37f236a0"
+    },
+    {
+      "issue": 104,
+      "url": "https://github.com/challanger2000/125A-AWE-Synthesizer/issues/104",
+      "updated_at": "2026-11-11T00:50:58Z",
+      "body_sha256": "8ca688a1ac0b480ed39387e53c75ae9cb565b857abfee8ae9ccc4034e0d5acf7"
+    }
+  ]
+}

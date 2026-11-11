@@ -1,0 +1,38 @@
+{
+  "basis": "2bd6d2d299a53f9af1e741e625d22207e08c8909",
+  "scope": "Temporary Git index apply checks only; no merged commit, no engine/worktree/branch modification; no combined Windows or PCM execution",
+  "order": [
+    {
+      "phase": "P196",
+      "commit": "f308b71a4765e2402856e7be24105420542e37a1",
+      "files": [
+        "src/engine/SoundFont.cpp",
+        "tests/p90_sf2_driver_registers.cpp"
+      ],
+      "apply_check_exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "patch_sha256": "2ec7e1424b7a638bfc732b0c522aa21c35d0e4ba78e65e5c5059a37daaf2e580",
+      "temporary_tree_sha": "aa8428302cbc3a5e36dd043c9863cabdaf0da611"
+    },
+    {
+      "phase": "P198",
+      "commit": "2f986648d0507ba97c804b483ce00021a2f656fe",
+      "files": [
+        "src/engine/SoundFont.cpp",
+        "tests/p90_sf2_driver_registers.cpp"
+      ],
+      "apply_check_exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "patch_sha256": "f857df6a352d1676176ef850d1899daea51c65fef2d5d2f234597f978614611d",
+      "temporary_tree_sha": "a9325dcba5f79849827f1a795fe590479b7fe271"
+    }
+  ],
+  "productive_files_unchanged": true,
+  "combined_functional_validation": "NOT RUN",
+  "P198_original_driver_parity": "NOT RUN; physical CT4390 calibration is a separate oracle",
+  "P223": "EXCLUDED: audible send mapping change",
+  "P232": "existing developer branch untouched",
+  "reverse_order_same_tree": true
+}

@@ -1,0 +1,455 @@
+{
+  "test_version": "p220-stereo-regression-v2",
+  "scope": "SYNTHETIC_STEREO_WAV_COMPARATOR_ONLY_NOT_ORIGINAL_CREATIVE_OR_VST3",
+  "tool_source_sha256": "0385c8d6cd0907e97add8cc41c2b9c125e933fc57da5cb48671722c069a3cea6",
+  "test_source_sha256": "1992debc2c0c39b7bb73425c29064c08881e44ae00a2894ffc554372ac22e6bd",
+  "pcm_oracle_source_sha256": "b9905ac2c8ff79eec9cd2e55810c568b6a467521c6aa908a57da5817652e8f8d",
+  "github_source_sha": null,
+  "release_approved": false,
+  "cases": [
+    {
+      "id": "asymmetric_independent_lsb",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reference_wav_sha256": "cf8fdb54adfda2b3525b495dbb6c0385933a71c600ffdf65e4e16dcfd861fa56",
+      "capture_wav_sha256": "d4c3139451712562aecb49cbaadcb3944deee1f69e782b50e5494118bd9b6350",
+      "comparison": {
+        "status": "PASS",
+        "rms_level_native_minus_creative_db": 0.0,
+        "log_envelope_correlation": 1.0,
+        "onset_lag_ms": 0,
+        "spectrum_native_minus_creative_db_8_centers": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "max_abs_spectral_difference_db": 0.0,
+        "center_frequencies_hz": [
+          110,
+          220,
+          440,
+          880,
+          1760,
+          3520,
+          7040,
+          11000
+        ],
+        "measured_audio_frames": 88200,
+        "scope": "emulated EMU8000 original Win95 driver vs real VST3; NOT physical AWE64"
+      }
+    },
+    {
+      "id": "dual_mono_swap",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reference_wav_sha256": "a5b31fd8aac9ec01d999db099b8899a11586879044dbabb8af41ccaf9484b11f",
+      "capture_wav_sha256": "a5b31fd8aac9ec01d999db099b8899a11586879044dbabb8af41ccaf9484b11f",
+      "comparison": {
+        "status": "PASS",
+        "rms_level_native_minus_creative_db": 0.0,
+        "log_envelope_correlation": 1.0,
+        "onset_lag_ms": 0,
+        "spectrum_native_minus_creative_db_8_centers": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "max_abs_spectral_difference_db": 0.0,
+        "center_frequencies_hz": [
+          110,
+          220,
+          440,
+          880,
+          1760,
+          3520,
+          7040,
+          11000
+        ],
+        "measured_audio_frames": 88200,
+        "scope": "emulated EMU8000 original Win95 driver vs real VST3; NOT physical AWE64"
+      }
+    },
+    {
+      "id": "matching_antiphase",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reference_wav_sha256": "81ba4b8c8d2ef920b35411e7f1484835f1baef8feefc9f5da6de425b3dedb630",
+      "capture_wav_sha256": "4d0fc45121a3469e7f3d95c17f078894caa0e24f19efbb42e5c61141be016ad1",
+      "comparison": {
+        "reason": "SILENT_AUDIO:P000-DRY.wav"
+      }
+    },
+    {
+      "id": "matching_hard_left",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reference_wav_sha256": "5d3a31ec2c4e4b35e69be02c3776f2f1b89a5aa3f35723de6eaabf6e14aaece4",
+      "capture_wav_sha256": "52cf630cdb52b8ff098530fd1e8b789e6758ecd38c253c61a122f56fe09edc59",
+      "comparison": {
+        "status": "PASS",
+        "rms_level_native_minus_creative_db": 0.0,
+        "log_envelope_correlation": 1.0,
+        "onset_lag_ms": 0,
+        "spectrum_native_minus_creative_db_8_centers": [
+          -0.0,
+          0.0,
+          -0.0,
+          0.0,
+          0.0,
+          0.0,
+          -0.0,
+          -0.0
+        ],
+        "max_abs_spectral_difference_db": 0.0,
+        "center_frequencies_hz": [
+          110,
+          220,
+          440,
+          880,
+          1760,
+          3520,
+          7040,
+          11000
+        ],
+        "measured_audio_frames": 88200,
+        "scope": "emulated EMU8000 original Win95 driver vs real VST3; NOT physical AWE64"
+      }
+    },
+    {
+      "id": "common_gain_half_db",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reference_wav_sha256": "cf8fdb54adfda2b3525b495dbb6c0385933a71c600ffdf65e4e16dcfd861fa56",
+      "capture_wav_sha256": "91fe819d16e61ec205f8fda8ff63e84461924e5c95de5bd4d6734958bc61574c",
+      "comparison": {
+        "status": "PASS",
+        "rms_level_native_minus_creative_db": 0.5,
+        "log_envelope_correlation": 1.0,
+        "onset_lag_ms": 0,
+        "spectrum_native_minus_creative_db_8_centers": [
+          -0.004,
+          -0.0,
+          0.0,
+          0.011,
+          0.619,
+          2.842,
+          9.195,
+          -1.314
+        ],
+        "max_abs_spectral_difference_db": 0.004,
+        "center_frequencies_hz": [
+          110,
+          220,
+          440,
+          880,
+          1760,
+          3520,
+          7040,
+          11000
+        ],
+        "measured_audio_frames": 88200,
+        "scope": "emulated EMU8000 original Win95 driver vs real VST3; NOT physical AWE64"
+      }
+    },
+    {
+      "id": "common_latency_211_frames",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reference_wav_sha256": "cf8fdb54adfda2b3525b495dbb6c0385933a71c600ffdf65e4e16dcfd861fa56",
+      "capture_wav_sha256": "425ee7a25a91de63b2ff653565b819df5fdc2499c4a1c18b1cb1fcf341da0b97",
+      "comparison": {
+        "status": "PASS",
+        "rms_level_native_minus_creative_db": -0.004,
+        "log_envelope_correlation": 0.99406,
+        "onset_lag_ms": 0,
+        "spectrum_native_minus_creative_db_8_centers": [
+          -0.049,
+          -0.002,
+          0.006,
+          -2.099,
+          3.254,
+          3.073,
+          -4.247,
+          -7.719
+        ],
+        "max_abs_spectral_difference_db": 0.049,
+        "center_frequencies_hz": [
+          110,
+          220,
+          440,
+          880,
+          1760,
+          3520,
+          7040,
+          11000
+        ],
+        "measured_audio_frames": 88200,
+        "scope": "emulated EMU8000 original Win95 driver vs real VST3; NOT physical AWE64"
+      }
+    },
+    {
+      "id": "left_right_swap",
+      "expected": "FAIL",
+      "actual": "PASS",
+      "reference_wav_sha256": "cf8fdb54adfda2b3525b495dbb6c0385933a71c600ffdf65e4e16dcfd861fa56",
+      "capture_wav_sha256": "fe1ba80de563eb71ec180850e8eef09436fb24bf9584b18e8998340e9272d0d8",
+      "comparison": {
+        "status": "PASS",
+        "rms_level_native_minus_creative_db": 0.0,
+        "log_envelope_correlation": 1.0,
+        "onset_lag_ms": 0,
+        "spectrum_native_minus_creative_db_8_centers": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "max_abs_spectral_difference_db": 0.0,
+        "center_frequencies_hz": [
+          110,
+          220,
+          440,
+          880,
+          1760,
+          3520,
+          7040,
+          11000
+        ],
+        "measured_audio_frames": 88200,
+        "scope": "emulated EMU8000 original Win95 driver vs real VST3; NOT physical AWE64"
+      }
+    },
+    {
+      "id": "right_silent",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reference_wav_sha256": "cf8fdb54adfda2b3525b495dbb6c0385933a71c600ffdf65e4e16dcfd861fa56",
+      "capture_wav_sha256": "5d3a31ec2c4e4b35e69be02c3776f2f1b89a5aa3f35723de6eaabf6e14aaece4",
+      "comparison": {
+        "status": "FAIL",
+        "rms_level_native_minus_creative_db": -1.272,
+        "log_envelope_correlation": 0.99491,
+        "onset_lag_ms": 0,
+        "spectrum_native_minus_creative_db_8_centers": [
+          1.054,
+          1.225,
+          -57.891,
+          -2.331,
+          -9.766,
+          -1.373,
+          0.926,
+          -10.479
+        ],
+        "max_abs_spectral_difference_db": 57.891,
+        "center_frequencies_hz": [
+          110,
+          220,
+          440,
+          880,
+          1760,
+          3520,
+          7040,
+          11000
+        ],
+        "measured_audio_frames": 88200,
+        "scope": "emulated EMU8000 original Win95 driver vs real VST3; NOT physical AWE64"
+      }
+    },
+    {
+      "id": "left_silent",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reference_wav_sha256": "cf8fdb54adfda2b3525b495dbb6c0385933a71c600ffdf65e4e16dcfd861fa56",
+      "capture_wav_sha256": "1c234ed27473107ebcad3716fce8508a9a1dd192e4616b76fbcd7b7fc9ee2db6",
+      "comparison": {
+        "status": "FAIL",
+        "rms_level_native_minus_creative_db": -5.954,
+        "log_envelope_correlation": 0.99766,
+        "onset_lag_ms": 0,
+        "spectrum_native_minus_creative_db_8_centers": [
+          -27.836,
+          -55.484,
+          6.093,
+          -3.009,
+          3.767,
+          -5.581,
+          -3.499,
+          4.648
+        ],
+        "max_abs_spectral_difference_db": 55.484,
+        "center_frequencies_hz": [
+          110,
+          220,
+          440,
+          880,
+          1760,
+          3520,
+          7040,
+          11000
+        ],
+        "measured_audio_frames": 88200,
+        "scope": "emulated EMU8000 original Win95 driver vs real VST3; NOT physical AWE64"
+      }
+    },
+    {
+      "id": "right_gain_minus_3db",
+      "expected": "FAIL",
+      "actual": "PASS",
+      "reference_wav_sha256": "cf8fdb54adfda2b3525b495dbb6c0385933a71c600ffdf65e4e16dcfd861fa56",
+      "capture_wav_sha256": "dfdc422ab4d7622bb309c93656bf4342ae0916a622599840b7441746f07e4504",
+      "comparison": {
+        "status": "PASS",
+        "rms_level_native_minus_creative_db": -0.588,
+        "log_envelope_correlation": 0.99974,
+        "onset_lag_ms": 0,
+        "spectrum_native_minus_creative_db_8_centers": [
+          0.516,
+          0.568,
+          -2.431,
+          -0.27,
+          0.407,
+          6.172,
+          6.243,
+          2.747
+        ],
+        "max_abs_spectral_difference_db": 2.431,
+        "center_frequencies_hz": [
+          110,
+          220,
+          440,
+          880,
+          1760,
+          3520,
+          7040,
+          11000
+        ],
+        "measured_audio_frames": 88200,
+        "scope": "emulated EMU8000 original Win95 driver vs real VST3; NOT physical AWE64"
+      }
+    },
+    {
+      "id": "right_polarity",
+      "expected": "FAIL",
+      "actual": "PASS",
+      "reference_wav_sha256": "cf8fdb54adfda2b3525b495dbb6c0385933a71c600ffdf65e4e16dcfd861fa56",
+      "capture_wav_sha256": "894f1681c2aacee5dcb06652069ac8cff350f00ebce1b6fbcb66d8aef00d76a2",
+      "comparison": {
+        "status": "PASS",
+        "rms_level_native_minus_creative_db": -0.0,
+        "log_envelope_correlation": 0.98449,
+        "onset_lag_ms": 0,
+        "spectrum_native_minus_creative_db_8_centers": [
+          -0.34,
+          0.006,
+          -0.019,
+          -8.909,
+          -4.845,
+          -6.26,
+          0.364,
+          -2.471
+        ],
+        "max_abs_spectral_difference_db": 0.34,
+        "center_frequencies_hz": [
+          110,
+          220,
+          440,
+          880,
+          1760,
+          3520,
+          7040,
+          11000
+        ],
+        "measured_audio_frames": 88200,
+        "scope": "emulated EMU8000 original Win95 driver vs real VST3; NOT physical AWE64"
+      }
+    },
+    {
+      "id": "both_polarities",
+      "expected": "FAIL",
+      "actual": "PASS",
+      "reference_wav_sha256": "cf8fdb54adfda2b3525b495dbb6c0385933a71c600ffdf65e4e16dcfd861fa56",
+      "capture_wav_sha256": "2dd98056c43a1d1558569b92c82d831cf691917d95f4ad38f5352d2e934f9f83",
+      "comparison": {
+        "status": "PASS",
+        "rms_level_native_minus_creative_db": 0.0,
+        "log_envelope_correlation": 1.0,
+        "onset_lag_ms": 0,
+        "spectrum_native_minus_creative_db_8_centers": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "max_abs_spectral_difference_db": 0.0,
+        "center_frequencies_hz": [
+          110,
+          220,
+          440,
+          880,
+          1760,
+          3520,
+          7040,
+          11000
+        ],
+        "measured_audio_frames": 88200,
+        "scope": "emulated EMU8000 original Win95 driver vs real VST3; NOT physical AWE64"
+      }
+    },
+    {
+      "id": "right_delay_128_frames",
+      "expected": "FAIL",
+      "actual": "PASS",
+      "reference_wav_sha256": "cf8fdb54adfda2b3525b495dbb6c0385933a71c600ffdf65e4e16dcfd861fa56",
+      "capture_wav_sha256": "e51c7173dcafb1b7d01556cf7af520af51c16dc827107ed2dd1d837dd57117b0",
+      "comparison": {
+        "status": "PASS",
+        "rms_level_native_minus_creative_db": -0.007,
+        "log_envelope_correlation": 0.98977,
+        "onset_lag_ms": 0,
+        "spectrum_native_minus_creative_db_8_centers": [
+          -0.187,
+          -0.008,
+          0.025,
+          -3.521,
+          -5.098,
+          -2.307,
+          0.77,
+          -4.001
+        ],
+        "max_abs_spectral_difference_db": 0.187,
+        "center_frequencies_hz": [
+          110,
+          220,
+          440,
+          880,
+          1760,
+          3520,
+          7040,
+          11000
+        ],
+        "measured_audio_frames": 88200,
+        "scope": "emulated EMU8000 original Win95 driver vs real VST3; NOT physical AWE64"
+      }
+    }
+  ],
+  "passed_assertions": 7,
+  "assertions": 13
+}

@@ -1,0 +1,174 @@
+[
+  {
+    "sha": "e8f18a30f06f509b66e716414f2c48a1e4964418",
+    "ref": "refs/tags/archive/pre-p122-cleanup/ci/p19-include-gitattributes-in-windows-vst3-trigger"
+  },
+  {
+    "sha": "c3f3758c1208bed5119c26a84aac3fa487e40556",
+    "ref": "refs/tags/archive/pre-p122-cleanup/develop/p116-master-volume"
+  },
+  {
+    "sha": "aea70e329128e01666a2fdf8a1d074d5ec3ef520",
+    "ref": "refs/tags/archive/pre-p122-cleanup/develop/p117-synthgm-recall-fix"
+  },
+  {
+    "sha": "719457956f1b449e0d0f7966506f9e517deea0ca",
+    "ref": "refs/tags/archive/pre-p122-cleanup/develop/p117-vstgui-layout"
+  },
+  {
+    "sha": "ea418f0b4e54205838239407a61b8028ee2305bb",
+    "ref": "refs/tags/archive/pre-p122-cleanup/develop/p16-preset-bank-catalog"
+  },
+  {
+    "sha": "1b82d4ff2cf0008fd2504f27a44228713c654a06",
+    "ref": "refs/tags/archive/pre-p122-cleanup/develop/p17-preset-browser"
+  },
+  {
+    "sha": "867c09651bffeaf71dd817c1c0af410734727fe9",
+    "ref": "refs/tags/archive/pre-p122-cleanup/develop/p96-win95-sf2-pitch-candidate"
+  },
+  {
+    "sha": "b7288c2addb4dd130ce0596452b324ba66a0cf91",
+    "ref": "refs/tags/archive/pre-p122-cleanup/develop/p96-windows-vst3-validation"
+  },
+  {
+    "sha": "d63f4d021664d39a7ca722d97e34856fd8d03ad1",
+    "ref": "refs/tags/archive/pre-p122-cleanup/develop/p97-awe64-physical-audio-comparison"
+  },
+  {
+    "sha": "a2304f6dd316ed817be24a049be776dbb23b63ca",
+    "ref": "refs/tags/archive/pre-p122-cleanup/docs/p16-verified-checkpoint"
+  },
+  {
+    "sha": "db7a56757a3d2fc580c4d38f574944159062ed75",
+    "ref": "refs/tags/archive/pre-p122-cleanup/docs/p17-windows-verified"
+  },
+  {
+    "sha": "2d0a880ede13cf735116eee7d01a66b0411ddf68",
+    "ref": "refs/tags/archive/pre-p122-cleanup/docs/p19-complete-verified"
+  },
+  {
+    "sha": "80a5689bea1bbb61fc649881597ec8ab7a24cf25",
+    "ref": "refs/tags/archive/pre-p122-cleanup/docs/p20-sf2-audio-verification"
+  },
+  {
+    "sha": "614188bcb630e2bbe72fc8fc4384a28e3ee9af96",
+    "ref": "refs/tags/archive/pre-p122-cleanup/docs/preset-browser-hardware-explanations"
+  },
+  {
+    "sha": "46ff4702da18c819daf637d3574327a23e23c79b",
+    "ref": "refs/tags/archive/pre-p122-cleanup/feature/p19-sound-blaster-hardware-faceplate"
+  },
+  {
+    "sha": "8b157c8142cf1e31bc90649dacaf28330ff1379c",
+    "ref": "refs/tags/archive/pre-p122-cleanup/fix/p118-audit-critical"
+  },
+  {
+    "sha": "fe7a4129afde21db399cfa661b37835108ee5a8f",
+    "ref": "refs/tags/archive/pre-p122-cleanup/fix/p119-vst3-integration"
+  },
+  {
+    "sha": "020d41cae5972f8025f2418ffdadf826a3119b6c",
+    "ref": "refs/tags/archive/pre-p122-cleanup/fix/p120-audit-remediation"
+  },
+  {
+    "sha": "dac4d72bab4817ae55e972f8a7016af804a634db",
+    "ref": "refs/tags/archive/pre-p122-cleanup/fix/p121-pitchbend-automation"
+  },
+  {
+    "sha": "461d5d4838e750eb3f44f90ef66711e352149705",
+    "ref": "refs/tags/archive/pre-p122-cleanup/fix/p16-bank-audio-regressions"
+  },
+  {
+    "sha": "00971f8902af3a863d9dd866d59f7c6a9af03707",
+    "ref": "refs/tags/archive/pre-p122-cleanup/fix/p17-native-vstgui-buttons"
+  },
+  {
+    "sha": "2c1850258f66ee075c7fa5e3ed861c2df9d3412d",
+    "ref": "refs/tags/archive/pre-p122-cleanup/fix/p18-button-single-click-gesture"
+  },
+  {
+    "sha": "2c287836f586fe3745524de85d6b5d3be82c0336",
+    "ref": "refs/tags/archive/pre-p122-cleanup/fix/p18-hardware-menu-keyboard-automation"
+  },
+  {
+    "sha": "7f33c01929b391bafefde3b07399047042a08dbb",
+    "ref": "refs/tags/archive/pre-p122-cleanup/fix/p19-browser-constructor-contract"
+  },
+  {
+    "sha": "169a0082e075dcbd8aa6ec2fa696460b65b585b4",
+    "ref": "refs/tags/archive/pre-p122-cleanup/fix/p19-logo-binary-checkout"
+  },
+  {
+    "sha": "999304be784f250ee31cd5bb914f4be99a8f7a03",
+    "ref": "refs/tags/archive/pre-p122-cleanup/fix/p19-logo-header-inset"
+  },
+  {
+    "sha": "faa387f622032ff8854ce51a1b2989481bada469",
+    "ref": "refs/tags/archive/pre-p122-cleanup/fix/p19-test-variable-order"
+  },
+  {
+    "sha": "028996aa53dc8f34ed7b1d6c03726bb5425ff862",
+    "ref": "refs/tags/archive/pre-p122-cleanup/fix/p20-sf2-envelope-defaults"
+  },
+  {
+    "sha": "78f30a925d7f94da761e04573c86ac700514f9ce",
+    "ref": "refs/tags/archive/pre-p122-cleanup/fix/p20-sf2-failed-load-status"
+  },
+  {
+    "sha": "5a06026d8519e08d4a34e557d55337ca25e1f6d2",
+    "ref": "refs/tags/archive/pre-p122-cleanup/fix/p21-sf2-preset-additive-generators"
+  },
+  {
+    "sha": "733b33005621edf7591b055b940164a4691e234e",
+    "ref": "refs/tags/archive/pre-p122-cleanup/fix/p22-sf2-sustain-generator-semantics"
+  },
+  {
+    "sha": "c58c1fca2f6b99807a491825e96ea0a2d38fc0c3",
+    "ref": "refs/tags/archive/pre-p122-cleanup/research/p35-win95-preinstalled-boot"
+  },
+  {
+    "sha": "281cad5dd4280caa11c5c53a1caf6a248c09605d",
+    "ref": "refs/tags/archive/pre-p122-cleanup/research/p37-win95-driver-install-precheck"
+  },
+  {
+    "sha": "c1494d42d40fa369c457aaad5b78fd1bc3c3c369",
+    "ref": "refs/tags/archive/pre-p122-cleanup/research/p39-win95-guest-targeted-installer"
+  },
+  {
+    "sha": "b7b7c83d8a7404279ff3ee32faa9e7d5e9a97a75",
+    "ref": "refs/tags/archive/pre-p122-cleanup/test/p113-sf2-output-rail-diagnostic"
+  },
+  {
+    "sha": "c76d39e4a1fae0d40cd06229769add5dd2f9c102",
+    "ref": "refs/tags/archive/pre-p122-cleanup/test/p114-raw-32bit-output-audit"
+  },
+  {
+    "sha": "156677faec3e1fa8b229860c84f9743b27ddc345",
+    "ref": "refs/tags/archive/pre-p122-cleanup/test/p18-editorhost-win32-gui-smoke"
+  },
+  {
+    "sha": "598e3f51924be9ea2e85340a77a8639786f11f01",
+    "ref": "refs/tags/archive/pre-p122-cleanup/work/p14-fix-absolute-sdk-dllmain"
+  },
+  {
+    "sha": "8cab1e564fcdfede2939d0e971f1313bf49ef9c1",
+    "ref": "refs/tags/archive/pre-p122-cleanup/work/p14-fix-vstgui-module-entry"
+  },
+  {
+    "sha": "d70879ba0952c7bf551cad3778d2d9d50357d8db",
+    "ref": "refs/tags/archive/pre-p122-cleanup/work/p14-program-menu-binding"
+  },
+  {
+    "sha": "84e8751783d7c4104fe466255a3b151a2cb00a49",
+    "ref": "refs/tags/archive/pre-p122-cleanup/work/p14-vstgui-test-panel"
+  },
+  {
+    "sha": "b88e01ad76d450e3aa62314fd8e53df0c39d4408",
+    "ref": "refs/tags/archive/pre-p122-cleanup/work/p15-autoload-historical-ibk"
+  },
+  {
+    "sha": "2447464e74ff9a60609759a1d35d4fbe86e2e136",
+    "ref": "refs/tags/archive/pre-p122-cleanup/work/p15-fm-program-immediate-voices"
+  }
+]

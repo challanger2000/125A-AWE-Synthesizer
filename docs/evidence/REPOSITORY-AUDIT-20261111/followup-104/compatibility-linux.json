@@ -1,0 +1,21 @@
+{
+  "lab_commit": "0832e1573a9ba83d3fdae43a63917554a0440aa8",
+  "platform": "Linux-6.18.57-x86_64-with-glibc2.41",
+  "python": "3.12.14 (main, Aug 25 2026, 14:00:49) [Clang 22.1.3 ]",
+  "tests": [
+    {
+      "test": "test_p220_awe_unified_release.py",
+      "exit_code": 0
+    },
+    {
+      "test": "test_p89_unified_qa_gaps.py",
+      "exit_code": 0
+    },
+    {
+      "test": "test_p90_external_capture_check.py",
+      "exit_code": 0
+    }
+  ],
+  "original_creative_or_vst3_test": false,
+  "release_approved": false
+}

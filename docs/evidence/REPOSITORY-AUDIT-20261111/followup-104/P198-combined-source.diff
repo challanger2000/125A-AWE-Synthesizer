@@ -1,0 +1,119 @@
+diff --git a/src/engine/SoundFont.cpp b/src/engine/SoundFont.cpp
+index 7884a44..bf4b79f 100644
+--- a/src/engine/SoundFont.cpp
++++ b/src/engine/SoundFont.cpp
+@@ -1275,8 +1275,18 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
+     // those were the last four mismatching notes of RELAX. For note 69 with
+     // samplePitch 8781 it gives (69-60+60)*100 - 8781 = -1881, half is
+     // -940 - exactly what the driver wrote.
++    const int scaleTuning = g.Get(Gen::ScaleTuning, 100);
+     double pitchCents = (key - rootKey) * 100.0 + cents;
+-    if (g.Get(Gen::ScaleTuning, 100) == 1)
++    // P196: real AWE64 Gold CT4390 SoundFont test #3/#4 uses
++    // SF2 scaleTuning=0 on the instrument zone. Hardware plays the
++    // key-number-dependent envelope tests at a fixed pitch. Previously
++    // C3/C2 erroneously rendered at 131/65 Hz rather than the same
++    // fixed source pitch, manufacturing 50-200 Hz bass energy.
++    // Preserve the exact P96 nonzero/default Win95 SF2 pitch vectors,
++    // and the original DOS/SF1 driver's scaleTuning==1 half step.
++    if (!sf1 && drv == Awe32::Driver::Win95 && scaleTuning == 0)
++        pitchCents = cents;
++    else if (scaleTuning == 1)
+         pitchCents = static_cast<int>(pitchCents) / 2;
+ 
+     // The sample rate is converted to cents separately - the driver has this
+@@ -1308,18 +1318,19 @@ VoiceParams MakeVoiceParams(const Bank& bank, const Region& region,
+     }
+     else
+     {
+-        // SF2 stores initialAttenuation in centibels. The Win95 Creative
+-        // AWE hardware uses its historical *0.4 attenuation response*, not
+-        // a modern SF2 player's nominal 1.0 dB per dB. The original
+-        // SoundFont Spec Test #11 records +5 SF2 dB as approximately +2 dB
+-        // attenuation on an AWE64 Gold; P103's 5-step hardware playback
+-        // independently finds 2.258 dB per +5 SF2 dB, whereas the previous
+-        // Win95 path rendered 4.250 dB. Preserve the legacy DOS family,
+-        // whose converter and existing compatibility regressions are distinct.
+-        // This corrects the SF2-to-register mapping; chip 0.375-dB IFATN
+-        // quantization and verified Creative MIDI attenuation curves remain.
++        // P198: SF2 initialAttenuation centibels -> Creative IFATN units.
++        // The original CT4390 Gold/SoundFont Spec Test v3.0 uses the same
++        // sample (ID 43) and pitch across 5 separately attenuated notes.
++        // Hardware: 2.258 dB per +5 SF2 dB. P104's 0.4 approximation
++        // produced 1.700 dB/step; the independent P198 reference at 0.50
++        // produced 2.267 dB/step with <=0.05 dB middle/late per-note
++        // error. The alternate 0.53 showed >1 dB errors at intermediate
++        // notes despite an identical average slope (chip quantization).
++        // Preserve original 0.375 dB IFATN steps and DOS/SDK/SF1 mapping.
++        // This is analog hardware response calibration, not a VXD binary
++        // proof or permission to retune envelopes, EQ and effects.
+         const double hardwareSf2AttenuationScale =
+-            (drv == Awe32::Driver::Win95) ? 0.4 : 1.0;
++            (drv == Awe32::Driver::Win95) ? 0.50 : 1.0;
+         vp.patchAttenUnits = static_cast<uint8_t>(std::clamp(
+             static_cast<int>(std::lround(g.Get(Gen::InitialAttenuation, 0)
+                        * hardwareSf2AttenuationScale
+diff --git a/tests/p90_sf2_driver_registers.cpp b/tests/p90_sf2_driver_registers.cpp
+index 2a1ddca..d91c672 100644
+--- a/tests/p90_sf2_driver_registers.cpp
++++ b/tests/p90_sf2_driver_registers.cpp
+@@ -39,19 +39,20 @@ int main() {
+     ok&=check(!oneShot.looping && !oneShot.loopOpensOnRelease,
+               "Win95 SF2 mode 0 is one-shot");
+     r.gen.Set(Gen::SampleModes,1);
+-    // P104: original CT4390 analog SoundFont Spec Test #11 confirms its
+-    // historic 0.4-dB-per-dB SF2 initialAttenuation response, rather than
+-    // modern SF2 1:1. Check Win95 versus the untouched DOS mapping.
+-    for (const int cb : {0, 50, 100, 150, 300})
++    // P198: P104's 0.40 scale left 0.558 dB/5-SF2-dB low on physical
++    // AWE64 Gold comparison. The 0.50 candidate matches every note in
++    // independent original SF2 fixture (sample 43, matched pitch) within
++    // 0.05 dB during its stable middle/late phase. DOS remains unchanged.
++    for (const int cb : {0, 50, 100, 150, 200, 250, 300})
+     {
+         r.gen.Set(Gen::InitialAttenuation, static_cast<int16_t>(cb));
+         const auto win95 = MakeVoiceParams(sf2,r,60,100,base,0,Awe32::Driver::Win95);
+         const auto oldDos = MakeVoiceParams(sf2,r,60,100,base,0,Awe32::Driver::Dos);
+-        const int expectedWin95 = static_cast<int>(std::lround(cb * .4 / 10. / .375));
++        const int expectedWin95 = static_cast<int>(std::lround(cb * .50 / 10. / .375));
+         const int expectedDos = static_cast<int>(std::lround(cb / 10. / .375));
+         ok &= check(win95.patchAttenUnits == expectedWin95
+                     && oldDos.patchAttenUnits == expectedDos,
+-                    "P104 hardware Win95 SF2 0.4x attenuation; DOS unmodified");
++                    "P198 hardware Win95 SF2 0.50x attenuation; DOS unmodified");
+     }
+     r.gen.Set(Gen::InitialAttenuation, 0);
+     // P92 independent original Creative converter code / P91 genuine
+@@ -153,5 +154,32 @@ int main() {
+     ok&=check(p7a.ip==0xBFE9 && p7b.ip==0xCFEA &&
+               p7c.ip==0xCFEE && p7d.ip==0xBFED,
+               "P96 candidate matches 4 original Creative program7 pitch writes");
++    // P196: original, SHA-pinned SoundFont Spec Test v3.0 programs 1/2
++    // have scaleTuning=0 (validated by read-only RIFF/pgen/igen parser).
++    // MIDI C4/C3/C2 must affect envelope key-number scaling but NOT pitch.
++    r.gen.Set(Gen::OverridingRootKey,60);
++    r.gen.Set(Gen::CoarseTune,0);
++    r.gen.Set(Gen::FineTune,0);
++    r.gen.Set(Gen::ScaleTuning,0);
++    const auto zero36=MakeVoiceParams(sf2,r,36,127,base,0,Awe32::Driver::Win95);
++    const auto zero48=MakeVoiceParams(sf2,r,48,127,base,0,Awe32::Driver::Win95);
++    const auto zero60=MakeVoiceParams(sf2,r,60,127,base,0,Awe32::Driver::Win95);
++    ok&=check(zero36.ipCents==zero60.ipCents &&
++              zero48.ipCents==zero60.ipCents &&
++              zero36.ip==zero60.ip && zero48.ip==zero60.ip,
++              "P196 SF2 scaleTuning=0 preserves fixed pitch for C2/C3/C4");
++    r.gen.Set(Gen::ScaleTuning,100);
++    const auto full36=MakeVoiceParams(sf2,r,36,127,base,0,Awe32::Driver::Win95);
++    const auto full48=MakeVoiceParams(sf2,r,48,127,base,0,Awe32::Driver::Win95);
++    const auto full60=MakeVoiceParams(sf2,r,60,127,base,0,Awe32::Driver::Win95);
++    ok&=check(full36.ipCents==-2400 &&
++              full48.ipCents==-1200 && full60.ipCents==0,
++              "P196 SF2 default 100 cents/key preserves original pitch");
++    r.gen.Set(Gen::ScaleTuning,1);
++    Bank sf1=sf2;
++    sf1.version=Version::Sf1;
++    const auto legacySf1=MakeVoiceParams(sf1,r,48,127,base,0,Awe32::Driver::Win95);
++    ok&=check(legacySf1.ipCents==-600,
++              "P196 legacy SF1 scaleTuning=1 still halves key interval");
+     return ok?0:1;
+ }

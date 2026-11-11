@@ -1,0 +1,14 @@
+P220_STEREO asymmetric_independent_lsb expected=PASS observed=PASS
+P220_STEREO dual_mono_swap expected=PASS observed=PASS
+P220_STEREO matching_antiphase expected=PASS observed=PASS
+P220_STEREO matching_hard_left expected=PASS observed=PASS
+P220_STEREO common_gain_half_db expected=PASS observed=PASS
+P220_STEREO common_latency_211_frames expected=PASS observed=PASS
+P220_STEREO left_right_swap expected=FAIL observed=FAIL
+P220_STEREO right_silent expected=FAIL observed=FAIL
+P220_STEREO left_silent expected=FAIL observed=FAIL
+P220_STEREO right_gain_minus_3db expected=FAIL observed=FAIL
+P220_STEREO right_polarity expected=FAIL observed=FAIL
+P220_STEREO both_polarities expected=FAIL observed=FAIL
+P220_STEREO right_delay_128_frames expected=FAIL observed=FAIL
+P220_STEREO_REGRESSION 13 / 13 synthetic WAV only; release_approved=False

@@ -1,0 +1,122 @@
+flowchart LR
+  %% Base -> Head: development dependency, not a merge recommendation
+  b0["audit/p131-process-wall-cycles-20261106\n8fe0142874"]
+  b1["audit/p132-chorus-feedback-evidence-20261106\n9e93ff667a"]
+  b2["audit/p135-p134-v11-realtime\n00f40c89a6"]
+  b3["audit/p139-p137-v11-full-etw\n67f8ed3025"]
+  b4["audit/p140-p134-p137-paired-stress\nca27257581"]
+  b5["develop/p63-win95-original-driver-midi-bridge\n867c09651b"]
+  b6["develop/v0.1.0-upstream-audit\n13bd4cbd61"]
+  b7["docs/p22-verified-sf2-timbre-checkpoint\nc7a940eb9d"]
+  b8["fix/creative-volume-sustain-layer-parity\n2bd6d2d299"]
+  b9["fix/creative-win95-original-envelope-parity\n503123022d"]
+  b10["fix/p122-bank-dirty-audit\n79ba56bc5e"]
+  b11["fix/p129-chorus-signed-tail-quantization\n64b8f61c7a"]
+  b12["fix/p165-original-faceplate-layout\nc729fda9cb"]
+  b13["fix/p166-exact-sf2-rom-isolation\n6395d4cf1d"]
+  b14["fix/p168-dawevidence-lcd-text-safe-inset\n8ad695055c"]
+  b15["fix/p169-invalid-program-visible\n99fb90fc85"]
+  b16["fix/p170-p171-audio-corrections\naa7b871836"]
+  b17["fix/p175-dark-filter-peak-bound\n3203fe8df1"]
+  b18["fix/p223-preserve-creative-fx-sends\n3ae1b26322"]
+  b19["fix/p224-remove-86box-ui-label\n8e8315c2ec"]
+  b20["fix/p23-sf2-scale-tuning\nc2d23a8b60"]
+  b21["fix/p24-visible-rom-backend-status\nf9ae1a5af3"]
+  b22["opt/p137-box86-shadow-skip-unused-float-dsp\nf0f397c265"]
+  b23["qa/creative-original-owner-direct-ab\n8052496bc0"]
+  b24["qa/p176-exported-vst3-first-note-loops\n65bba76976"]
+  b25["qa/p177-controller-gui-first-note\nf2b07522ea"]
+  b26["qa/p178-private-media-local-acceptance\ncff9d91cde"]
+  b27["qa/p179-native-asio-instrument-kit\n3aaa2f7365"]
+  b28["qa/p222-controlled-fx-factorial\n3af63b9923"]
+  b29["qa/p226-raw32-preclip-factorial\n597150d218"]
+  b30["qa/p228-crossbank-real-dry-audio\na17d95d87f"]
+  b31["qa/p229-dry-preclip-rootcause\ne3cbd9ce78"]
+  b32["qa/p230-original-rom-sbk-audio\n7b7553fb95"]
+  b33["research/p29-original-creative-sf2-driver-oracle\n9dd8f50ef1"]
+  b34["research/p30-creative-dos-awe32-runtime\nd0f97999d9"]
+  b35["research/p31-original-creative-noteon-validation\nfe850abda3"]
+  b36["research/p32-sf2-preset-merge-comparison\nbdac7148e0"]
+  b37["research/p33-actual-audio-merge-ab\n661371072b"]
+  b38["research/p34-win95-original-driver-stack-audit\n29c4d2c5c2"]
+  b39["research/p36-win95-dosboxx-awe32-boot\n55a91bd9f5"]
+  b40["research/p38-original-creative-win95-install\n943e9abcf5"]
+  b41["research/p40-win95-qemu-direct-guest-input\ne6c5313721"]
+  b42["research/p41-win95-awe32-hardware-wizard\na2d5acad32"]
+  b43["research/p42-win95-media-class-selection\n8d39e6734a"]
+  b44["research/p43-win95-original-awe32-install\nfa7ebf77d1"]
+  b45["research/p44-win95-awe32-finish-driver-setup\n7e9f28a1e1"]
+  b46["research/p45-86box-emu8000-trace-instrumentation\nfc1d3f35e9"]
+  b47["research/p46-win95-original-driver-reboot\nfe217317dd"]
+  b48["research/p47-86box-emu8000-hardware-smoke\n1688134644"]
+  b49["research/p48-win95-86box-awe32-pnp-guest\nf5882eb448"]
+  b50["research/p49-win95-midi-note-creative-driver\n22d7f29e6c"]
+  b51["research/p49c-win95-midi-program7\n8df211f827"]
+  b52["research/p50-emu8000-program0-7-comparison\n1d3859a20a"]
+  b53["research/p51-emu8000-immediate-trace\n5827a125b4"]
+  b54["research/p52-creative-awecp95-sf2-staging\n97fe007d97"]
+  b55["research/p53-original-creative-control-panel-win95\nd7aad085ad"]
+  b56["research/p54-creative-control-panel-synth-user-tabs\n1a15cd2770"]
+  b57["research/p55-win95-original-creative-sf2-user-load\na84bd168a3"]
+  b58["research/p56-win95-creative-apply-generated-sf2\n298de6b7fc"]
+  b59["research/p57-original-creative-userbank-midi\n585ec1e0c7"]
+  b60["research/p58-sf2-waveform-spectral-confirmation\n28d9e853f3"]
+  b61["research/p59-user-bass-d3-e3-voice-regression\n3d102cd296"]
+  b62["research/p60-original-creative-sf2-ram-upload\ndeac27bd6e"]
+  b63["research/p61-bass-envelope-audible-decay\nc1affe5446"]
+  b64["research/p62-creative-sf2-upload-fit-refinement\n42a2843e2d"]
+  b65["work/p15-built-in-fm-presets\n5a85c3fb29"]
+  b8 -->|"PR #102"| b32
+  b23 -->|"PR #101"| b9
+  b30 -->|"PR #100"| b31
+  b29 -->|"PR #99"| b30
+  b28 -->|"PR #98"| b29
+  b28 -->|"PR #97"| b19
+  b28 -->|"PR #96"| b18
+  b26 -->|"PR #90"| b27
+  b25 -->|"PR #89"| b26
+  b24 -->|"PR #88"| b25
+  b17 -->|"PR #87"| b24
+  b16 -->|"PR #86"| b17
+  b14 -->|"PR #84"| b15
+  b12 -->|"PR #79"| b13
+  b22 -->|"PR #77"| b4
+  b10 -->|"PR #76"| b3
+  b10 -->|"PR #74"| b2
+  b10 -->|"PR #71"| b1
+  b10 -->|"PR #70"| b0
+  b10 -->|"PR #67"| b11
+  b64 -->|"PR #62"| b5
+  b62 -->|"PR #61"| b64
+  b62 -->|"PR #60"| b63
+  b61 -->|"PR #59"| b62
+  b60 -->|"PR #58"| b61
+  b59 -->|"PR #57"| b60
+  b58 -->|"PR #56"| b59
+  b57 -->|"PR #55"| b58
+  b56 -->|"PR #54"| b57
+  b55 -->|"PR #53"| b56
+  b54 -->|"PR #52"| b55
+  b53 -->|"PR #51"| b54
+  b52 -->|"PR #50"| b53
+  b50 -->|"PR #49"| b52
+  b50 -->|"PR #48"| b51
+  b49 -->|"PR #47"| b50
+  b48 -->|"PR #46"| b49
+  b47 -->|"PR #45"| b48
+  b46 -->|"PR #44"| b47
+  b45 -->|"PR #43"| b46
+  b44 -->|"PR #42"| b45
+  b43 -->|"PR #41"| b44
+  b42 -->|"PR #40"| b43
+  b41 -->|"PR #39"| b42
+  b39 -->|"PR #38"| b40
+  b6 -->|"PR #37"| b38
+  b6 -->|"PR #36"| b37
+  b6 -->|"PR #35"| b36
+  b34 -->|"PR #34"| b35
+  b33 -->|"PR #33"| b34
+  b6 -->|"PR #32"| b33
+  b7 -->|"PR #31"| b21
+  b7 -->|"PR #30"| b20
+  b6 -->|"PR #5"| b65
