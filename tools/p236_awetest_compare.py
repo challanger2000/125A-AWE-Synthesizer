@@ -316,14 +316,15 @@ def line_out_audit(a):
                 "rt":(int(m.group(3))*65536+int(m.group(4)))/1193182.,
                 "filebase":int(m.group(5)),"frame":int(m.group(6))}
             events.append(ev)
-    # Use the original author's reference-tone strategy with redundant
-    # anchors. The first reference tone in blocks 1/2 uses reca001, and
-    # blocks 5/6 use reca003. One bad capture should not invalidate all
-    # usable independent alignment evidence.
+    # Match source analysis/flac25.py across the full recording, including
+    # mid-run references. The first two source anchors were reproducible
+    # (r=.935/.947), but v25 blocks 5 and 6 have low envelope correlation;
+    # accepting only these four yields a false missing-clock conclusion.
+    # Also preserve all THREE consecutive original external FLAC parts.
     anchors=[next((e for e in events if e["block"]==blk and
-                   e["text"]=="reference tone"),None) for blk in (1,2,5,6)]
+                   e["text"]=="reference tone"),None) for blk in (1,2,3,4,5,6)]
     demand(all(anchors),"missing original AWETEST v25 line-out reference tones")
-    card_by_base={0:"reca001.flac",213000:"reca003.flac"}
+    card_by_base={0:"reca001.flac",101800:"reca002.flac",213000:"reca003.flac"}
     pieces=[]
     for fp in a.line_parts:
         info=sf.info(fp)
@@ -374,9 +375,9 @@ def line_out_audit(a):
               flush=True)
         if quality>.60 and abs(got-pred)<3.0:
             found.append((anchor["block"],anchor["rt"],got,quality))
-    demand(len(found)>=2 and any(e[0]>=5 for e in found)
+    demand(len(found)>=3 and any(e[0]>=4 for e in found)
            and any(e[0]<=2 for e in found),
-           "physical line-out lacks two trusted near/far timing anchors")
+           "physical line-out lacks independent near/mid/late trusted reference tones")
     slope,intercept=np.polyfit([p[1] for p in found],[p[2] for p in found],1)
     residual=np.asarray([p[2]-(slope*p[1]+intercept) for p in found])
     demand(.995<slope<1.005 and np.max(np.abs(residual))<.03,
@@ -470,7 +471,7 @@ def main():
     p.add_argument("--out",type=Path)
     p.add_argument("--current-commit")
     p.add_argument("--self-test",action="store_true")
-    p.add_argument("--line-parts",type=Path,nargs=2)
+    p.add_argument("--line-parts",type=Path,nargs=3)
     p.add_argument("--line-out",type=Path)
     a=p.parse_args()
     if a.self_test:return selftest()
