@@ -1,7 +1,7 @@
 name: P97 analog AWE64 Gold vs native 125A EMU8000
 on:
   push:
-    branches: [develop/p97-awe64-physical-audio-comparison]
+    branches: [develop/p97-awe64-physical-audio-comparison, qa/p230-original-rom-sbk-audio]
     paths:
       - 'tools/p97_*'
       - 'tools/p98_*'
@@ -12,6 +12,9 @@ on:
       - 'src/engine/CMakeLists.txt'
       - 'src/engine/snd_emu8k.c'
       - 'src/engine/SoundFont.cpp'
+      - 'src/engine/Emu8000.cpp'
+      - 'src/engine/Synth.cpp'
+      - 'tools/p236_*'
       - '.github/workflows/p97-physical-awe64-audio.yml'
   workflow_dispatch:
 permissions:
@@ -55,6 +58,28 @@ jobs:
           cmake -S . -B build-p97 -G Ninja \
             -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_OPL3_PROBES=OFF -D125A_BUILD_VST3=OFF
           cmake --build build-p97 --target awe32_p97_midi_renderer --parallel 4
+      - name: Verify November 4 hardware-checked baseline and build matching historical 125A kernel
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASELINE_SHA=85dd26e7d466150a2cdba62be513b83486e9d887
+          # Historical P97-P105 hardware run 41749832362; absolutely never
+          # compare a different fixture or a stale cached binary.
+          git fetch --no-tags --depth=1 origin "$BASELINE_SHA"
+          git worktree add --detach "$RUNNER_TEMP/p97/hardware-baseline-src" "$BASELINE_SHA"
+          test "$(git -C "$RUNNER_TEMP/p97/hardware-baseline-src" rev-parse HEAD)" = "$BASELINE_SHA"
+          cmake -S "$RUNNER_TEMP/p97/hardware-baseline-src" \
+            -B "$RUNNER_TEMP/p97/hardware-baseline-build" -G Ninja \
+            -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_OPL3_PROBES=OFF -D125A_BUILD_VST3=OFF
+          cmake --build "$RUNNER_TEMP/p97/hardware-baseline-build" \
+            --target awe32_p97_midi_renderer --parallel 4
+          "$RUNNER_TEMP/p97/hardware-baseline-build/src/engine/awe32_p97_midi_renderer" \
+            --rom "$RUNNER_TEMP/p97/awe32.raw" \
+            --sf2 "$RUNNER_TEMP/p97/reference-v3.sf2" \
+            --events "$RUNNER_TEMP/p97/events.tsv" \
+            --out "$RUNNER_TEMP/p97/baseline-264s.wav" --seconds 264
+          test -s "$RUNNER_TEMP/p97/baseline-264s.wav"
+          echo "P236_HISTORICAL_HW_BASELINE_SOURCE_SHA=$BASELINE_SHA"
       - name: Render complete 264 seconds through the original EMU8000 chip
         run: |
           ./build-p97/src/engine/awe32_p97_midi_renderer \
@@ -68,6 +93,12 @@ jobs:
             --reference "$RUNNER_TEMP/p97/CT4390.flac" \
             --native "$RUNNER_TEMP/p97/native-264s.wav" --seconds 264 \
             --out p97-evidence/P97-AWE64-Gold-versus-125A-264s.json
+      - name: P236 remeasure same hardware recording against baseline through the same P97 comparator
+        run: |
+          "$RUNNER_TEMP/p97/venv/bin/python" tools/p97_compare_hardware_audio.py \
+            --reference "$RUNNER_TEMP/p97/CT4390.flac" \
+            --native "$RUNNER_TEMP/p97/baseline-264s.wav" --seconds 264 \
+            --out p97-evidence/P236-baseline-CT4390-264s.json
       - name: P98 compare MIDI-verified Hall/Chorus A/B/C individual notes
         run: |
           "$RUNNER_TEMP/p97/venv/bin/python" tools/p98_effect_subtests.py \
@@ -87,6 +118,15 @@ jobs:
             --sf2 "$RUNNER_TEMP/p97/reference-v3.sf2" \
             --out p97-evidence/P99-Fidelity-Audit.json \
             --summary p97-evidence/P99-Fidelity-Summary.md
+      - name: P236 hardware-baseline/PR102 quantitative regression gate
+        run: |
+          "$RUNNER_TEMP/p97/venv/bin/python" tools/p236_hardware_regression.py \
+            --old p97-evidence/P236-baseline-CT4390-264s.json \
+            --current p97-evidence/P97-AWE64-Gold-versus-125A-264s.json \
+            --baseline-commit 85dd26e7d466150a2cdba62be513b83486e9d887 \
+            --current-commit "$(git rev-parse HEAD)" \
+            --out p97-evidence/P236-hardware-regression.json \
+            --summary p97-evidence/P236-hardware-regression.md
       - name: P102 validate EG1/EG2 six-stage envelopes versus original AWE64
         run: |
           "$RUNNER_TEMP/p97/venv/bin/python" -m py_compile tools/p102_envelope_phases.py
