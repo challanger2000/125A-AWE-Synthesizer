@@ -83,7 +83,9 @@ static void capture(Emu8000Core& core,const fs::path& out,int cutoff,int Q) {
              <<" rail "<<rail<<" nonzero "<<nonzero<<"\n";
 }
 int main(int argc,char** argv){
-    if(argc!=3){std::cerr<<"Usage: awe32_p236_awetest_native awe32.raw PRIVATE_OUTDIR\n";return 2;}
+    if(argc!=3 && argc!=4){std::cerr<<"Usage: awe32_p236_awetest_native awe32.raw PRIVATE_OUTDIR [--hardware-eq]\n";return 2;}
+    const bool exactCardEq=(argc==4 && std::string(argv[3])=="--hardware-eq");
+    if(argc==4 && !exactCardEq){std::cerr<<"Unknown AWETEST fixture flag\n";return 2;}
     try{
         const fs::path root=argv[2];fs::create_directories(root);
         Emu8000Core core(44100);
@@ -115,6 +117,16 @@ int main(int argc,char** argv){
             std::cout << " " << std::hex << x << std::dec;
         }
         std::cout << " register_equivalent=" << (equivalent ? "YES" : "NO") << "\n";
+        if (exactCardEq) {
+            // This is a disposable audio-reference state, never a 125A
+            // production EQ or chip algorithm change. The recorded v25 card
+            // had precisely these 10 INIT slots in awetest.log.
+            for (size_t i=0;i<eq_ids.size();i++)
+                core.Write(eq_ids[i].first,eq_ids[i].second,physical_eq[i]);
+        }
+        std::cout << "P236_AWETEST_NATIVE_EQ_MODE "
+                  << (exactCardEq ? "EXACT_V25_CARD_EQ_REGISTERS" : "125A_DOS_INIT_EQ")
+                  << "\n";
         // v25 AWETEST: filter cutoff block 6, Q=0. Include high-cutoff
         // reference 252 to compare relative spectra without analog gain fit.
         const std::array<int,13> cuts={0,16,32,48,64,80,96,112,128,160,192,224,252};
