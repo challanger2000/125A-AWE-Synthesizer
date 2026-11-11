@@ -159,7 +159,7 @@ int main(int argc,char** argv){
     require(argc==3||pilotMode||stateProbeMode,"usage: p230_rom_sbk_native awe32.raw PRIVATE_OUTPUT_DIR"
            " or --pilot awe32.raw PRIVATE_OUTPUT_DIR"
            " or --creative-fx-pilot awe32.raw PRIVATE_OUTPUT_DIR"
-           " or --state-probe awe32.raw PRIVATE_OUTPUT_DIR GM_PROGRAM (0 or 88)"
+           " or --state-probe awe32.raw PRIVATE_OUTPUT_DIR GM_PROGRAM (0,39,88)"
            " or --list");
     const fs::path rom=argv[(pilotMode||stateProbeMode)?2:1],
                    dir=argv[(pilotMode||stateProbeMode)?3:2];
@@ -182,7 +182,7 @@ int main(int argc,char** argv){
     auto cases=pilotMode?pilot():plan();
     if(stateProbeMode){
         const std::string p=argv[4];
-        require(p=="0"||p=="88","P233 GM state probe only permits programs 0, 88");
+        require(p=="0"||p=="39"||p=="88","P234 dry state probe permits GM 0, 39, 88");
         const int program=std::stoi(p);
         cases.clear();
         cases.push_back(Case{16383,program,60,100,0});
