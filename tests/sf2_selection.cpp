@@ -139,20 +139,24 @@ int main() {
             ok &= Check(full.ifatn!=0xFF00,
                 "SF2 preset cutoff offset over default is converted to chip register");
             Region adjusted=sound[0];
-            adjusted.gen.Set(Gen::SustainVolEnv,120); // 12 dB -> 16 steps
+            // Original Creative Win95 generator-37 oracle: 127 -> 111,
+            // 960 -> 6. See CREATIVE-WIN95-28-GENERATOR-HOLD-SUSTAIN-ORIGINAL.
+            // Its historical volume-sustain conversion is not a modern
+            // SF2 dB-to-0.75-dB envelope conversion.
+            adjusted.gen.Set(Gen::SustainVolEnv,127);
             adjusted.gen.Set(Gen::SustainModEnv,600); // 60% below peak
             const auto explicitSustain=MakeVoiceParams(
                 bass,adjusted,60,100,0x200010,0,Awe32::Driver::Win95);
             ok &= Check((explicitSustain.dcysusv>>8)==111 &&
                         (explicitSustain.dcysus>>8)==51,
-                "SF2 explicit volume 120 centibels and mod 600 permille use distinct units");
+                "SF2 volume sustain 127 and mod 600 follow measured Creative units");
             adjusted.gen.Set(Gen::SustainVolEnv,960);
             adjusted.gen.Set(Gen::SustainModEnv,1000);
             const auto zeroSustain=MakeVoiceParams(
                 bass,adjusted,60,100,0x200010,0,Awe32::Driver::Win95);
-            ok &= Check((zeroSustain.dcysusv>>8)==0 &&
+            ok &= Check((zeroSustain.dcysusv>>8)==6 &&
                         (zeroSustain.dcysus>>8)==0,
-                "SF2 explicit high attenuation decays to zero as intended");
+                "Creative SF2 volume sustain 960 retains 6 while mod 1000 reaches zero");
         }
         // Protect the previously proven SBK/SF1 driver semantics.
         bass.version=Version::Sf1;
