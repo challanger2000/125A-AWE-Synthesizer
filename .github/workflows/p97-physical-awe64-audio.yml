@@ -103,15 +103,24 @@ jobs:
           python3 tools/p236_hw_fx_reference_mode.py \
             --source "$RUNNER_TEMP/p97/Synth.cpp.production-unchanged" \
             --out "$RUNNER_TEMP/p97/Synth.cpp.hardware-CT4390-fixture"
+          # Always restore the checked-out production source, including on build failure.
+          trap 'cp "$RUNNER_TEMP/p97/Synth.cpp.production-unchanged" "$source"' EXIT
           cp "$RUNNER_TEMP/p97/Synth.cpp.hardware-CT4390-fixture" "$source"
           # The ONLY temporary source differences are the FX mute and actual
           # historical preset+CC send bytes. No DSP algorithm modified.
           test "$(git diff -U0 -- "$source" | grep '^+' | grep -v '^+++' | grep -c 'P236:')" -eq 3
-          cmake --build build-p97 --target awe32_p97_midi_renderer --parallel 4
-          # Restore the entire product source without discarding any changes.
+          # An independent build tree is mandatory: the regular P170 mutant
+          # generator requires original Synth.cpp and must not inspect this fixture.
+          cmake -S . -B "$RUNNER_TEMP/p97/hardware-fx-build" -G Ninja \
+            -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_OPL3_PROBES=OFF \
+            -D125A_BUILD_VST3=OFF -D125A_P170_MUTATION_TESTS=OFF
+          cmake --build "$RUNNER_TEMP/p97/hardware-fx-build" \
+            --target awe32_p97_midi_renderer --parallel 4
+          # Restore the entire product source before audio comparisons.
           cp "$RUNNER_TEMP/p97/Synth.cpp.production-unchanged" "$source"
+          trap - EXIT
           git diff --exit-code -- "$source"
-          ./build-p97/src/engine/awe32_p97_midi_renderer \
+          "$RUNNER_TEMP/p97/hardware-fx-build/src/engine/awe32_p97_midi_renderer" \
             --rom "$RUNNER_TEMP/p97/awe32.raw" \
             --sf2 "$RUNNER_TEMP/p97/reference-v3.sf2" \
             --events "$RUNNER_TEMP/p97/events.tsv" \
@@ -154,16 +163,6 @@ jobs:
             --sf2 "$RUNNER_TEMP/p97/reference-v3.sf2" \
             --out p97-evidence/P99-Fidelity-Audit.json \
             --summary p97-evidence/P99-Fidelity-Summary.md
-      - name: P236 hardware-baseline/PR102 quantitative regression gate
-        run: |
-          "$RUNNER_TEMP/p97/venv/bin/python" tools/p236_hardware_regression.py --self-test
-          "$RUNNER_TEMP/p97/venv/bin/python" tools/p236_hardware_regression.py \
-            --old p97-evidence/P236-baseline-CT4390-264s.json \
-            --current p97-evidence/P97-AWE64-Gold-versus-125A-264s.json \
-            --baseline-commit 85dd26e7d466150a2cdba62be513b83486e9d887 \
-            --current-commit "$(git rev-parse HEAD)" \
-            --out p97-evidence/P236-hardware-regression.json \
-            --summary p97-evidence/P236-hardware-regression.md
       - name: P102 validate EG1/EG2 six-stage envelopes versus original AWE64
         run: |
           "$RUNNER_TEMP/p97/venv/bin/python" -m py_compile tools/p102_envelope_phases.py
@@ -191,6 +190,16 @@ jobs:
             --events "$RUNNER_TEMP/p97/events.tsv" \
             --p97-report p97-evidence/P97-AWE64-Gold-versus-125A-264s.json \
             --out p97-evidence/P105-Filter-and-Release-Diagnostics.json
+      - name: P236 hardware-baseline/PR102 quantitative regression gate
+        run: |
+          "$RUNNER_TEMP/p97/venv/bin/python" tools/p236_hardware_regression.py --self-test
+          "$RUNNER_TEMP/p97/venv/bin/python" tools/p236_hardware_regression.py \
+            --old p97-evidence/P236-baseline-CT4390-264s.json \
+            --current p97-evidence/P97-AWE64-Gold-versus-125A-264s.json \
+            --baseline-commit 85dd26e7d466150a2cdba62be513b83486e9d887 \
+            --current-commit "$(git rev-parse HEAD)" \
+            --out p97-evidence/P236-hardware-regression.json \
+            --summary p97-evidence/P236-hardware-regression.md
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -203,3 +212,27 @@ jobs:
       - name: Destroy ephemeral ROM and original recording
         if: always()
         run: rm -rf "$RUNNER_TEMP/p97"
+
+  # P170 retains its normal ON/default mutation oracles on untouched source.
+  # It runs independently of the temporary P236 wet-reference compilation.
+  p170-original-source-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure unmodified P170 audio mutation tests
+        run: |
+          cmake -S . -B build-p170-original -G Ninja \
+            -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_OPL3_PROBES=OFF \
+            -D125A_BUILD_VST3=OFF -D125A_P170_MUTATION_TESTS=ON
+      - name: Build all original P170 audio oracles and eight mutants
+        run: |
+          cmake --build build-p170-original --parallel 4 --target \
+            awe32_p170_audio_render awe32_p166_exact_presets_test \
+            p170_mutant_bank p170_mutant_amp p170_mutant_filter \
+            p170_mutant_loop p170_mutant_end p170_mutant_rom \
+            p170_mutant_pedal p170_mutant_headroom
+      - name: Execute original P170 mutant rejection and PCM oracle tests
+        run: |
+          ctest --test-dir build-p170-original --output-on-failure \
+            -R '^125A_p170_(pcm_audio_oracles|detect_mutant_.*)$|^125A_p166_exact_sf2_rom$'
