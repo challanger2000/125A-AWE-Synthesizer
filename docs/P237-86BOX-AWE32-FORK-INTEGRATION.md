@@ -5,7 +5,7 @@
 Der [86Box-AWE32-Fork von turican0](https://github.com/turican0/86Box-AWE32) ist als zusätzlicher, SHA-256-geprüfter Windows-x64-Backend integriert. Er ergänzt die bereits bestehende automatisierte Win95-/Creative-Testumgebung, ersetzt sie aber nicht.
 
 - Originalrelease: v6.0-AWE32-0.93 vom 30. September 2026, SHA-256
-  cef d28b691bfe1149719d26f54729356af91f9c3f713cfa6bab747aa0fa16b09 (ohne Leerzeichen).
+  cefd28b691bfe1149719d26f54729356af91f9c3f713cfa6bab747aa0fa16b09.
 - Das Python-Werkzeug tools/p237_86box_awe32_fork.py mit Befehl install lädt genau dieses Windows-ZIP, verifiziert es vor dem Entpacken, prüft sichere Archivpfade und bestimmt die ausführbare Datei.
 - capture startet den Fork auf einer ausdrücklich freigegebenen Wegwerf-Kopie einer vorhandenen VM mit EMU8K_TRACE und AWE32_WAV, ohne auf bestehende Originaldateien zu schreiben.
 - audit verifiziert Portwrite-Trace, 44,1-kHz-Chiptakt und WAV-Format (Stereo, PCM16, 44,1 kHz), zählt PCM-Grenzwerte und verweigert einen positiven Befund bei fehlenden Daten.
