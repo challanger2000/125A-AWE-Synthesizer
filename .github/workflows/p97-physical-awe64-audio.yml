@@ -242,6 +242,29 @@ jobs:
                 "original_resonance_Qpositive",a["median_absolute_resonance_nonzero_Q_level_error_db"],
                 "exact_card_EQ_resonance_Qpositive",b["median_absolute_resonance_nonzero_Q_level_error_db"])
           PY
+          # The original tester also captured the same v25 AWE32 LINE OUT
+          # simultaneously on an external sound card. Its author documented
+          # the internal ADC's frequency tilt in analysis/flac25.py.
+          # These are pre-existing public recordings, not a new test lab.
+          line_base="https://raw.githubusercontent.com/turican0/AWE32Emu/$commit/recordings/2026-09-12"
+          curl --fail --location --retry 3 --max-time 360 \
+            "$line_base/awetst25_line.part1.flac" -o "$root/awetst25_line.part1.flac"
+          curl --fail --location --retry 3 --max-time 360 \
+            "$line_base/awetst25_line.part2.flac" -o "$root/awetst25_line.part2.flac"
+          curl --fail --location --retry 3 --max-time 180 \
+            "$line_base/reca/reca001.flac" -o "$card/reca001.flac"
+          test "$(git hash-object "$root/awetst25_line.part1.flac")" = 367b81093811fe88ae8e4f7e0fb76273fdfc851a
+          test "$(git hash-object "$root/awetst25_line.part2.flac")" = b17f514b00bdffe87d008954cbcab9aedeabc57b
+          test "$(git hash-object "$card/reca001.flac")" = 750b3639027305073953ac3964cc497f44f249b6
+          "$root/venv/bin/python" tools/p236_awetest_compare.py \
+            --original-log "$card/awetest.log" \
+            --card-folder "$card" \
+            --native-dir "$root/awetest-native" \
+            --current-commit "$(git rev-parse HEAD)" \
+            --out "$root/P236-lineout-private-internal-control.json" \
+            --line-parts "$root/awetst25_line.part1.flac" "$root/awetst25_line.part2.flac" \
+            --line-out p97-evidence/P236-Real-AWE32-External-LineOut-Cutoff.json
+          echo P236_EXTERNAL_LINEOUT_V25_DIRECT_PHYSICAL_AUDIO_COMPARISON_DONE
 
       - name: P236 hardware-baseline/PR102 quantitative regression gate
         run: |
