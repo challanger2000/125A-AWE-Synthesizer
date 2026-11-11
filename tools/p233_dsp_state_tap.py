@@ -112,7 +112,8 @@ def patch(source: str, kind: str) -> str:
     if "P233: measurement-only" in source:
         raise ValueError("P233 already instrumented")
     assert kind in ("original","native")
-    marker="void\nemu8k_update(emu8k_t *emu8k)\n{"
+    marker=("static void /* AWE32Emu: one chunk; emu8k_update() below splits at state dump frames */\nemu8k_update_chunk(emu8k_t *emu8k)\n{"
+            if kind=="native" else "void\nemu8k_update(emu8k_t *emu8k)\n{")
     assert_unique(source,marker,kind)
     source=source.replace(marker,COMMON+"\n"+marker,1)
     # Only allocate temporary on-stack taps on runs with P233 explicitly enabled.
