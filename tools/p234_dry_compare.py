@@ -240,8 +240,9 @@ def audit(args):
     cases={r["program"]:r for r in guest["p230_original_gm_8_capture"]["cases"]
            if r["bank"]==16383}
     need(all(p in cases for p in PROGRAMS),"GM0/39/88 guest original data missing")
-    original_pcm=private_pcm(args.original_dry,None,None)
-    output=[]
+    # Two-pass acceptance: validate *every* program's true register-edge
+    # timing before computing even one RMS, FFT or envelope comparison.
+    timing_preflight={}
     for p in PROGRAMS:
         c=cases[p]
         need(c["valid_original_pcm"],f"GM{p} original WAV invalid")
@@ -249,12 +250,21 @@ def audit(args):
         original_meta=c.get("p234_dry_pcm_byte_range")
         need(original_meta and original_meta[0] is not None,f"GM{p} missing original raw per-note gate")
         rows_n,qs_n,m_n=decode_rows(args.native_root/f"native-gm{p}-stage.csv")
+        eo,en=edges(qs_o),edges(qs_n)
+        timing_gate=require_hold_timing(eo,en,p)
+        timing_preflight[p]=(rows_o,qs_o,m_o,rows_n,qs_n,m_n,
+                             eo,en,timing_gate,original_meta)
+    print("P234_TIMING_ACCEPTANCE_PASS all_programs="+",".join(map(str,PROGRAMS)),
+          "target="+str(RATE)+" tolerance=±"+str(HOLD_TOLERANCE_SAMPLES),
+          flush=True)
+    original_pcm=private_pcm(args.original_dry,None,None)
+    output=[]
+    for p in PROGRAMS:
+        c=cases[p]
+        (rows_o,qs_o,m_o,rows_n,qs_n,m_n,eo,en,timing_gate,
+         original_meta)=timing_preflight[p]
         raw_native=args.native_root/f"native-gm{p}-dry.i32le"
         pcm_native=private_pcm(raw_native,None,None)
-        eo,en=edges(qs_o),edges(qs_n)
-        # Hard stop BEFORE any RMS/envelope/spectral scores can be emitted.
-        # This is a certified timing precondition, NOT a certified audio match.
-        timing_gate=require_hold_timing(eo,en,p)
         windows={}
         for key,f in SLICES.items():
             ao,bo=f(eo["noteon_chip_frame"],eo["noteoff_chip_frame"])
