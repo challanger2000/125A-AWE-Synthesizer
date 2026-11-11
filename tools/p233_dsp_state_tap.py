@@ -150,10 +150,16 @@ def patch(source: str, kind: str) -> str:
           "\n    if(p233_enabled)memcpy(p233_after_rev,p233_before,num_samples*2*sizeof(int32_t));"
           "\n    if(p233_enabled)memcpy(p233_after_chor,p233_before,num_samples*2*sizeof(int32_t));\n"
           +beginning,1)
+        # The production fork compiles REVERB_FITTED by default. A probe
+        # placed after the legacy (inactive) emu8k_work_reverb call would
+        # wrongly attribute the entire fitted reverb return to chorus.
+        # Capture after #endif, which observes whichever reverb is active.
         assert_unique(source,reverb,kind)
-        source=source.replace(reverb,reverb+
-          "\n        if(p233_enabled)memcpy(p233_after_rev,buf,num_samples*2*sizeof(int32_t));",1)
         assert_unique(source,chorus,kind)
+        post_reverb="#endif\n"+chorus
+        assert_unique(source,post_reverb,kind)
+        source=source.replace(post_reverb,
+             "#endif\n        if(p233_enabled)memcpy(p233_after_rev,buf,num_samples*2*sizeof(int32_t));\n"+chorus,1)
         source=source.replace(chorus,chorus+
           "\n        if(p233_enabled)memcpy(p233_after_chor,buf,num_samples*2*sizeof(int32_t));",1)
     assert_unique(source,end,kind)
