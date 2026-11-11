@@ -120,6 +120,7 @@ jobs:
             --summary p97-evidence/P99-Fidelity-Summary.md
       - name: P236 hardware-baseline/PR102 quantitative regression gate
         run: |
+          "$RUNNER_TEMP/p97/venv/bin/python" tools/p236_hardware_regression.py --self-test
           "$RUNNER_TEMP/p97/venv/bin/python" tools/p236_hardware_regression.py \
             --old p97-evidence/P236-baseline-CT4390-264s.json \
             --current p97-evidence/P97-AWE64-Gold-versus-125A-264s.json \
