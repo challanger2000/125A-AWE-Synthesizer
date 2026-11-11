@@ -68,6 +68,14 @@ def capture(conn,send,guest_fifo,trace,report,raw_dir,private_dir):
     stage_path=Path(os.environ["EMU8K_P233_STAGE"]) if os.environ.get("EMU8K_P233_STAGE") else None
     if stage_path and not stage_path.is_file():
         raise RuntimeError("P233 expected original emulated-chip stage trace not created")
+    pcm_path=Path(os.environ["EMU8K_P234_DRY_PCM"]) if os.environ.get("EMU8K_P234_DRY_PCM") else None
+    gate_path=Path(os.environ["EMU8K_P234_GATE"]) if os.environ.get("EMU8K_P234_GATE") else None
+    if (pcm_path is None)!=(gate_path is None):
+        raise RuntimeError("P234 requires both raw dry PCM and runner gate paths")
+    if gate_path and gate_path.exists():
+        raise RuntimeError("P234 dry gate must be off before original capture")
+    if pcm_path and not pcm_path.is_file():
+        raise RuntimeError("P234 expected private dry PCM initialized in 86Box")
     try:
         for bank,program,note,velocity,channel in plan():
             fname=label(bank,program,note,velocity)
@@ -80,9 +88,11 @@ def capture(conn,send,guest_fifo,trace,report,raw_dir,private_dir):
             send(conn,"step 260")
             before=row_index(trace)
             stage_begin=stage_path.stat().st_size if stage_path else None
+            dry_begin=pcm_path.stat().st_size if pcm_path else None
             folder=raw_dir/fname.removesuffix(".wav")
             folder.mkdir()
             started=False
+            if gate_path: gate_path.touch(exist_ok=False)
             try:
                 send(conn,f"audio start {folder.resolve()}")
                 started=True
@@ -92,9 +102,15 @@ def capture(conn,send,guest_fifo,trace,report,raw_dir,private_dir):
                 send_paced_frame(fd,frame(0x80|channel,note,0),conn,send)
                 send(conn,"step 1000")
             finally:
-                if started:send(conn,"audio stop")
+                try:
+                    if started:send(conn,"audio stop")
+                finally:
+                    if gate_path:gate_path.unlink(missing_ok=True)
             after=row_index(trace)
             stage_end=stage_path.stat().st_size if stage_path else None
+            dry_end=pcm_path.stat().st_size if pcm_path else None
+            if pcm_path and (dry_end<=dry_begin or (dry_end-dry_begin)%8!=0):
+                raise RuntimeError("P234 original dry int32 PCM absent or unaligned: "+fname)
             if stage_path and (stage_end is None or stage_end <= stage_begin):
                 raise RuntimeError("P233 original staged chip observation missing: "+fname)
             if before<0 or after<=before:
@@ -123,6 +139,8 @@ def capture(conn,send,guest_fifo,trace,report,raw_dir,private_dir):
                             "creative_register_window":[before,after],
                             "register_entries":len(registers),
                             "p233_stage_file_byte_range":[stage_begin,stage_end],
+                            "p234_dry_pcm_byte_range":[dry_begin,dry_end],
+                            "p234_true_note_edge_observer_enabled":bool(pcm_path),
 
                             "register_write_sequence":registers,
                             "audio_frames":pcm["frames"],
