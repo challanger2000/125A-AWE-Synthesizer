@@ -54,7 +54,7 @@ void write_wav(const fs::path& path,const std::vector<int16_t>& pcm){
 }
 struct Result {size_t active=0,nonzero=0,rails=0;};
 Result render(const fs::path& rom,const Case& c,std::vector<int16_t>& pcm,
-              const fs::path& trace={},bool measuredCreativeFx=false){
+              const fs::path& trace={},bool measuredCreativeFx=false,bool p234Dry=false){
     Synth s(kRate);s.Core().SetDriver(Awe32::Driver::Win95);
     std::string err;
     require(s.Core().UseBox86Chip(rom.string(),err),"ROM chip init: "+err);
@@ -70,6 +70,7 @@ Result render(const fs::path& rom,const Case& c,std::vector<int16_t>& pcm,
     s.ControlChange(uint8_t(c.channel),91,0);
     s.ControlChange(uint8_t(c.channel),93,0);
     s.SetGuiControl(10,0.f);s.SetGuiControl(11,0.f);
+    if(p234Dry)s.Core().MuteEffectReturns(true,true); // P234 test-only proof: both FX returns excluded
     const fs::path noteDump=(measuredCreativeFx&&!trace.empty())
         ?fs::path(trace.string()+".notes.csv"):fs::path{};
     if(!noteDump.empty())require(s.OpenNoteDump(noteDump.string()),"cannot create native note-voice diagnostic");
@@ -151,15 +152,17 @@ int main(int argc,char** argv){
                    <<','<<c.velocity<<','<<c.channel<<'\n';
         return 0;
     }
-    const bool stateProbeMode=argc==5&&std::string(argv[1])=="--state-probe";
+    const bool p234DryMode=argc==5&&std::string(argv[1])=="--p234-dry";
+    const bool stateProbeMode=(argc==5&&std::string(argv[1])=="--state-probe")||p234DryMode;
     const bool creativeFxMode=(argc==4&&std::string(argv[1])=="--creative-fx-pilot")
-                           || stateProbeMode;
+                           || (stateProbeMode&&!p234DryMode);
     const bool pilotMode=argc==4 &&
          (std::string(argv[1])=="--pilot"||creativeFxMode);
     require(argc==3||pilotMode||stateProbeMode,"usage: p230_rom_sbk_native awe32.raw PRIVATE_OUTPUT_DIR"
            " or --pilot awe32.raw PRIVATE_OUTPUT_DIR"
            " or --creative-fx-pilot awe32.raw PRIVATE_OUTPUT_DIR"
            " or --state-probe awe32.raw PRIVATE_OUTPUT_DIR GM_PROGRAM (0,39,88)"
+           " or --p234-dry awe32.raw PRIVATE_OUTPUT_DIR GM_PROGRAM (0,39,88)"
            " or --list");
     const fs::path rom=argv[(pilotMode||stateProbeMode)?2:1],
                    dir=argv[(pilotMode||stateProbeMode)?3:2];
@@ -190,7 +193,7 @@ int main(int argc,char** argv){
     for(auto c:cases){
         std::vector<int16_t> pcm(kFrames*2ull,0);
         const auto trace=(pilotMode||stateProbeMode)?(dir/"traces"/(name(c)+".trace")):fs::path{};
-        auto r=render(rom,c,pcm,trace,creativeFxMode);
+        auto r=render(rom,c,pcm,trace,creativeFxMode,p234DryMode);
         const auto filename=name(c);
         write_wav(dir/filename,pcm);
         manifest<<filename<<','<<c.bank<<','<<c.program<<','<<c.note
