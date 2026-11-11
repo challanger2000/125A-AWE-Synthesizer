@@ -92,6 +92,29 @@ int main(int argc,char** argv){
         require(core.UseBox86Chip(argv[1],e),"not real ROM/125A chip: "+e);
         core.PowerOnInit();
         core.MuteEffectReturns(true,true);
+        // Compare genuine card EQ INIT readback (v25 awetest.log) with the
+        // register-programmed native state. DOS init can use nibble-swapped
+        // coefficients which 86Box correctly decodes as equivalent.
+        constexpr std::array<std::pair<Reg,int>,10> eq_ids = {{
+            {Reg::INIT4,0x01},{Reg::INIT4,0x11},
+            {Reg::INIT3,0x11},{Reg::INIT3,0x13},{Reg::INIT3,0x1B},
+            {Reg::INIT4,0x07},{Reg::INIT4,0x0B},{Reg::INIT4,0x0D},
+            {Reg::INIT4,0x17},{Reg::INIT4,0x19}
+        }};
+        constexpr std::array<uint16_t,10> physical_eq = {{
+            0xC208,0xC308,0x821E,0xD208,0x031E,
+            0xD308,0x0219,0xD26E,0x8319,0xD36E
+        }};
+        bool equivalent = true;
+        std::cout << "P236_AWETEST_EQ_HARDWARE_VS_CURRENT";
+        for (size_t i=0;i<eq_ids.size();i++) {
+            const uint16_t x=static_cast<uint16_t>(core.Read(eq_ids[i].first,eq_ids[i].second));
+            const uint16_t swapped=static_cast<uint16_t>((x&0xFF00u) |
+                ((x&0x000Fu)<<4) | ((x&0x00F0u)>>4));
+            equivalent &= x==physical_eq[i] || swapped==physical_eq[i];
+            std::cout << " " << std::hex << x << std::dec;
+        }
+        std::cout << " register_equivalent=" << (equivalent ? "YES" : "NO") << "\n";
         // v25 AWETEST: filter cutoff block 6, Q=0. Include high-cutoff
         // reference 252 to compare relative spectra without analog gain fit.
         const std::array<int,13> cuts={0,16,32,48,64,80,96,112,128,160,192,224,252};
