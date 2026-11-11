@@ -151,14 +151,18 @@ int main(int argc,char** argv){
                    <<','<<c.velocity<<','<<c.channel<<'\n';
         return 0;
     }
-    const bool creativeFxMode=argc==4&&std::string(argv[1])=="--creative-fx-pilot";
+    const bool stateProbeMode=argc==5&&std::string(argv[1])=="--state-probe";
+    const bool creativeFxMode=(argc==4&&std::string(argv[1])=="--creative-fx-pilot")
+                           || stateProbeMode;
     const bool pilotMode=argc==4 &&
          (std::string(argv[1])=="--pilot"||creativeFxMode);
-    require(argc==3||pilotMode,"usage: p230_rom_sbk_native awe32.raw PRIVATE_OUTPUT_DIR"
+    require(argc==3||pilotMode||stateProbeMode,"usage: p230_rom_sbk_native awe32.raw PRIVATE_OUTPUT_DIR"
            " or --pilot awe32.raw PRIVATE_OUTPUT_DIR"
            " or --creative-fx-pilot awe32.raw PRIVATE_OUTPUT_DIR"
+           " or --state-probe awe32.raw PRIVATE_OUTPUT_DIR GM_PROGRAM (0 or 88)"
            " or --list");
-    const fs::path rom=argv[pilotMode?2:1],dir=argv[pilotMode?3:2];
+    const fs::path rom=argv[(pilotMode||stateProbeMode)?2:1],
+                   dir=argv[(pilotMode||stateProbeMode)?3:2];
     require(fs::is_regular_file(rom)&&fs::file_size(rom)==1048576,
             "original 1MiB Wave ROM required");
     const auto sbk=AWE125::RomGmBank::AdjacentFile(rom.string());
@@ -167,7 +171,7 @@ int main(int argc,char** argv){
             "valid 1MGM SYNTHGM.SBK next to ROM required: "+err);
     require(!fs::exists(dir),"refuse overwrite existing output");
     require(fs::create_directories(dir),"cannot create output");
-    if(pilotMode)require(fs::create_directories(dir/"traces"),
+    if(pilotMode||stateProbeMode)require(fs::create_directories(dir/"traces"),
                         "cannot create private pilot trace directory");
     std::ofstream manifest(dir/"cases.csv");
     require(bool(manifest),"cannot create manifest");
@@ -175,10 +179,17 @@ int main(int argc,char** argv){
     std::array<bool,128> gmAudible{};
     bool drumAudible=false;
     size_t silent=0,missing=0,clipped=0;
-    const auto cases=pilotMode?pilot():plan();
+    auto cases=pilotMode?pilot():plan();
+    if(stateProbeMode){
+        const std::string p=argv[4];
+        require(p=="0"||p=="88","P233 GM state probe only permits programs 0, 88");
+        const int program=std::stoi(p);
+        cases.clear();
+        cases.push_back(Case{16383,program,60,100,0});
+    }
     for(auto c:cases){
         std::vector<int16_t> pcm(kFrames*2ull,0);
-        const auto trace=pilotMode?(dir/"traces"/(name(c)+".trace")):fs::path{};
+        const auto trace=(pilotMode||stateProbeMode)?(dir/"traces"/(name(c)+".trace")):fs::path{};
         auto r=render(rom,c,pcm,trace,creativeFxMode);
         const auto filename=name(c);
         write_wav(dir/filename,pcm);
@@ -200,6 +211,6 @@ int main(int argc,char** argv){
              <<" any_drums_audible="<<drumAudible
              <<" ORIGINAL_CREATIVE_PCM=NOT_RUN PHYSICAL_CARD=NOT_RUN"
              <<" RELEASE=BLOCKED\n";
-    return (pilotMode?(missing||silent):(missingGm||!drumAudible))?3:0;
+    return ((pilotMode||stateProbeMode)?(missing||silent):(missingGm||!drumAudible))?3:0;
  }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 2;}
 }
