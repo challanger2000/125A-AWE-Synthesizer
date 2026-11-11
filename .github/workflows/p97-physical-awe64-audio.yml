@@ -219,6 +219,29 @@ jobs:
             --current-commit "$(git rev-parse HEAD)" \
             --out p97-evidence/P236-current-vs-real-AWE32-AWETEST-v25-physical-filter-resonance.json
           echo P236_ACTUAL_CURRENT_125A_VS_REAL_AWE32_AUDIO_NOT_UPSTREAM_EMULATOR
+          # Same original AWE32 recording, ROM, note windows and core. Only
+          # test-only EQ INIT words are set to the actual v25 hardware log.
+          mkdir -p "$root/awetest-native-exact-card-eq"
+          ./build-p97/src/engine/awe32_p236_awetest_native \
+            "$root/awe32.raw" "$root/awetest-native-exact-card-eq" --hardware-eq
+          "$root/venv/bin/python" tools/p236_awetest_compare.py \
+            --original-log "$card/awetest.log" \
+            --card-folder "$card" \
+            --native-dir "$root/awetest-native-exact-card-eq" \
+            --current-commit "$(git rev-parse HEAD)" \
+            --out p97-evidence/P236-current-vs-real-AWE32-AWETEST-v25-exact-hardware-EQ.json
+          "$root/venv/bin/python" - <<'PY'
+          import json
+          from pathlib import Path
+          a=json.loads(Path("p97-evidence/P236-current-vs-real-AWE32-AWETEST-v25-physical-filter-resonance.json").read_text())
+          b=json.loads(Path("p97-evidence/P236-current-vs-real-AWE32-AWETEST-v25-exact-hardware-EQ.json").read_text())
+          assert (a["total_real_hardware_note_pairs"],a["valid_real_hardware_note_pairs"]) == (23,22)
+          assert (b["total_real_hardware_note_pairs"],b["valid_real_hardware_note_pairs"]) == (23,22)
+          print("P236_EQ_CONTROLLED_A_B original_cutoff_median",a["median_absolute_cutoff_level_error_db"],
+                "exact_card_EQ_cutoff_median",b["median_absolute_cutoff_level_error_db"],
+                "original_resonance_Qpositive",a["median_absolute_resonance_nonzero_Q_level_error_db"],
+                "exact_card_EQ_resonance_Qpositive",b["median_absolute_resonance_nonzero_Q_level_error_db"])
+          PY
 
       - name: P236 hardware-baseline/PR102 quantitative regression gate
         run: |
