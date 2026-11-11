@@ -251,18 +251,24 @@ jobs:
             "$line_base/awetst25_line.part1.flac" -o "$root/awetst25_line.part1.flac"
           curl --fail --location --retry 3 --max-time 360 \
             "$line_base/awetst25_line.part2.flac" -o "$root/awetst25_line.part2.flac"
+          curl --fail --location --retry 3 --max-time 360 \
+            "$line_base/awetst25_line.part3.flac" -o "$root/awetst25_line.part3.flac"
           curl --fail --location --retry 3 --max-time 180 \
             "$line_base/reca/reca001.flac" -o "$card/reca001.flac"
+          curl --fail --location --retry 3 --max-time 180 \
+            "$line_base/reca/reca002.flac" -o "$card/reca002.flac"
           test "$(git hash-object "$root/awetst25_line.part1.flac")" = 367b81093811fe88ae8e4f7e0fb76273fdfc851a
           test "$(git hash-object "$root/awetst25_line.part2.flac")" = b17f514b00bdffe87d008954cbcab9aedeabc57b
+          test "$(git hash-object "$root/awetst25_line.part3.flac")" = 3722abaf1c087345788e97d0724f6259ed308b8
           test "$(git hash-object "$card/reca001.flac")" = 750b3639027305073953ac3964cc497f44f249b6
+          test "$(git hash-object "$card/reca002.flac")" = 859d9800d76ae513ea418a19c57fd4ec50147008
           "$root/venv/bin/python" tools/p236_awetest_compare.py \
             --original-log "$card/awetest.log" \
             --card-folder "$card" \
             --native-dir "$root/awetest-native" \
             --current-commit "$(git rev-parse HEAD)" \
             --out "$root/P236-lineout-private-internal-control.json" \
-            --line-parts "$root/awetst25_line.part1.flac" "$root/awetst25_line.part2.flac" \
+            --line-parts "$root/awetst25_line.part1.flac" "$root/awetst25_line.part2.flac" "$root/awetst25_line.part3.flac" \
             --line-out p97-evidence/P236-Real-AWE32-External-LineOut-Cutoff.json
           echo P236_EXTERNAL_LINEOUT_V25_DIRECT_PHYSICAL_AUDIO_COMPARISON_DONE
 
