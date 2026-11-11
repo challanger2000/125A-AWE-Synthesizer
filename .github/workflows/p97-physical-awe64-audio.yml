@@ -131,6 +131,9 @@ jobs:
             "$line_base/reca/reca001.flac" -o "$card/reca001.flac"
           curl --fail --location --retry 3 --max-time 180 \
             "$line_base/reca/reca002.flac" -o "$card/reca002.flac"
+          echo "P236_SOURCE_BLOB_LINE_PART1=$(git hash-object "$root/awetst25_line.part1.flac")"
+          echo "P236_SOURCE_BLOB_LINE_PART2=$(git hash-object "$root/awetst25_line.part2.flac")"
+          echo "P236_SOURCE_BLOB_RECA001=$(git hash-object "$card/reca001.flac")"
           echo "P236_SOURCE_BLOB_LINE_PART3=$(git hash-object "$root/awetst25_line.part3.flac")"
           echo "P236_SOURCE_BLOB_RECA002=$(git hash-object "$card/reca002.flac")"
           test "$(git hash-object "$root/awetst25_line.part1.flac")" = 367b81093811fe88ae8e4f7e0fb76273fdfc851a
