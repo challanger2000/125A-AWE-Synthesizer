@@ -118,7 +118,8 @@ def main():
                       for k,v in final_original.items() if v!=final_native.get(k)}
             # Once the original driver has written its preset+effects registers,
             # all four variants must have the same effective voice register state.
-            demand(not mismatch,"effective Win95/125A register mismatch "+name+" "+str(mismatch))
+            # Never erase real audio findings merely because register parity fails.
+            # The case is flagged NOT equal-state instead of silently passing.
             pcm=compare_pair(orig_file,candidate)
             offset,_=lag(read_wav(orig_file),read_wav(candidate))
             o,n=align(read_wav(orig_file),read_wav(candidate),offset)
@@ -130,7 +131,8 @@ def main():
             pcm["stereo_side_difference_db"]=side_delta
             pcm["lr_balance_difference_db"]=balance_delta
             pcm["audio_sha256"]={"original":checksum(orig_file),"125a":checksum(candidate)}
-            pcm["effect_register_final_match"]=True
+            pcm["effect_register_final_match"]=not bool(mismatch)
+            pcm["effect_register_final_mismatches"]=mismatch
             # Pre-registered tolerance classification, but not automatically
             # a valid equal-state result until independent DSP init and capture
             # timing have been verified.
@@ -150,7 +152,8 @@ def main():
         records.append({"program":program,"original_name":name,"variants":result,
                         "diagnostic_best":ranked[0],
                         "diagnostic_rank_order":ranked,
-                        "registers_identical_all_four_and_equal_to_original":True})
+                        "registers_identical_all_four_and_equal_to_original":all(
+                            m["effect_register_final_match"] for m in result.values())})
     report={"schema":"125A-P232-original-Win95-4way-recapture-v1",
         "source_product_commit":args.product_sha,"source_86box_commit":args.original_86box_sha,
         "driver_staging_sha256":checksum(args.driver_staging),
@@ -161,7 +164,8 @@ def main():
         "tolerances":TOL,
         "original_win95_86box_verified":True,
         "original_driver_staging":stage,
-        "original_vs_native_matching_note_registers":True,
+        "original_vs_native_matching_note_registers":all(
+            c["registers_identical_all_four_and_equal_to_original"] for c in records),
         "original_chip_initialization_full_state_verified":False,
         "original_capture_note_on_timing_sample_aligned_verified":False,
         "original_and_native_effect_internal_returns_identical_verified":False,
