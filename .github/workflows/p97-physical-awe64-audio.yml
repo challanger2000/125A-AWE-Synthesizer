@@ -64,6 +64,90 @@ jobs:
             -DCMAKE_SUPPRESS_REGENERATION=ON \
             -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_OPL3_PROBES=OFF -D125A_BUILD_VST3=OFF
           cmake --build build-p97 --target awe32_p97_midi_renderer --parallel 4
+      - name: P236 actual AWE32 AWETEST v25 physical FLACs versus current 125A original ROM filter and Q
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/p97"
+          card="$root/real-AWE32-AWETEST-v25"
+          mkdir -p "$card" "$root/awetest-native"
+          # These are ACTUAL physical AWE32 recordings, NOT the upstream
+          # AWE32Emu software test renders. Pinned full Git SHA of source.
+          commit=9ae2217b92af72f706c9631679cd43c3afff507f
+          for name in awetest.log reca003.flac reca004.flac; do
+            curl --fail --location --retry 3 --max-time 360 \
+              "https://raw.githubusercontent.com/turican0/AWE32Emu/$commit/recordings/2026-09-12/reca/$name" \
+              -o "$card/$name"
+          done
+          test "$(git hash-object "$card/awetest.log")" = 09fe5c9f2a07e86fb4193f9f56f0b8583f656ede
+          test "$(git hash-object "$card/reca003.flac")" = 339d0de47599039bb529eab8aa737cd9a31172c1
+          test "$(git hash-object "$card/reca004.flac")" = 3e09e54631171f2d3a20b03318affc58613938e1
+          "$root/venv/bin/python" tools/p236_awetest_compare.py --self-test
+          cmake --build build-p97 --target awe32_p236_awetest_native --parallel 4
+          ./build-p97/src/engine/awe32_p236_awetest_native \
+            "$root/awe32.raw" "$root/awetest-native"
+          "$root/venv/bin/python" tools/p236_awetest_compare.py \
+            --original-log "$card/awetest.log" \
+            --card-folder "$card" \
+            --native-dir "$root/awetest-native" \
+            --current-commit "$(git rev-parse HEAD)" \
+            --out p97-evidence/P236-current-vs-real-AWE32-AWETEST-v25-physical-filter-resonance.json
+          echo P236_ACTUAL_CURRENT_125A_VS_REAL_AWE32_AUDIO_NOT_UPSTREAM_EMULATOR
+          # Same original AWE32 recording, ROM, note windows and core. Only
+          # test-only EQ INIT words are set to the actual v25 hardware log.
+          mkdir -p "$root/awetest-native-exact-card-eq"
+          ./build-p97/src/engine/awe32_p236_awetest_native \
+            "$root/awe32.raw" "$root/awetest-native-exact-card-eq" --hardware-eq
+          "$root/venv/bin/python" tools/p236_awetest_compare.py \
+            --original-log "$card/awetest.log" \
+            --card-folder "$card" \
+            --native-dir "$root/awetest-native-exact-card-eq" \
+            --current-commit "$(git rev-parse HEAD)" \
+            --out p97-evidence/P236-current-vs-real-AWE32-AWETEST-v25-exact-hardware-EQ.json
+          "$root/venv/bin/python" - <<'PY'
+          import json
+          from pathlib import Path
+          a=json.loads(Path("p97-evidence/P236-current-vs-real-AWE32-AWETEST-v25-physical-filter-resonance.json").read_text())
+          b=json.loads(Path("p97-evidence/P236-current-vs-real-AWE32-AWETEST-v25-exact-hardware-EQ.json").read_text())
+          assert (a["total_real_hardware_note_pairs"],a["valid_real_hardware_note_pairs"]) == (23,22)
+          assert (b["total_real_hardware_note_pairs"],b["valid_real_hardware_note_pairs"]) == (23,22)
+          print("P236_EQ_CONTROLLED_A_B original_cutoff_median",a["median_absolute_cutoff_level_error_db"],
+                "exact_card_EQ_cutoff_median",b["median_absolute_cutoff_level_error_db"],
+                "original_resonance_Qpositive",a["median_absolute_resonance_nonzero_Q_level_error_db"],
+                "exact_card_EQ_resonance_Qpositive",b["median_absolute_resonance_nonzero_Q_level_error_db"])
+          PY
+          # The original tester also captured the same v25 AWE32 LINE OUT
+          # simultaneously on an external sound card. Its author documented
+          # the internal ADC's frequency tilt in analysis/flac25.py.
+          # These are pre-existing public recordings, not a new test lab.
+          line_base="https://raw.githubusercontent.com/turican0/AWE32Emu/$commit/recordings/2026-09-12"
+          curl --fail --location --retry 3 --max-time 360 \
+            "$line_base/awetst25_line.part1.flac" -o "$root/awetst25_line.part1.flac"
+          curl --fail --location --retry 3 --max-time 360 \
+            "$line_base/awetst25_line.part2.flac" -o "$root/awetst25_line.part2.flac"
+          curl --fail --location --retry 3 --max-time 360 \
+            "$line_base/awetst25_line.part3.flac" -o "$root/awetst25_line.part3.flac"
+          curl --fail --location --retry 3 --max-time 180 \
+            "$line_base/reca/reca001.flac" -o "$card/reca001.flac"
+          curl --fail --location --retry 3 --max-time 180 \
+            "$line_base/reca/reca002.flac" -o "$card/reca002.flac"
+          echo "P236_SOURCE_BLOB_LINE_PART3=$(git hash-object "$root/awetst25_line.part3.flac")"
+          echo "P236_SOURCE_BLOB_RECA002=$(git hash-object "$card/reca002.flac")"
+          test "$(git hash-object "$root/awetst25_line.part1.flac")" = 367b81093811fe88ae8e4f7e0fb76273fdfc851a
+          test "$(git hash-object "$root/awetst25_line.part2.flac")" = b17f514b00bdffe87d008954cbcab9aedeabc57b
+          test "$(git hash-object "$root/awetst25_line.part3.flac")" = 3722abaf1c087345788e97d0724f6259ed308b8
+          test "$(git hash-object "$card/reca001.flac")" = 750b3639027305073953ac3964cc497f44f249b6
+          test "$(git hash-object "$card/reca002.flac")" = 859d9800d76ae513ea418a19c57fd4ec50147008
+          "$root/venv/bin/python" tools/p236_awetest_compare.py \
+            --original-log "$card/awetest.log" \
+            --card-folder "$card" \
+            --native-dir "$root/awetest-native" \
+            --current-commit "$(git rev-parse HEAD)" \
+            --out "$root/P236-lineout-private-internal-control.json" \
+            --line-parts "$root/awetst25_line.part1.flac" "$root/awetst25_line.part2.flac" "$root/awetst25_line.part3.flac" \
+            --line-out p97-evidence/P236-Real-AWE32-External-LineOut-Cutoff.json
+          echo P236_EXTERNAL_LINEOUT_V25_DIRECT_PHYSICAL_AUDIO_COMPARISON_DONE
+
       - name: Verify November 4 hardware-checked baseline and build matching historical 125A kernel
         shell: bash
         run: |
@@ -190,90 +274,6 @@ jobs:
             --events "$RUNNER_TEMP/p97/events.tsv" \
             --p97-report p97-evidence/P97-AWE64-Gold-versus-125A-264s.json \
             --out p97-evidence/P105-Filter-and-Release-Diagnostics.json
-      - name: P236 actual AWE32 AWETEST v25 physical FLACs versus current 125A original ROM filter and Q
-        shell: bash
-        run: |
-          set -euo pipefail
-          root="$RUNNER_TEMP/p97"
-          card="$root/real-AWE32-AWETEST-v25"
-          mkdir -p "$card" "$root/awetest-native"
-          # These are ACTUAL physical AWE32 recordings, NOT the upstream
-          # AWE32Emu software test renders. Pinned full Git SHA of source.
-          commit=9ae2217b92af72f706c9631679cd43c3afff507f
-          for name in awetest.log reca003.flac reca004.flac; do
-            curl --fail --location --retry 3 --max-time 360 \
-              "https://raw.githubusercontent.com/turican0/AWE32Emu/$commit/recordings/2026-09-12/reca/$name" \
-              -o "$card/$name"
-          done
-          test "$(git hash-object "$card/awetest.log")" = 09fe5c9f2a07e86fb4193f9f56f0b8583f656ede
-          test "$(git hash-object "$card/reca003.flac")" = 339d0de47599039bb529eab8aa737cd9a31172c1
-          test "$(git hash-object "$card/reca004.flac")" = 3e09e54631171f2d3a20b03318affc58613938e1
-          "$root/venv/bin/python" tools/p236_awetest_compare.py --self-test
-          cmake --build build-p97 --target awe32_p236_awetest_native --parallel 4
-          ./build-p97/src/engine/awe32_p236_awetest_native \
-            "$root/awe32.raw" "$root/awetest-native"
-          "$root/venv/bin/python" tools/p236_awetest_compare.py \
-            --original-log "$card/awetest.log" \
-            --card-folder "$card" \
-            --native-dir "$root/awetest-native" \
-            --current-commit "$(git rev-parse HEAD)" \
-            --out p97-evidence/P236-current-vs-real-AWE32-AWETEST-v25-physical-filter-resonance.json
-          echo P236_ACTUAL_CURRENT_125A_VS_REAL_AWE32_AUDIO_NOT_UPSTREAM_EMULATOR
-          # Same original AWE32 recording, ROM, note windows and core. Only
-          # test-only EQ INIT words are set to the actual v25 hardware log.
-          mkdir -p "$root/awetest-native-exact-card-eq"
-          ./build-p97/src/engine/awe32_p236_awetest_native \
-            "$root/awe32.raw" "$root/awetest-native-exact-card-eq" --hardware-eq
-          "$root/venv/bin/python" tools/p236_awetest_compare.py \
-            --original-log "$card/awetest.log" \
-            --card-folder "$card" \
-            --native-dir "$root/awetest-native-exact-card-eq" \
-            --current-commit "$(git rev-parse HEAD)" \
-            --out p97-evidence/P236-current-vs-real-AWE32-AWETEST-v25-exact-hardware-EQ.json
-          "$root/venv/bin/python" - <<'PY'
-          import json
-          from pathlib import Path
-          a=json.loads(Path("p97-evidence/P236-current-vs-real-AWE32-AWETEST-v25-physical-filter-resonance.json").read_text())
-          b=json.loads(Path("p97-evidence/P236-current-vs-real-AWE32-AWETEST-v25-exact-hardware-EQ.json").read_text())
-          assert (a["total_real_hardware_note_pairs"],a["valid_real_hardware_note_pairs"]) == (23,22)
-          assert (b["total_real_hardware_note_pairs"],b["valid_real_hardware_note_pairs"]) == (23,22)
-          print("P236_EQ_CONTROLLED_A_B original_cutoff_median",a["median_absolute_cutoff_level_error_db"],
-                "exact_card_EQ_cutoff_median",b["median_absolute_cutoff_level_error_db"],
-                "original_resonance_Qpositive",a["median_absolute_resonance_nonzero_Q_level_error_db"],
-                "exact_card_EQ_resonance_Qpositive",b["median_absolute_resonance_nonzero_Q_level_error_db"])
-          PY
-          # The original tester also captured the same v25 AWE32 LINE OUT
-          # simultaneously on an external sound card. Its author documented
-          # the internal ADC's frequency tilt in analysis/flac25.py.
-          # These are pre-existing public recordings, not a new test lab.
-          line_base="https://raw.githubusercontent.com/turican0/AWE32Emu/$commit/recordings/2026-09-12"
-          curl --fail --location --retry 3 --max-time 360 \
-            "$line_base/awetst25_line.part1.flac" -o "$root/awetst25_line.part1.flac"
-          curl --fail --location --retry 3 --max-time 360 \
-            "$line_base/awetst25_line.part2.flac" -o "$root/awetst25_line.part2.flac"
-          curl --fail --location --retry 3 --max-time 360 \
-            "$line_base/awetst25_line.part3.flac" -o "$root/awetst25_line.part3.flac"
-          curl --fail --location --retry 3 --max-time 180 \
-            "$line_base/reca/reca001.flac" -o "$card/reca001.flac"
-          curl --fail --location --retry 3 --max-time 180 \
-            "$line_base/reca/reca002.flac" -o "$card/reca002.flac"
-          echo "P236_SOURCE_BLOB_LINE_PART3=$(git hash-object "$root/awetst25_line.part3.flac")"
-          echo "P236_SOURCE_BLOB_RECA002=$(git hash-object "$card/reca002.flac")"
-          test "$(git hash-object "$root/awetst25_line.part1.flac")" = 367b81093811fe88ae8e4f7e0fb76273fdfc851a
-          test "$(git hash-object "$root/awetst25_line.part2.flac")" = b17f514b00bdffe87d008954cbcab9aedeabc57b
-          test "$(git hash-object "$root/awetst25_line.part3.flac")" = 3722abaf1c087345788e97d0724f6259ed308b8
-          test "$(git hash-object "$card/reca001.flac")" = 750b3639027305073953ac3964cc497f44f249b6
-          test "$(git hash-object "$card/reca002.flac")" = 859d9800d76ae513ea418a19c57fd4ec50147008
-          "$root/venv/bin/python" tools/p236_awetest_compare.py \
-            --original-log "$card/awetest.log" \
-            --card-folder "$card" \
-            --native-dir "$root/awetest-native" \
-            --current-commit "$(git rev-parse HEAD)" \
-            --out "$root/P236-lineout-private-internal-control.json" \
-            --line-parts "$root/awetst25_line.part1.flac" "$root/awetst25_line.part2.flac" "$root/awetst25_line.part3.flac" \
-            --line-out p97-evidence/P236-Real-AWE32-External-LineOut-Cutoff.json
-          echo P236_EXTERNAL_LINEOUT_V25_DIRECT_PHYSICAL_AUDIO_COMPARISON_DONE
-
       - name: P236 hardware-baseline/PR102 quantitative regression gate
         run: |
           "$RUNNER_TEMP/p97/venv/bin/python" tools/p236_hardware_regression.py --self-test
