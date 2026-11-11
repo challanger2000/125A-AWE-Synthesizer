@@ -131,6 +131,10 @@ jobs:
             "$line_base/reca/reca001.flac" -o "$card/reca001.flac"
           curl --fail --location --retry 3 --max-time 180 \
             "$line_base/reca/reca002.flac" -o "$card/reca002.flac"
+          for n in 005 006 007; do
+            curl --fail --location --retry 3 --max-time 180 \
+              "$line_base/reca/reca$n.flac" -o "$card/reca$n.flac"
+          done
           echo "P236_SOURCE_BLOB_LINE_PART1=$(git hash-object "$root/awetst25_line.part1.flac")"
           echo "P236_SOURCE_BLOB_LINE_PART2=$(git hash-object "$root/awetst25_line.part2.flac")"
           echo "P236_SOURCE_BLOB_RECA001=$(git hash-object "$card/reca001.flac")"
@@ -141,6 +145,9 @@ jobs:
           test "$(git hash-object "$root/awetst25_line.part3.flac")" = 3722abaf1c087345788e97d0724f6259ed308b8b
           test "$(git hash-object "$card/reca001.flac")" = 750b3639027305073953ac3964cc497f44f249b6
           test "$(git hash-object "$card/reca002.flac")" = 859d9800d76ae513ea418a19c57fd4ec50147008
+          test "$(git hash-object "$card/reca005.flac")" = 068695ef2394257b794f3b4d652d3d2af1e87221
+          test "$(git hash-object "$card/reca006.flac")" = 36f8b6915485cb283520fb259888e79aacde065b
+          test "$(git hash-object "$card/reca007.flac")" = dff6c37e149b516578e8c97434bd333848444167
           "$root/venv/bin/python" tools/p236_awetest_compare.py \
             --original-log "$card/awetest.log" \
             --card-folder "$card" \
