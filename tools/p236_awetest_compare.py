@@ -29,7 +29,7 @@ from scipy import signal
 SOURCE_SHA="9ae2217b92af72f706c9631679cd43c3afff507f"
 LOG_BLOB_SHA="09fe5c9f2a07e86fb4193f9f56f0b8583f656ede"
 FILES={213000:"reca003",323600:"reca004"}
-BANDS=((250,1000),(1000,4000),(4000,10000))
+BANDS=((0,50),(50,250),(250,1000),(1000,4000),(4000,10000))
 CUTOFFS=(0,16,32,48,64,80,96,112,128,160,192,224,252)
 RESONANCE={(96,q) for q in (0,4,8,12,15)} | {(192,q) for q in (0,4,8,12,15)}
 
@@ -76,6 +76,11 @@ def windows(path,start,win_s=.08,win_e=.32):
 def feature(x,noise):
     def rms(v):return float(np.sqrt(np.mean(v*v)))
     r=rms(x);n=rms(noise)
+    ac=rms(x-np.mean(x))
+    # Quantify the 0..250 Hz and DC energy that the original three spectral
+    # bands omitted. Diagnose only: do not filter either audio signal in DSP.
+    sos=signal.butter(4,250,btype="highpass",fs=44100,output="sos")
+    highpass250=rms(signal.sosfiltfilt(sos,x))
     limit=float(np.max(np.abs(x)))
     # Require >=6dB above the actual physical card's pre-note noise floor.
     snr=20*math.log10(max(r,1e-12)/max(n,1e-12))
@@ -87,7 +92,8 @@ def feature(x,noise):
     for lo,hi in BANDS:
         v=float(np.sum(p[(f>=lo)&(f<hi)]))
         bands[f"{lo}-{hi}Hz"]=v
-    return {"rms":r,"peak":limit,"noise_rms":n,"snr_db":round(snr,3),
+    return {"rms":r,"ac_rms":ac,"above_250hz_rms":highpass250,
+        "dc_mean":float(np.mean(x)), "peak":limit,"noise_rms":n,"snr_db":round(snr,3),
         "clipped_sample_count":clipped,"valid":bool(good),"bands":bands}
 
 def dbp(v):
@@ -109,9 +115,13 @@ def compare(ref,model,refbase,modelbase):
         spec[band]={"card_relative_db":round(phys_rel,4),
             "125a_relative_db":round(emu_rel,4),
             "125a_minus_card_relative_db":round(emu_rel-phys_rel,4)}
+    def relative_metric_error(k):
+        return round(dbr(model[k],modelbase[k])-dbr(ref[k],refbase[k]),4)
     return {"relative_level_hardware_db":round(real_rel,4),
         "relative_level_native_db":round(current_rel,4),
         "relative_level_error_db":round(current_rel-real_rel,4),
+        "relative_ac_level_error_db":relative_metric_error("ac_rms"),
+        "relative_above_250hz_level_error_db":relative_metric_error("above_250hz_rms"),
         "relative_spectrum":spec}
 def audit(a):
     log=a.original_log.read_text()
@@ -150,6 +160,9 @@ def audit(a):
             "native_valid":nat["valid"],"card_snr_db":ref["snr_db"],
             "card_clipped_samples":ref["clipped_sample_count"],
             "card_rms":round(ref["rms"],7),"current_125a_rms":round(nat["rms"],7),
+            "card_dc_mean":round(ref["dc_mean"],9),"current_125a_dc_mean":round(nat["dc_mean"],9),
+            "card_above_250hz_rms":round(ref["above_250hz_rms"],8),
+            "current_125a_above_250hz_rms":round(nat["above_250hz_rms"],8),
             "original_hardware_stamp":cut[key],
             "compare":compare(ref,nat,*anchor) if valid else None}
         cut_rows.append(row)
@@ -168,6 +181,9 @@ def audit(a):
     spec=[abs(v["125a_minus_card_relative_db"])
           for x in allvalid
           for v in x["compare"]["relative_spectrum"].values()]
+    # These are diagnostics, not a replacement for the true broadband RMS.
+    # A large total-RMS error with a small >250Hz error isolates a frequency-
+    # dependent or DC/capture component before changing a verified filter.
     # Never hide a severe cutoff mismatch behind the good resonance cases.
     cut_errors=[abs(x["compare"]["relative_level_error_db"])
                 for x in cut_rows if x["compare"]]
@@ -175,6 +191,10 @@ def audit(a):
     # and must not inflate the resonance fidelity score.
     res_errors=[abs(x["compare"]["relative_level_error_db"])
                 for x in res_rows if x["Q"]>0 and x["compare"]]
+    cut_ac_errors=[abs(x["compare"]["relative_ac_level_error_db"])
+                   for x in cut_rows if x["compare"]]
+    cut_above250_errors=[abs(x["compare"]["relative_above_250hz_level_error_db"])
+                         for x in cut_rows if x["compare"]]
     # Optional stationary-noise sensitivity estimate, not an audio correction
     # and not a calibrated analog ADC inversion. Report both estimates.
     def hw_signal_only_rms(f):
@@ -212,10 +232,13 @@ def audit(a):
         "invalid_pairs":len(cut_rows)+len(res_rows)-len(allvalid),
         "median_absolute_relative_level_error_db":round(float(np.median(errors)),4) if errors else None,
         "median_absolute_cutoff_level_error_db":round(float(np.median(cut_errors)),4) if cut_errors else None,
+        "median_absolute_cutoff_ac_level_error_db":round(float(np.median(cut_ac_errors)),4) if cut_ac_errors else None,
+        "median_absolute_cutoff_above_250hz_level_error_db":round(float(np.median(cut_above250_errors)),4) if cut_above250_errors else None,
         "median_absolute_resonance_nonzero_Q_level_error_db":round(float(np.median(res_errors)),4) if res_errors else None,
         "resonance_Q0_reference_points_excluded_from_fidelity_score":2,
         "median_absolute_relative_spectral_error_db":round(float(np.median(spec)),4) if spec else None,
         "stationary_noise_sensitivity_not_adc_calibration":True,
+        "dc_and_above_250hz_measurements_are_only_diagnostics":True,
         "hardware_one_to_one_accepted":False,
         "hardware_acceptance":"BLOCKED",
         "production_dsp_unchanged":True,
@@ -229,12 +252,17 @@ def audit(a):
           "median_abs_level_db",report["median_absolute_relative_level_error_db"],
           "median_abs_spec_db",report["median_absolute_relative_spectral_error_db"],
           "cutoff_median_abs_level_db",report["median_absolute_cutoff_level_error_db"],
+          "cutoff_ac_median_abs_level_db",report["median_absolute_cutoff_ac_level_error_db"],
+          "cutoff_above250_median_abs_level_db",report["median_absolute_cutoff_above_250hz_level_error_db"],
           "resonance_Q_positive_median_abs_level_db",report["median_absolute_resonance_nonzero_Q_level_error_db"],
           "card_ADC_nonlin_AND_missing_raw_trace=NOT_1TO1_HARDWARE_ACCEPTANCE")
     for x in cut_rows:
         if x["compare"]:
             print("P236_REAL_HARDWARE_CUTOFF",x["cutoff"],"relative_level_error_dB",
                   x["compare"]["relative_level_error_db"],
+                  "relative_ac_level_error_db",x["compare"]["relative_ac_level_error_db"],
+                  "relative_above250_level_error_db",x["compare"]["relative_above_250hz_level_error_db"],
+                  "card_dc",x["card_dc_mean"],"native_dc",x["current_125a_dc_mean"],
                   "relative_bands",{
                    k:v["125a_minus_card_relative_db"]
                    for k,v in x["compare"]["relative_spectrum"].items()})
@@ -249,8 +277,16 @@ def selftest():
     else:raise AssertionError("partial AWE32 record accepted")
     x={"rms":.2,"bands":{str(x):x for x in range(3)}}
     y={"rms":.1,"bands":{str(x):x/2 for x in range(3)}}
+    # All comparative metrics must have independent normalization identities.
+    x.update({"ac_rms":.2,"above_250hz_rms":.1})
+    y.update({"ac_rms":.1,"above_250hz_rms":.05})
     p=compare(x,y,x,y)
     assert p["relative_level_error_db"]==0
+    assert p["relative_ac_level_error_db"]==0
+    assert p["relative_above_250hz_level_error_db"]==0
+    ff=feature(np.sin(2*np.pi*80*np.arange(11000)/44100),np.zeros(1000))
+    assert ff["above_250hz_rms"]<.05*ff["rms"]
+    assert ff["bands"]["50-250Hz"]>ff["bands"]["250-1000Hz"]
     print("P236_AWETEST_PHYSICAL_ORACLE_SELFTEST_PASS missing_events_rejected=1 normalized_anchor_identity=1")
 def main():
     p=argparse.ArgumentParser()
