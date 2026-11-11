@@ -11,6 +11,7 @@ from pathlib import Path
 import numpy as np
 
 RATE=44100
+HOLD_TOLERANCE_SAMPLES=44 # predeclared ±1 ms, integer samples at 44.1kHz
 SPECTRAL=((80,250),(250,1000),(1000,4000),(4000,10000),(10000,20000))
 PROGRAMS=(0,39,88)
 SLICES={
@@ -64,6 +65,84 @@ def edges(Q):
             "noteoff_layer_voices":sorted(set(x["voice"] for x in Q if x["reg"]==5
                  and x["value"]&0x8000 and release<=x["frame"]<=release+4410)),
             "register_edges":Q}
+
+def require_hold_timing(original, native, program):
+    """Mandatory fail-closed original/native true EMU8000 register-edge timing gate.
+
+    BOTH measured holds must be 44100 ±44 and their difference ≤44 frames.
+    A relative-only check is insufficient: two equally late notes also FAIL.
+    Never accept a Boolean report field as a substitute for this gate.
+    """
+    a=original["duration_frames"]
+    b=native["duration_frames"]
+    delta=a-b
+    status=dict(program=program,source="true_DCYSUSV_chip_frame_edges",
+        target_samples=RATE,tolerance_samples=HOLD_TOLERANCE_SAMPLES,
+        original_duration_samples=a,native_duration_samples=b,
+        original_minus_native_samples=delta,
+        passed=(abs(a-RATE)<=HOLD_TOLERANCE_SAMPLES
+                and abs(b-RATE)<=HOLD_TOLERANCE_SAMPLES
+                and abs(delta)<=HOLD_TOLERANCE_SAMPLES))
+    print("P234_TIMING_GATE",json.dumps(status,sort_keys=True),flush=True)
+    need(status["passed"],
+         "P234_TIMING_FAIL_BLOCKED GM{} original={} native={} target={}±{} "
+         "delta={} (all THREE tolerances mandatory)".format(
+             program,a,b,RATE,HOLD_TOLERANCE_SAMPLES,delta))
+    return status
+
+
+def timing_gate_self_test():
+    """Synthetic register-event edge mutation, no guest/ROM access required."""
+    def make_edges(hold):
+        # Match real P234 chip register edge parser; NoteOff is a WRITE event.
+        return edges([
+            {"frame":200_000,"voice":0,"reg":5,"value":0x7f7f},
+            {"frame":200_000+hold,"voice":0,"reg":5,"value":0xff7f},
+        ])
+    positives=[
+        ("exact_44100",44100,44100),
+        ("real_gm0_44099",44099,44100),
+        ("real_gm39_44100",44100,44100),
+        ("real_gm88_44096",44096,44100),
+        ("absolute_lower_limit",RATE-44,RATE),
+        ("absolute_upper_limit",RATE+44,RATE),
+        ("relative_limit",RATE+44,RATE),
+    ]
+    negatives=[
+        ("original_off_late_plus45",RATE+45,RATE),
+        ("original_off_early_minus45",RATE-45,RATE),
+        ("native_off_late_plus45",RATE,RATE+45),
+        ("native_off_early_minus45",RATE,RATE-45),
+        ("both_late_same_44145",RATE+45,RATE+45),
+        ("both_early_same_44055",RATE-45,RATE-45),
+        ("both_individually_in_range_but_delta88",RATE+44,RATE-44),
+        ("original_old_uart_pacing_plus6614",RATE+6614,RATE),
+    ]
+    successes=[]
+    for name,a,b in positives:
+        state=require_hold_timing(make_edges(a),make_edges(b),name)
+        assert state["passed"],name
+        successes.append(name)
+    failures=[]
+    for name,a,b in negatives:
+        try:
+            require_hold_timing(make_edges(a),make_edges(b),name)
+        except ValueError as exc:
+            assert "P234_TIMING_FAIL_BLOCKED" in str(exc),(name,exc)
+            failures.append(name)
+        else:
+            raise AssertionError("P234 NEGATIVE TEST SILENT PASS: "+name)
+    try:
+        edges([{"frame":200000,"voice":0,"reg":5,"value":0x7f7f}])
+    except ValueError as exc:
+        assert "no observed original/native DCYSUSV note-off" in str(exc)
+        failures.append("noteoff_missing")
+    else:
+        raise AssertionError("P234 NEGATIVE TEST accepted missing NoteOff")
+    assert len(successes)==7 and len(failures)==9
+    print("P234_TIMING_GATE_SELF_TEST_PASS positives={} negatives={} labels={}".format(
+        len(successes),len(failures),",".join(failures)),flush=True)
+
 
 def private_pcm(p,lo,hi):
     need(p.is_file() and p.stat().st_size%8==0,"private dry stereo int32le PCM absent")
@@ -173,7 +252,9 @@ def audit(args):
         raw_native=args.native_root/f"native-gm{p}-dry.i32le"
         pcm_native=private_pcm(raw_native,None,None)
         eo,en=edges(qs_o),edges(qs_n)
-        verified_same_hold_duration=abs(eo["duration_frames"]-en["duration_frames"])<=44
+        # Hard stop BEFORE any RMS/envelope/spectral scores can be emitted.
+        # This is a certified timing precondition, NOT a certified audio match.
+        timing_gate=require_hold_timing(eo,en,p)
         windows={}
         for key,f in SLICES.items():
             ao,bo=f(eo["noteon_chip_frame"],eo["noteoff_chip_frame"])
@@ -202,7 +283,8 @@ def audit(args):
             chip_register_edges={"original":eo,"native":en},
             note_duration_difference_frames=eo["duration_frames"]-en["duration_frames"],
             nominal_1000ms_not_substituted_for_actual_noteoff=True,
-            same_note_hold_duration_within_1ms=verified_same_hold_duration,
+            same_note_hold_duration_within_1ms=True,
+            mandatory_timing_gate=timing_gate,
             native_wet_return_component_energy=wet_native,
             native_both_fx_returns_verified_zero=no_native_fx,
             creative_reference_tap_is_pre_effects=True,
@@ -220,6 +302,10 @@ def audit(args):
         original_dry_pcm_sha256=digest(args.original_dry),
         original_stage_sha256=digest(args.original_stage),
         actual_DSP_frame_noteon_noteoff_required=True,
+        mandatory_timing_gate="PASS",
+        timing_target_samples=RATE,
+        timing_tolerance_samples=HOLD_TOLERANCE_SAMPLES,
+        timing_passed_programs=len(output),
         exact_44100Hz_time_window_cropping=True,
         no_volume_normalization=True,
         note="Unmodified original Creative guest; pre-FX dry observer excludes wet returns without driver muting. Native test-only GUI=0 with both FX returns explicitly muted. No VST3 host capture or full end-to-end sample-aligned output equal-state proof.",
@@ -254,11 +340,19 @@ def audit(args):
 
 def main():
     ap=argparse.ArgumentParser()
+    ap.add_argument("--self-test",action="store_true",
+                    help="positive and fault-injected true NoteOff edge tests; no ROM")
     for k in ("original-stage","original-dry","p48","p67","native-root","out"):
-        ap.add_argument("--"+k,type=Path,required=True)
+        ap.add_argument("--"+k,type=Path)
     for k in ("original-86box-sha","native-sha","observer-sha"):
-        ap.add_argument("--"+k,required=True)
-    audit(ap.parse_args())
+        ap.add_argument("--"+k)
+    args=ap.parse_args()
+    if args.self_test:
+        return timing_gate_self_test()
+    missing=[key for key,val in vars(args).items() if key!="self_test" and val is None]
+    if missing:
+        ap.error("required in normal mode: "+", ".join(missing))
+    audit(args)
 
 if __name__=="__main__":
     main()
