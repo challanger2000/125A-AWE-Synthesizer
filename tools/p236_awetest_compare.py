@@ -374,7 +374,13 @@ def line_out_audit(a):
         demand(sr==44100,"invalid anchor internal card")
         c0=int(anchor["frame"]-44100)
         c1=int(anchor["frame"]+4*44100)
-        demand(c0>=0 and c1<=len(card),"internal anchor out of bounds")
+        # An original capture segment can end just after a reference
+        # tone; the 1s pre+4s post window may cross that segment boundary.
+        # Skip only this unusable anchor, never fabricate or pad its samples.
+        if c0<0 or c1>len(card):
+            print("P236_EXTERNAL_LINE_ANCHOR_TRUNCATED",
+                  anchor["block"],anchor["filebase"],anchor["frame"],flush=True)
+            continue
         ce=env10(card[c0:c1,0])
         fe=env10(read_line(pred-4.,pred+7.))
         corr=np.correlate(fe,ce,"valid")
