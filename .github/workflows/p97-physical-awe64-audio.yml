@@ -138,7 +138,7 @@ jobs:
           echo "P236_SOURCE_BLOB_RECA002=$(git hash-object "$card/reca002.flac")"
           test "$(git hash-object "$root/awetst25_line.part1.flac")" = 367b81093811fe88ae8e4f7e0fb76273fdfc851a
           test "$(git hash-object "$root/awetst25_line.part2.flac")" = b17f514b00bdffe87d008954cbcab9aedeabc57b
-          test "$(git hash-object "$root/awetst25_line.part3.flac")" = 3722abaf1c087345788e97d0724f6259ed308b8
+          test "$(git hash-object "$root/awetst25_line.part3.flac")" = 3722abaf1c087345788e97d0724f6259ed308b8b
           test "$(git hash-object "$card/reca001.flac")" = 750b3639027305073953ac3964cc497f44f249b6
           test "$(git hash-object "$card/reca002.flac")" = 859d9800d76ae513ea418a19c57fd4ec50147008
           "$root/venv/bin/python" tools/p236_awetest_compare.py \
