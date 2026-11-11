@@ -168,6 +168,27 @@ def audit(a):
     spec=[abs(v["125a_minus_card_relative_db"])
           for x in allvalid
           for v in x["compare"]["relative_spectrum"].values()]
+    # Never hide a severe cutoff mismatch behind the good resonance cases.
+    cut_errors=[abs(x["compare"]["relative_level_error_db"])
+                for x in cut_rows if x["compare"]]
+    # Q0 is the reference by definition: its exactly-zero error is tautological
+    # and must not inflate the resonance fidelity score.
+    res_errors=[abs(x["compare"]["relative_level_error_db"])
+                for x in res_rows if x["Q"]>0 and x["compare"]]
+    # Optional stationary-noise sensitivity estimate, not an audio correction
+    # and not a calibrated analog ADC inversion. Report both estimates.
+    def hw_signal_only_rms(f):
+        return math.sqrt(max(0.,f["rms"]**2-f["noise_rms"]**2))
+    anchor_signal=hw_signal_only_rms(anchor[0])
+    for row in cut_rows:
+        if row["compare"]:
+            ref=c_p[row["cutoff"]]
+            signal=hw_signal_only_rms(ref)
+            if signal>1e-12 and anchor_signal>1e-12:
+                hw_rel_signal=dbr(signal,anchor_signal)
+                emu_rel=row["compare"]["relative_level_native_db"]
+                row["relative_level_error_db_stationary_noise_sensitivity"]=round(
+                    emu_rel-hw_rel_signal,4)
     report={
         "schema":"125A-P236-direct-physical-AWE32-v25-cutoff-resonance-v1",
         "reference":"real AWE32 internal ADC mono-left; AWETEST v25 hardware data and original timestamps",
@@ -190,7 +211,11 @@ def audit(a):
         "valid_real_hardware_note_pairs":len(allvalid),
         "invalid_pairs":len(cut_rows)+len(res_rows)-len(allvalid),
         "median_absolute_relative_level_error_db":round(float(np.median(errors)),4) if errors else None,
+        "median_absolute_cutoff_level_error_db":round(float(np.median(cut_errors)),4) if cut_errors else None,
+        "median_absolute_resonance_nonzero_Q_level_error_db":round(float(np.median(res_errors)),4) if res_errors else None,
+        "resonance_Q0_reference_points_excluded_from_fidelity_score":2,
         "median_absolute_relative_spectral_error_db":round(float(np.median(spec)),4) if spec else None,
+        "stationary_noise_sensitivity_not_adc_calibration":True,
         "hardware_one_to_one_accepted":False,
         "hardware_acceptance":"BLOCKED",
         "production_dsp_unchanged":True,
@@ -203,6 +228,8 @@ def audit(a):
           "invalid",report["invalid_pairs"],
           "median_abs_level_db",report["median_absolute_relative_level_error_db"],
           "median_abs_spec_db",report["median_absolute_relative_spectral_error_db"],
+          "cutoff_median_abs_level_db",report["median_absolute_cutoff_level_error_db"],
+          "resonance_Q_positive_median_abs_level_db",report["median_absolute_resonance_nonzero_Q_level_error_db"],
           "card_ADC_nonlin_AND_missing_raw_trace=NOT_1TO1_HARDWARE_ACCEPTANCE")
     for x in cut_rows:
         if x["compare"]:
