@@ -107,7 +107,10 @@ Result render(const fs::path& rom,const Case& c,std::vector<int16_t>& pcm,
                     "duplicate physical voice in diagnostic");
             voiceIds.push_back(v);
         }
-        require(voiceIds.size()==result.active,"real voice count not equal to note dump");
+        // CaptureHeldNotes deliberately coalesces all layers of one NoteOn;
+        // the physical voice note-dump correctly contains one row per layer.
+        require(voiceIds.size()>=result.active && voiceIds.size()<=4,
+                "unexpected physical voice layer count in Creative-FX probe");
         for(size_t layer=0;layer<voiceIds.size();++layer){
             const int v=voiceIds[layer];
             const uint32_t original=s.Core().ReadDriver(Emu8000::Reg::PTRX,v);
