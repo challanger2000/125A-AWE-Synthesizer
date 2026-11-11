@@ -67,13 +67,11 @@ def patch(source: str) -> str:
     # Put P234 definitions *after* p233_emit, before emu8k_update in original,
     # or before emu8k_update_chunk in native; forward declarations not needed.
     source=source.replace(OBSERVER+"\n"+marker,marker,1)
+    # At this point p233_open() and p233_frame have already been declared;
+    # p234_dry_write must precede the p233_emit caller.
     end="static void p233_emit(emu8k_t *e,int count,"
     idx=source.index(end)
-    endmarker="    fflush(f);\n}\n"
-    endidx=source.find(endmarker,idx)
-    if endidx<0:raise ValueError("P233 emit terminator missing")
-    insert=endidx+len(endmarker)
-    source=source[:insert]+"\n"+OBSERVER+"\n"+source[insert:]
+    source=source[:idx]+"\n"+OBSERVER+"\n"+source[idx:]
     called="    if(!f || count<=0)return;"
     if source.count(called)!=1:raise ValueError("P233 emit call guard not unique")
     source=source.replace(called,called+
@@ -82,6 +80,10 @@ def patch(source: str) -> str:
     # Clock stamp therefore refers to the exact register-write boundary.
     marker="void\nemu8k_outw(uint16_t addr, uint16_t val, void *priv)\n{"
     if source.count(marker)!=1:raise ValueError("original/native port-write marker mismatch")
+    # 86Box defines emu8k_outw before its audio-update routine.
+    # A prototype is required because the observer is defined later.
+    source=source.replace(marker,
+        "static void p234_register_edge(emu8k_t *,uint16_t,uint16_t);\n"+marker,1)
     beginning=source.index(marker)
     sub=source[beginning:]
     update="    emu8k_update(emu8k);"
