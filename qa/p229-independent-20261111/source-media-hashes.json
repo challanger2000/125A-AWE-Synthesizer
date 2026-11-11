@@ -1,0 +1,22 @@
+[
+  {
+    "file": "Synth 512 Bank(3).sf2",
+    "bytes": 555754,
+    "sha256": "d5b99ec38fddf59f53f66b90921e170d207bf3bbd73960f6e4175c39ef68349b"
+  },
+  {
+    "file": "FM Dreams Sampler(1).sf2",
+    "bytes": 1394908,
+    "sha256": "794b37cf424cd8a05188cb84d8ffedc3ffc1ab466726b8dd55d8c638a0c355c4"
+  },
+  {
+    "file": "Vintage Dreams Bank.sf2",
+    "bytes": 315982,
+    "sha256": "91c0ce6a5f6422b6193c61e5bce48f342a7c1ac3b013fd11ca07775fd204dfc9"
+  },
+  {
+    "file": "Vintage Synth 2001.sf2",
+    "bytes": 4519324,
+    "sha256": "b6031a360b33e00cbb7ab6b8b711953c1ea54b6e5c4320c87f1d3ff9fd542da4"
+  }
+]

@@ -1,0 +1,48 @@
+{
+  "method": "Match actual CCCA/loop addresses, then pan/pitch; never physical-voice number or allocation order. Raw SF2 generators parsed independently. Candidate is original VXD integer domain: ((base_db + (raw_cb+12)/24)*8)/3, integer truncation.",
+  "banks": [
+    {
+      "bank_index": 0,
+      "matched_layers": 176,
+      "sample_address_mismatches": 0,
+      "current_IFATN_mismatches": 0,
+      "direct_cb_IFATN_mismatches": 0,
+      "IP_mismatches": 20,
+      "pan_mismatches": 0,
+      "unmatched_native_layers": 0
+    },
+    {
+      "bank_index": 1,
+      "matched_layers": 20,
+      "sample_address_mismatches": 0,
+      "current_IFATN_mismatches": 0,
+      "direct_cb_IFATN_mismatches": 0,
+      "IP_mismatches": 0,
+      "pan_mismatches": 0,
+      "unmatched_native_layers": 0
+    },
+    {
+      "bank_index": 2,
+      "matched_layers": 302,
+      "sample_address_mismatches": 0,
+      "current_IFATN_mismatches": 12,
+      "direct_cb_IFATN_mismatches": 0,
+      "IP_mismatches": 32,
+      "pan_mismatches": 0,
+      "unmatched_native_layers": 0
+    },
+    {
+      "bank_index": 3,
+      "matched_layers": 292,
+      "sample_address_mismatches": 0,
+      "current_IFATN_mismatches": 204,
+      "direct_cb_IFATN_mismatches": 0,
+      "IP_mismatches": 22,
+      "pan_mismatches": 12,
+      "unmatched_native_layers": 8,
+      "cases_with_different_layer_count": 4
+    }
+  ],
+  "private_individual_records": 790,
+  "private_evidence_manifest": "PRIVATE-EVIDENCE-SHA256.json"
+}

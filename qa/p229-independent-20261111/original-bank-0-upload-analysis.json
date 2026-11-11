@@ -1,0 +1,20 @@
+{
+  "bank_index": 0,
+  "file": "Synth 512 Bank(3).sf2",
+  "source_sha256": "d5b99ec38fddf59f53f66b90921e170d207bf3bbd73960f6e4175c39ef68349b",
+  "dram_upload_base": "0x200010",
+  "smpl_words": 260921,
+  "observed_written_words": 260921,
+  "original_dma_writes": 261265,
+  "raw_mismatch_words": 257552,
+  "raw_rmse": 6238.132696030134,
+  "full_sample_preemphasis_model_mismatch_words": 102,
+  "model_rmse": 27.982308228218713,
+  "sample_words": 258265,
+  "interior_words": 257352,
+  "interior_model_mismatch_words": 72,
+  "boundary_or_padding_model_mismatch_words": 30,
+  "model": "clip16(floor((6*x-prev-next)/8)) on each whole non-ROM sample, outside neighbours/padding 0; boundary exceptions reported, never fitted",
+  "observed_smpl_ram_sha256": "ff3ce73a1898ef586312d368ad3abdc2cfad47e3cfe07dd6d460a32845d8c470",
+  "trace_sha256_before_first_case": "974277f5efb5e68f9c3bfac1a83f57b5a3839b7a3200f5366fa56d17cd669281"
+}

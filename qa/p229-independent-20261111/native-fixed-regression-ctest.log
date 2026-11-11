@@ -1,0 +1,88 @@
+Internal ctest changing into directory: /tmp/awe-sf2-regression-build
+Test project /tmp/awe-sf2-regression-build
+      Start  1: 125A_source_baseline_contract
+ 1/41 Test  #1: 125A_source_baseline_contract ........................   Passed    0.04 sec
+      Start  2: 125A_p14_vstgui_contract
+ 2/41 Test  #2: 125A_p14_vstgui_contract .............................   Passed    0.05 sec
+      Start  3: 125A_asset_state
+ 3/41 Test  #3: 125A_asset_state .....................................   Passed    0.00 sec
+      Start  4: 125A_p190_fx_zero_dry
+ 4/41 Test  #4: 125A_p190_fx_zero_dry ................................   Passed    0.00 sec
+      Start  5: 125A_p116_master_volume
+ 5/41 Test  #5: 125A_p116_master_volume ..............................   Passed    0.00 sec
+      Start  6: 125A_p117_direct_presets
+ 6/41 Test  #6: 125A_p117_direct_presets .............................   Passed    0.00 sec
+      Start  7: 125A_p117_synthgm_catalog
+ 7/41 Test  #7: 125A_p117_synthgm_catalog ............................   Passed    0.00 sec
+      Start  8: 125A_p118_midi_mapping
+ 8/41 Test  #8: 125A_p118_midi_mapping ...............................   Passed    0.00 sec
+      Start  9: 125A_p119_midi_live_state
+ 9/41 Test  #9: 125A_p119_midi_live_state ............................   Passed    0.00 sec
+      Start 10: 125A_p119_engine_exchange
+10/41 Test #10: 125A_p119_engine_exchange ............................   Passed    0.03 sec
+      Start 11: 125A_p120_engine_retirement
+11/41 Test #11: 125A_p120_engine_retirement ..........................   Passed    0.01 sec
+      Start 12: 125A_p120_midi_automation
+12/41 Test #12: 125A_p120_midi_automation ............................   Passed    0.00 sec
+      Start 13: 125A_p19_master_logo
+13/41 Test #13: 125A_p19_master_logo .................................   Passed    0.00 sec
+      Start 14: 125A_p122_browser_bank_command
+14/41 Test #14: 125A_p122_browser_bank_command .......................   Passed    0.00 sec
+      Start 15: 125A_p122_state_snapshot
+15/41 Test #15: 125A_p122_state_snapshot .............................   Passed    0.01 sec
+      Start 30: 125A_p166_exact_sf2_rom
+16/41 Test #30: 125A_p166_exact_sf2_rom ..............................   Passed    0.43 sec
+      Start 31: 125A_p170_pcm_audio_oracles
+17/41 Test #31: 125A_p170_pcm_audio_oracles ..........................   Passed   29.23 sec
+      Start 16: 125A_p170_detect_mutant_bank
+18/41 Test #16: 125A_p170_detect_mutant_bank .........................   Passed    0.58 sec
+      Start 17: 125A_p170_detect_mutant_amp
+19/41 Test #17: 125A_p170_detect_mutant_amp ..........................   Passed   33.68 sec
+      Start 18: 125A_p170_detect_mutant_filter
+20/41 Test #18: 125A_p170_detect_mutant_filter .......................   Passed   27.45 sec
+      Start 19: 125A_p170_detect_mutant_loop
+21/41 Test #19: 125A_p170_detect_mutant_loop .........................   Passed   35.33 sec
+      Start 20: 125A_p170_detect_mutant_end
+22/41 Test #20: 125A_p170_detect_mutant_end ..........................   Passed   29.61 sec
+      Start 21: 125A_p170_detect_mutant_rom
+23/41 Test #21: 125A_p170_detect_mutant_rom ..........................   Passed    0.19 sec
+      Start 22: 125A_p170_detect_mutant_pedal
+24/41 Test #22: 125A_p170_detect_mutant_pedal ........................   Passed   29.02 sec
+      Start 23: 125A_p170_detect_mutant_headroom
+25/41 Test #23: 125A_p170_detect_mutant_headroom .....................   Passed   28.99 sec
+      Start 24: 125A_engine_safety
+26/41 Test #24: 125A_engine_safety ...................................   Passed    0.03 sec
+      Start 25: 125A_p118_parser_bounds
+27/41 Test #25: 125A_p118_parser_bounds ..............................   Passed    0.01 sec
+      Start 26: 125A_sf2_selection
+28/41 Test #26: 125A_sf2_selection ...................................   Passed    0.00 sec
+      Start 27: 125A_render_rates
+29/41 Test #27: 125A_render_rates ....................................   Passed    0.03 sec
+      Start 28: 125A_box_rate_fifo
+30/41 Test #28: 125A_box_rate_fifo ...................................   Passed    0.04 sec
+      Start 29: 125A_sf2_audio_integration
+31/41 Test #29: 125A_sf2_audio_integration ...........................   Passed    1.18 sec
+      Start 32: 125A_p171_synthetic_rom_level
+32/41 Test #32: 125A_p171_synthetic_rom_level ........................   Passed    0.14 sec
+      Start 33: 125A_p121_pitchbend_audio
+33/41 Test #33: 125A_p121_pitchbend_audio ............................   Passed    0.12 sec
+      Start 34: 125A_p90_sf2_driver_registers
+34/41 Test #34: 125A_p90_sf2_driver_registers ........................   Passed    0.00 sec
+      Start 35: 125A_p128_note_handoff
+35/41 Test #35: 125A_p128_note_handoff ...............................   Passed    0.04 sec
+      Start 36: 125A_p133_fx_register_modes
+36/41 Test #36: 125A_p133_fx_register_modes ..........................   Passed    0.00 sec
+      Start 37: 125A_p226_raw_capture_mutant
+37/41 Test #37: 125A_p226_raw_capture_mutant .........................   Passed    0.00 sec
+      Start 38: 125A_p228_dry_matrix_negative_mutant
+38/41 Test #38: 125A_p228_dry_matrix_negative_mutant .................   Passed    0.00 sec
+      Start 39: 125A_p229_preclip_matrix_parser
+39/41 Test #39: 125A_p229_preclip_matrix_parser ......................   Passed    0.00 sec
+      Start 40: 125A_creative_win95_original_sf2_envelopes
+40/41 Test #40: 125A_creative_win95_original_sf2_envelopes ...........   Passed    0.00 sec
+      Start 41: 125A_creative_win95_original_volume_sustain_layers
+41/41 Test #41: 125A_creative_win95_original_volume_sustain_layers ...   Passed    0.00 sec
+
+100% tests passed, 0 tests failed out of 41
+
+Total Test time (real) = 216.29 sec

@@ -1,0 +1,12 @@
+{
+  "changed_fields": [
+    "dc_normalized",
+    "raw_dc"
+  ],
+  "all_other_fields_identical": true,
+  "old_denominator": 1485307904,
+  "correct_denominator": 5780275200,
+  "old_dc_error_factor": 3.891634309918814,
+  "old_half_scale": 1.945817154959407,
+  "correct_half_scale": 0.5
+}

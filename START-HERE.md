@@ -1,3 +1,9 @@
+## Unabhängiger P228/P229-SF2-Nachaudit – Ergebnisse vom 11.11.2026
+
+[Bericht mit Rohbelegen](docs/P229-INDEPENDENT-SF2-CLIPPING-AUDIT.md): vier Original-SF2-Hashes verifiziert, **3.082 native Noten / 117 Clipping-Fälle** reproduziert; **234 echte Original-Creative-Win95/86Box-Gegenproben** plus vier Frischgast-Layerproben ausgeführt. Gemessener Produktkern **8d2f41d**, ausschließlich Diagnose-/Testkorrekturen auf bestehendem `fix/creative-volume-sustain-layer-parity`, exakter Windows-QA-Commit **ca68572**. Originaler SF2-Sample-Upload unterscheidet sich nachweislich vom nativen Roh-PCM-Upload; **216/790 IFATN-Lowbytes falsch**, direkte Creative-Ganzzahlrechnung sagt 790/790 gemessene Werte voraus. Zwei Presets: Creative 6 statt native 8 Layer, frisch bestätigt. Beobachteter Original-RAM plus IFATN nur im Diagnoseprogramm: **117 → 2 Restfälle**, keine Produktkorrektur oder Klangfreigabe. Windows [#43028856058](https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/43028856058) **49/49**, Linux mit demselben QA-Overlay gegen 8d2f41d **41/41**; frühere rote Läufe und korrigierte Testfehler dokumentiert. **Produkt-Engine/Filter unverändert, Cutoff bleibt beim Entwicklerchat.** Physische AWE, echte Windows-VST3-Besitzerbank-A/B-Abnahme und spätere Entwicklercommits **NOT RUN**, Release **BLOCKED**. Keine neuen Branches oder Merges.
+
+---
+
 ## P104 – veröffentlichter Repository-Audit und QA-Folgeauftrag (11.11.2026)
 
 [Bericht, vollständige 142-Branch-/89-PR-Inventare, Graph und ausgeführte P196/P198-Prüfung](docs/P104-REPOSITORY-INTEGRATION-FOLLOWUP.md).

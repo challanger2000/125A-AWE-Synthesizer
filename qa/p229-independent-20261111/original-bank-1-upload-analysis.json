@@ -1,0 +1,20 @@
+{
+  "bank_index": 1,
+  "file": "FM Dreams Sampler(1).sf2",
+  "source_sha256": "794b37cf424cd8a05188cb84d8ffedc3ffc1ab466726b8dd55d8c638a0c355c4",
+  "dram_upload_base": "0x200010",
+  "smpl_words": 693475,
+  "observed_written_words": 693475,
+  "original_dma_writes": 694242,
+  "raw_mismatch_words": 692253,
+  "raw_rmse": 5585.7618771669795,
+  "full_sample_preemphasis_model_mismatch_words": 32,
+  "model_rmse": 15.608747470076775,
+  "sample_words": 692515,
+  "interior_words": 692185,
+  "interior_model_mismatch_words": 2,
+  "boundary_or_padding_model_mismatch_words": 30,
+  "model": "clip16(floor((6*x-prev-next)/8)) on each whole non-ROM sample, outside neighbours/padding 0; boundary exceptions reported, never fitted",
+  "observed_smpl_ram_sha256": "981154622c21035d4881d5ddcd2c0fa19b7a33dba2ee1357bbbc83292681f6b7",
+  "trace_sha256_before_first_case": "c6e22765254d7a83eed87156b7f4e54ab388bd73164b42fca7dc781434eb6636"
+}

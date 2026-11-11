@@ -1,0 +1,108 @@
+﻿2026-11-11T13:26:28.6510193Z ##[group]Run ctest --test-dir build -C Release --output-on-failure
+2026-11-11T13:26:28.6510798Z [36;1mctest --test-dir build -C Release --output-on-failure[0m
+2026-11-11T13:26:28.6543174Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-11T13:26:28.6543594Z ##[endgroup]
+2026-11-11T13:26:29.3389782Z Internal ctest changing into directory: D:/a/125A-AWE-Synthesizer/125A-AWE-Synthesizer/build
+2026-11-11T13:26:29.4274865Z Test project D:/a/125A-AWE-Synthesizer/125A-AWE-Synthesizer/build
+2026-11-11T13:26:29.4695151Z       Start  1: 125A_source_baseline_contract
+2026-11-11T13:26:29.5595355Z  1/49 Test  #1: 125A_source_baseline_contract ........................   Passed    0.09 sec
+2026-11-11T13:26:29.5604017Z       Start  2: 125A_p14_vstgui_contract
+2026-11-11T13:26:29.7368372Z  2/49 Test  #2: 125A_p14_vstgui_contract .............................   Passed    0.18 sec
+2026-11-11T13:26:29.7371468Z       Start  3: 125A_asset_state
+2026-11-11T13:26:29.7463417Z  3/49 Test  #3: 125A_asset_state .....................................   Passed    0.01 sec
+2026-11-11T13:26:29.7466353Z       Start  4: 125A_p190_fx_zero_dry
+2026-11-11T13:26:29.7543972Z  4/49 Test  #4: 125A_p190_fx_zero_dry ................................   Passed    0.01 sec
+2026-11-11T13:26:29.7546445Z       Start  5: 125A_p116_master_volume
+2026-11-11T13:26:29.7622116Z  5/49 Test  #5: 125A_p116_master_volume ..............................   Passed    0.01 sec
+2026-11-11T13:26:29.7624920Z       Start  6: 125A_p117_direct_presets
+2026-11-11T13:26:29.7699624Z  6/49 Test  #6: 125A_p117_direct_presets .............................   Passed    0.01 sec
+2026-11-11T13:26:29.7702744Z       Start  7: 125A_p117_synthgm_catalog
+2026-11-11T13:26:29.7788597Z  7/49 Test  #7: 125A_p117_synthgm_catalog ............................   Passed    0.01 sec
+2026-11-11T13:26:29.7791457Z       Start  8: 125A_p118_midi_mapping
+2026-11-11T13:26:29.7865848Z  8/49 Test  #8: 125A_p118_midi_mapping ...............................   Passed    0.01 sec
+2026-11-11T13:26:29.7868658Z       Start  9: 125A_p119_midi_live_state
+2026-11-11T13:26:29.7944299Z  9/49 Test  #9: 125A_p119_midi_live_state ............................   Passed    0.01 sec
+2026-11-11T13:26:29.7947111Z       Start 10: 125A_p119_engine_exchange
+2026-11-11T13:26:29.8393372Z 10/49 Test #10: 125A_p119_engine_exchange ............................   Passed    0.04 sec
+2026-11-11T13:26:29.8396571Z       Start 11: 125A_p119_ui_dispatch
+2026-11-11T13:26:30.1371270Z 11/49 Test #11: 125A_p119_ui_dispatch ................................   Passed    0.30 sec
+2026-11-11T13:26:30.1374287Z       Start 12: 125A_p120_engine_retirement
+2026-11-11T13:26:30.1481985Z 12/49 Test #12: 125A_p120_engine_retirement ..........................   Passed    0.01 sec
+2026-11-11T13:26:30.1484873Z       Start 13: 125A_p120_midi_automation
+2026-11-11T13:26:30.1568412Z 13/49 Test #13: 125A_p120_midi_automation ............................   Passed    0.01 sec
+2026-11-11T13:26:30.1571288Z       Start 14: 125A_p120_ui_reentrancy
+2026-11-11T13:26:30.1832993Z 14/49 Test #14: 125A_p120_ui_reentrancy ..............................   Passed    0.03 sec
+2026-11-11T13:26:30.1835634Z       Start 15: 125A_p19_master_logo
+2026-11-11T13:26:30.1939400Z 15/49 Test #15: 125A_p19_master_logo .................................   Passed    0.01 sec
+2026-11-11T13:26:30.1942130Z       Start 16: 125A_p122_browser_bank_command
+2026-11-11T13:26:30.2023750Z 16/49 Test #16: 125A_p122_browser_bank_command .......................   Passed    0.01 sec
+2026-11-11T13:26:30.2026903Z       Start 17: 125A_p122_host_shutdown
+2026-11-11T13:26:30.9814280Z 17/49 Test #17: 125A_p122_host_shutdown ..............................   Passed    0.78 sec
+2026-11-11T13:26:30.9817587Z       Start 18: 125A_p122_state_snapshot
+2026-11-11T13:26:30.9927524Z 18/49 Test #18: 125A_p122_state_snapshot .............................   Passed    0.01 sec
+2026-11-11T13:26:30.9930217Z       Start 33: 125A_p166_exact_sf2_rom
+2026-11-11T13:26:31.4461217Z 19/49 Test #33: 125A_p166_exact_sf2_rom ..............................   Passed    0.45 sec
+2026-11-11T13:26:31.4464723Z       Start 34: 125A_p170_pcm_audio_oracles
+2026-11-11T13:27:00.3019585Z 20/49 Test #34: 125A_p170_pcm_audio_oracles ..........................   Passed   28.86 sec
+2026-11-11T13:27:00.3023177Z       Start 19: 125A_p170_detect_mutant_bank
+2026-11-11T13:27:00.8011381Z 21/49 Test #19: 125A_p170_detect_mutant_bank .........................   Passed    0.50 sec
+2026-11-11T13:27:00.8014026Z       Start 20: 125A_p170_detect_mutant_amp
+2026-11-11T13:27:29.6687308Z 22/49 Test #20: 125A_p170_detect_mutant_amp ..........................   Passed   28.87 sec
+2026-11-11T13:27:29.6688215Z       Start 21: 125A_p170_detect_mutant_filter
+2026-11-11T13:28:00.5641530Z 23/49 Test #21: 125A_p170_detect_mutant_filter .......................   Passed   30.90 sec
+2026-11-11T13:28:00.5644462Z       Start 22: 125A_p170_detect_mutant_loop
+2026-11-11T13:28:29.4056564Z 24/49 Test #22: 125A_p170_detect_mutant_loop .........................   Passed   28.84 sec
+2026-11-11T13:28:29.4059206Z       Start 23: 125A_p170_detect_mutant_end
+2026-11-11T13:28:58.1817194Z 25/49 Test #23: 125A_p170_detect_mutant_end ..........................   Passed   28.78 sec
+2026-11-11T13:28:58.1819811Z       Start 24: 125A_p170_detect_mutant_rom
+2026-11-11T13:28:58.3791896Z 26/49 Test #24: 125A_p170_detect_mutant_rom ..........................   Passed    0.20 sec
+2026-11-11T13:28:58.3794844Z       Start 25: 125A_p170_detect_mutant_pedal
+2026-11-11T13:29:26.2985337Z 27/49 Test #25: 125A_p170_detect_mutant_pedal ........................   Passed   27.92 sec
+2026-11-11T13:29:26.2988119Z       Start 26: 125A_p170_detect_mutant_headroom
+2026-11-11T13:29:54.5345643Z 28/49 Test #26: 125A_p170_detect_mutant_headroom .....................   Passed   28.24 sec
+2026-11-11T13:29:54.5346548Z       Start 27: 125A_engine_safety
+2026-11-11T13:29:54.5648799Z 29/49 Test #27: 125A_engine_safety ...................................   Passed    0.03 sec
+2026-11-11T13:29:54.5649882Z       Start 28: 125A_p118_parser_bounds
+2026-11-11T13:29:54.5753032Z 30/49 Test #28: 125A_p118_parser_bounds ..............................   Passed    0.01 sec
+2026-11-11T13:29:54.5755425Z       Start 29: 125A_sf2_selection
+2026-11-11T13:29:54.5838115Z 31/49 Test #29: 125A_sf2_selection ...................................   Passed    0.01 sec
+2026-11-11T13:29:54.5841024Z       Start 30: 125A_render_rates
+2026-11-11T13:29:54.6318004Z 32/49 Test #30: 125A_render_rates ....................................   Passed    0.05 sec
+2026-11-11T13:29:54.6320885Z       Start 31: 125A_box_rate_fifo
+2026-11-11T13:29:54.6796152Z 33/49 Test #31: 125A_box_rate_fifo ...................................   Passed    0.05 sec
+2026-11-11T13:29:54.6799158Z       Start 32: 125A_sf2_audio_integration
+2026-11-11T13:29:55.6053039Z 34/49 Test #32: 125A_sf2_audio_integration ...........................   Passed    0.92 sec
+2026-11-11T13:29:55.6053817Z       Start 35: 125A_p171_synthetic_rom_level
+2026-11-11T13:29:55.7598832Z 35/49 Test #35: 125A_p171_synthetic_rom_level ........................   Passed    0.15 sec
+2026-11-11T13:29:55.7601639Z       Start 36: 125A_p121_pitchbend_audio
+2026-11-11T13:29:55.8908041Z 36/49 Test #36: 125A_p121_pitchbend_audio ............................   Passed    0.13 sec
+2026-11-11T13:29:55.8911105Z       Start 37: 125A_p90_sf2_driver_registers
+2026-11-11T13:29:55.8996677Z 37/49 Test #37: 125A_p90_sf2_driver_registers ........................   Passed    0.01 sec
+2026-11-11T13:29:55.8999729Z       Start 38: 125A_p128_note_handoff
+2026-11-11T13:29:55.9388270Z 38/49 Test #38: 125A_p128_note_handoff ...............................   Passed    0.04 sec
+2026-11-11T13:29:55.9389405Z       Start 39: 125A_p133_fx_register_modes
+2026-11-11T13:29:55.9482173Z 39/49 Test #39: 125A_p133_fx_register_modes ..........................   Passed    0.01 sec
+2026-11-11T13:29:55.9484724Z       Start 40: 125A_p226_raw_capture_mutant
+2026-11-11T13:29:55.9562972Z 40/49 Test #40: 125A_p226_raw_capture_mutant .........................   Passed    0.01 sec
+2026-11-11T13:29:55.9565780Z       Start 41: 125A_p228_dry_matrix_negative_mutant
+2026-11-11T13:29:55.9653028Z 41/49 Test #41: 125A_p228_dry_matrix_negative_mutant .................   Passed    0.01 sec
+2026-11-11T13:29:55.9655519Z       Start 42: 125A_p229_preclip_matrix_parser
+2026-11-11T13:29:55.9732930Z 42/49 Test #42: 125A_p229_preclip_matrix_parser ......................   Passed    0.01 sec
+2026-11-11T13:29:55.9735629Z       Start 43: 125A_creative_win95_original_sf2_envelopes
+2026-11-11T13:29:55.9815251Z 43/49 Test #43: 125A_creative_win95_original_sf2_envelopes ...........   Passed    0.01 sec
+2026-11-11T13:29:55.9817978Z       Start 44: 125A_creative_win95_original_volume_sustain_layers
+2026-11-11T13:29:55.9898245Z 44/49 Test #44: 125A_creative_win95_original_volume_sustain_layers ...   Passed    0.01 sec
+2026-11-11T13:29:55.9900981Z       Start 45: 125A_opl3_register_audio
+2026-11-11T13:29:56.0033561Z 45/49 Test #45: 125A_opl3_register_audio .............................   Passed    0.01 sec
+2026-11-11T13:29:56.0035842Z       Start 46: 125A_opl3_midi_audio
+2026-11-11T13:29:56.0170651Z 46/49 Test #46: 125A_opl3_midi_audio .................................   Passed    0.01 sec
+2026-11-11T13:29:56.0171731Z       Start 47: 125A_opl3_ibk_bank
+2026-11-11T13:29:56.0320078Z 47/49 Test #47: 125A_opl3_ibk_bank ...................................   Passed    0.01 sec
+2026-11-11T13:29:56.0322713Z       Start 48: 125A_opl3_rhythm_audio
+2026-11-11T13:29:56.0444124Z 48/49 Test #48: 125A_opl3_rhythm_audio ...............................   Passed    0.01 sec
+2026-11-11T13:29:56.0447171Z       Start 49: 125A_cqm_backend_audio
+2026-11-11T13:29:56.0671004Z 49/49 Test #49: 125A_cqm_backend_audio ...............................   Passed    0.02 sec
+2026-11-11T13:29:56.0677781Z 
+2026-11-11T13:29:56.0678244Z 100% tests passed, 0 tests failed out of 49
+2026-11-11T13:29:56.0678562Z 
+2026-11-11T13:29:56.0678742Z Total Test time (real) = 206.65 sec

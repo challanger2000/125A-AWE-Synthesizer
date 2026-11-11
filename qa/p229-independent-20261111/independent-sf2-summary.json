@@ -1,0 +1,76 @@
+{
+  "scope": "Original Creative Win95 SF2 attenuation, sample upload, layers and 117 native clipping cases; no cutoff investigation",
+  "original_driver_backend": "Actual original Creative SBAWE.VXD inside Win95 OSR2/86Box; not physical AWE silicon",
+  "native_product_core_commit": "8d2f41dfefd84d98a903ee8c3bdfe0350ae9de95",
+  "production_branch_head_observed_after_measurement": "3d2a1a3bdd7a1f49390f3b79305fbc9b174a3112",
+  "diagnostic_test_commit": "ca68572c4fee0693e6e21ab59d0417dc46196e34",
+  "original_86box_upstream_commit": "d1d59ca9f57ed1df0c9e83243d258c19dcbe5da4",
+  "original_86box_binary_sha256": "8d9dcbd655206c061f3b8a06dc7c2779d15cf5668ef50f977cef903671c83154",
+  "win95_source_image_sha256": "fb685b36b15123af51bad9b68b3402671837065f330b33778bfc771ccfd33c26",
+  "input_archive_sha256": "dfe06d71442fa8e6f73bb500a931cba90e299cdc15a264fc8c98bb254f9529fc",
+  "original_rom_sha256": "4e143b94f758734f594ded78f4e5115635975c16fa37fabeae0baa4938ca710e",
+  "native_full_plan_cases": 3082,
+  "native_clipping_cases": 117,
+  "native_int16_rail_values": 12332,
+  "native_true_overrange_values": 12328,
+  "original_matched_cases": 234,
+  "additional_fresh_guest_layer_witnesses": 4,
+  "matched_voice_pairs": 790,
+  "current_IFATN_mismatched_voice_pairs": 216,
+  "direct_raw_cb_IFATN_mismatched_voice_pairs": 0,
+  "observed_initial_attenuation_cb_values": [
+    0,
+    80,
+    100,
+    150,
+    250
+  ],
+  "sample_rate": 44100,
+  "common_pre_FX_window_frames": 88200,
+  "original_hold_samples_min": 44084,
+  "original_hold_samples_max": 44099,
+  "native_hold_samples": 44100,
+  "hold_tolerance_samples": 44,
+  "native_cases_still_overrange_with_observed_original_DRAM_only": 4,
+  "native_cases_still_overrange_with_observed_original_DRAM_and_IFATN": 2,
+  "native_values_still_overrange_with_observed_original_DRAM_and_IFATN": 13,
+  "regression_linux": {
+    "source": "product core 8d2f41d plus six diagnostic/test files from ca68572; no observer instrumentation",
+    "ctest_passed": 41,
+    "ctest_total": 41,
+    "seconds": 216.29
+  },
+  "regression_windows": {
+    "run": 43028856058,
+    "source": "ca68572c4fee0693e6e21ab59d0417dc46196e34",
+    "ctest_passed": 49,
+    "ctest_total": 49,
+    "seconds": 206.65,
+    "url": "https://github.com/challanger2000/125A-AWE-Synthesizer/actions/runs/43028856058"
+  },
+  "initial_regression_failure_preserved": {
+    "linux": {
+      "passed": 39,
+      "total": 41,
+      "failures": [
+        "engine_safety header ABI mismatch",
+        "sf2_selection stale sustain expectations"
+      ]
+    },
+    "windows": {
+      "run": 43026006819,
+      "passed": 48,
+      "total": 49,
+      "failure": "sf2_selection stale sustain expectations"
+    }
+  },
+  "shipping_engine_changed": false,
+  "filter_changed": false,
+  "cutoff_work_performed": false,
+  "branch_created": false,
+  "merge_performed": false,
+  "release_approved": false,
+  "physical_hardware": "NOT RUN",
+  "actual_Windows_VST3_owner_bank_audio": "NOT RUN",
+  "full_sound_acceptance": "BLOCKED"
+}

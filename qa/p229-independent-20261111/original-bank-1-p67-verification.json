@@ -1,0 +1,18 @@
+{
+  "phase": "P67",
+  "agent_launched_in_actual_win95": true,
+  "original_creative_winmm_endpoint_selected": true,
+  "original_creative_com1_ready": true,
+  "creatives_midi_short_messages_delivered": 138,
+  "win95_agent_error": false,
+  "private_driver_executable_logged": false,
+  "raw_user_sf2_published": false,
+  "expected_winmm_deliveries": 138,
+  "actual_case_count": 10,
+  "delivery_count_exact": true,
+  "guest_createprocess_ok": true,
+  "original_sf2_upload_observed": true,
+  "physical_hardware_parity": "NOT RUN",
+  "individual_winmm_payload_echo": false,
+  "verified": true
+}

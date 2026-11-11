@@ -1,0 +1,19 @@
+PASS: missing ROM rejects without process termination
+PASS: missing ROM remains uninitialized
+PASS: uninitialized chip renders silence
+PASS: short ROM rejects safely
+PASS: short ROM doesn't publish ready state
+PASS: negative RAM size is rejected before allocation
+PASS: oversized RAM is rejected before allocation
+PASS: synthetic ROM first instance initialization
+PASS: synthetic ROM second instance initialization
+PASS: isolated per-instance DRAM
+PASS: shared chip lookup tables initialized exactly once
+PASS: both chip RAM regions valid
+PASS: interleaved instance render survives
+PASS: 32769 writes keep the 86Box instance initialized
+PASS: oversized burst can continue rendering without breaking a second instance
+PASS: four concurrent chip instances initialize and render
+PASS: concurrent initialization leaves shared lookup tables unchanged
+ENGINE SAFETY PROBES PASS
+NOT RUN: original hardware parity, SF2/voice allocation, VST3, Studio One, realtime allocation hook

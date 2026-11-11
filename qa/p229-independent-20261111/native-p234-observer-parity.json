@@ -1,0 +1,25 @@
+{
+  "results": [
+    {
+      "bank_index": 0,
+      "cases": 56,
+      "all_24_metric_columns_identical": true
+    },
+    {
+      "bank_index": 1,
+      "cases": 10,
+      "all_24_metric_columns_identical": true
+    },
+    {
+      "bank_index": 2,
+      "cases": 104,
+      "all_24_metric_columns_identical": true
+    },
+    {
+      "bank_index": 3,
+      "cases": 64,
+      "all_24_metric_columns_identical": true
+    }
+  ],
+  "wall_seconds": 27.878569745007553
+}

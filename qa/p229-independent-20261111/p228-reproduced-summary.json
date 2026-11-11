@@ -1,0 +1,32 @@
+{
+  "core_commit": "8d2f41dfefd84d98a903ee8c3bdfe0350ae9de95",
+  "banks": [
+    {
+      "file": "Synth 512 Bank(3).sf2",
+      "cases": 688,
+      "clipped": 28,
+      "rails": 2169
+    },
+    {
+      "file": "FM Dreams Sampler(1).sf2",
+      "cases": 210,
+      "clipped": 5,
+      "rails": 92
+    },
+    {
+      "file": "Vintage Dreams Bank.sf2",
+      "cases": 1272,
+      "clipped": 52,
+      "rails": 7694
+    },
+    {
+      "file": "Vintage Synth 2001.sf2",
+      "cases": 912,
+      "clipped": 32,
+      "rails": 2377
+    }
+  ],
+  "total_cases": 3082,
+  "clipping_cases": 117,
+  "rails": 12332
+}

@@ -1,0 +1,13 @@
+/tmp/awe-sf2-tools/lib/python3.12/site-packages/fs/__init__.py:4: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  __import__("pkg_resources").declare_namespace(__name__)  # type: ignore
+test_24_point_8_mb_sf2_fits_awe64_not_awe32 (test_p83_generic_sf2.GenericSF2.test_24_point_8_mb_sf2_fits_awe64_not_awe32) ... ok
+test_drum_bank_128_is_discovered (test_p83_generic_sf2.GenericSF2.test_drum_bank_128_is_discovered) ... ok
+test_invalid_riff_rejected (test_p83_generic_sf2.GenericSF2.test_invalid_riff_rejected) ... ok
+test_not_a_bank_specific_player (test_p83_generic_sf2.GenericSF2.test_not_a_bank_specific_player) ... ok
+test_over_28_mib_is_rejected_as_hardware_limit (test_p83_generic_sf2.GenericSF2.test_over_28_mib_is_rejected_as_hardware_limit) ... ok
+test_rom_sample_uses_original_wave_rom_address_space (test_p83_generic_sf2.GenericSF2.test_rom_sample_uses_original_wave_rom_address_space) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.123s
+
+OK

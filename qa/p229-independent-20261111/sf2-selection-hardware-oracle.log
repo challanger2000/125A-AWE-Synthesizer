@@ -1,0 +1,92 @@
+PASS: 80 matching layers in baseline
+PASS: SF2: instrument coarseTune +3 and preset offset -1 combine to +2
+PASS: SF2: positive preset cutoff offset clamps against default 13500
+PASS: SF2 real-bank-style filter, envelope, chorus and tuning offsets combine
+PASS: SF2 absent volume AND modulation sustain -> full 127
+PASS: SF2 preset -3986 delay offset over implicit -12000 starts immediately
+PASS: P110 SF2 fast attack -11959 stays 0x7F, not wrapped to zero
+PASS: P110 SF2 minimum timecents never overflow volume/mod attack
+PASS: SF2 preset cutoff offset over default is converted to chip register
+PASS: SF2 volume sustain 127 and mod 600 follow measured Creative units
+PASS: Creative SF2 volume sustain 960 retains 6 while mod 1000 reaches zero
+PASS: SF1 missing sustain retains original hardware register default zero
+PASS: SF1 historical driver precedence remains unchanged
+PASS: SF2 additive overflow saturates instead of wrapping
+PASS: P59: bass D3 correctly splits into two fine-detuned octave pairs
+PASS: P59: bass E3 preserves four layers and correct pitch intervals
+PASS: P59: original-style layer key range excludes MIDI note 70
+PASS: oversized preset reports overflow instead of silently truncating
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: SF2 layer identical to original selector
+PASS: full-capacity selector retains all layers
+PASS: SelectInto has zero dynamic allocations
+PASS: key range rejects nonmatching note
+PASS: velocity range rejects nonmatching note
+PASS: no implicit bank fallback
+PASS: zero-capacity output reports overflow
+PASS: SF1 selection remains supported
+PASS: SF1 attenuation matches driver unit-summing rule
+SF2/SBK BOUNDED SELECTION PASS
+NOT RUN: audible SF2 rendering, complete Synth runtime, hardware parity, Studio One

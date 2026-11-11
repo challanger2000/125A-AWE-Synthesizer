@@ -1,0 +1,42 @@
+--- a/tools/p229_dry_preclip_native.cpp
++++ b/tools/p229_dry_preclip_native.cpp
+@@ -8,6 +8,7 @@
+ #include <array>
+ #include <cmath>
+ #include <cstdint>
++#include <cstdlib>
+ #include <filesystem>
+ #include <fstream>
+ #include <iomanip>
+@@ -138,6 +139,16 @@
+         check(bool(voices),"cannot open private voice register snapshot");
+         voices<<"voice,IP,IFATN,CVCF,VTFT,PSST,CSL,CCCA,DCYSUSV,ATKHLDV\n";
+     }
++    const char* stagePath=std::getenv("EMU8K_P233_STAGE");
++    const char* pcmPath=std::getenv("EMU8K_P234_DRY_PCM");
++    const char* gatePath=std::getenv("EMU8K_P234_GATE");
++    uintmax_t stageBegin=0,pcmBegin=0;
++    if(capture && stagePath && pcmPath && gatePath){
++        check(!std::filesystem::exists(gatePath),"native observer gate left active");
++        stageBegin=std::filesystem::exists(stagePath)?std::filesystem::file_size(stagePath):0;
++        pcmBegin=std::filesystem::exists(pcmPath)?std::filesystem::file_size(pcmPath):0;
++        std::ofstream gate(gatePath);gate.close();check(bool(gate),"native gate creation failed");
++    }
+     synth.NoteOn(0,static_cast<uint8_t>(t.note),
+                  static_cast<uint8_t>(t.velocity),1);
+     Metrics m;
+@@ -181,6 +192,14 @@
+             m.pos_rail+=v==32767;
+         }
+         at+=count;
++    }
++    if(capture && stagePath && pcmPath && gatePath){
++        check(std::filesystem::remove(gatePath),"native observer gate not active");
++        std::ofstream spans(*capture/"native-p234-spans.csv");
++        spans<<"stage_begin,stage_end,pcm_begin,pcm_end\n"<<stageBegin<<','
++             <<std::filesystem::file_size(stagePath)<<','<<pcmBegin<<','
++             <<std::filesystem::file_size(pcmPath)<<'\n';
++        spans.close();check(bool(spans),"native observer span output failed");
+     }
+     const size_t captured=synth.Core().RawChipFramesCaptured();
+     synth.Core().SetRawChipFrameCapture(nullptr,0);

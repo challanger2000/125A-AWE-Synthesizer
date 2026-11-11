@@ -1,0 +1,9 @@
+{
+  "cases": 234,
+  "sample_values": 41277600,
+  "clamp_mismatches": 0,
+  "true_overrange": 12328,
+  "int16_rail_samples": 12332,
+  "private_individual_records": 234,
+  "private_evidence_manifest": "PRIVATE-EVIDENCE-SHA256.json"
+}

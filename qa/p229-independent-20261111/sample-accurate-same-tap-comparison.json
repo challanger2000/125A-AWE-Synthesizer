@@ -1,0 +1,47 @@
+{
+  "schema": "p229-original-native-equal-tap-actual-reg-edge-88200-v1",
+  "source_core_commit": "8d2f41dfefd84d98a903ee8c3bdfe0350ae9de95",
+  "banks": [
+    {
+      "bank_index": 0,
+      "cases": 56,
+      "original_pre_FX_overrange_values": 0,
+      "native_pre_FX_overrange_values": 4,
+      "native_pre_FX_clipping_cases": 1,
+      "original_post_FX_EQ_overrange_frames": 1
+    },
+    {
+      "bank_index": 1,
+      "cases": 10,
+      "original_pre_FX_overrange_values": 0,
+      "native_pre_FX_overrange_values": 0,
+      "native_pre_FX_clipping_cases": 0,
+      "original_post_FX_EQ_overrange_frames": 0
+    },
+    {
+      "bank_index": 2,
+      "cases": 104,
+      "original_pre_FX_overrange_values": 0,
+      "native_pre_FX_overrange_values": 4,
+      "native_pre_FX_clipping_cases": 1,
+      "original_post_FX_EQ_overrange_frames": 0
+    },
+    {
+      "bank_index": 3,
+      "cases": 64,
+      "original_pre_FX_overrange_values": 0,
+      "native_pre_FX_overrange_values": 1169,
+      "native_pre_FX_clipping_cases": 4,
+      "original_post_FX_EQ_overrange_frames": 0
+    }
+  ],
+  "limitations": [
+    "Original driver is Creative in 86Box, not physical EMU8000 silicon.",
+    "P67 logs attest aggregate WinMM delivery count, not per-message payload echoes.",
+    "Both captures use measured chip-note edges; up to 44 samples hold tolerance is explicit.",
+    "Original and native use different 86Box DSP revisions; register/DMA differences are independent of DSP.",
+    "Earlier delivered-native versus pre-FX-original RMS comparisons are exploratory and superseded here."
+  ],
+  "private_individual_records": 234,
+  "private_evidence_manifest": "PRIVATE-EVIDENCE-SHA256.json"
+}

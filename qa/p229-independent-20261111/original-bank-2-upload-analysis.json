@@ -1,0 +1,20 @@
+{
+  "bank_index": 2,
+  "file": "Vintage Dreams Bank.sf2",
+  "source_sha256": "91c0ce6a5f6422b6193c61e5bce48f342a7c1ac3b013fd11ca07775fd204dfc9",
+  "dram_upload_base": "0x200010",
+  "smpl_words": 125160,
+  "observed_written_words": 125160,
+  "original_dma_writes": 125372,
+  "raw_mismatch_words": 121585,
+  "raw_rmse": 6333.629587570522,
+  "full_sample_preemphasis_model_mismatch_words": 62,
+  "model_rmse": 32.37532555848014,
+  "sample_words": 122331,
+  "interior_words": 120978,
+  "interior_model_mismatch_words": 10,
+  "boundary_or_padding_model_mismatch_words": 52,
+  "model": "clip16(floor((6*x-prev-next)/8)) on each whole non-ROM sample, outside neighbours/padding 0; boundary exceptions reported, never fitted",
+  "observed_smpl_ram_sha256": "47454685e2253d978719154b9c529e4cfbb265386d765399c8e84febe568348a",
+  "trace_sha256_before_first_case": "45466e13e0061161c9780f5c3abab03f85ea92a040de518258fa35f7c33d53e9"
+}

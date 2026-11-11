@@ -1,0 +1,50 @@
+{
+  "phase": "P67",
+  "agent_launched_in_actual_win95": true,
+  "original_creative_winmm_endpoint_selected": true,
+  "original_creative_com1_ready": true,
+  "creatives_midi_short_messages_delivered": 60,
+  "win95_agent_error": false,
+  "private_driver_executable_logged": false,
+  "raw_user_sf2_published": false,
+  "expected_winmm_deliveries": 60,
+  "delivery_count_exact": true,
+  "cases": [
+    {
+      "case": 15,
+      "program": 83,
+      "note": 60,
+      "velocity": 112,
+      "original_active_layer_count": 6,
+      "native_active_layer_count": 8,
+      "original_hold_frames": 44089
+    },
+    {
+      "case": 16,
+      "program": 83,
+      "note": 60,
+      "velocity": 48,
+      "original_active_layer_count": 6,
+      "native_active_layer_count": 8,
+      "original_hold_frames": 44090
+    },
+    {
+      "case": 51,
+      "program": 9,
+      "note": 84,
+      "velocity": 112,
+      "original_active_layer_count": 6,
+      "native_active_layer_count": 8,
+      "original_hold_frames": 44090
+    },
+    {
+      "case": 52,
+      "program": 9,
+      "note": 84,
+      "velocity": 48,
+      "original_active_layer_count": 6,
+      "native_active_layer_count": 8,
+      "original_hold_frames": 44087
+    }
+  ]
+}

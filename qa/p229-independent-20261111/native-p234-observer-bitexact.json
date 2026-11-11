@@ -1,0 +1,7 @@
+{
+  "cases": 234,
+  "pcm_and_raw_every_byte_identical": true,
+  "sample_values": 41277600,
+  "private_individual_records": 234,
+  "private_evidence_manifest": "PRIVATE-EVIDENCE-SHA256.json"
+}

@@ -1,0 +1,57 @@
+--- a/tools/p229_dry_preclip_native.cpp
++++ b/tools/p229_dry_preclip_native.cpp
+@@ -8,6 +8,7 @@
+ #include <array>
+ #include <cmath>
+ #include <cstdint>
++#include <cstdlib>
+ #include <filesystem>
+ #include <fstream>
+ #include <iomanip>
+@@ -110,6 +111,22 @@
+     synth.Core().PowerOnInit();
+     check(synth.LoadBank(sf2,err),"SoundFont rejected: "+err);
+     check(synth.BankCount()==1u,"unexpected ROM fallback or multiple imported banks");
++    // Private diagnostic single-variable intervention: observed ORIGINAL
++    // Creative DMA contents replace only the uploaded DRAM after LoadBank.
++    // No production source, MIDI, registers, FX or DSP calculation changes.
++    if(const char* observed=std::getenv("P229_OBSERVED_CREATIVE_DRAM")){
++        std::ifstream memory(observed,std::ios::binary);
++        check(bool(memory),"observed original Creative DRAM file absent");
++        memory.seekg(0x200000u*2u);
++        const size_t count=synth.Core().DramSize();
++        std::vector<int16_t> words(count);
++        memory.read(reinterpret_cast<char*>(words.data()),static_cast<std::streamsize>(count*2));
++        check(bool(memory),"observed original Creative DRAM truncated");
++        check(synth.Core().ChipRam()!=nullptr,"original upload intervention requires actual chip RAM");
++        std::copy(words.begin(),words.end(),synth.Core().DramData());
++        std::copy(words.begin(),words.end(),synth.Core().ChipRam());
++    }
++
+     synth.SelectBrowserBank(static_cast<uint16_t>(t.bank));
+     synth.ProgramChange(0,static_cast<uint8_t>(t.program));
+     // Deliberately maximal incoming MIDI FX CCs. GUI 0 MUST OVERRIDE
+@@ -140,6 +157,23 @@
+     }
+     synth.NoteOn(0,static_cast<uint8_t>(t.note),
+                  static_cast<uint8_t>(t.velocity),1);
++    if(const char* plan=std::getenv("P229_OBSERVED_IFATN_PLAN")){
++        std::ifstream mapping(plan);check(bool(mapping),"observed original IFATN map absent");
++        const char* which=std::getenv("P229_BANK_INDEX");check(which!=nullptr,"IFATN mapping needs exact bank index");
++        const int bankIndex=std::stoi(which);
++        std::string row;std::getline(mapping,row);
++        while(std::getline(mapping,row)){
++            const auto c=csv_columns(row);check(c.size()==6,"malformed original attenuation map");
++            if(std::stoi(c[0])!=bankIndex || std::stoi(c[1])!=t.program ||
++               std::stoi(c[2])!=t.note || std::stoi(c[3])!=t.velocity)continue;
++            const int voice=std::stoi(c[4]),atten=std::stoi(c[5]);
++            check(voice>=0 && voice<Synth::kMaxVoices && atten>=0 && atten<=255,"invalid original attenuation witness");
++            check(synth.Core().IsVoiceActive(voice),"original attenuation mapping references inactive native layer");
++            const auto before=synth.Core().ReadDriver(Emu8000::Reg::IFATN,voice);
++            // Change ONLY measured attenuation low byte. Preserve all filter bits.
++            synth.Core().Write(Emu8000::Reg::IFATN,voice,(before&0xff00u)|static_cast<uint32_t>(atten));
++        }
++    }
+     Metrics m;
+     const auto held=synth.CaptureHeldNotes();
+     for(const auto& item:held)m.live+=item.sequence!=0;
