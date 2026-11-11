@@ -20,9 +20,12 @@
 namespace {
 constexpr int SR=44100;
 constexpr int FRAMES=SR*2;
+// Promote before multiplication: 88200*2*32768 exceeds signed int32.
+constexpr double kPcmNormalization=double(FRAMES)*2.0*32768.0;
+static_assert(kPcmNormalization==5780275200.0);
 struct Trial {std::string file;int bank,program,note,velocity;};
 void check(bool ok,const std::string& msg) {
-    if(!ok)throw std::runtime_error("P228 FAILED: "+msg);
+    if(!ok)throw std::runtime_error("P229 FAILED: "+msg);
 }
 std::vector<std::string> csv_columns(const std::string& line) {
     std::vector<std::string> items;
@@ -71,6 +74,8 @@ std::vector<Trial> read_plan(const std::filesystem::path& plan,
     return rows;
 }
 void selftest(){
+    check((double(FRAMES)*2.0*16384.0)/kPcmNormalization==0.5,
+          "half-scale DC normalization must be exactly one half");
     check(csv_columns("a,\"b,c\",d")==std::vector<std::string>({"a","b,c","d"}),
           "CSV quoted comma accepted");
     check(csv_columns("a,\"b\"\"c\",d")==std::vector<std::string>({"a","b\"c","d"}),
@@ -93,7 +98,10 @@ struct Metrics{
     int firstRawOverflowFrame=-1;
     double rawSquares=0.0,rawSum=0.0;
 };
-Metrics run(const std::string& rom,const std::string& sf2,const Trial& t,bool positiveFxWitness=false) {
+void w16(std::ofstream& f,uint16_t n){f.put(char(n&255));f.put(char(n>>8));}
+void w32(std::ofstream& f,uint32_t n){w16(f,uint16_t(n));w16(f,uint16_t(n>>16));}
+Metrics run(const std::string& rom,const std::string& sf2,const Trial& t,
+            bool positiveFxWitness=false,const std::filesystem::path* capture=nullptr) {
     Synth synth(SR);
     synth.Core().SetDriver(Awe32::Driver::Win95);
     synth.SetStrictPresetSelection(true);
@@ -120,6 +128,16 @@ Metrics run(const std::string& rom,const std::string& sf2,const Trial& t,bool po
     std::vector<int32_t> raw(static_cast<size_t>(FRAMES)*2,0);
     std::vector<int16_t> pcm(static_cast<size_t>(FRAMES)*2,0);
     synth.Core().SetRawChipFrameCapture(raw.data(),FRAMES);
+    std::ofstream voices;
+    if(capture){
+        check(!std::filesystem::exists(*capture),"refuse overwrite private case captures");
+        std::filesystem::create_directories(*capture);
+        check(synth.Core().OpenTrace((*capture/"native-port-write.trace").string().c_str()),
+              "cannot open private P89-compatible register trace");
+        voices.open(*capture/"active-voice-registers.csv");
+        check(bool(voices),"cannot open private voice register snapshot");
+        voices<<"voice,IP,IFATN,CVCF,VTFT,PSST,CSL,CCCA,DCYSUSV,ATKHLDV\n";
+    }
     synth.NoteOn(0,static_cast<uint8_t>(t.note),
                  static_cast<uint8_t>(t.velocity),1);
     Metrics m;
@@ -133,6 +151,14 @@ Metrics run(const std::string& rom,const std::string& sf2,const Trial& t,bool po
         const auto ptrx=synth.Core().ReadDriver(Emu8000::Reg::PTRX,v);
         const auto csl=synth.Core().ReadDriver(Emu8000::Reg::CSL,v);
         if(((ptrx>>8)&255u)||((csl>>24)&255u))++m.nonzeroFXVoices;
+        if(capture){
+            voices<<v;
+            for(auto reg:{Emu8000::Reg::IP,Emu8000::Reg::IFATN,Emu8000::Reg::CVCF,
+                          Emu8000::Reg::VTFT,Emu8000::Reg::PSST,Emu8000::Reg::CSL,
+                          Emu8000::Reg::CCCA,Emu8000::Reg::DCYSUSV,Emu8000::Reg::ATKHLDV})
+                voices<<','<<synth.Core().ReadDriver(reg,v);
+            voices<<'\n';
+        }
     }
     check(m.activeChipVoices>0,"FX register witness vacuous: no active physical EMU8000 voice");
     // Always measure real chip PCM, never the RIFF inventory or a fake
@@ -158,6 +184,10 @@ Metrics run(const std::string& rom,const std::string& sf2,const Trial& t,bool po
     }
     const size_t captured=synth.Core().RawChipFramesCaptured();
     synth.Core().SetRawChipFrameCapture(nullptr,0);
+    if(capture){
+        synth.Core().CloseTrace();voices.close();
+        check(bool(voices),"private voice register output incomplete");
+    }
     check(captured==FRAMES,"actual 86Box signed32 capture incomplete");
     for(size_t i=0;i<raw.size();++i) {
         const int32_t x=raw[i];
@@ -171,6 +201,17 @@ Metrics run(const std::string& rom,const std::string& sf2,const Trial& t,bool po
         m.rawClipMismatches+=clipped!=pcm[i];
     }
     check(m.rawClipMismatches==0,"native 32bit-to-16bit sample mismatch");
+    if(capture){
+        std::ofstream wav(*capture/"native.wav",std::ios::binary);
+        wav.write("RIFF",4);w32(wav,36+FRAMES*4);wav.write("WAVEfmt ",8);
+        w32(wav,16);w16(wav,1);w16(wav,2);w32(wav,SR);w32(wav,SR*4);
+        w16(wav,4);w16(wav,16);wav.write("data",4);w32(wav,FRAMES*4);
+        for(int16_t n:pcm)w16(wav,static_cast<uint16_t>(n));
+        std::ofstream pre(*capture/"native-preclip.i32le",std::ios::binary);
+        for(int32_t n:raw)w32(pre,static_cast<uint32_t>(n));
+        wav.close();pre.close();
+        check(bool(wav)&&bool(pre),"private native raw audio output incomplete");
+    }
     return m;
 }
 } // namespace
@@ -180,13 +221,15 @@ int main(int argc,char** argv) {
         if(argc==2 && std::string(argv[1])=="--self-test") {
             selftest();return 0;
         }
-        check(argc==6,
-              "usage: p228-dry rom.raw bank.sf2 matrix.csv report.csv [case_limit]");
+        check(argc==6 || (argc==8 && std::string(argv[6])=="--private-captures"),
+              "usage: p229-preclip rom.raw bank.sf2 matrix.csv report.csv case_limit [--private-captures directory]");
         const std::filesystem::path rom=argv[1],sf2=argv[2],plan=argv[3],report=argv[4];
         // argc 6: one extra positional argument is required to avoid accidental
         // huge jobs; zero means all cases.
         const size_t cap=static_cast<size_t>(std::stoull(argv[5]));
-        check(argc==6,"unexpected P228 extra arguments");
+        const std::filesystem::path captures=(argc==8)?std::filesystem::path(argv[7]):std::filesystem::path{};
+        if(argc==8)check(!captures.empty(),"private captures directory is empty");
+        if(!captures.empty())check(!std::filesystem::exists(captures),"refuse overwrite private captures");
         check(std::filesystem::is_regular_file(rom) &&
               std::filesystem::file_size(rom)==1048576,
               "expected genuine 1MiB local original EMU8000 wave ROM");
@@ -204,7 +247,8 @@ int main(int argc,char** argv) {
               "active_chip_voices\n";
         size_t completed=0,voices_missing=0,fx_leaks=0,allsilent=0;
         for(const auto& t:cases){
-            const auto m=run(rom.string(),sf2.string(),t);
+            const auto casePath=captures/("case-"+std::to_string(completed+1));
+            const auto m=run(rom.string(),sf2.string(),t,false,captures.empty()?nullptr:&casePath);
             ++completed;
             voices_missing+=m.live==0;
             fx_leaks+=m.nonzeroFXVoices>0;
@@ -218,13 +262,13 @@ int main(int argc,char** argv) {
                <<m.nonzero<<','<<m.first<<','
                <<std::setprecision(12)<<rmsdb<<','<<peakdb<<','
                <<m.neg_rail<<','<<m.pos_rail<<','
-               <<m.mean/double(FRAMES*2*32768)<<','
+               <<m.mean/kPcmNormalization<<','
                <<m.rawMin<<','<<m.rawMax<<','<<m.rawOverPos<<','
                <<m.rawOverNeg<<','<<m.firstRawOverflowFrame<<','
                <<20.*std::log10(double(std::max<int64_t>(
                      -static_cast<int64_t>(m.rawMin),m.rawMax))/32768.)<<','
                <<20.*std::log10(std::sqrt(m.rawSquares/double(FRAMES*2))/32768.)<<','
-               <<m.rawSum/double(FRAMES*2*32768)<<','
+               <<m.rawSum/kPcmNormalization<<','
                <<m.rawClipMismatches<<','<<m.activeChipVoices<<'\n';
             check(bool(out),"result output truncated");
             if(completed%50==0) {

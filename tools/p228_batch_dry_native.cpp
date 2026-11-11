@@ -20,6 +20,9 @@
 namespace {
 constexpr int SR=44100;
 constexpr int FRAMES=SR*2;
+// Promote before multiplication: 88200*2*32768 exceeds signed int32.
+constexpr double kPcmNormalization=double(FRAMES)*2.0*32768.0;
+static_assert(kPcmNormalization==5780275200.0);
 struct Trial {std::string file;int bank,program,note,velocity;};
 void check(bool ok,const std::string& msg) {
     if(!ok)throw std::runtime_error("P228 FAILED: "+msg);
@@ -71,6 +74,8 @@ std::vector<Trial> read_plan(const std::filesystem::path& plan,
     return rows;
 }
 void selftest(){
+    check((double(FRAMES)*2.0*16384.0)/kPcmNormalization==0.5,
+          "half-scale DC normalization must be exactly one half");
     check(csv_columns("a,\"b,c\",d")==std::vector<std::string>({"a","b,c","d"}),
           "CSV quoted comma accepted");
     check(csv_columns("a,\"b\"\"c\",d")==std::vector<std::string>({"a","b\"c","d"}),
@@ -185,7 +190,7 @@ int main(int argc,char** argv) {
                <<m.nonzero<<','<<m.first<<','
                <<std::setprecision(12)<<rmsdb<<','<<peakdb<<','
                <<m.neg_rail<<','<<m.pos_rail<<','
-               <<m.mean/double(FRAMES*2*32768)<<'\n';
+               <<m.mean/kPcmNormalization<<'\n';
             check(bool(out),"result output truncated");
             if(completed%50==0) {
                 out.flush();
