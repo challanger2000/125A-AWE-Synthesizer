@@ -1,4 +1,7 @@
-#include "Emu8000Box.h"
+// Link against the 125A adapter's actual class layout. This target also
+// searches the verbatim upstream include directory, whose older class has
+// no private raw-capture fields and is ABI-incompatible with our library.
+#include "../src/engine/Emu8000Box.h"
 extern "C" {
 #include <86box/sound.h>
 #include <86box/snd_emu8k.h>
