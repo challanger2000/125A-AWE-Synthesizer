@@ -70,9 +70,13 @@ Result render(const fs::path& rom,const Case& c,std::vector<int16_t>& pcm,
     s.ControlChange(uint8_t(c.channel),91,0);
     s.ControlChange(uint8_t(c.channel),93,0);
     s.SetGuiControl(10,0.f);s.SetGuiControl(11,0.f);
+    const fs::path noteDump=(measuredCreativeFx&&!trace.empty())
+        ?fs::path(trace.string()+".notes.csv"):fs::path{};
+    if(!noteDump.empty())require(s.OpenNoteDump(noteDump.string()),"cannot create native note-voice diagnostic");
     if(!trace.empty())require(s.Core().OpenTrace(trace.string().c_str()),
                               "failed to start original-register comparison trace");
     s.NoteOn(uint8_t(c.channel),uint8_t(c.note),uint8_t(c.velocity),1);
+    if(!noteDump.empty())s.CloseNoteDump();
     Result result;
     const auto held=s.CaptureHeldNotes();
     for(auto note:held)if(note.sequence)++result.active;
@@ -83,22 +87,40 @@ Result render(const fs::path& rom,const Case& c,std::vector<int16_t>& pcm,
         // overrides that default; do not change production DSP/GUI.
         // Restore measured original sends only in this offline A/B mode.
         s.Core().MuteEffectReturns(false,false);
-        unsigned layer=0;
-        for(size_t v=0;v<held.size();++v){
-            if(!held[v].sequence)continue;
-            const uint32_t original=s.Core().ReadDriver(Emu8000::Reg::PTRX,int(v));
-            s.Core().Write(Emu8000::Reg::PTRX,int(v),
+        std::ifstream dump(noteDump);
+        require(bool(dump),"cannot read real hardware voice indices");
+        std::string csvLine;
+        require(bool(std::getline(dump,csvLine)),"missing note-dump header");
+        std::vector<int> voiceIds;
+        while(std::getline(dump,csvLine)){
+            size_t a=0;
+            for(int field=0;field<3;++field){
+                a=csvLine.find(',',a);
+                require(a!=std::string::npos,"malformed native note-dump");
+                ++a;
+            }
+            const size_t b=csvLine.find(',',a);
+            require(b!=std::string::npos,"missing voice index in native note-dump");
+            const int v=std::stoi(csvLine.substr(a,b-a));
+            require(v>=0&&v<Synth::kMaxVoices,"invalid physical EMU8000 voice");
+            require(std::find(voiceIds.begin(),voiceIds.end(),v)==voiceIds.end(),
+                    "duplicate physical voice in diagnostic");
+            voiceIds.push_back(v);
+        }
+        require(voiceIds.size()==result.active,"real voice count not equal to note dump");
+        for(size_t layer=0;layer<voiceIds.size();++layer){
+            const int v=voiceIds[layer];
+            const uint32_t original=s.Core().ReadDriver(Emu8000::Reg::PTRX,v);
+            s.Core().Write(Emu8000::Reg::PTRX,v,
                            (original&0xFFFF00FFu)|(0x1Cu<<8));
             if(c.bank==16383 && c.program==88){
                 require(layer<2,"unexpected P88 voice layering");
-                const uint32_t csl=s.Core().ReadDriver(Emu8000::Reg::CSL,int(v));
+                const uint32_t csl=s.Core().ReadDriver(Emu8000::Reg::CSL,v);
                 const uint32_t originalChorus=layer==0?0x77u:0x7Bu;
-                s.Core().Write(Emu8000::Reg::CSL,int(v),
+                s.Core().Write(Emu8000::Reg::CSL,v,
                                (csl&0x00FFFFFFu)|(originalChorus<<24));
             }
-            ++layer;
         }
-        require(result.active>=1,"no active ROM voice for Creative-FX comparison");
     }
     std::array<int16_t,1024*2> block{};
     for(uint32_t at=0;at<kFrames;){
