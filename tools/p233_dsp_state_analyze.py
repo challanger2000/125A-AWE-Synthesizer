@@ -114,7 +114,7 @@ def compare_state(original,native):
 def summarize(rows):
     measured=[r for r in rows if r["kind"]=="M"]
     must(measured,"missing observer energy rows")
-    active=[r for r in measured if r["stage"]=="dry" and r["l2"]+r["r2"]>1e8]
+    active=[r for r in measured if r["stage"]=="dry" and r["l2"]+r["r2"]>1e6]
     onset=min([r["frame"] for r in active],default=None)
     must(onset is not None,"no audible dry component in selected note interval")
     result={}
