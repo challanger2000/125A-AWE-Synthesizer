@@ -55,7 +55,13 @@ jobs:
             --json p97-evidence/P97-original-MIDI.json
       - name: Compile 125A native chip runner, no VST3 or alternate soundfont engine
         run: |
+          # Configure ONCE from original source: p170 mutation-oracles run
+          # only during this verified configuration. A disposable P236 fixture
+          # temporarily edits Synth.cpp for the second C++ build; automatic
+          # CMake regeneration would run p170 source-string mutation tests on
+          # that temporary fixture and fail for irrelevant reasons.
           cmake -S . -B build-p97 -G Ninja \
+            -DCMAKE_SUPPRESS_REGENERATION=ON \
             -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_OPL3_PROBES=OFF -D125A_BUILD_VST3=OFF
           cmake --build build-p97 --target awe32_p97_midi_renderer --parallel 4
       - name: Verify November 4 hardware-checked baseline and build matching historical 125A kernel
