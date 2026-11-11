@@ -321,10 +321,18 @@ def line_out_audit(a):
     # (r=.935/.947), but v25 blocks 5 and 6 have low envelope correlation;
     # accepting only these four yields a false missing-clock conclusion.
     # Also preserve all THREE consecutive original external FLAC parts.
-    anchors=[next((e for e in events if e["block"]==blk and
-                   e["text"]=="reference tone"),None) for blk in (1,2,3,4,5,6)]
-    demand(all(anchors),"missing original AWETEST v25 line-out reference tones")
-    card_by_base={0:"reca001.flac",101800:"reca002.flac",213000:"reca003.flac"}
+    card_by_base={
+        0:"reca001.flac",101800:"reca002.flac",213000:"reca003.flac",
+        323600:"reca004.flac",434800:"reca005.flac",
+        548252:"reca006.flac",660287:"reca007.flac"}
+    # Reuse the full original author's 1..11 reference-tone clock-fit.
+    # Include repeated checkpoint tones as well: v25 block 4/5/6 first
+    # checkpoints exhibit low cross-correlation, not an absent recording.
+    anchors=[e for e in events if e["text"]=="reference tone"
+             and 1<=e["block"]<=11 and e["filebase"] in card_by_base]
+    demand(any(e["block"]==1 for e in anchors)
+           and any(e["block"]>=7 for e in anchors),
+           "missing full physical v25 clock references")
     pieces=[]
     for fp in a.line_parts:
         info=sf.info(fp)
@@ -355,6 +363,10 @@ def line_out_audit(a):
     found=[]
     for anchor in anchors:
         pred=predicted_base+anchor["rt"]-reference["rt"]
+        if pred<4 or pred+7>length/44100.:
+            print("P236_EXTERNAL_LINE_ANCHOR_OUTSIDE_CAPTURE",
+                  anchor["block"],round(pred,4),flush=True)
+            continue
         demand(anchor["filebase"] in card_by_base,
                "unknown original capture segment for reference tone")
         fp=a.card_folder/card_by_base[anchor["filebase"]]
