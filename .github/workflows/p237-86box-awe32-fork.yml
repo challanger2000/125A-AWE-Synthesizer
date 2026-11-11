@@ -1,0 +1,43 @@
+name: P237 pinned hardware-calibrated 86Box-AWE32 sidecar
+on:
+  push:
+    branches: [qa/p230-original-rom-sbk-audio]
+    paths:
+      - tools/p237_86box_awe32_fork.py
+      - tests/test_p237_86box_awe32_fork.py
+      - .github/workflows/p237-86box-awe32-fork.yml
+      - docs/P237-86BOX-AWE32-FORK-INTEGRATION.md
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pinned-fork-windows:
+    runs-on: windows-2022
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fail-closed archive, trace and WAV contract tests
+        run: python -m unittest discover -s tests -p test_p237_86box_awe32_fork.py -v
+      - name: Download pinned Windows fork and verify official release SHA256
+        shell: pwsh
+        run: |
+          python tools/p237_86box_awe32_fork.py install --out "$env:RUNNER_TEMP\p237-fork"
+          if ($LASTEXITCODE -ne 0) { throw 'Fork installation failed or release hash changed' }
+          $exe = Get-ChildItem "$env:RUNNER_TEMP\p237-fork" -Recurse -File -Filter 86Box.exe
+          if (@($exe).Count -ne 1) { throw 'Fork executable missing or ambiguous' }
+          Write-Host "P237_PINNED_FORK_INSTALLED_SHA256_VERIFIED"
+      - name: Summarize strictly limited P237 evidence
+        shell: pwsh
+        run: |
+          $data = Get-Content "$env:RUNNER_TEMP\p237-fork\P237-fork-install.json" | ConvertFrom-Json
+          if ($data.hardware_audio_fidelity -ne 'NOT_TESTED' -or $data.run_vm -ne $false) {
+            throw 'Invalid P237 fidelity claim'
+          }
+          Write-Host "P237_FORK_RELEASE_VERIFIED; CREATIVE_VM_NOT_RUN; AUDIO_FIDELITY_NOT_TESTED"
+      - name: Remove external binary from ephemeral Windows runner
+        if: always()
+        shell: pwsh
+        run: Remove-Item "$env:RUNNER_TEMP\p237-fork" -Recurse -Force -ErrorAction SilentlyContinue

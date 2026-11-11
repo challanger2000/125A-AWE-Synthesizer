@@ -1,7 +1,7 @@
 name: P97 analog AWE64 Gold vs native 125A EMU8000
 on:
   push:
-    branches: [develop/p97-awe64-physical-audio-comparison]
+    branches: [develop/p97-awe64-physical-audio-comparison, qa/p230-original-rom-sbk-audio]
     paths:
       - 'tools/p97_*'
       - 'tools/p98_*'
@@ -12,6 +12,9 @@ on:
       - 'src/engine/CMakeLists.txt'
       - 'src/engine/snd_emu8k.c'
       - 'src/engine/SoundFont.cpp'
+      - 'src/engine/Emu8000.cpp'
+      - 'src/engine/Synth.cpp'
+      - 'tools/p236_*'
       - '.github/workflows/p97-physical-awe64-audio.yml'
   workflow_dispatch:
 permissions:
@@ -52,9 +55,131 @@ jobs:
             --json p97-evidence/P97-original-MIDI.json
       - name: Compile 125A native chip runner, no VST3 or alternate soundfont engine
         run: |
+          # Configure ONCE from original source: p170 mutation-oracles run
+          # only during this verified configuration. A disposable P236 fixture
+          # temporarily edits Synth.cpp for the second C++ build; automatic
+          # CMake regeneration would run p170 source-string mutation tests on
+          # that temporary fixture and fail for irrelevant reasons.
           cmake -S . -B build-p97 -G Ninja \
+            -DCMAKE_SUPPRESS_REGENERATION=ON \
             -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_OPL3_PROBES=OFF -D125A_BUILD_VST3=OFF
           cmake --build build-p97 --target awe32_p97_midi_renderer --parallel 4
+      - name: P236 actual AWE32 AWETEST v25 physical FLACs versus current 125A original ROM filter and Q
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/p97"
+          card="$root/real-AWE32-AWETEST-v25"
+          mkdir -p "$card" "$root/awetest-native"
+          # These are ACTUAL physical AWE32 recordings, NOT the upstream
+          # AWE32Emu software test renders. Pinned full Git SHA of source.
+          commit=9ae2217b92af72f706c9631679cd43c3afff507f
+          for name in awetest.log reca003.flac reca004.flac; do
+            curl --fail --location --retry 3 --max-time 360 \
+              "https://raw.githubusercontent.com/turican0/AWE32Emu/$commit/recordings/2026-09-12/reca/$name" \
+              -o "$card/$name"
+          done
+          test "$(git hash-object "$card/awetest.log")" = 09fe5c9f2a07e86fb4193f9f56f0b8583f656ede
+          test "$(git hash-object "$card/reca003.flac")" = 339d0de47599039bb529eab8aa737cd9a31172c1
+          test "$(git hash-object "$card/reca004.flac")" = 3e09e54631171f2d3a20b03318affc58613938e1
+          "$root/venv/bin/python" tools/p236_awetest_compare.py --self-test
+          cmake --build build-p97 --target awe32_p236_awetest_native --parallel 4
+          ./build-p97/src/engine/awe32_p236_awetest_native \
+            "$root/awe32.raw" "$root/awetest-native"
+          "$root/venv/bin/python" tools/p236_awetest_compare.py \
+            --original-log "$card/awetest.log" \
+            --card-folder "$card" \
+            --native-dir "$root/awetest-native" \
+            --current-commit "$(git rev-parse HEAD)" \
+            --out p97-evidence/P236-current-vs-real-AWE32-AWETEST-v25-physical-filter-resonance.json
+          echo P236_ACTUAL_CURRENT_125A_VS_REAL_AWE32_AUDIO_NOT_UPSTREAM_EMULATOR
+          # Same original AWE32 recording, ROM, note windows and core. Only
+          # test-only EQ INIT words are set to the actual v25 hardware log.
+          mkdir -p "$root/awetest-native-exact-card-eq"
+          ./build-p97/src/engine/awe32_p236_awetest_native \
+            "$root/awe32.raw" "$root/awetest-native-exact-card-eq" --hardware-eq
+          "$root/venv/bin/python" tools/p236_awetest_compare.py \
+            --original-log "$card/awetest.log" \
+            --card-folder "$card" \
+            --native-dir "$root/awetest-native-exact-card-eq" \
+            --current-commit "$(git rev-parse HEAD)" \
+            --out p97-evidence/P236-current-vs-real-AWE32-AWETEST-v25-exact-hardware-EQ.json
+          "$root/venv/bin/python" - <<'PY'
+          import json
+          from pathlib import Path
+          a=json.loads(Path("p97-evidence/P236-current-vs-real-AWE32-AWETEST-v25-physical-filter-resonance.json").read_text())
+          b=json.loads(Path("p97-evidence/P236-current-vs-real-AWE32-AWETEST-v25-exact-hardware-EQ.json").read_text())
+          assert (a["total_real_hardware_note_pairs"],a["valid_real_hardware_note_pairs"]) == (23,22)
+          assert (b["total_real_hardware_note_pairs"],b["valid_real_hardware_note_pairs"]) == (23,22)
+          print("P236_EQ_CONTROLLED_A_B original_cutoff_median",a["median_absolute_cutoff_level_error_db"],
+                "exact_card_EQ_cutoff_median",b["median_absolute_cutoff_level_error_db"],
+                "original_resonance_Qpositive",a["median_absolute_resonance_nonzero_Q_level_error_db"],
+                "exact_card_EQ_resonance_Qpositive",b["median_absolute_resonance_nonzero_Q_level_error_db"])
+          PY
+          # The original tester also captured the same v25 AWE32 LINE OUT
+          # simultaneously on an external sound card. Its author documented
+          # the internal ADC's frequency tilt in analysis/flac25.py.
+          # These are pre-existing public recordings, not a new test lab.
+          line_base="https://raw.githubusercontent.com/turican0/AWE32Emu/$commit/recordings/2026-09-12"
+          curl --fail --location --retry 3 --max-time 360 \
+            "$line_base/awetst25_line.part1.flac" -o "$root/awetst25_line.part1.flac"
+          curl --fail --location --retry 3 --max-time 360 \
+            "$line_base/awetst25_line.part2.flac" -o "$root/awetst25_line.part2.flac"
+          curl --fail --location --retry 3 --max-time 360 \
+            "$line_base/awetst25_line.part3.flac" -o "$root/awetst25_line.part3.flac"
+          curl --fail --location --retry 3 --max-time 180 \
+            "$line_base/reca/reca001.flac" -o "$card/reca001.flac"
+          curl --fail --location --retry 3 --max-time 180 \
+            "$line_base/reca/reca002.flac" -o "$card/reca002.flac"
+          for n in 005 006 007; do
+            curl --fail --location --retry 3 --max-time 180 \
+              "$line_base/reca/reca$n.flac" -o "$card/reca$n.flac"
+          done
+          echo "P236_SOURCE_BLOB_LINE_PART1=$(git hash-object "$root/awetst25_line.part1.flac")"
+          echo "P236_SOURCE_BLOB_LINE_PART2=$(git hash-object "$root/awetst25_line.part2.flac")"
+          echo "P236_SOURCE_BLOB_RECA001=$(git hash-object "$card/reca001.flac")"
+          echo "P236_SOURCE_BLOB_LINE_PART3=$(git hash-object "$root/awetst25_line.part3.flac")"
+          echo "P236_SOURCE_BLOB_RECA002=$(git hash-object "$card/reca002.flac")"
+          test "$(git hash-object "$root/awetst25_line.part1.flac")" = 367b81093811fe88ae8e4f7e0fb76273fdfc851a
+          test "$(git hash-object "$root/awetst25_line.part2.flac")" = b17f514b00bdffe87d008954cbcab9aedeabc57b
+          test "$(git hash-object "$root/awetst25_line.part3.flac")" = 3722abaf1c087345788e97d0724f6259ed308b8b
+          test "$(git hash-object "$card/reca001.flac")" = 750b3639027305073953ac3964cc497f44f249b6
+          test "$(git hash-object "$card/reca002.flac")" = 859d9800d76ae513ea418a19c57fd4ec50147008
+          test "$(git hash-object "$card/reca005.flac")" = 068695ef2394257b794f3b4d652d3d2af1e87221
+          test "$(git hash-object "$card/reca006.flac")" = 36f8b6915485cb283520fb259888e79aacde065b
+          test "$(git hash-object "$card/reca007.flac")" = dff6c37e149b516578e8c97434bd333848444167
+          "$root/venv/bin/python" tools/p236_awetest_compare.py \
+            --original-log "$card/awetest.log" \
+            --card-folder "$card" \
+            --native-dir "$root/awetest-native" \
+            --current-commit "$(git rev-parse HEAD)" \
+            --out "$root/P236-lineout-private-internal-control.json" \
+            --line-parts "$root/awetst25_line.part1.flac" "$root/awetst25_line.part2.flac" "$root/awetst25_line.part3.flac" \
+            --line-out p97-evidence/P236-Real-AWE32-External-LineOut-Cutoff.json
+          echo P236_EXTERNAL_LINEOUT_V25_DIRECT_PHYSICAL_AUDIO_COMPARISON_DONE
+
+      - name: Verify November 4 hardware-checked baseline and build matching historical 125A kernel
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASELINE_SHA=85dd26e7d466150a2cdba62be513b83486e9d887
+          # Historical P97-P105 hardware run 41749832362; absolutely never
+          # compare a different fixture or a stale cached binary.
+          git fetch --no-tags --depth=1 origin "$BASELINE_SHA"
+          git worktree add --detach "$RUNNER_TEMP/p97/hardware-baseline-src" "$BASELINE_SHA"
+          test "$(git -C "$RUNNER_TEMP/p97/hardware-baseline-src" rev-parse HEAD)" = "$BASELINE_SHA"
+          cmake -S "$RUNNER_TEMP/p97/hardware-baseline-src" \
+            -B "$RUNNER_TEMP/p97/hardware-baseline-build" -G Ninja \
+            -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_OPL3_PROBES=OFF -D125A_BUILD_VST3=OFF
+          cmake --build "$RUNNER_TEMP/p97/hardware-baseline-build" \
+            --target awe32_p97_midi_renderer --parallel 4
+          "$RUNNER_TEMP/p97/hardware-baseline-build/src/engine/awe32_p97_midi_renderer" \
+            --rom "$RUNNER_TEMP/p97/awe32.raw" \
+            --sf2 "$RUNNER_TEMP/p97/reference-v3.sf2" \
+            --events "$RUNNER_TEMP/p97/events.tsv" \
+            --out "$RUNNER_TEMP/p97/baseline-264s.wav" --seconds 264
+          test -s "$RUNNER_TEMP/p97/baseline-264s.wav"
+          echo "P236_HISTORICAL_HW_BASELINE_SOURCE_SHA=$BASELINE_SHA"
       - name: Render complete 264 seconds through the original EMU8000 chip
         run: |
           ./build-p97/src/engine/awe32_p97_midi_renderer \
@@ -62,17 +187,62 @@ jobs:
             --sf2 "$RUNNER_TEMP/p97/reference-v3.sf2" \
             --events "$RUNNER_TEMP/p97/events.tsv" \
             --out "$RUNNER_TEMP/p97/native-264s.wav" --seconds 264
-      - name: Compare real CT4390 analog FLAC vs 125A native audio
+      - name: P236 match real CT4390 Hall1/Chorus1 sends and returns only in disposable build
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/p236_hw_fx_reference_mode.py --self-test
+          source=src/engine/Synth.cpp
+          cp "$source" "$RUNNER_TEMP/p97/Synth.cpp.production-unchanged"
+          python3 tools/p236_hw_fx_reference_mode.py \
+            --source "$RUNNER_TEMP/p97/Synth.cpp.production-unchanged" \
+            --out "$RUNNER_TEMP/p97/Synth.cpp.hardware-CT4390-fixture"
+          # Always restore the checked-out production source, including on build failure.
+          trap 'cp "$RUNNER_TEMP/p97/Synth.cpp.production-unchanged" "$source"' EXIT
+          cp "$RUNNER_TEMP/p97/Synth.cpp.hardware-CT4390-fixture" "$source"
+          # The ONLY temporary source differences are the FX mute and actual
+          # historical preset+CC send bytes. No DSP algorithm modified.
+          test "$(git diff -U0 -- "$source" | grep '^+' | grep -v '^+++' | grep -c 'P236:')" -eq 3
+          # An independent build tree is mandatory: the regular P170 mutant
+          # generator requires original Synth.cpp and must not inspect this fixture.
+          cmake -S . -B "$RUNNER_TEMP/p97/hardware-fx-build" -G Ninja \
+            -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_OPL3_PROBES=OFF \
+            -D125A_BUILD_VST3=OFF -D125A_P170_MUTATION_TESTS=OFF
+          cmake --build "$RUNNER_TEMP/p97/hardware-fx-build" \
+            --target awe32_p97_midi_renderer --parallel 4
+          # Restore the entire product source before audio comparisons.
+          cp "$RUNNER_TEMP/p97/Synth.cpp.production-unchanged" "$source"
+          trap - EXIT
+          git diff --exit-code -- "$source"
+          "$RUNNER_TEMP/p97/hardware-fx-build/src/engine/awe32_p97_midi_renderer" \
+            --rom "$RUNNER_TEMP/p97/awe32.raw" \
+            --sf2 "$RUNNER_TEMP/p97/reference-v3.sf2" \
+            --events "$RUNNER_TEMP/p97/events.tsv" \
+            --out "$RUNNER_TEMP/p97/native-264s-hardware-matched.wav" --seconds 264
+          echo P236_CURRENT_CORE_MATCHED_CT4390_EFFECT_SEND_RETURN_NO_PRODUCTION_DSP_EDIT
+      - name: Compare current factory-GUI0 DRY output against wet CT4390 as NON-EQUAL-STATE evidence
         run: |
           "$RUNNER_TEMP/p97/venv/bin/python" tools/p97_compare_hardware_audio.py \
             --reference "$RUNNER_TEMP/p97/CT4390.flac" \
             --native "$RUNNER_TEMP/p97/native-264s.wav" --seconds 264 \
+            --out p97-evidence/P236-current-GUI0-DRY-vs-hardware-WET-NOT-COMPARABLE.json
+      - name: Compare real CT4390 analog FLAC vs 125A hardware-FX-matched native audio
+        run: |
+          "$RUNNER_TEMP/p97/venv/bin/python" tools/p97_compare_hardware_audio.py \
+            --reference "$RUNNER_TEMP/p97/CT4390.flac" \
+            --native "$RUNNER_TEMP/p97/native-264s-hardware-matched.wav" --seconds 264 \
             --out p97-evidence/P97-AWE64-Gold-versus-125A-264s.json
+      - name: P236 remeasure same hardware recording against baseline through the same P97 comparator
+        run: |
+          "$RUNNER_TEMP/p97/venv/bin/python" tools/p97_compare_hardware_audio.py \
+            --reference "$RUNNER_TEMP/p97/CT4390.flac" \
+            --native "$RUNNER_TEMP/p97/baseline-264s.wav" --seconds 264 \
+            --out p97-evidence/P236-baseline-CT4390-264s.json
       - name: P98 compare MIDI-verified Hall/Chorus A/B/C individual notes
         run: |
           "$RUNNER_TEMP/p97/venv/bin/python" tools/p98_effect_subtests.py \
             --reference "$RUNNER_TEMP/p97/CT4390.flac" \
-            --native "$RUNNER_TEMP/p97/native-264s.wav" \
+            --native "$RUNNER_TEMP/p97/native-264s-hardware-matched.wav" \
             --events "$RUNNER_TEMP/p97/events.tsv" \
             --p97-report p97-evidence/P97-AWE64-Gold-versus-125A-264s.json \
             --out p97-evidence/P98-Effects-A-B-C-Subtests.json
@@ -82,7 +252,7 @@ jobs:
           "$RUNNER_TEMP/p97/venv/bin/python" tools/p99_fidelity_audit.py \
             --p97 p97-evidence/P97-AWE64-Gold-versus-125A-264s.json \
             --p98 p97-evidence/P98-Effects-A-B-C-Subtests.json \
-            --native "$RUNNER_TEMP/p97/native-264s.wav" \
+            --native "$RUNNER_TEMP/p97/native-264s-hardware-matched.wav" \
             --midi "$RUNNER_TEMP/p97/reference-v3.mid" \
             --sf2 "$RUNNER_TEMP/p97/reference-v3.sf2" \
             --out p97-evidence/P99-Fidelity-Audit.json \
@@ -92,7 +262,7 @@ jobs:
           "$RUNNER_TEMP/p97/venv/bin/python" -m py_compile tools/p102_envelope_phases.py
           "$RUNNER_TEMP/p97/venv/bin/python" tools/p102_envelope_phases.py \
             --reference "$RUNNER_TEMP/p97/CT4390.flac" \
-            --native "$RUNNER_TEMP/p97/native-264s.wav" \
+            --native "$RUNNER_TEMP/p97/native-264s-hardware-matched.wav" \
             --events "$RUNNER_TEMP/p97/events.tsv" \
             --p97-report p97-evidence/P97-AWE64-Gold-versus-125A-264s.json \
             --out p97-evidence/P102-Amp-Mod-Envelope-Phases.json
@@ -101,7 +271,7 @@ jobs:
           "$RUNNER_TEMP/p97/venv/bin/python" -m py_compile tools/p103_attenuation_steps.py
           "$RUNNER_TEMP/p97/venv/bin/python" tools/p103_attenuation_steps.py \
             --reference "$RUNNER_TEMP/p97/CT4390.flac" \
-            --native "$RUNNER_TEMP/p97/native-264s.wav" \
+            --native "$RUNNER_TEMP/p97/native-264s-hardware-matched.wav" \
             --events "$RUNNER_TEMP/p97/events.tsv" \
             --p97-report p97-evidence/P97-AWE64-Gold-versus-125A-264s.json \
             --out p97-evidence/P103-SF2-Attenuation-Steps.json
@@ -110,10 +280,20 @@ jobs:
           "$RUNNER_TEMP/p97/venv/bin/python" -m py_compile tools/p105_filter_release_diagnostics.py
           "$RUNNER_TEMP/p97/venv/bin/python" tools/p105_filter_release_diagnostics.py \
             --reference "$RUNNER_TEMP/p97/CT4390.flac" \
-            --native "$RUNNER_TEMP/p97/native-264s.wav" \
+            --native "$RUNNER_TEMP/p97/native-264s-hardware-matched.wav" \
             --events "$RUNNER_TEMP/p97/events.tsv" \
             --p97-report p97-evidence/P97-AWE64-Gold-versus-125A-264s.json \
             --out p97-evidence/P105-Filter-and-Release-Diagnostics.json
+      - name: P236 hardware-baseline/PR102 quantitative regression gate
+        run: |
+          "$RUNNER_TEMP/p97/venv/bin/python" tools/p236_hardware_regression.py --self-test
+          "$RUNNER_TEMP/p97/venv/bin/python" tools/p236_hardware_regression.py \
+            --old p97-evidence/P236-baseline-CT4390-264s.json \
+            --current p97-evidence/P97-AWE64-Gold-versus-125A-264s.json \
+            --baseline-commit 85dd26e7d466150a2cdba62be513b83486e9d887 \
+            --current-commit "$(git rev-parse HEAD)" \
+            --out p97-evidence/P236-hardware-regression.json \
+            --summary p97-evidence/P236-hardware-regression.md
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -126,3 +306,27 @@ jobs:
       - name: Destroy ephemeral ROM and original recording
         if: always()
         run: rm -rf "$RUNNER_TEMP/p97"
+
+  # P170 retains its normal ON/default mutation oracles on untouched source.
+  # It runs independently of the temporary P236 wet-reference compilation.
+  p170-original-source-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure unmodified P170 audio mutation tests
+        run: |
+          cmake -S . -B build-p170-original -G Ninja \
+            -D125A_BUILD_ENGINE_PROBES=ON -D125A_BUILD_OPL3_PROBES=OFF \
+            -D125A_BUILD_VST3=OFF -D125A_P170_MUTATION_TESTS=ON
+      - name: Build all original P170 audio oracles and eight mutants
+        run: |
+          cmake --build build-p170-original --parallel 4 --target \
+            awe32_p170_audio_render awe32_p166_exact_presets_test \
+            p170_mutant_bank p170_mutant_amp p170_mutant_filter \
+            p170_mutant_loop p170_mutant_end p170_mutant_rom \
+            p170_mutant_pedal p170_mutant_headroom
+      - name: Execute original P170 mutant rejection and PCM oracle tests
+        run: |
+          ctest --test-dir build-p170-original --output-on-failure \
+            -R '^125A_p170_(pcm_audio_oracles|detect_mutant_.*)$|^125A_p166_exact_sf2_rom$'

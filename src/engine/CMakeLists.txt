@@ -145,6 +145,16 @@ target_include_directories(awe32_p97_midi_renderer PRIVATE "." "include" "../../
 target_link_libraries(awe32_p97_midi_renderer PRIVATE awe32_chip_safety)
 set_target_properties(awe32_p97_midi_renderer PROPERTIES CXX_STANDARD 23)
 
+# P236: actual AWE32 AWETEST v25 recorded-hardware cutoff/Q stimulus, same
+# real ROM, direct 86Box EMU8000 chip registers from original AWETEST.C.
+# No 125A DSP changes or alternate synth and no audio files in the repo.
+add_executable(awe32_p236_awetest_native
+  "${PROJECT_SOURCE_DIR}/tools/p236_awetest_native.cpp")
+target_include_directories(awe32_p236_awetest_native PRIVATE "." "include"
+  "${UPSTREAM_SRC}" "${UPSTREAM_SRC}/86box/include")
+target_link_libraries(awe32_p236_awetest_native PRIVATE awe32_chip_safety)
+target_compile_features(awe32_p236_awetest_native PRIVATE cxx_std_23)
+
 # P128: audible, allocation-free note transfer at engine publication boundaries.
 add_executable(awe32_p128_note_handoff_test "${PROJECT_SOURCE_DIR}/tests/p128_note_handoff.cpp")
 target_include_directories(awe32_p128_note_handoff_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${UPSTREAM_SRC}")
@@ -224,3 +234,12 @@ target_link_libraries(awe32_creative_win95_vol_sustain_layer_parity PRIVATE awe3
 target_compile_features(awe32_creative_win95_vol_sustain_layer_parity PRIVATE cxx_std_23)
 add_test(NAME 125A_creative_win95_original_volume_sustain_layers
   COMMAND awe32_creative_win95_vol_sustain_layer_parity)
+
+# P230: owner-media-only original ROM + SYNTHGM.SBK native acoustic renderer.
+# Does not bundle original ROM/SBK, does not certify Creative parity.
+add_executable(awe32_p230_rom_sbk_native
+  "${PROJECT_SOURCE_DIR}/tools/p230_rom_sbk_native.cpp")
+target_include_directories(awe32_p230_rom_sbk_native PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/src/vst3" "${UPSTREAM_SRC}")
+target_link_libraries(awe32_p230_rom_sbk_native PRIVATE awe32_chip_safety)
+target_compile_features(awe32_p230_rom_sbk_native PRIVATE cxx_std_23)

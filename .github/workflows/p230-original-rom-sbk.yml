@@ -1,0 +1,58 @@
+name: P230 real ROM+SYNTHGM acoustic A/B tools (no media)
+on:
+  push:
+    branches: [qa/p230-original-rom-sbk-audio]
+    paths:
+      - tools/p230_rom_sbk_native.cpp
+      - tools/p230_rom_sbk_ab.py
+      - src/engine/CMakeLists.txt
+      - .github/workflows/p230-original-rom-sbk.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  media-free-tool-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile production-derived native EMU8000 test renderer
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build-p230 -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -D125A_BUILD_VST3=OFF -D125A_BUILD_ENGINE_PROBES=ON \
+            -D125A_BUILD_OPL3_PROBES=OFF
+          cmake --build build-p230 --parallel 4 --target awe32_p230_rom_sbk_native
+      - name: Validate full original-bank MIDI matrix and audio comparison mutants
+        shell: bash
+        run: |
+          set -euo pipefail
+          build-p230/src/engine/awe32_p230_rom_sbk_native --list > p230-plan.csv
+          python3 - <<'PY'
+          import csv
+          from pathlib import Path
+          rows=list(csv.reader(Path('p230-plan.csv').open()))
+          assert len(rows)==397 and len(set(r[0] for r in rows))==397
+          assert sum(r[1]=='16383' for r in rows)==384
+          assert sum(r[1]=='16382' for r in rows)==13
+          print("P230_397_MIDI_CASE_MATRIX_PASS")
+          PY
+          python3 -m pip install --disable-pip-version-check numpy==2.3.5
+          python3 tools/p230_rom_sbk_ab.py --self-test
+      - name: Publish code-built native tool only, never ROM/SBK/media
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p p230-tool
+          cp build-p230/src/engine/awe32_p230_rom_sbk_native p230-tool/
+          cp tools/p230_rom_sbk_ab.py p230-tool/
+          cp p230-plan.csv p230-tool/
+          sha256sum p230-tool/* > p230-tool/SHA256.txt
+          printf 'P230: tools compiled and self-tested; genuine Creative Win95 acoustic comparison NOT RUN; no ROM/SBK or user media uploaded. RELEASE BLOCKED.\n' > p230-tool/START-HERE.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: P230-ROM-SBK-acoustic-tools-NO-MEDIA
+          path: p230-tool/
+          if-no-files-found: error
+          retention-days: 7
