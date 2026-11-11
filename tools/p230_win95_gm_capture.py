@@ -65,6 +65,9 @@ def capture(conn,send,guest_fifo,trace,report,raw_dir,private_dir):
     private_dir.mkdir(parents=True,exist_ok=False)
     fd=connect_linux_86box_fifo(Path(guest_fifo))
     records=[]
+    stage_path=Path(os.environ["EMU8K_P233_STAGE"]) if os.environ.get("EMU8K_P233_STAGE") else None
+    if stage_path and not stage_path.is_file():
+        raise RuntimeError("P233 expected original emulated-chip stage trace not created")
     try:
         for bank,program,note,velocity,channel in plan():
             fname=label(bank,program,note,velocity)
@@ -76,6 +79,7 @@ def capture(conn,send,guest_fifo,trace,report,raw_dir,private_dir):
             send_paced_frame(fd,frame(0xC0|channel,program,0),conn,send)
             send(conn,"step 260")
             before=row_index(trace)
+            stage_begin=stage_path.stat().st_size if stage_path else None
             folder=raw_dir/fname.removesuffix(".wav")
             folder.mkdir()
             started=False
@@ -90,6 +94,9 @@ def capture(conn,send,guest_fifo,trace,report,raw_dir,private_dir):
             finally:
                 if started:send(conn,"audio stop")
             after=row_index(trace)
+            stage_end=stage_path.stat().st_size if stage_path else None
+            if stage_path and (stage_end is None or stage_end <= stage_begin):
+                raise RuntimeError("P233 original staged chip observation missing: "+fname)
             if before<0 or after<=before:
                 raise RuntimeError("No original Creative EMU8000 note I/O for "+fname)
             registers=original_csv(trace,before,after)
@@ -115,6 +122,8 @@ def capture(conn,send,guest_fifo,trace,report,raw_dir,private_dir):
                             "source_audio":"86Box_original_wavetable_tap",
                             "creative_register_window":[before,after],
                             "register_entries":len(registers),
+                            "p233_stage_file_byte_range":[stage_begin,stage_end],
+
                             "register_write_sequence":registers,
                             "audio_frames":pcm["frames"],
                             "reference_sha256":hashlib.sha256(target.read_bytes()).hexdigest(),
