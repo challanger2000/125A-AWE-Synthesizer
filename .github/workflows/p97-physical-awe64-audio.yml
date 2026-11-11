@@ -190,6 +190,36 @@ jobs:
             --events "$RUNNER_TEMP/p97/events.tsv" \
             --p97-report p97-evidence/P97-AWE64-Gold-versus-125A-264s.json \
             --out p97-evidence/P105-Filter-and-Release-Diagnostics.json
+      - name: P236 actual AWE32 AWETEST v25 physical FLACs versus current 125A original ROM filter and Q
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/p97"
+          card="$root/real-AWE32-AWETEST-v25"
+          mkdir -p "$card" "$root/awetest-native"
+          # These are ACTUAL physical AWE32 recordings, NOT the upstream
+          # AWE32Emu software test renders. Pinned full Git SHA of source.
+          commit=9ae2217b92af72f706c9631679cd43c3afff507f
+          for name in awetest.log reca003.flac reca004.flac; do
+            curl --fail --location --retry 3 --max-time 360 \
+              "https://raw.githubusercontent.com/turican0/AWE32Emu/$commit/recordings/2026-09-12/reca/$name" \
+              -o "$card/$name"
+          done
+          test "$(git hash-object "$card/awetest.log")" = 09fe5c9f2a07e86fb4193f9f56f0b8583f656ede
+          test "$(git hash-object "$card/reca003.flac")" = 339d0de47599039bb529eab8aa737cd9a31172c1
+          test "$(git hash-object "$card/reca004.flac")" = 3e09e54631171f2d3a20b03318affc58613938e1
+          "$root/venv/bin/python" tools/p236_awetest_compare.py --self-test
+          cmake --build build-p97 --target awe32_p236_awetest_native --parallel 4
+          ./build-p97/src/engine/awe32_p236_awetest_native \
+            "$root/awe32.raw" "$root/awetest-native"
+          "$root/venv/bin/python" tools/p236_awetest_compare.py \
+            --original-log "$card/awetest.log" \
+            --card-folder "$card" \
+            --native-dir "$root/awetest-native" \
+            --current-commit "$(git rev-parse HEAD)" \
+            --out p97-evidence/P236-current-vs-real-AWE32-AWETEST-v25-physical-filter-resonance.json
+          echo P236_ACTUAL_CURRENT_125A_VS_REAL_AWE32_AUDIO_NOT_UPSTREAM_EMULATOR
+
       - name: P236 hardware-baseline/PR102 quantitative regression gate
         run: |
           "$RUNNER_TEMP/p97/venv/bin/python" tools/p236_hardware_regression.py --self-test
