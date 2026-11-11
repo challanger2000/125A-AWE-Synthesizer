@@ -54,7 +54,7 @@ void write_wav(const fs::path& path,const std::vector<int16_t>& pcm){
 }
 struct Result {size_t active=0,nonzero=0,rails=0;};
 Result render(const fs::path& rom,const Case& c,std::vector<int16_t>& pcm,
-              const fs::path& trace={}){
+              const fs::path& trace={},bool measuredCreativeFx=false){
     Synth s(kRate);s.Core().SetDriver(Awe32::Driver::Win95);
     std::string err;
     require(s.Core().UseBox86Chip(rom.string(),err),"ROM chip init: "+err);
@@ -74,7 +74,32 @@ Result render(const fs::path& rom,const Case& c,std::vector<int16_t>& pcm,
                               "failed to start original-register comparison trace");
     s.NoteOn(uint8_t(c.channel),uint8_t(c.note),uint8_t(c.velocity),1);
     Result result;
-    for(auto note:s.CaptureHeldNotes())if(note.sequence)++result.active;
+    const auto held=s.CaptureHeldNotes();
+    for(auto note:held)if(note.sequence)++result.active;
+    if(measuredCreativeFx){
+        // P232 diagnostic only. Creative's original Win95 trace writes
+        // PTRX[15:8]=0x1C, despite CC91=0, because the 1MGM patch has
+        // a default reverb send of 28. P190 VST3 GUI=0 *intentionally*
+        // overrides that default; do not change production DSP/GUI.
+        // Restore measured original sends only in this offline A/B mode.
+        s.Core().MuteEffectReturns(false,false);
+        unsigned layer=0;
+        for(size_t v=0;v<held.size();++v){
+            if(!held[v].sequence)continue;
+            const uint32_t original=s.Core().ReadDriver(Emu8000::Reg::PTRX,int(v));
+            s.Core().Write(Emu8000::Reg::PTRX,int(v),
+                           (original&0xFFFF00FFu)|(0x1Cu<<8));
+            if(c.bank==16383 && c.program==88){
+                require(layer<2,"unexpected P88 voice layering");
+                const uint32_t csl=s.Core().ReadDriver(Emu8000::Reg::CSL,int(v));
+                const uint32_t originalChorus=layer==0?0x77u:0x7Bu;
+                s.Core().Write(Emu8000::Reg::CSL,int(v),
+                               (csl&0x00FFFFFFu)|(originalChorus<<24));
+            }
+            ++layer;
+        }
+        require(result.active>=1,"no active ROM voice for Creative-FX comparison");
+    }
     std::array<int16_t,1024*2> block{};
     for(uint32_t at=0;at<kFrames;){
         if(at==kRate)s.NoteOff(uint8_t(c.channel),uint8_t(c.note));
@@ -101,9 +126,13 @@ int main(int argc,char** argv){
                    <<','<<c.velocity<<','<<c.channel<<'\n';
         return 0;
     }
-    const bool pilotMode=argc==4 && std::string(argv[1])=="--pilot";
+    const bool creativeFxMode=argc==4&&std::string(argv[1])=="--creative-fx-pilot";
+    const bool pilotMode=argc==4 &&
+         (std::string(argv[1])=="--pilot"||creativeFxMode);
     require(argc==3||pilotMode,"usage: p230_rom_sbk_native awe32.raw PRIVATE_OUTPUT_DIR"
-           " or --pilot awe32.raw PRIVATE_OUTPUT_DIR or --list");
+           " or --pilot awe32.raw PRIVATE_OUTPUT_DIR"
+           " or --creative-fx-pilot awe32.raw PRIVATE_OUTPUT_DIR"
+           " or --list");
     const fs::path rom=argv[pilotMode?2:1],dir=argv[pilotMode?3:2];
     require(fs::is_regular_file(rom)&&fs::file_size(rom)==1048576,
             "original 1MiB Wave ROM required");
@@ -125,7 +154,7 @@ int main(int argc,char** argv){
     for(auto c:cases){
         std::vector<int16_t> pcm(kFrames*2ull,0);
         const auto trace=pilotMode?(dir/"traces"/(name(c)+".trace")):fs::path{};
-        auto r=render(rom,c,pcm,trace);
+        auto r=render(rom,c,pcm,trace,creativeFxMode);
         const auto filename=name(c);
         write_wav(dir/filename,pcm);
         manifest<<filename<<','<<c.bank<<','<<c.program<<','<<c.note
@@ -137,7 +166,9 @@ int main(int argc,char** argv){
     }
     require(bool(manifest),"manifest write failed");
     const auto missingGm=std::count(gmAudible.begin(),gmAudible.end(),false);
-    std::cout<<(pilotMode?"P231_GM_PILOT_REGISTER_TRACE_NATIVE":"P230_REAL_ROM_SBK_NATIVE")
+    std::cout<<(creativeFxMode?"P232_MEASURED_CREATIVE_FX_NATIVE"
+               :pilotMode?"P231_GM_PILOT_REGISTER_TRACE_NATIVE"
+               :"P230_REAL_ROM_SBK_NATIVE")
              <<" cases="<<cases.size()
              <<" silent_cases="<<silent<<" no_voice_cases="<<missing
              <<" clipped_cases="<<clipped<<" silent_gm_programs="<<missingGm
