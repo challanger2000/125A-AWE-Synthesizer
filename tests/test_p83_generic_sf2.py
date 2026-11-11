@@ -57,6 +57,22 @@ class GenericSF2(unittest.TestCase):
         struct.pack_into("<I",raw,4,0)
         with self.assertRaisesRegex(ValueError,"RIFF length"):
             inspect_sf2(raw)
+    def test_rom_sample_uses_original_wave_rom_address_space(self):
+        raw=bytearray(make_sf2())
+        sample=raw.index(b"shdr")+8
+        # The real Vintage Dreams ROM sample has these coordinates,
+        # outside this tiny synthetic fixture's smpl and inside 1MiB ROM.
+        struct.pack_into("<IIII",raw,sample+20,430271,430410,430340,430406)
+        struct.pack_into("<H",raw,sample+44,0x8001)
+        self.assertEqual(inspect_sf2(raw)["rom_sample_count"],1)
+        # The same coordinates without the ROM bit MUST still fail.
+        struct.pack_into("<H",raw,sample+44,1)
+        with self.assertRaisesRegex(ValueError,"smpl data"):
+            inspect_sf2(raw)
+        struct.pack_into("<H",raw,sample+44,0x8001)
+        struct.pack_into("<I",raw,sample+24,524289)
+        with self.assertRaisesRegex(ValueError,"1MiB wave ROM"):
+            inspect_sf2(raw)
 
 if __name__=="__main__":
     unittest.main()

@@ -79,11 +79,21 @@ def inspect_sf2(raw,ram_bytes=RAM_BYTES["awe64_gold"]):
     if len(shdr)<92 or bytes(shdr[-46:-43])!=b"EOS":
         raise ValueError("No terminal EOS sample header")
     count=len(shdr)//46-1
+    rom_samples=0
     for i in range(count):
         off=i*46
         start,end=struct.unpack_from("<II",shdr,off+20)
-        if start>end or end>smpl_bytes//2:
-            raise ValueError("Sample %d reaches beyond smpl data"%(i,))
+        sample_type,=struct.unpack_from("<H",shdr,off+44)
+        # SF2 ROM sample addresses refer to the original 1MiB EMU8000
+        # wave ROM, not to this file's smpl chunk. Vintage Dreams' SineWave
+        # is a real example. Keep the original bytes and validate each
+        # address against its actual source memory.
+        in_rom=bool(sample_type&0x8000)
+        rom_samples+=in_rom
+        limit=1048576//2 if in_rom else smpl_bytes//2
+        if start>end or end>limit:
+            raise ValueError("Sample %d reaches beyond %s"%
+                             (i,"1MiB wave ROM" if in_rom else "smpl data"))
     fits=(max_bytes is None or smpl_bytes<=max_bytes)
     return {"phase":"P83","sf2_valid":True,"sf2_version":f"{major}.{minor:02d}",
             "file_bytes":len(data),"sample_pcm_bytes":smpl_bytes,
@@ -93,6 +103,7 @@ def inspect_sf2(raw,ram_bytes=RAM_BYTES["awe64_gold"]):
             "sample_memory_remaining_bytes":None if max_bytes is None else max_bytes-smpl_bytes,
             "sm24_extension_present":sf24 is not None,
             "instrument_count":len(ins)//22-1,"sample_count":count,
+            "rom_sample_count":rom_samples,
             "preset_count":len(presets),
             "available_banks":sorted({p["bank"] for p in presets}),
             "drum_bank_present":any(p["bank"]==128 for p in presets),
