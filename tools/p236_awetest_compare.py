@@ -128,119 +128,6 @@ def compare(ref,model,refbase,modelbase):
         "relative_above_250hz_level_error_db":relative_metric_error("above_250hz_rms"),
         "relative_spectrum":spec}
 
-def lineout_oracle(original_log, line_path, card, cut, cut_rows, native_features):
-    """AWETEST-v25 block 6: line output vs internal ADC for the SAME real card.
-    No reference to any 125A DSP implementation is used to align the paths.
-    Upstream analysis/flac25.py independently places the initial reca001
-    reference at 21.76 s + its local ADC stamp in the joined line recording.
-    """
-    event_re=re.compile(
-        r"^\s*\d+\s+(\d+)\s+(reference tone|cutoff (\d+))\s+"
-        r"@rt\s+(\d+):(\d+)\s+cap\s+(\d+):(\d+)\s*$")
-    ev={}
-    for line in original_log.splitlines():
-        m=event_re.match(line)
-        if not m: continue
-        block=int(m.group(1)); name=m.group(2)
-        if block not in (1,6): continue
-        ticks=(int(m.group(4))*65536+int(m.group(5)))/1193182.0
-        ev[(block,name)]={"rt":ticks,"base":int(m.group(6)),"frame":int(m.group(7))}
-    demand((1,"reference tone") in ev and (6,"reference tone") in ev,
-           "missing original line-out timing anchors")
-    ref1=ev[(1,"reference tone")]; ref6=ev[(6,"reference tone")]
-    demand(all((6,f"cutoff {k}") in ev for k in CUTOFFS),
-           "missing block-6 exact line-out onset events")
-    line, sr=sf.read(line_path,dtype="float64",always_2d=True)
-    demand(sr==44100 and line.shape[1]>=1,"line-out v25 FLAC wrong sample geometry")
-    left=line[:,0]
-    # Absolute first anchor is published by the source's own flac25.py.
-    approx=21.76+ref1["frame"]/sr+(ref6["rt"]-ref1["rt"])
-    def env10(x):
-        h=441;n=(len(x)//h)*h
-        demand(n>=h*40,"short original waveform for 10ms envelope alignment")
-        return np.log(np.maximum(np.mean(x[:n].reshape(-1,h)**2,axis=1),1e-12))
-    base,frame=ref6["base"],ref6["frame"]
-    demand(base in card,"original v25 reference is not in provided capture")
-    template=env10(card[base][frame:frame+int(1.0*sr),0])
-    search_start=max(0,approx-4.0)
-    search_end=min(len(left)/sr,approx+5.0)
-    start=int(round(search_start*sr))
-    cand=env10(left[start:int(round(search_end*sr))])
-    t=template-template.mean()
-    cor=signal.correlate(cand,t,mode="valid",method="fft")
-    p=np.cumsum(np.r_[0.,cand])
-    p2=np.cumsum(np.r_[0.,cand*cand])
-    n=len(t)
-    means=(p[n:]-p[:-n])/n
-    variances=np.maximum((p2[n:]-p2[:-n])-n*means**2,1e-16)
-    score=cor/np.sqrt(np.dot(t,t)*variances)
-    index=int(np.argmax(score))
-    correlation=float(score[index])
-    aligned=search_start+index*.01
-    demand(correlation>=0.60,
-           "real AWE32 internal/line-out reference-tone alignment too weak: "
-           +str(round(correlation,3)))
-    demand(abs(aligned-approx)<4.0,
-           "line output cannot be aligned to the published v25 timestamps")
-    extracted={}
-    for key in CUTOFFS:
-        e=ev[(6,f"cutoff {key}")]
-        onset=aligned+(e["rt"]-ref6["rt"])
-        a=int(round(onset*sr))
-        demand(a>=2646 and a+14112<len(left),
-               "line-out file part does not contain the entire block-6 cutoff sweep")
-        extracted[key]=feature(left[a+3528:a+14112],
-                               left[a-2646:a-441])
-    refline=extracted[252]
-    demand(refline["valid"],"external card line-out wide-open reference invalid")
-    values=[]
-    for row in cut_rows:
-        k=row["cutoff"]
-        external=extracted[k]
-        row["original_card_lineout_snr_db"]=external["snr_db"]
-        row["original_card_lineout_peak"]=round(external["peak"],7)
-        row["original_card_lineout_rms"]=round(external["rms"],7)
-        row["original_card_lineout_valid"]=bool(external["valid"])
-        if not (external["valid"] and row["hardware_card_valid"] and row["native_valid"]):
-            continue
-        relative_external=dbr(external["rms"],refline["rms"])
-        relative_internal=dbr(native_features["physical"][k]["rms"],
-                              native_features["physical"][252]["rms"])
-        relative_native=dbr(native_features["native"][k]["rms"],
-                            native_features["native"][252]["rms"])
-        row["external_lineout_relative_to_cutoff252_db"]=round(relative_external,4)
-        row["internal_ADC_minus_lineout_relative_db"]=round(
-            relative_internal-relative_external,4)
-        row["native_minus_external_lineout_relative_db"]=round(
-            relative_native-relative_external,4)
-        values.append(row)
-    def median_abs(k):
-        p=[abs(x[k]) for x in values if k in x]
-        return round(float(np.median(p)),4) if p else None
-    result={
-        "source":"ACTUAL SAME AWE32 v25 external line output vs internal ADC, "
-                 "not 86Box software reference",
-        "external_audio_blob_expected":"367b81093811fe88ae8e4f7e0fb76273fdfc851a",
-        "source_alignment":"upstream analysis/flac25.py first reference + "
-                           "actual @rt timing; block 6 correlation-verified",
-        "reference_alignment_correlation":round(correlation,5),
-        "reference_alignment_residual_seconds":round(aligned-approx,5),
-        "lineout_valid_note_count":len(values),
-        "lineout_median_absolute_native_relative_cutoff_error_db":
-            median_abs("native_minus_external_lineout_relative_db"),
-        "lineout_median_absolute_internal_adc_relative_cutoff_error_db":
-            median_abs("internal_ADC_minus_lineout_relative_db"),
-        "uncertainty":"external card sample clock, response and line-channel "
-                      "capture remain uncalibrated; no DSP PASS inferred"
-    }
-    print("P236_REAL_AWE32_EXTERNAL_LINEOUT_VS_INTERNAL_ADC",
-          "valid",len(values),"align_correlation",result["reference_alignment_correlation"],
-          "internal_adc_median_abs_db",
-          result["lineout_median_absolute_internal_adc_relative_cutoff_error_db"],
-          "native_vs_line_median_abs_db",
-          result["lineout_median_absolute_native_relative_cutoff_error_db"])
-    return result
-
 def audit(a):
     log=a.original_log.read_text()
     demand(blobhash(a.original_log)==LOG_BLOB_SHA,"AWETEST hardware log changed")
@@ -329,9 +216,6 @@ def audit(a):
                 emu_rel=row["compare"]["relative_level_native_db"]
                 row["relative_level_error_db_stationary_noise_sensitivity"]=round(
                     emu_rel-hw_rel_signal,4)
-    line_result=(lineout_oracle(log,a.line_flac,card,cut,cut_rows,
-                                {"physical":c_p,"native":c_n})
-                 if a.line_flac else None)
     report={
         "schema":"125A-P236-direct-physical-AWE32-v25-cutoff-resonance-v1",
         "reference":"real AWE32 internal ADC mono-left; AWETEST v25 hardware data and original timestamps",
@@ -365,7 +249,6 @@ def audit(a):
         "hardware_one_to_one_accepted":False,
         "hardware_acceptance":"BLOCKED",
         "production_dsp_unchanged":True,
-        "external_line_out_comparison":line_result,
     }
     a.out.parent.mkdir(parents=True,exist_ok=True)
     demand(not a.out.exists(),"P236 refuses overwriting direct hardware evidence")
@@ -561,8 +444,6 @@ def main():
     p.add_argument("--native-dir",type=Path)
     p.add_argument("--out",type=Path)
     p.add_argument("--current-commit")
-    p.add_argument("--line-flac",type=Path,
-                   help="v25 external LINE OUT first part (same physical card), optional")
     p.add_argument("--self-test",action="store_true")
     p.add_argument("--line-parts",type=Path,nargs=2)
     p.add_argument("--line-out",type=Path)
