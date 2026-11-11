@@ -413,21 +413,24 @@ def line_out_audit(a):
     card={}
     native={}
     internal={}
-    original_internal,sr=sf.read(a.card_folder/"reca003.flac",
-                                 dtype="float64",always_2d=True)
-    demand(sr==44100 and original_internal.shape[1]==2,
-           "AWE32 internal ADC recording wrong format")
+    original_internal={}
+    for base,name in ((213000,"reca003.flac"),(323600,"reca004.flac")):
+        wav,sr=sf.read(a.card_folder/name,dtype="float64",always_2d=True)
+        demand(sr==44100 and wav.shape[1]==2,
+               "AWE32 internal ADC recording wrong format: "+name)
+        original_internal[base]=wav
     for cutoff in CUTOFFS:
         e=cut_ev[cutoff]
-        demand(e["filebase"]==213000,
-               "cutoff note not in original reca003")
+        demand(e["filebase"] in original_internal,
+               "cutoff note belongs to unverified original capture segment")
         t=slope*e["rt"]+intercept
         card[cutoff]=feature(read_line(t+.08,t+.32),read_line(t-.06,t-.01))
         frame=e["frame"]
-        demand(frame>2646 and frame+14112<len(original_internal),
+        card_pcm=original_internal[e["filebase"]]
+        demand(frame>2646 and frame+14112<len(card_pcm),
                "internal ADC window outside actual recording")
-        internal[cutoff]=feature(original_internal[frame+3528:frame+14112,0],
-                                original_internal[frame-2646:frame-441,0])
+        internal[cutoff]=feature(card_pcm[frame+3528:frame+14112,0],
+                                card_pcm[frame-2646:frame-441,0])
         wav,sr=sf.read(a.native_dir/f"cutoff_{cutoff}.wav",
                        dtype="float64",always_2d=True)
         demand(sr==44100,"line-out native WAV rate")
