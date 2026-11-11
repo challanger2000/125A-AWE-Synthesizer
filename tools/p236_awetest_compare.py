@@ -296,6 +296,131 @@ def selftest():
     assert ff["above_250hz_rms"]<.05*ff["rms"]
     assert ff["bands"]["50-250Hz"]>ff["bands"]["250-1000Hz"]
     print("P236_AWETEST_PHYSICAL_ORACLE_SELFTEST_PASS missing_events_rejected=1 normalized_anchor_identity=1")
+
+def line_out_audit(a):
+    """Compare the SAME v25 card's external LINE OUT, not its internal ADC.
+
+    Clock fit is the two-reference-tone subset of the hardware author's
+    analysis/flac25.py. Hard fail on bad alignment or a clipped/absent anchor.
+    This is strictly offline evidence; no DSP or normalization is applied.
+    """
+    log=a.original_log.read_text()
+    demand(blobhash(a.original_log)==LOG_BLOB_SHA,"line-out log provenance")
+    events=[]
+    for line in log.splitlines():
+        m=re.match(r"\s*\d+\s+(\d+)\s+(.+?)\s+@rt\s+(\d+):(\d+)\s+cap\s+(\d+):(\d+)\s*$",line)
+        if m:
+            block=int(m.group(1))
+            ev={"block":block,"text":m.group(2).strip(),
+                "rt":(int(m.group(3))*65536+int(m.group(4)))/1193182.,
+                "filebase":int(m.group(5)),"frame":int(m.group(6))}
+            events.append(ev)
+    anchors=[next((e for e in events if e["block"]==blk and
+                   e["text"]=="reference tone"),None) for blk in (1,6)]
+    demand(all(anchors),"missing two original AWETEST v25 line-out reference tones")
+    pieces=[]
+    for fp in a.line_parts:
+        info=sf.info(fp)
+        demand(info.samplerate==44100 and info.channels==2,"invalid external line format")
+        pieces.append((fp,info.frames))
+    length=sum(n for _,n in pieces)
+    def read_line(t0,t1):
+        n0=int(round(t0*44100))
+        n1=int(round(t1*44100))
+        demand(0<=n0<n1<=length,"external line recording does not cover event")
+        out=[];off=0
+        for fp,n in pieces:
+            lo=max(n0-off,0);hi=min(n1-off,n)
+            if hi>lo:
+                with sf.SoundFile(fp) as src:
+                    src.seek(lo)
+                    out.append(src.read(hi-lo,dtype="float64",always_2d=True)[:,0])
+            off+=n
+        return np.concatenate(out)
+    def env10(x):
+        h=441;n=len(x)//h*h
+        e=np.log(np.mean(x[:n].reshape(-1,h)**2,axis=1)+1e-10)
+        return e-e.mean()
+    # The author's first-anchor provenance is 21.76s from the start of
+    # the unsplit line recording to the start of reca001.
+    reference=anchors[0]
+    predicted_base=21.76+reference["frame"]/44100.
+    found=[]
+    for anchor in anchors:
+        pred=predicted_base+anchor["rt"]-reference["rt"]
+        fp=a.card_folder/("reca001.flac" if anchor["block"]==1 else "reca003.flac")
+        card,sr=sf.read(fp,dtype="float64",always_2d=True)
+        demand(sr==44100,"invalid anchor internal card")
+        c0=int(anchor["frame"]-44100)
+        c1=int(anchor["frame"]+4*44100)
+        demand(c0>=0 and c1<=len(card),"internal anchor out of bounds")
+        ce=env10(card[c0:c1,0])
+        fe=env10(read_line(pred-4.,pred+7.))
+        corr=np.correlate(fe,ce,"valid")
+        idx=int(np.argmax(corr))
+        quality=float(np.corrcoef(fe[idx:idx+len(ce)],ce)[0,1])
+        got=pred-4+idx*.01+1.
+        demand(quality>.60 and abs(got-pred)<3.0,
+               "physical line-out alignment not authenticated")
+        found.append((anchor["rt"],got,quality))
+    slope,intercept=np.polyfit([p[0] for p in found],[p[1] for p in found],1)
+    demand(.995<slope<1.005,"external line clock drift outside 0.5 percent")
+    anchors_text=[{"block":int(anchors[i]["block"]),
+                  "rt":round(t,7),"line_time_s":round(sec,4),
+                  "envelope_correlation":round(q,4)}
+                  for i,(t,sec,q) in enumerate(found)]
+    cut_ev={}
+    for e in events:
+        m=re.fullmatch(r"cutoff (\d+)",e["text"])
+        if e["block"]==6 and m:
+            cut_ev[int(m.group(1))]=e
+    demand(set(CUTOFFS)<=set(cut_ev),"external line cutoff notes missing")
+    card={}
+    native={}
+    for cutoff in CUTOFFS:
+        e=cut_ev[cutoff]
+        t=slope*e["rt"]+intercept
+        card[cutoff]=feature(read_line(t+.08,t+.32),read_line(t-.06,t-.01))
+        wav,sr=sf.read(a.native_dir/f"cutoff_{cutoff}.wav",
+                       dtype="float64",always_2d=True)
+        demand(sr==44100,"line-out native WAV rate")
+        native[cutoff]=feature(wav[3528:14112,0],np.zeros(2000))
+    demand(card[252]["valid"] and native[252]["valid"],
+           "external line cutoff252 anchor silent/noisy/clipped")
+    rows=[]
+    for cutoff in CUTOFFS:
+        x,y=card[cutoff],native[cutoff]
+        rows.append({"cutoff":cutoff,"line_capture_valid":x["valid"],
+                     "line_snr_db":x["snr_db"],"line_clipped_samples":x["clipped_sample_count"],
+                     "compare":compare(x,y,card[252],native[252])
+                       if x["valid"] and y["valid"] else None})
+    valid=[r for r in rows if r["compare"]]
+    med=round(float(np.median([abs(r["compare"]["relative_level_error_db"])
+                               for r in valid])),4) if valid else None
+    out={"schema":"P236-real-AWE32-v25-external-line-vs-125A",
+         "source":"turican0 AWETST25 genuine simultaneous LINE OUT, author's flac25.py 2-anchor fit",
+         "card_log_blob_sha":LOG_BLOB_SHA,"current_125a_commit":a.current_commit,
+         "line_parts":[p.name for p in a.line_parts],
+         "line_alignment":anchors_text,"line_clock_slope":round(float(slope),8),
+         "valid_pairs":len(valid),"median_abs_cutoff_rms_error_db":med,
+         "note_windows":rows,
+         "conditions":"No EQ/gain correction or analog compensation; same actual native WAV and ROM",
+         "release_audio_fidelity":"BLOCKED"}
+    demand(not a.line_out.exists(),"external line-out evidence file already exists")
+    a.line_out.write_text(json.dumps(out,indent=2)+"\n")
+    print("P236_REAL_AWE32_EXTERNAL_LINE_CUTOFF",
+          "valid",len(valid),"median_abs_level_error_db",med,
+          "align",anchors_text)
+    for item in rows:
+        if item["compare"]:
+            print("P236_REAL_LINE_CUTOFF",item["cutoff"],
+                  "relative_level_error_db",item["compare"]["relative_level_error_db"],
+                  "relative_bands",{k:v["125a_minus_card_relative_db"]
+                                    for k,v in item["compare"]["relative_spectrum"].items()})
+        else:
+            print("P236_REAL_LINE_CUTOFF_INVALID",item["cutoff"],
+                  "SNR",item["line_snr_db"],"clipped",item["line_clipped_samples"])
+
 def main():
     p=argparse.ArgumentParser()
     p.add_argument("--original-log",type=Path)
@@ -304,9 +429,15 @@ def main():
     p.add_argument("--out",type=Path)
     p.add_argument("--current-commit")
     p.add_argument("--self-test",action="store_true")
+    p.add_argument("--line-parts",type=Path,nargs=2)
+    p.add_argument("--line-out",type=Path)
     a=p.parse_args()
     if a.self_test:return selftest()
     for key in ("original_log","card_folder","native_dir","out","current_commit"):
         demand(getattr(a,key) is not None,"missing "+key)
     audit(a)
+    if a.line_parts or a.line_out:
+        demand(a.line_parts is not None and a.line_out is not None,
+               "line-out pieces and output must both be present")
+        line_out_audit(a)
 if __name__=="__main__":main()
