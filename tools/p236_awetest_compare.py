@@ -135,8 +135,8 @@ def lineout_oracle(original_log, line_path, card, cut, cut_rows, native_features
     reference at 21.76 s + its local ADC stamp in the joined line recording.
     """
     event_re=re.compile(
-        r"^\\s*\\d+\\s+(\\d+)\\s+(reference tone|cutoff (\\d+))\\s+"
-        r"@rt\\s+(\\d+):(\\d+)\\s+cap\\s+(\\d+):(\\d+)\\s*$")
+        r"^\s*\d+\s+(\d+)\s+(reference tone|cutoff (\d+))\s+"
+        r"@rt\s+(\d+):(\d+)\s+cap\s+(\d+):(\d+)\s*$")
     ev={}
     for line in original_log.splitlines():
         m=event_re.match(line)
