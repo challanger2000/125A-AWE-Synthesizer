@@ -433,9 +433,14 @@ def line_out_audit(a):
                 "rt":(int(m.group(3))*65536+int(m.group(4)))/1193182.,
                 "filebase":int(m.group(5)),"frame":int(m.group(6))}
             events.append(ev)
+    # Use the original author's reference-tone strategy with redundant
+    # anchors. The first reference tone in blocks 1/2 uses reca001, and
+    # blocks 5/6 use reca003. One bad capture should not invalidate all
+    # usable independent alignment evidence.
     anchors=[next((e for e in events if e["block"]==blk and
-                   e["text"]=="reference tone"),None) for blk in (1,6)]
-    demand(all(anchors),"missing two original AWETEST v25 line-out reference tones")
+                   e["text"]=="reference tone"),None) for blk in (1,2,5,6)]
+    demand(all(anchors),"missing original AWETEST v25 line-out reference tones")
+    card_by_base={0:"reca001.flac",213000:"reca003.flac"}
     pieces=[]
     for fp in a.line_parts:
         info=sf.info(fp)
@@ -466,7 +471,9 @@ def line_out_audit(a):
     found=[]
     for anchor in anchors:
         pred=predicted_base+anchor["rt"]-reference["rt"]
-        fp=a.card_folder/("reca001.flac" if anchor["block"]==1 else "reca003.flac")
+        demand(anchor["filebase"] in card_by_base,
+               "unknown original capture segment for reference tone")
+        fp=a.card_folder/card_by_base[anchor["filebase"]]
         card,sr=sf.read(fp,dtype="float64",always_2d=True)
         demand(sr==44100,"invalid anchor internal card")
         c0=int(anchor["frame"]-44100)
@@ -478,15 +485,23 @@ def line_out_audit(a):
         idx=int(np.argmax(corr))
         quality=float(np.corrcoef(fe[idx:idx+len(ce)],ce)[0,1])
         got=pred-4+idx*.01+1.
-        demand(quality>.60 and abs(got-pred)<3.0,
-               "physical line-out alignment not authenticated")
-        found.append((anchor["rt"],got,quality))
-    slope,intercept=np.polyfit([p[0] for p in found],[p[1] for p in found],1)
-    demand(.995<slope<1.005,"external line clock drift outside 0.5 percent")
-    anchors_text=[{"block":int(anchors[i]["block"]),
-                  "rt":round(t,7),"line_time_s":round(sec,4),
+        print("P236_EXTERNAL_LINE_ANCHOR",anchor["block"],
+              "predicted_s",round(pred,4),"found_s",round(got,4),
+              "correlation",round(quality,4),"offset_s",round(got-pred,4),
+              flush=True)
+        if quality>.60 and abs(got-pred)<3.0:
+            found.append((anchor["block"],anchor["rt"],got,quality))
+    demand(len(found)>=2 and any(e[0]>=5 for e in found)
+           and any(e[0]<=2 for e in found),
+           "physical line-out lacks two trusted near/far timing anchors")
+    slope,intercept=np.polyfit([p[1] for p in found],[p[2] for p in found],1)
+    residual=np.asarray([p[2]-(slope*p[1]+intercept) for p in found])
+    demand(.995<slope<1.005 and np.max(np.abs(residual))<.03,
+           "external line clock drift or anchor residual outside tolerance")
+    anchors_text=[{"block":int(block),"rt":round(rt,7),
+                  "line_time_s":round(sec,4),
                   "envelope_correlation":round(q,4)}
-                  for i,(t,sec,q) in enumerate(found)]
+                  for block,rt,sec,q in found]
     cut_ev={}
     for e in events:
         m=re.fullmatch(r"cutoff (\d+)",e["text"])
